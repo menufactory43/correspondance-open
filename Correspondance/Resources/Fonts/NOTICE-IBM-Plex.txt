@@ -1,0 +1,3 @@
+IBM Plex Sans / Serif — SIL Open Font License 1.1
+https://github.com/IBM/plex
+Bundled copies redistributed under OFL from the iA Writer Additional fonts set (same OFL).

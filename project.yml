@@ -1,0 +1,111 @@
+name: Correspondance
+options:
+  bundleIdPrefix: app.correspondance
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    SWIFT_VERSION: "6"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Correspondance
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+    INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © Correspondance"
+    ENABLE_HARDENED_RUNTIME: YES
+    # Signature stable (Team ID) → Accès disque survit aux rebuilds.
+    # L’adhoc (« Sign to Run Locally ») change de CDHash à chaque build → TCC oublié.
+    DEVELOPMENT_TEAM: AKMNXGVVGX
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
+    COMBINE_HIDPI_IMAGES: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+targets:
+  Correspondance:
+    type: application
+    platform: macOS
+    sources:
+      - path: Correspondance
+        excludes:
+          - Resources/**
+          - Info.plist
+    resources:
+      # xcassets à la racine projet — évite le conflit avec sources excludes Resources/**
+      - path: Assets.xcassets
+      - path: Correspondance/Resources/AppIcon.icns
+      - path: Correspondance/Resources/Fonts
+        type: folder
+        buildPhase: resources
+    postCompileScripts:
+      - name: Embed Resources
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          RES="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          DEST_FONTS="${RES}/Fonts"
+          mkdir -p "$DEST_FONTS"
+          cp -f "${SRCROOT}/Correspondance/Resources/Fonts/"*.ttf "$DEST_FONTS/" 2>/dev/null || true
+          cp -f "${SRCROOT}/Correspondance/Resources/Fonts/"*.md "$DEST_FONTS/" 2>/dev/null || true
+          cp -f "${SRCROOT}/Correspondance/Resources/Fonts/"*.txt "$DEST_FONTS/" 2>/dev/null || true
+          # Icône Dock / Finder (secours si Assets.car absent)
+          if [ -f "${SRCROOT}/Correspondance/Resources/AppIcon.icns" ]; then
+            cp -f "${SRCROOT}/Correspondance/Resources/AppIcon.icns" "${RES}/AppIcon.icns"
+          fi
+          echo "Embedded fonts + AppIcon.icns into $RES"
+          ls -la "$RES" || true
+          ls -la "$DEST_FONTS" || true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
+        PRODUCT_NAME: Correspondance
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Correspondance/Info.plist
+        DEVELOPMENT_TEAM: AKMNXGVVGX
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
+    info:
+      path: Correspondance/Info.plist
+      properties:
+        CFBundleName: Correspondance
+        CFBundleDisplayName: Correspondance
+        CFBundleIconFile: AppIcon
+        CFBundleIconName: AppIcon
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+        ATSApplicationFontsPath: Fonts
+  CorrespondanceTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: CorrespondanceTests
+    dependencies:
+      - target: Correspondance
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.CorrespondanceTests
+        GENERATE_INFOPLIST_FILE: YES
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Correspondance.app/Contents/MacOS/Correspondance"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+
+schemes:
+  Correspondance:
+    build:
+      targets:
+        Correspondance: all
+    run:
+      config: Debug
+    # Les tests unitaires existent (CorrespondanceTests) mais le host
+    # SwiftUI @main + XCTest crée un double NSApplication sur macOS —
+    # à brancher plus tard via un target Framework Core.
+
