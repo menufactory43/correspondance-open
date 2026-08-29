@@ -1192,8 +1192,9 @@ final class InboxStore {
     let panel = NSOpenPanel()
     panel.allowsMultipleSelection = true
     panel.canChooseDirectories = false
-    panel.allowedContentTypes = [.image]
-    panel.message = "Choisir une ou plusieurs images"
+    // Les trois réseaux acceptent n'importe quel fichier (iMessage passe par
+    // `send POSIX file`) : ne pas restreindre aux images.
+    panel.message = "Choisir un ou plusieurs fichiers"
     guard panel.runModal() == .OK else { return }
     let paths = panel.urls.map(\.path)
     pendingAttachmentPaths.append(contentsOf: paths)
@@ -1225,10 +1226,6 @@ final class InboxStore {
         + "l’automatisation : le message part sans citation."
       replyingToMessageID = nil
     }
-    if conversation.network == .iMessage, !attachments.isEmpty {
-      lastErrorMessage = "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
-      return
-    }
     if conversation.network.isMatrixBridged, !isMatrixConnected {
       lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
       return
@@ -1241,7 +1238,7 @@ final class InboxStore {
       let url = URL(fileURLWithPath: path)
       return MessageAttachment(
         id: url.lastPathComponent,
-        contentType: "image/jpeg",
+        contentType: Self.contentType(forFileAt: url),
         filename: url.lastPathComponent,
         localPath: path
       )
@@ -1275,7 +1272,21 @@ final class InboxStore {
     do {
       switch conversation.network {
       case .iMessage:
-        try await iMessageSender.send(text: text, toAddress: conversation.address)
+        if !text.isEmpty {
+          try await iMessageSender.send(text: text, toAddress: conversation.address)
+        }
+        // Une pièce jointe part en `send POSIX file` : vers le fil pour un groupe
+        // (seule cible que Messages sait viser), vers le correspondant sinon.
+        for path in attachments {
+          let url = URL(fileURLWithPath: path)
+          if conversation.isGroup,
+             let guid = IMessageDatabase.guid(fromConversationID: conversation.id)
+          {
+            try await iMessageSender.send(fileURL: url, toChat: guid)
+          } else {
+            try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
+          }
+        }
       case .signal:
         try await signal.send(
           text: text,
@@ -1304,6 +1315,17 @@ final class InboxStore {
       replyingToMessageID = quoted?.id
       lastErrorMessage = error.localizedDescription
     }
+  }
+
+  /// Type MIME d'un fichier joint, pour que la bulle optimiste sache déjà
+  /// l'afficher comme image, son ou document.
+  static func contentType(forFileAt url: URL) -> String {
+    if let type = UTType(filenameExtension: url.pathExtension.lowercased()),
+       let mime = type.preferredMIMEType
+    {
+      return mime
+    }
+    return "application/octet-stream"
   }
 
   /// Traduit une citation en arguments `--quote-*` de signal-cli.
