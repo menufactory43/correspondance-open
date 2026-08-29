@@ -46,7 +46,10 @@ struct IMessageDatabase: Sendable {
       CASE WHEN EXISTS (
         SELECT 1 FROM message_attachment_join maj
         WHERE maj.message_id = m.ROWID
-      ) THEN 1 ELSE 0 END
+      ) THEN 1 ELSE 0 END,
+      IFNULL(m.is_from_me, 0),
+      IFNULL(m.is_delivered, 0),
+      IFNULL(m.is_read, 0)
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -80,6 +83,9 @@ struct IMessageDatabase: Sendable {
       var text = stringColumn(statement, 5)
       let rawDate = sqlite3_column_int64(statement, 6)
       let hasAttachment = sqlite3_column_int(statement, 7) != 0
+      let lastFromMe = sqlite3_column_int(statement, 8) != 0
+      let lastDelivered = sqlite3_column_int(statement, 9) != 0
+      let lastRead = sqlite3_column_int(statement, 10) != 0
 
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
         // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
@@ -116,12 +122,21 @@ struct IMessageDatabase: Sendable {
           unreadCount: 0,
           isArchived: false,
           transportKey: "\(rowID)|\(guid)|\(identifier)\(handleSuffix)",
-          isGroup: isGroup
+          isGroup: isGroup,
+          lastDelivery: Self.delivery(fromMe: lastFromMe, delivered: lastDelivered, read: lastRead)
         )
       )
       if results.count >= limit { break }
     }
     return results
+  }
+
+  /// Coche « livré / vu » du dernier message : seulement s'il est sortant.
+  private static func delivery(fromMe: Bool, delivered: Bool, read: Bool) -> MessageDelivery? {
+    guard fromMe else { return nil }
+    if read { return .read }
+    if delivered { return .delivered }
+    return .sent
   }
 
   func fetchMessages(chatGUID: String, limit: Int = 120) throws -> [ChatMessage] {

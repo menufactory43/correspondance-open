@@ -14,6 +14,9 @@ struct Conversation: Identifiable, Hashable, Sendable {
   var transportKey: String
   /// Groupe Signal (envoi via `-g`) ou salon Matrix à plus de 2 membres humains.
   var isGroup: Bool
+  /// Acheminement du dernier message *sortant*, si le réseau l'expose (iMessage).
+  /// `nil` = information indisponible → aucune coche affichée.
+  var lastDelivery: MessageDelivery?
 
   var hasUnread: Bool { unreadCount > 0 }
 

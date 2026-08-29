@@ -10,6 +10,11 @@ final class InboxStore {
     didSet { UserDefaults.standard.set(mode.rawValue, forKey: Keys.mode) }
   }
 
+  /// Rail de réseaux : `nil` = « Tous ». Persisté (UserDefaults).
+  var networkFilter: MessageNetwork? {
+    didSet { UserDefaults.standard.set(networkFilter?.rawValue ?? "", forKey: Keys.networkFilter) }
+  }
+
   /// Sidebar inbox réduite (avatars seulement, type Messages).
   var isSidebarCompact: Bool = false {
     didSet { UserDefaults.standard.set(isSidebarCompact, forKey: Keys.sidebarCompact) }
@@ -70,8 +75,39 @@ final class InboxStore {
 
   var activeQueue: [Conversation] {
     conversations
+      .filter { !$0.isArchived && matchesNetworkFilter($0) }
+      .sorted(by: { sortForInbox($0, $1) })
+  }
+
+  /// File complète, rail ignoré — pour les compteurs et le repli de sélection.
+  var unfilteredQueue: [Conversation] {
+    conversations
       .filter { !$0.isArchived }
       .sorted(by: { sortForInbox($0, $1) })
+  }
+
+  private func matchesNetworkFilter(_ conversation: Conversation) -> Bool {
+    guard let networkFilter else { return true }
+    return conversation.network == networkFilter
+  }
+
+  /// Non-lus du rail. `nil` = « Tous ».
+  func unreadCount(for network: MessageNetwork?) -> Int {
+    conversations.reduce(0) { total, conversation in
+      guard !conversation.isArchived else { return total }
+      guard network == nil || conversation.network == network else { return total }
+      return total + conversation.unreadCount
+    }
+  }
+
+  /// Le rail n'affiche un réseau que s'il est réellement branché ou déjà peuplé.
+  func hasConversations(on network: MessageNetwork) -> Bool {
+    conversations.contains { !$0.isArchived && $0.network == network }
+  }
+
+  func setNetworkFilter(_ network: MessageNetwork?) {
+    guard networkFilter != network else { return }
+    networkFilter = network
   }
 
   var inboxRecents: [Conversation] {
@@ -138,6 +174,9 @@ final class InboxStore {
       mode = .focus
     }
     isSidebarCompact = UserDefaults.standard.bool(forKey: Keys.sidebarCompact)
+    if let raw = UserDefaults.standard.string(forKey: Keys.networkFilter), !raw.isEmpty {
+      networkFilter = MessageNetwork(rawValue: raw)
+    }
     pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.pinnedIDs) ?? [])
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
     if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
@@ -1150,7 +1189,20 @@ final class InboxStore {
     var updated = conversations[idx]
     updated.preview = last.sidebarPreviewText
     updated.lastMessageAt = last.sentAt
+    updated.lastDelivery = Self.delivery(after: last, previous: updated.lastDelivery)
     conversations[idx] = updated
+  }
+
+  /// Le dernier message reçu efface la coche ; un envoi optimiste la met à « Envoi… ».
+  /// Un état plus riche déjà connu du réseau (livré / vu) n'est jamais rétrogradé.
+  private static func delivery(
+    after last: ChatMessage,
+    previous: MessageDelivery?
+  ) -> MessageDelivery? {
+    guard last.isFromMe else { return nil }
+    if last.isPending { return .sending }
+    if previous == .delivered || previous == .read { return previous }
+    return .sent
   }
 
   /// Une conv. ouverte au composeur ne doit pas disparaître au refresh.
@@ -1191,6 +1243,7 @@ final class InboxStore {
   private enum Keys {
     static let mode = "correspondance.inboxMode"
     static let sidebarCompact = "correspondance.sidebarCompact"
+    static let networkFilter = "correspondance.networkFilter"
     static let pinnedIDs = "correspondance.pinnedConversationIDs"
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
