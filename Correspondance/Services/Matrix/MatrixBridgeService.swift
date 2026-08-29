@@ -10,6 +10,8 @@ actor MatrixBridgeService {
   private var didHydrate = false
   /// Salon de gestion du bot WhatsApp (commandes `login`, `pm`…).
   private var managementRoomID: String?
+  /// Invitations de bridge déjà traitées (évite de marteler `/join`).
+  private var attemptedInviteJoins: Set<String> = []
   /// Event de la dernière commande `login` envoyée : borne basse de lecture des réponses du bot.
   private var loginCommandEventID: String?
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
@@ -94,7 +96,30 @@ actor MatrixBridgeService {
     nextBatch = response.nextBatch
     detectManagementRoom()
     persist()
+    await acceptBridgeInvites(response)
     return conversations()
+  }
+
+  /// Les portails (un par chat WhatsApp) arrivent sous forme d'invitations du bridge :
+  /// sans double puppeting, c'est au client de les accepter. On ne rejoint que ce qui
+  /// vient d'un bot ou d'un ghost de bridge — jamais une invitation humaine à l'aveugle.
+  private func acceptBridgeInvites(_ response: MatrixSyncResponse) async {
+    guard let invites = response.rooms?.invite else { return }
+    for (roomID, payload) in invites where !attemptedInviteJoins.contains(roomID) {
+      let events = payload["invite_state"]?["events"]?.arrayValue ?? []
+      let fromBridge = events.contains { event in
+        guard let sender = event["sender"]?.stringValue else { return false }
+        return MatrixIdentity.isBridgeBot(sender) || MatrixIdentity.isGhost(sender)
+      }
+      guard fromBridge else { continue }
+      attemptedInviteJoins.insert(roomID)
+      do {
+        try await client.join(roomID: roomID)
+      } catch {
+        // Réessayé au prochain sync si l'invitation est encore là (réseau, rate-limit).
+        attemptedInviteJoins.remove(roomID)
+      }
+    }
   }
 
   func conversations() -> [Conversation] {
