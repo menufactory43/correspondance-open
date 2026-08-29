@@ -17,7 +17,6 @@ struct CorrespondanceApp: App {
         }
     }
     .defaultSize(width: 1100, height: 760)
-    .windowStyle(.hiddenTitleBar)
     .commands { CorrespondanceCommands(store: store) }
 
     Settings {

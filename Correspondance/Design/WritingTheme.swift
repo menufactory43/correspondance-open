@@ -285,8 +285,6 @@ enum LayoutMetrics {
   static let noteMinWidth: CGFloat = 420
   /// Largeur type Claude / Codex — un peu plus généreuse qu’une sidebar Finder.
   static let sidebarWidth: CGFloat = 260
-  /// Sidebar réduite type Messages (avatars seulement).
-  static let sidebarCompactWidth: CGFloat = 72
   static let pageTopInset: CGFloat = 72
   static let pageBottomInset: CGFloat = 120
   /// Marge gauche type iA Writer — à gauche du centre, loin des feux.

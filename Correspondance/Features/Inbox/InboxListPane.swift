@@ -8,39 +8,44 @@ struct InboxListPane: View {
   @State private var pendingLeaveID: String?
 
   private var theme: WritingTheme { themes.theme }
-  private var isCompact: Bool { store.isSidebarCompact }
+
+  /// Sélection native de la `List` — la sélection réelle reste pilotée par le store.
+  private var selection: Binding<String?> {
+    Binding(
+      get: { store.selectedConversationID },
+      set: { newValue in
+        guard let newValue, newValue != store.selectedConversationID else { return }
+        Task { await store.select(newValue) }
+      }
+    )
+  }
 
   var body: some View {
     VStack(spacing: 0) {
-      header
-      if store.usingDemoData && !isCompact {
+      if store.usingDemoData {
         PermissionBanner()
           .padding(.horizontal, Spacing.sm)
-          .padding(.bottom, Spacing.sm)
+          .padding(.vertical, Spacing.xs)
       }
-      if store.needsContactsPermission && !isCompact {
+      if store.needsContactsPermission {
         ContactsPermissionBanner()
           .padding(.horizontal, Spacing.sm)
-          .padding(.bottom, Spacing.sm)
+          .padding(.bottom, Spacing.xs)
       }
 
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: isCompact ? 4 : 2) {
-          if isCompact {
-            ForEach(store.inboxCompactQueue) { conversation in
-              conversationButton(conversation)
-            }
-          } else {
-            section(title: "Récents", items: store.inboxRecents)
-            section(title: "Groupes Signal", items: store.inboxGroups)
-            section(title: "Contacts", items: store.inboxContacts)
-          }
+      List(selection: selection) {
+          section(title: "Récents", items: store.inboxRecents)
+          section(title: "Groupes", items: store.inboxGroups)
+          section(title: "Contacts", items: store.inboxContacts)
+      }
+      .listStyle(.sidebar)
+      .environment(\.defaultMinListRowHeight, 52)
+      .overlay {
+        if store.activeQueue.isEmpty {
+          emptyState
         }
-        .padding(.horizontal, isCompact ? Spacing.xs : Spacing.xs)
-        .padding(.bottom, Spacing.md)
       }
     }
-    .background(theme.sidebar.ignoresSafeArea(edges: .top))
     .confirmationDialog(
       "Effacer l’historique ?",
       isPresented: Binding(
@@ -77,76 +82,43 @@ struct InboxListPane: View {
     }
   }
 
-  private var header: some View {
-    HStack(spacing: Spacing.xs) {
-      if !isCompact {
-        Text("Inbox")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(theme.inkSecondary)
-        Spacer(minLength: 0)
-        if store.usingDemoData {
-          Text("Démo — pas iMessage")
-            .font(Typography.meta)
-            .foregroundStyle(theme.accent)
-        }
-        SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
-          store.presentNewConversation()
-        }
-      } else {
-        SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
-          store.presentNewConversation()
-        }
-        Spacer(minLength: 0)
-      }
-
-      SoftToolButton(
-        systemImage: isCompact ? "sidebar.squares.left" : "sidebar.squares.right",
-        helpText: isCompact ? "Agrandir la sidebar" : "Réduire la sidebar"
-      ) {
-        withAnimation(.easeInOut(duration: 0.22)) {
-          store.toggleSidebarCompact()
-        }
+  private var emptyState: some View {
+    VStack(spacing: Spacing.xs) {
+      Text(store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter.")
+        .font(Typography.emptyState(themes.typeface))
+        .foregroundStyle(theme.inkSecondary)
+      if store.networkFilter != nil {
+        Button("Voir tous les réseaux") { store.setNetworkFilter(nil) }
+          .buttonStyle(.link)
       }
     }
-    .padding(.horizontal, isCompact ? Spacing.xs : Spacing.md)
-    .padding(.top, LayoutMetrics.pageTopInset * 0.35)
-    .padding(.bottom, Spacing.xs)
+    .padding(Spacing.md)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   @ViewBuilder
   private func section(title: String, items: [Conversation]) -> some View {
     if !items.isEmpty {
-      Text(title)
-        .font(Typography.sidebarSection(themes.typeface))
-        .foregroundStyle(theme.inkTertiary)
-        .tracking(0.6)
-        .textCase(.uppercase)
-        .padding(.horizontal, Spacing.sm)
-        .padding(.top, Spacing.sm)
-        .padding(.bottom, 4)
-
-      ForEach(items) { conversation in
-        conversationButton(conversation)
+      Section(title) {
+        ForEach(items) { conversation in
+          row(conversation)
+        }
       }
     }
   }
 
-  private func conversationButton(_ conversation: Conversation) -> some View {
-    Button {
-      Task { await store.select(conversation.id) }
-    } label: {
-      ConversationRowView(
-        conversation: conversation,
-        isSelected: conversation.id == store.selectedConversationID,
-        theme: theme,
-        typeface: themes.typeface,
-        isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,
-        isPinned: store.isPinned(conversation.id),
-        isMuted: store.isMuted(conversation.id),
-        isCompact: isCompact
-      )
-    }
-    .buttonStyle(.plain)
+  private func row(_ conversation: Conversation) -> some View {
+    ConversationRowView(
+      conversation: conversation,
+      isSelected: conversation.id == store.selectedConversationID,
+      theme: theme,
+      typeface: themes.typeface,
+      isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,
+      isPinned: store.isPinned(conversation.id),
+      isMuted: store.isMuted(conversation.id)
+    )
+    .tag(conversation.id)
+    .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
     .contextMenu {
       conversationContextMenu(conversation)
     }

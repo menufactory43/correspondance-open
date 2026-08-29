@@ -3,56 +3,38 @@ import SwiftUI
 struct ContentView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.controlActiveState) private var controlActiveState
+
   @State private var showSettingsSheet = false
-  @State private var chromeRevealed = false
+  @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
   private var theme: WritingTheme { themes.theme }
   private var isFocus: Bool { store.mode == .focus }
-  private var showsModeChrome: Bool { chromeRevealed && !store.isComposerFocused }
 
   var body: some View {
-    Group {
-      switch store.mode {
-      case .focus:
-        FocusConversationView()
-      case .inbox:
-        inboxSplit
-      }
+    NavigationSplitView(columnVisibility: $columnVisibility) {
+      sidebar
+        .navigationSplitViewColumnWidth(
+          min: RailMetrics.width + 232,
+          ideal: RailMetrics.width + 284,
+          max: RailMetrics.width + 400
+        )
+    } detail: {
+      detail
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background((isFocus ? theme.paper : theme.room).ignoresSafeArea())
-    .overlay(alignment: .topTrailing) {
-      modeChrome
-        .opacity(isFocus ? (showsModeChrome ? 1 : 0) : 1)
-        .animation(.easeOut(duration: 0.15), value: showsModeChrome)
-        .animation(.easeOut(duration: 0.15), value: isFocus)
-        .allowsHitTesting(!isFocus || showsModeChrome)
-    }
-    .overlay(alignment: .topTrailing) {
-      if isFocus {
-        Color.clear
-          .frame(width: 220, height: 56)
-          .contentShape(Rectangle())
-          .onHover { hovering in
-            chromeRevealed = hovering && !store.isComposerFocused
-          }
-          .allowsHitTesting(!store.isComposerFocused)
-      }
-    }
+    .navigationSplitViewStyle(.balanced)
+    // TODO(macOS 27) : fondu croisé natif entre Focus et Inbox.
+    // .navigationTransition(.crossFade)
+    .navigationTitle(store.selectedConversation?.title ?? "Correspondance")
+    .toolbar { toolbarContent }
+    .correspondanceWindowBackground(theme.paper)
     .tint(theme.accent)
-    .correspondanceWindowChrome(
-      theme,
-      sidebarVisible: store.mode == .inbox,
-      zenMode: isFocus
-    )
+    .correspondanceWindowChrome(theme)
+    .onAppear { syncColumns(animated: false) }
+    .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onReceive(NotificationCenter.default.publisher(for: .correspondanceOpenSettings)) { _ in
       showSettingsSheet = true
-    }
-    .onChange(of: store.mode) { _, newMode in
-      chromeRevealed = newMode != .focus
-    }
-    .onChange(of: store.isComposerFocused) { _, focused in
-      if focused { chromeRevealed = false }
     }
     .sheet(isPresented: $showSettingsSheet) {
       SettingsView()
@@ -80,63 +62,93 @@ struct ContentView: View {
     }
   }
 
-  /// Vue Beeper : sidebar liste + fil.
-  private var inboxSplit: some View {
+  // MARK: - Colonnes
+
+  /// Rail de réseaux + liste : une seule colonne sidebar, matériau système.
+  private var sidebar: some View {
     HStack(spacing: 0) {
+      NetworkRailView()
+      Divider()
+        .opacity(controlActiveState == .inactive ? 0.4 : 0.8)
       InboxListPane()
-        .frame(width: store.isSidebarCompact
-          ? LayoutMetrics.sidebarCompactWidth
-          : LayoutMetrics.sidebarWidth + 40)
-        .frame(maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.22), value: store.isSidebarCompact)
-
-      Rectangle()
-        .fill(theme.edge.opacity(0.55))
-        .frame(width: 1)
-        .frame(maxHeight: .infinity)
-        .ignoresSafeArea(edges: .top)
-
-      ThreadView(showsHeader: true)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
     }
   }
 
-  private var modeChrome: some View {
-    HStack(spacing: Spacing.xs) {
-      modeToggle
-      SoftToolButton(
-        systemImage: (store.isLoading || store.isLiveSyncing) ? "hourglass" : "arrow.clockwise",
-        helpText: store.isLiveSyncing ? "Sync live…" : (store.isLoading ? "Actualisation…" : "Actualiser"),
-        isDisabled: store.isLoading
-      ) {
-        Task { await store.refresh() }
-      }
+  @ViewBuilder
+  private var detail: some View {
+    if isFocus {
+      FocusConversationView()
+    } else {
+      ThreadView()
     }
-    .padding(.trailing, Spacing.md)
-    .padding(.top, 10)
   }
 
-  private var modeToggle: some View {
-    HStack(spacing: 2) {
-      ForEach(InboxMode.allCases) { mode in
-        Button {
-          store.setMode(mode)
-        } label: {
-          Image(systemName: mode.systemImage)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(store.mode == mode ? theme.accent : theme.inkTertiary)
-            .frame(width: 28, height: 28)
-            .background(
-              RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(store.mode == mode ? theme.selection : Color.clear)
-            )
+  /// Focus = même écran, chrome minimisé : la sidebar s'efface.
+  private func syncColumns(animated: Bool) {
+    let target: NavigationSplitViewVisibility = isFocus ? .detailOnly : .all
+    guard columnVisibility != target else { return }
+    if animated, !reduceMotion {
+      withAnimation(.smooth(duration: 0.3)) { columnVisibility = target }
+    } else {
+      columnVisibility = target
+    }
+  }
+
+  // MARK: - Toolbar native
+
+  @ToolbarContentBuilder
+  private var toolbarContent: some ToolbarContent {
+    if !isFocus {
+      ToolbarItem(placement: .navigation) {
+        Button("Nouvelle conversation", systemImage: "square.and.pencil") {
+          store.presentNewConversation()
         }
-        .buttonStyle(.plain)
-        .help(mode == .focus ? "Focus (⌘1)" : "Inbox avec sidebar (⌘2)")
+        .help("Nouvelle conversation (⌘N)")
       }
     }
-    .padding(2)
-    .background(theme.paperSecondary.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+    if isFocus {
+      ToolbarItemGroup(placement: .navigation) {
+        Button("Conversation précédente", systemImage: "chevron.left") {
+          Task { await store.focusPrevious() }
+        }
+        .disabled(store.focusIndex == nil || store.focusIndex == 0)
+
+        Button("Conversation suivante", systemImage: "chevron.right") {
+          Task { await store.focusNext() }
+        }
+        .disabled({
+          guard let index = store.focusIndex else { return true }
+          return index >= store.activeQueue.count - 1
+        }())
+      }
+    }
+
+    ToolbarItemGroup(placement: .primaryAction) {
+      if store.selectedConversation != nil {
+        Button("Archiver", systemImage: "archivebox") {
+          Task { await store.archiveSelected() }
+        }
+        .help("Archiver (⌘E)")
+      }
+
+      if !isFocus {
+        Button(
+          store.isLoading || store.isLiveSyncing ? "Synchronisation…" : "Actualiser",
+          systemImage: store.isLoading || store.isLiveSyncing ? "hourglass" : "arrow.clockwise"
+        ) {
+          Task { await store.refresh() }
+        }
+        .disabled(store.isLoading)
+        .help("Actualiser (⌘R)")
+      }
+
+      Button("Focus", systemImage: isFocus ? "rectangle.split.2x1" : "text.aligncenter") {
+        store.setMode(isFocus ? .inbox : .focus)
+      }
+      .help(isFocus ? "Revenir à l’inbox (⌘⇧F)" : "Mode Focus (⌘⇧F)")
+    }
   }
 }
 

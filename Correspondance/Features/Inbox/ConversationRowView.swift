@@ -8,7 +8,6 @@ struct ConversationRowView: View {
   var isSyncing: Bool = false
   var isPinned: Bool = false
   var isMuted: Bool = false
-  var isCompact: Bool = false
 
   private var subtitle: String {
     if conversation.hasLivePreview { return conversation.preview }
@@ -18,87 +17,102 @@ struct ConversationRowView: View {
   }
 
   var body: some View {
-    Group {
-      if isCompact {
-        compactBody
-      } else {
-        expandedBody
-      }
-    }
-  }
+    HStack(alignment: .top, spacing: Spacing.sm) {
+      ConversationAvatarView(conversation: conversation, size: 36, theme: theme)
+        .overlay(alignment: .bottomTrailing) {
+          NetworkPip(network: conversation.network, theme: theme)
+            .offset(x: 2, y: 2)
+        }
 
-  private var compactBody: some View {
-    ZStack(alignment: .topTrailing) {
-      ConversationAvatarView(conversation: conversation, size: 40, theme: theme)
-      if conversation.hasUnread {
-        Circle()
-          .fill(theme.accent)
-          .frame(width: 10, height: 10)
-          .overlay(Circle().strokeBorder(theme.sidebar, lineWidth: 1.5))
-          .offset(x: 2, y: -1)
-      }
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 6)
-    .background(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
-        .fill(isSelected ? theme.selection : Color.clear)
-    )
-    .contentShape(Rectangle())
-    .help(conversation.title)
-  }
-
-  private var expandedBody: some View {
-    HStack(alignment: .center, spacing: Spacing.sm) {
-      ConversationAvatarView(conversation: conversation, size: 34, theme: theme)
-
-      VStack(alignment: .leading, spacing: 3) {
-        HStack(alignment: .firstTextBaseline) {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
           Text(conversation.title)
             .font(Typography.sidebarItem(typeface))
-            .foregroundStyle(theme.ink.opacity(conversation.hasUnread ? 1 : 0.92))
+            .fontWeight(conversation.hasUnread ? .semibold : .regular)
+            .foregroundStyle(theme.ink)
             .lineLimit(1)
+            .truncationMode(.tail)
           if isPinned {
             Image(systemName: "pin.fill")
-              .font(.system(size: 9, weight: .semibold))
+              .font(.system(size: 8, weight: .semibold))
               .foregroundStyle(theme.inkTertiary)
+              .accessibilityLabel("Épinglée")
           }
           if isMuted {
             Image(systemName: "bell.slash.fill")
-              .font(.system(size: 9, weight: .semibold))
+              .font(.system(size: 8, weight: .semibold))
               .foregroundStyle(theme.inkTertiary)
+              .accessibilityLabel("Notifications coupées")
           }
-          if conversation.isGroup {
-            Text("groupe")
+          Spacer(minLength: 6)
+          if conversation.hasLivePreview {
+            Text(Self.shortDate(conversation.lastMessageAt))
               .font(Typography.meta(typeface))
-              .foregroundStyle(theme.accent)
-              .padding(.horizontal, 5)
-              .padding(.vertical, 1)
-              .background(theme.selection, in: Capsule())
-          }
-          Spacer(minLength: 8)
-          if conversation.hasUnread {
-            UnreadBadge(count: conversation.unreadCount, theme: theme)
-          } else if conversation.hasLivePreview {
-            Text(conversation.lastMessageAt, style: .relative)
-              .font(Typography.meta(typeface))
+              .monospacedDigit()
               .foregroundStyle(theme.inkTertiary)
+              .lineLimit(1)
+              .layoutPriority(1)
           }
         }
-        Text(subtitle)
-          .font(Typography.meta(typeface))
-          .foregroundStyle(conversation.hasUnread ? theme.inkSecondary : theme.inkTertiary)
-          .lineLimit(2)
+
+        HStack(alignment: .top, spacing: 4) {
+          if let delivery = conversation.lastDelivery {
+            Image(systemName: delivery.systemImage)
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(delivery == .read ? theme.accent : theme.inkTertiary)
+              .padding(.top, 2)
+              .accessibilityLabel(delivery.labelFR)
+          }
+          Text(subtitle)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(conversation.hasUnread ? theme.inkSecondary : theme.inkTertiary)
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+          Spacer(minLength: 6)
+          if conversation.hasUnread {
+            UnreadBadge(count: conversation.unreadCount, theme: theme)
+              .padding(.top, 1)
+          }
+        }
       }
     }
     .padding(.horizontal, Spacing.sm)
-    .padding(.vertical, Spacing.xs + 2)
+    .padding(.vertical, Spacing.xs)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(isSelected ? theme.selection : Color.clear)
-    )
     .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
+  }
+
+  /// Colonne de droite compacte : heure aujourd'hui, jour cette semaine, date sinon.
+  static func shortDate(_ date: Date, now: Date = Date()) -> String {
+    let calendar = Calendar.current
+    if calendar.isDateInToday(date) {
+      return date.formatted(.dateTime.hour().minute())
+    }
+    if calendar.isDateInYesterday(date) {
+      return "hier"
+    }
+    if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
+      return date.formatted(.dateTime.weekday(.abbreviated))
+    }
+    return date.formatted(.dateTime.day().month(.twoDigits))
+  }
+}
+
+/// Pastille réseau discrète, posée sur l'avatar.
+private struct NetworkPip: View {
+  let network: MessageNetwork
+  let theme: WritingTheme
+
+  var body: some View {
+    Image(systemName: network.systemImage)
+      .font(.system(size: 7, weight: .bold))
+      .foregroundStyle(theme.inkSecondary)
+      .frame(width: 14, height: 14)
+      .background(theme.sidebar, in: Circle())
+      .overlay(Circle().strokeBorder(theme.edge.opacity(0.7), lineWidth: 0.5))
+      .accessibilityLabel(network.labelFR)
   }
 }
 

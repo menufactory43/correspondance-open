@@ -15,11 +15,6 @@ final class InboxStore {
     didSet { UserDefaults.standard.set(networkFilter?.rawValue ?? "", forKey: Keys.networkFilter) }
   }
 
-  /// Sidebar inbox réduite (avatars seulement, type Messages).
-  var isSidebarCompact: Bool = false {
-    didSet { UserDefaults.standard.set(isSidebarCompact, forKey: Keys.sidebarCompact) }
-  }
-
   var conversations: [Conversation] = []
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
@@ -130,13 +125,6 @@ final class InboxStore {
       }
   }
 
-  /// File compacte : récents d’abord, puis le reste (pour la vue avatars).
-  var inboxCompactQueue: [Conversation] {
-    let recents = inboxRecents
-    let rest = activeQueue.filter { conv in !recents.contains(where: { $0.id == conv.id }) }
-    return recents + rest
-  }
-
   func isPinned(_ id: String) -> Bool { pinnedIDs.contains(id) }
   func isMuted(_ id: String) -> Bool { mutedIDs.contains(id) }
   func disappearingSeconds(for id: String) -> Int { disappearingSecondsByID[id] ?? 0 }
@@ -173,7 +161,6 @@ final class InboxStore {
     } else {
       mode = .focus
     }
-    isSidebarCompact = UserDefaults.standard.bool(forKey: Keys.sidebarCompact)
     if let raw = UserDefaults.standard.string(forKey: Keys.networkFilter), !raw.isEmpty {
       networkFilter = MessageNetwork(rawValue: raw)
     }
@@ -185,10 +172,6 @@ final class InboxStore {
       disappearingSecondsByID = decoded
     }
     hydrateFromDiskCache()
-  }
-
-  func toggleSidebarCompact() {
-    isSidebarCompact.toggle()
   }
 
   /// Affiche tout de suite les caches iMessage + Signal (démarrage type Messages).
@@ -1242,7 +1225,6 @@ final class InboxStore {
 
   private enum Keys {
     static let mode = "correspondance.inboxMode"
-    static let sidebarCompact = "correspondance.sidebarCompact"
     static let networkFilter = "correspondance.networkFilter"
     static let pinnedIDs = "correspondance.pinnedConversationIDs"
     static let mutedIDs = "correspondance.mutedConversationIDs"

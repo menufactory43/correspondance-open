@@ -27,6 +27,7 @@
 		5ACE090A9482584EB9F3C4A9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */; };
 		663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */; };
 		691461685065A0072D19B637 /* SignalAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53171D7D92759527790B24B9 /* SignalAttachmentStore.swift */; };
+		6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72EC2976B9D7432A734100 /* NetworkRailView.swift */; };
 		716B7107C8A9273931B2FB62 /* ContactDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */; };
 		72844F5AEC9B03F135C9BECA /* FocusConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3796849D6D70116DE246282E /* FocusConversationView.swift */; };
 		73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9204E0947294308F58D53C /* MessageBubbleView.swift */; };
@@ -51,6 +52,7 @@
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C57C42F7B623ACE2AF159F2E /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5443743FD598E735E0F5F364 /* ChatMessage.swift */; };
 		CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */; };
+		D1BF5BAF7DA02418BC58DDFF /* GlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
 		DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */; };
 		DCF0104A7F5C0B8B7C4B310C /* MatrixSyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138212902ED48F144DFA0511 /* MatrixSyncModels.swift */; };
@@ -111,6 +113,7 @@
 		73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarStore.swift; sourceTree = "<group>"; };
 		7A8318D812881F5319CCFB34 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsPermissionBanner.swift; sourceTree = "<group>"; };
+		7C72EC2976B9D7432A734100 /* NetworkRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRailView.swift; sourceTree = "<group>"; };
 		7F15CB3ED61FA650ADAC3606 /* MatrixJSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixJSON.swift; sourceTree = "<group>"; };
 		803BDF7075D9E2ACC5BE3155 /* MessageDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDelivery.swift; sourceTree = "<group>"; };
 		873ABAD6A5B9F61135B01377 /* ContactDirectoryDisk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectoryDisk.swift; sourceTree = "<group>"; };
@@ -137,6 +140,7 @@
 		EAD00CD1C7485D79E4CB665C /* SignalBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalBridge.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsAppLoginSheet.swift; sourceTree = "<group>"; };
+		FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSurface.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -217,6 +221,7 @@
 				B7EF134955840058275C45E9 /* ConversationRowView.swift */,
 				388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */,
 				EC9204E0947294308F58D53C /* MessageBubbleView.swift */,
+				7C72EC2976B9D7432A734100 /* NetworkRailView.swift */,
 				225E93B93CBA37AE52390551 /* NewConversationSheet.swift */,
 				70003B06F876183A6C85B0DE /* PermissionBanner.swift */,
 				9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */,
@@ -227,6 +232,7 @@
 		7320C5E4A316C8FDD354C062 /* Design */ = {
 			isa = PBXGroup;
 			children = (
+				FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */,
 				625768DBC8A0E14E8A2D098D /* Spacing.swift */,
 				A29785E397E832EDCE2150AC /* Theme.swift */,
 				AB68DB666AD5741B836D9D65 /* Typography.swift */,
@@ -470,6 +476,7 @@
 				663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */,
 				D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */,
 				72844F5AEC9B03F135C9BECA /* FocusConversationView.swift in Sources */,
+				D1BF5BAF7DA02418BC58DDFF /* GlassSurface.swift in Sources */,
 				008F0335DF322F07E1AAC636 /* IMessageConversationCache.swift in Sources */,
 				DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */,
 				31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */,
@@ -490,6 +497,7 @@
 				73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */,
 				11893C938A693EA57AA61D52 /* MessageDelivery.swift in Sources */,
 				24C149E00176D210AC30D511 /* MessageNetwork.swift in Sources */,
+				6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */,
 				14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */,
 				003EBAD13023436D77C15471 /* PermissionBanner.swift in Sources */,
 				3FDB287BCE157F43106C3209 /* ProcessRunner.swift in Sources */,

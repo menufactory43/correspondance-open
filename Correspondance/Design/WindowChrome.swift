@@ -1,30 +1,21 @@
 import AppKit
 import SwiftUI
 
-/// Aligne la barre de titre sur le thème et laisse le contenu
-/// peindre sous les feux de circulation (transition sidebar continue).
+/// Ce que le système ne fournit pas encore : l'apparence claire/sombre suivant
+/// le thème d'écriture, et le titre de fenêtre masqué (la barre d'outils native
+/// et le fond de fenêtre viennent de `containerBackground`, plus de bricolage).
 struct WindowChromeModifier: ViewModifier {
   let theme: WritingTheme
-  var sidebarVisible: Bool
-  var zenMode: Bool
 
   func body(content: Content) -> some View {
     content
       .preferredColorScheme(theme.id.prefersDarkChrome ? .dark : .light)
-      .background(
-        WindowChromeApplicator(
-          theme: theme,
-          sidebarVisible: sidebarVisible,
-          zenMode: zenMode
-        )
-      )
+      .background(WindowChromeApplicator(isDark: theme.id.prefersDarkChrome))
   }
 }
 
 private struct WindowChromeApplicator: NSViewRepresentable {
-  let theme: WritingTheme
-  var sidebarVisible: Bool
-  var zenMode: Bool
+  let isDark: Bool
 
   func makeNSView(context: Context) -> NSView {
     let view = NSView()
@@ -33,45 +24,19 @@ private struct WindowChromeApplicator: NSViewRepresentable {
   }
 
   func updateNSView(_ nsView: NSView, context: Context) {
-    let sidebar = theme.sidebar
-    let fill = zenMode ? theme.paper : theme.room
-    let dark = theme.id.prefersDarkChrome
-    let showSidebar = sidebarVisible
-
+    let dark = isDark
     DispatchQueue.main.async {
       guard let window = nsView.window else { return }
-
-      if !window.styleMask.contains(.fullSizeContentView) {
-        window.styleMask.insert(.fullSizeContentView)
-      }
-
-      window.title = ""
       window.titleVisibility = .hidden
       window.titlebarAppearsTransparent = true
-      window.titlebarSeparatorStyle = .none
-      window.isMovableByWindowBackground = true
-      window.backgroundColor = NSColor(showSidebar ? sidebar : fill)
       window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-
-      if let titlebar = window.standardWindowButton(.closeButton)?.superview?.superview {
-        titlebar.wantsLayer = true
-        titlebar.layer?.backgroundColor = .clear
-      }
     }
   }
 }
 
 extension View {
-  func correspondanceWindowChrome(
-    _ theme: WritingTheme,
-    sidebarVisible: Bool,
-    zenMode: Bool = false
-  ) -> some View {
-    modifier(WindowChromeModifier(
-      theme: theme,
-      sidebarVisible: sidebarVisible,
-      zenMode: zenMode
-    ))
+  func correspondanceWindowChrome(_ theme: WritingTheme) -> some View {
+    modifier(WindowChromeModifier(theme: theme))
   }
 }
 
