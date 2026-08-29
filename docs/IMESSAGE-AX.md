@@ -216,3 +216,14 @@ Le plus utile, `axprobe.swift`, dumpe pour chaque élément : `AXRole`, `AXSubro
 `AXTitle`, `AXDescription`, `AXValue`, `AXHelp`, la liste des actions et le cadre.
 Le premier réflexe en cas de panne : lancer `axprobe` et comparer aux identifiants
 de la section 3.
+
+## Correction du 2026-08-30 — « autorisation périmée » était un mauvais diagnostic
+
+TCC (`/Library/Application Support/com.apple.TCC/TCC.db`, service `kTCCServiceAccessibility`) accorde bien l'accès
+(`auth_value = 2`) à Ghostty, Terminal **et** Correspondance ; aucun refus dans le journal `com.apple.TCC`. Pourtant
+`AXWindows` rend des pseudo-éléments de rôle `AXApplication` (avec `AXChildren` → `kAXErrorAttributeUnsupported`)
+pour **toutes** les apps — Finder, Messages, et Ghostty interrogeant ses propres fenêtres — alors que la barre de menus
+se lit et que `CGWindowListCopyWindowInfo` voit bien les fenêtres. C'est le serveur d'accessibilité de la session
+(3 jours d'uptime) qui ne rend plus les fenêtres à personne, pas l'autorisation. Remède : fermer puis rouvrir la
+session (ou redémarrer). L'app affiche désormais l'état « serveur AX indisponible » dans ce cas, et ne renvoie vers
+Réglages Système que quand `AXIsProcessTrusted()` est faux ou qu'aucune fenêtre n'est rendue du tout.
