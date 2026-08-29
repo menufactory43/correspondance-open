@@ -39,6 +39,7 @@ struct InboxListPane: View {
           section(title: "Contacts", items: store.inboxContacts)
       }
       .listStyle(.sidebar)
+      .scrollContentBackground(.hidden)
       .environment(\.defaultMinListRowHeight, 52)
       .overlay {
         if store.activeQueue.isEmpty {
@@ -110,7 +111,6 @@ struct InboxListPane: View {
   private func row(_ conversation: Conversation) -> some View {
     ConversationRowView(
       conversation: conversation,
-      isSelected: conversation.id == store.selectedConversationID,
       theme: theme,
       typeface: themes.typeface,
       isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,

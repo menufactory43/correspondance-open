@@ -26,8 +26,9 @@ struct ContentView: View {
     .navigationSplitViewStyle(.balanced)
     // TODO(macOS 27) : fondu croisé natif entre Focus et Inbox.
     // .navigationTransition(.crossFade)
-    .navigationTitle(store.selectedConversation?.title ?? "Correspondance")
+    .navigationTitle("")
     .toolbar { toolbarContent }
+    .toolbarBackground(theme.paper, for: .windowToolbar)
     .correspondanceWindowBackground(theme.paper)
     .tint(theme.accent)
     .correspondanceWindowChrome(theme)

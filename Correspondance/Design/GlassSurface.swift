@@ -74,4 +74,14 @@ extension View {
       background(color.ignoresSafeArea())
     }
   }
+
+  /// Effet de bord natif là où le contenu passe sous la barre d'outils.
+  @ViewBuilder
+  func softTopScrollEdge() -> some View {
+    if #available(macOS 26.0, *) {
+      scrollEdgeEffectStyle(.soft, for: .top)
+    } else {
+      self
+    }
+  }
 }

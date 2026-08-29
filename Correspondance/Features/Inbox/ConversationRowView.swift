@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ConversationRowView: View {
   let conversation: Conversation
-  let isSelected: Bool
   let theme: WritingTheme
   var typeface: WritingTypeface = .quattro
   var isSyncing: Bool = false
@@ -107,9 +106,9 @@ private struct NetworkPip: View {
 
   var body: some View {
     Image(systemName: network.systemImage)
-      .font(.system(size: 7, weight: .bold))
+      .font(.system(size: 8, weight: .bold))
       .foregroundStyle(theme.inkSecondary)
-      .frame(width: 14, height: 14)
+      .frame(width: 15, height: 15)
       .background(theme.sidebar, in: Circle())
       .overlay(Circle().strokeBorder(theme.edge.opacity(0.7), lineWidth: 0.5))
       .accessibilityLabel(network.labelFR)

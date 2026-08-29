@@ -58,6 +58,7 @@ struct ThreadView: View {
       // La pilule flotte : on réserve sa hauteur dans le contenu défilant.
       .contentMargins(.top, 52, for: .scrollContent)
       .defaultScrollAnchor(.bottom)
+      .softTopScrollEdge()
       // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
       // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
       .opacity(isShowingThread ? 1 : 0)

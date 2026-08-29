@@ -28,7 +28,6 @@ private struct WindowChromeApplicator: NSViewRepresentable {
     DispatchQueue.main.async {
       guard let window = nsView.window else { return }
       window.titleVisibility = .hidden
-      window.titlebarAppearsTransparent = true
       window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
     }
   }
