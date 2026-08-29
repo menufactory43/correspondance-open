@@ -49,10 +49,24 @@ enum MatrixJSON: Codable, Hashable, Sendable {
   }
 
   /// Chemin pointé : `json.value(at: "protocol.id")`.
+  ///
+  /// Beaucoup de clés Matrix contiennent elles-mêmes des points (`m.relates_to`,
+  /// `m.new_content`, `fi.mau.whatsapp.phone_number`) : découper bêtement sur `.`
+  /// ne trouverait jamais `m.relates_to.rel_type`. On essaie donc, à chaque niveau,
+  /// les préfixes du plus long au plus court.
   func value(at path: String) -> MatrixJSON? {
-    path.split(separator: ".").reduce(self as MatrixJSON?) { node, key in
-      node?[String(key)]
+    Self.resolve(self, path.split(separator: ".").map(String.init))
+  }
+
+  private static func resolve(_ node: MatrixJSON, _ components: [String]) -> MatrixJSON? {
+    guard !components.isEmpty else { return node }
+    guard case .object(let dict) = node else { return nil }
+    for length in stride(from: components.count, through: 1, by: -1) {
+      let key = components[0..<length].joined(separator: ".")
+      guard let child = dict[key] else { continue }
+      if let found = resolve(child, Array(components[length...])) { return found }
     }
+    return nil
   }
 
   var stringValue: String? {
