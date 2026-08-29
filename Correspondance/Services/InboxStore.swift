@@ -314,6 +314,7 @@ final class InboxStore {
       disappearingSecondsByID = decoded
     }
     hydrateFromDiskCache()
+    adoptMergedAvatars()
   }
 
   /// Affiche tout de suite les caches iMessage + Signal (démarrage type Messages).
@@ -846,6 +847,9 @@ final class InboxStore {
     for member in members { mergedMemberCache[member.id] = member }
     mergedContacts.append(contact)
     persistMergedContacts()
+    // Le visage avant la ligne : sinon elle s'affiche une fois avec ses
+    // initiales, et l'avatar choisi n'arrive qu'au rafraîchissement suivant.
+    await adoptMergedAvatar(contact)
     normalizeMergedContacts()
     await select(contact.id)
   }
@@ -867,9 +871,31 @@ final class InboxStore {
     pinnedIDs.remove(mergedID)
     mutedIDs.remove(mergedID)
     persistFlags()
+    await ConversationAvatarStore.shared.invalidate(conversationID: mergedID)
     conversations = list
     if selectedConversationID == mergedID {
       await select(restored.first?.id ?? activeQueue.first?.id)
+    }
+  }
+
+  /// Range sous l'identifiant virtuel l'avatar du membre choisi à la fusion.
+  private func adoptMergedAvatar(_ contact: MergedContact) async {
+    let members: [Conversation] = contact.memberIDs.compactMap { memberID in
+      conversations.first { $0.id == memberID } ?? mergedMemberCache[memberID]
+    }
+    guard let source = members.first(where: { $0.id == contact.avatarConversationID })
+      ?? members.first(where: { $0.id == contact.defaultConversationID })
+      ?? members.first
+    else { return }
+    await ConversationAvatarStore.shared.adopt(mergedID: contact.id, from: source)
+  }
+
+  /// Au lancement : les fusions relues du disque reprennent le visage choisi.
+  private func adoptMergedAvatars() {
+    let contacts = mergedContacts
+    guard !contacts.isEmpty else { return }
+    Task { @MainActor in
+      for contact in contacts { await self.adoptMergedAvatar(contact) }
     }
   }
 

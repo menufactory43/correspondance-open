@@ -44,6 +44,17 @@ actor ConversationAvatarStore {
     memory.removeValue(forKey: conversationID)
   }
 
+  /// Le visage d'une ligne fusionnée : celui du fil choisi à la fusion.
+  /// La ligne virtuelle n'a ni carnet d'adresses ni fichier sur disque — elle
+  /// emprunte l'image déjà résolue de l'un de ses membres.
+  func adopt(mergedID: String, from source: Conversation) async {
+    guard let data = await imageData(for: source) else {
+      memory.removeValue(forKey: mergedID)
+      return
+    }
+    memory[mergedID] = data
+  }
+
   /// Photo de groupe déjà localisée par `IMessageDatabase`.
   private func loadGroupPhotoData(for conversation: Conversation) -> Data? {
     guard let path = conversation.groupPhotoPath, !path.isEmpty else { return nil }
