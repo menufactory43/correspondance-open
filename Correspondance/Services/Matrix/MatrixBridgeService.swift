@@ -74,7 +74,10 @@ actor MatrixBridgeService {
   func restoreCursorAndCheckSession() async -> Bool {
     if !didHydrate {
       didHydrate = true
-      nextBatch = MatrixConversationCache.load().nextBatch
+      // Sync initial à chaque lancement (homeserver privé : c'est léger). Reprendre le
+      // curseur du cache ferait perdre les invitations de portails reçues entre-temps :
+      // Synapse ne les renvoie qu'une fois. Le cache sert à l'affichage immédiat, pas au curseur.
+      nextBatch = nil
     }
     guard await client.isConfigured else { return false }
     do {
