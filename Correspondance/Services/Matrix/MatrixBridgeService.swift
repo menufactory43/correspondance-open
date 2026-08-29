@@ -1,0 +1,270 @@
+import Foundation
+
+/// Pont entre le homeserver et l'inbox : tient l'état des salons, la boucle `/sync`,
+/// l'envoi et le flux de connexion WhatsApp. Un seul `MatrixClient` en dessous.
+actor MatrixBridgeService {
+  private let client: MatrixClient
+  private var rooms: [String: MatrixRoomModel] = [:]
+  private var nextBatch: String?
+  private var selfUserID: String = ""
+  private var didHydrate = false
+  /// Salon de gestion du bot WhatsApp (commandes `login`, `pm`…).
+  private var managementRoomID: String?
+  /// `txnId` par message optimiste : un renvoi ne duplique rien.
+  private var transactionIDs: [String: String] = [:]
+
+  init(credentials: MatrixCredentials? = MatrixCredentialStore.load()) {
+    client = MatrixClient(credentials: credentials)
+    if let credentials { selfUserID = credentials.userID }
+  }
+
+  // MARK: - Session
+
+  var isConnected: Bool { !selfUserID.isEmpty }
+
+  var currentUserID: String { selfUserID }
+
+  func statusMessageFR() async -> String {
+    guard let creds = await client.currentCredentials else {
+      return "Matrix : non connecté."
+    }
+    do {
+      let userID = try await client.whoami()
+      selfUserID = userID
+      let bridged = conversations().count
+      return "Matrix connecté (\(userID)) · \(bridged) fils WhatsApp."
+    } catch {
+      return "Matrix (\(creds.homeserver.host ?? "?")) : \(error.localizedDescription)"
+    }
+  }
+
+  /// Connexion par mot de passe, puis persistance dans le Trousseau.
+  @discardableResult
+  func connect(homeserver: URL, user: String, password: String) async throws -> MatrixCredentials {
+    // Ping d'abord : un mot de passe envoyé à une mauvaise adresse ne sert personne.
+    _ = try await client.serverVersions(homeserver: homeserver)
+    let creds = try await client.login(homeserver: homeserver, user: user, password: password)
+    MatrixCredentialStore.save(creds)
+    selfUserID = creds.userID
+    rooms = [:]
+    nextBatch = nil
+    managementRoomID = nil
+    return creds
+  }
+
+  func disconnect() async {
+    await client.logout()
+    MatrixCredentialStore.clear()
+    MatrixConversationCache.clear()
+    rooms = [:]
+    nextBatch = nil
+    selfUserID = ""
+    managementRoomID = nil
+  }
+
+  // MARK: - Sync
+
+  /// Hydrate depuis le cache disque — affichage immédiat au démarrage.
+  func hydrateFromCache() -> (conversations: [Conversation], messages: [String: [ChatMessage]]) {
+    guard !didHydrate else { return ([], [:]) }
+    didHydrate = true
+    let (batch, conversations, messages) = MatrixConversationCache.load()
+    nextBatch = batch
+    return (conversations, messages)
+  }
+
+  /// Une passe de `/sync`. Long-poll : renvoie dès qu'il se passe quelque chose.
+  @discardableResult
+  func syncOnce(timeoutMilliseconds: Int = 30_000) async throws -> [Conversation] {
+    guard await client.isConfigured else { throw MatrixError.notConfigured }
+    if selfUserID.isEmpty { selfUserID = try await client.whoami() }
+    let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    parser.apply(response, to: &rooms)
+    nextBatch = response.nextBatch
+    detectManagementRoom()
+    persist()
+    return conversations()
+  }
+
+  func conversations() -> [Conversation] {
+    rooms.values
+      .compactMap { $0.conversation(selfUserID: selfUserID) }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  func messages(conversationID: String) -> [ChatMessage] {
+    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return [] }
+    return model.sortedMessages
+  }
+
+  /// Complète l'historique d'un salon (ouverture d'un fil encore vide).
+  func backfill(conversationID: String, limit: Int = 50) async -> [ChatMessage] {
+    guard let roomID = roomID(forConversation: conversationID) else { return [] }
+    do {
+      let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: limit)
+      guard var model = rooms[roomID] else { return [] }
+      MatrixSyncParser(selfUserID: selfUserID).applyMessages(response.chunk, roomID: roomID, to: &model)
+      rooms[roomID] = model
+      persist()
+      return model.sortedMessages
+    } catch {
+      return rooms[roomID]?.sortedMessages ?? []
+    }
+  }
+
+  /// Télécharge les pièces jointes manquantes et renvoie les messages avec chemins locaux.
+  func ensureLocalAttachments(_ messages: [ChatMessage]) async -> [ChatMessage] {
+    var result: [ChatMessage] = []
+    for message in messages {
+      guard !message.attachments.isEmpty else {
+        result.append(message)
+        continue
+      }
+      var updated = message
+      for index in updated.attachments.indices {
+        let attachment = updated.attachments[index]
+        if attachment.resolvedFileURL != nil { continue }
+        if let path = MatrixAttachmentStore.existingLocalPath(forMXC: attachment.id, contentType: attachment.contentType) {
+          updated.attachments[index].localPath = path
+          continue
+        }
+        guard let data = try? await client.downloadMedia(mxcURI: attachment.id) else { continue }
+        updated.attachments[index].localPath = MatrixAttachmentStore.store(
+          data: data,
+          forMXC: attachment.id,
+          contentType: attachment.contentType
+        )
+      }
+      // Reporter les chemins dans le modèle pour éviter un re-téléchargement.
+      if let roomID = roomID(forConversation: message.conversationID) {
+        rooms[roomID]?.messagesByID[message.id] = updated
+      }
+      result.append(updated)
+    }
+    return result
+  }
+
+  // MARK: - Envoi
+
+  func send(conversationID: String, text: String, attachmentPaths: [String], localID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    // Un identifiant stable par message optimiste : rejouer l'envoi ne duplique rien.
+    let txnID = transactionIDs[localID] ?? "corr-\(localID)"
+    transactionIDs[localID] = txnID
+
+    for (index, path) in attachmentPaths.enumerated() {
+      try await client.sendAttachment(
+        roomID: roomID,
+        fileURL: URL(fileURLWithPath: path),
+        transactionID: "\(txnID)-att\(index)"
+      )
+    }
+    if !text.isEmpty {
+      try await client.sendText(roomID: roomID, body: text, transactionID: txnID)
+    }
+  }
+
+  // MARK: - Connexion WhatsApp
+
+  enum WhatsAppLoginStep: Sendable, Equatable {
+    /// QR à scanner (PNG déjà téléchargé).
+    case qrCode(Data)
+    case pairingCode(String)
+    case success(String)
+    case failure(String)
+    case waiting
+  }
+
+  /// Ouvre (ou retrouve) le salon de gestion et envoie la commande de connexion.
+  func startWhatsAppLogin(usingPhoneNumber phoneNumber: String? = nil) async throws {
+    let roomID = try await ensureManagementRoom()
+    let command = phoneNumber.map { "login phone \($0)" } ?? "login qr"
+    try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
+  }
+
+  /// Dernier état publié par le bot dans le salon de gestion.
+  func whatsAppLoginStep() async throws -> WhatsAppLoginStep {
+    let roomID = try await ensureManagementRoom()
+    let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 20)
+    for event in response.chunk {
+      guard event.type == "m.room.message",
+            let content = event.content,
+            let sender = event.sender,
+            MatrixIdentity.isBridgeBot(sender)
+      else { continue }
+      let body = content.string(at: "body") ?? ""
+      let lower = body.lowercased()
+      if lower.contains("successfully logged in") || lower.contains("connexion réussie") {
+        return .success(body)
+      }
+      if lower.contains("failed to log in") || lower.contains("login timed out") || lower.contains("timed out") {
+        return .failure(body)
+      }
+      if content.string(at: "msgtype") == "m.image", let mxc = content.string(at: "url") {
+        let data = try await client.downloadMedia(mxcURI: mxc)
+        return .qrCode(data)
+      }
+      if let code = Self.pairingCode(in: body) {
+        return .pairingCode(code)
+      }
+    }
+    return .waiting
+  }
+
+  /// Ouvre un fil WhatsApp vers un numéro via la commande bot `pm`.
+  func startWhatsAppConversation(phoneNumber: String) async throws {
+    let roomID = try await ensureManagementRoom()
+    let digits = phoneNumber.filter { $0.isNumber }
+    guard digits.count >= 8 else {
+      throw MatrixError.decoding("numéro WhatsApp invalide")
+    }
+    try await client.sendText(roomID: roomID, body: "pm +\(digits)", transactionID: UUID().uuidString)
+  }
+
+  /// Salon de gestion : celui où le bot est présent et qui n'est pas un portail.
+  @discardableResult
+  private func ensureManagementRoom() async throws -> String {
+    if let managementRoomID { return managementRoomID }
+    detectManagementRoom()
+    if let managementRoomID { return managementRoomID }
+    guard !selfUserID.isEmpty else { throw MatrixError.notConfigured }
+    let serverName = String(selfUserID.split(separator: ":").last ?? "")
+    let roomID = try await client.createDM(with: "@whatsappbot:\(serverName)")
+    managementRoomID = roomID
+    return roomID
+  }
+
+  private func detectManagementRoom() {
+    guard managementRoomID == nil else { return }
+    managementRoomID = rooms.values
+      .first { model in
+        model.network == nil && model.members.keys.contains(where: { MatrixIdentity.isBridgeBot($0) })
+      }?
+      .roomID
+  }
+
+  static func pairingCode(in body: String) -> String? {
+    // Le bot annonce « Input the pairing code ABCD-EFGH in the WhatsApp app ».
+    guard body.lowercased().contains("pairing code") else { return nil }
+    let pattern = #"\b[A-Z0-9]{4}-[A-Z0-9]{4}\b"#
+    guard let range = body.range(of: pattern, options: .regularExpression) else { return nil }
+    return String(body[range])
+  }
+
+  // MARK: - Privé
+
+  private func roomID(forConversation conversationID: String) -> String? {
+    rooms.values.first { $0.conversationID == conversationID }?.roomID
+  }
+
+  private func persist() {
+    var messages: [String: [ChatMessage]] = [:]
+    for model in rooms.values where model.network != nil {
+      messages[model.conversationID] = model.sortedMessages
+    }
+    MatrixConversationCache.save(nextBatch: nextBatch, conversations: conversations(), messages: messages)
+  }
+}
