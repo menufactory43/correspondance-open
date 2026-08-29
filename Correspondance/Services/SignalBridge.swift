@@ -19,6 +19,9 @@ actor SignalBridge {
     return Self.which("signal-cli")
   }
 
+  /// Notre propre numéro Signal, si `listAccounts` a déjà répondu.
+  func accountNumber() -> String? { lastAccountLabel }
+
   func statusMessageFR() async -> String {
     guard let cli = resolvedCLI() else {
       return "signal-cli absent. brew install signal-cli puis link."
@@ -345,9 +348,14 @@ actor SignalBridge {
 
     var list = cachedMessages[conversation.id] ?? []
     let body = trimmed.isEmpty && !outgoingAttachments.isEmpty ? "📷 Photo" : trimmed
+    // `signal-cli send` répond par le timestamp du message : c'est l'identifiant que
+    // la partie d'en face citera pour réagir. Sans lui, une réaction à *nos* messages
+    // n'aurait aucune cible à qui se rattacher.
+    let sentTimestamp = Self.sentTimestamp(in: result.stdout)
+      ?? Int64(Date().timeIntervalSince1970 * 1000)
     list.append(
       ChatMessage(
-        id: "local-\(UUID().uuidString)",
+        id: "signal-\(sentTimestamp)-me",
         conversationID: conversation.id,
         network: .signal,
         text: body,
@@ -592,6 +600,74 @@ actor SignalBridge {
     }
   }
 
+  /// Pose ou retire une réaction (`signal-cli sendReaction`).
+  /// Signal identifie sa cible par (auteur, timestamp d'envoi) : les deux se lisent
+  /// dans notre identifiant de message, `signal-<timestamp>-…`.
+  func sendReaction(
+    conversation: Conversation,
+    messageID: String,
+    emoji: String,
+    targetAuthor: String,
+    remove: Bool
+  ) async throws {
+    guard let cli = resolvedCLI() else { throw SignalBridgeError.cliMissing }
+    guard let timestamp = Self.timestamp(inMessageID: messageID) else {
+      throw SignalBridgeError.commandFailed("Message Signal sans horodatage — réaction impossible.")
+    }
+
+    var arguments = ["sendReaction", "-e", emoji, "-a", targetAuthor, "-t", "\(timestamp)"]
+    if remove { arguments.append("-r") }
+    let isGroup = conversation.isGroup || conversation.id.hasPrefix("signal-group:")
+    if isGroup {
+      arguments += ["-g", conversation.transportKey]
+    } else {
+      arguments.append(conversation.address)
+    }
+
+    let result = try await ProcessRunner.run(executable: cli, arguments: arguments, timeoutSeconds: 90)
+    guard result.exitCode == 0 else {
+      throw SignalBridgeError.sendFailed(result.stderr.isEmpty ? result.stdout : result.stderr)
+    }
+
+    // Reflet local immédiat : le `receive` suivant ne nous renvoie pas nos propres réactions.
+    ensureMemoryCacheLoaded()
+    guard var list = cachedMessages[conversation.id],
+          let index = list.firstIndex(where: { $0.id == messageID })
+    else { return }
+    var raw = list[index].reactions.flatMap { existing in
+      existing.senders.map { (emoji: existing.emoji, sender: $0, isMine: existing.isMine) }
+    }
+    raw.removeAll(where: \.isMine)
+    if !remove { raw.append((emoji: emoji, sender: "Moi", isMine: true)) }
+    list[index].reactions = MessageReaction.aggregate(raw)
+    cachedMessages[conversation.id] = list
+
+    var (stored, msgs) = SignalConversationCache.load()
+    msgs[conversation.id] = list
+    SignalConversationCache.save(conversations: stored, messages: msgs)
+    stored.removeAll()
+  }
+
+  /// Timestamp porté par un identifiant `signal-<timestamp>-…`.
+  static func timestamp(inMessageID id: String) -> Int64? {
+    guard id.hasPrefix("signal-") else { return nil }
+    let rest = id.dropFirst("signal-".count)
+    let digits = rest.prefix { $0.isNumber }
+    return Int64(digits)
+  }
+
+  /// Timestamp renvoyé par `signal-cli send` (un entier nu, parfois précédé de logs).
+  static func sentTimestamp(in stdout: String) -> Int64? {
+    for line in stdout.split(whereSeparator: \.isNewline).reversed() {
+      let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard trimmed.allSatisfy(\.isNumber), trimmed.count >= 13, let value = Int64(trimmed) else {
+        continue
+      }
+      return value
+    }
+    return nil
+  }
+
   private static func parseReceive(
     _ raw: String,
     conversations: inout [String: Conversation],
@@ -601,6 +677,8 @@ actor SignalBridge {
       .split(whereSeparator: \.isNewline)
       .map(String.init)
       .filter { $0.contains("{") }
+
+    var pendingReactions: [String: [PendingReaction]] = [:]
 
     for chunk in chunks {
       guard let data = chunk.data(using: .utf8),
@@ -644,20 +722,32 @@ actor SignalBridge {
       }
 
       let attachments = dataMessage.map { SignalAttachmentStore.parseAttachments(from: $0) } ?? []
-      let reaction = dataMessage?["reaction"] as? [String: Any]
-      let reactionEmoji = reaction?["emoji"] as? String
+
+      // Une réaction n'est PAS un message : on la met de côté pour l'attacher à sa
+      // cible une fois tous les messages du lot analysés (l'ordre n'est pas garanti).
+      if let reaction = dataMessage?["reaction"] as? [String: Any],
+         let emoji = reaction["emoji"] as? String,
+         let targetTimestamp = Self.int64(reaction["targetSentTimestamp"])
+      {
+        pendingReactions[conversationKey, default: []].append(
+          PendingReaction(
+            targetTimestamp: targetTimestamp,
+            emoji: emoji,
+            sender: sourceName?.isEmpty == false ? sourceName! : (sourceNumber ?? sourceUuid ?? "?"),
+            isRemove: (reaction["isRemove"] as? Bool) ?? false
+          )
+        )
+        // L'aperçu du fil ne bouge pas : une réaction ne remplace pas le dernier
+        // vrai message, alors que l'ancien code en fabriquait un faux.
+        continue
+      }
+
       let displayText: String = {
         if !body.isEmpty {
           if isGroup, let sourceName, !sourceName.isEmpty {
             return "\(sourceName): \(body)"
           }
           return body
-        }
-        if let reactionEmoji {
-          if isGroup, let sourceName, !sourceName.isEmpty {
-            return "\(sourceName): \(reactionEmoji)"
-          }
-          return reactionEmoji
         }
         if attachments.contains(where: \.isImage) {
           if isGroup, let sourceName, !sourceName.isEmpty {
@@ -671,8 +761,8 @@ actor SignalBridge {
         return ""
       }()
 
-      let tsMs = (dataMessage?["timestamp"] as? Int64)
-        ?? (envelope["timestamp"] as? Int64)
+      let tsMs = Self.int64(dataMessage?["timestamp"])
+        ?? Self.int64(envelope["timestamp"])
         ?? Int64(Date().timeIntervalSince1970 * 1000)
       let sentAt = Date(timeIntervalSince1970: Double(tsMs) / 1000)
 
@@ -714,6 +804,7 @@ actor SignalBridge {
           text: displayText,
           sentAt: sentAt,
           isFromMe: false,
+          senderID: sourceNumber ?? sourceUuid,
           attachments: attachments
         )
         messages[conversationKey, default: []].append(msg)
@@ -723,6 +814,52 @@ actor SignalBridge {
     for key in messages.keys {
       messages[key]?.sort { $0.sentAt < $1.sentAt }
     }
+
+    applyReactions(pendingReactions, to: &messages)
+  }
+
+  /// Réaction Signal reçue, en attente de sa cible.
+  struct PendingReaction: Sendable {
+    var targetTimestamp: Int64
+    var emoji: String
+    var sender: String
+    var isRemove: Bool
+  }
+
+  /// Rattache les réactions à leur message. Signal désigne sa cible par
+  /// `targetSentTimestamp` : nos identifiants commencent tous par `signal-<timestamp>-`,
+  /// y compris ceux de nos propres envois, ce qui suffit à la retrouver.
+  static func applyReactions(
+    _ pending: [String: [PendingReaction]],
+    to messages: inout [String: [ChatMessage]]
+  ) {
+    for (conversationKey, reactions) in pending {
+      guard var list = messages[conversationKey] else { continue }
+      for reaction in reactions {
+        let prefix = "signal-\(reaction.targetTimestamp)-"
+        guard let index = list.firstIndex(where: { $0.id.hasPrefix(prefix) }) else { continue }
+        var raw = list[index].reactions.flatMap { existing in
+          existing.senders.map { (emoji: existing.emoji, sender: $0, isMine: existing.isMine) }
+        }
+        raw.removeAll { $0.sender == reaction.sender }
+        // Signal n'autorise qu'un emoji par personne : retirer, c'est ne rien remettre.
+        if !reaction.isRemove {
+          raw.append((emoji: reaction.emoji, sender: reaction.sender, isMine: false))
+        }
+        list[index].reactions = MessageReaction.aggregate(raw)
+      }
+      messages[conversationKey] = list
+    }
+  }
+
+  /// `Int64` tolérant : signal-cli sérialise les timestamps tantôt en `Int`, tantôt en `Double`.
+  static func int64(_ value: Any?) -> Int64? {
+    if let v = value as? Int64 { return v }
+    if let v = value as? Int { return Int64(v) }
+    if let v = value as? Double { return Int64(v) }
+    if let v = value as? NSNumber { return v.int64Value }
+    if let v = value as? String { return Int64(v) }
+    return nil
   }
 
   private static func extractPhone(from stdout: String) -> String? {

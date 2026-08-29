@@ -175,8 +175,12 @@ actor MatrixBridgeService {
         )
       }
       // Reporter les chemins dans le modèle pour éviter un re-téléchargement.
+      // Sans les réactions : `messagesByID` est la vérité brute, l'agrégation se
+      // refait à la lecture depuis `reactionsByEventID` (qu'une redaction peut vider).
       if let roomID = roomID(forConversation: message.conversationID) {
-        rooms[roomID]?.messagesByID[message.id] = updated
+        var canonical = updated
+        canonical.reactions = []
+        rooms[roomID]?.messagesByID[message.id] = canonical
       }
       result.append(updated)
     }
@@ -202,6 +206,45 @@ actor MatrixBridgeService {
     if !text.isEmpty {
       try await client.sendText(roomID: roomID, body: text, transactionID: txnID)
     }
+  }
+
+  /// Pose, remplace ou retire ma réaction sur un message.
+  ///
+  /// WhatsApp n'accepte **qu'un emoji par personne et par message**
+  /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp) : reposer le même
+  /// emoji le retire, en poser un autre remplace le précédent.
+  func toggleReaction(conversationID: String, messageID: String, emoji: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    let mine = rooms[roomID]?.reactionsByEventID
+      .first { $0.value.targetEventID == messageID && $0.value.isMine }
+
+    if let mine {
+      try await client.redact(roomID: roomID, eventID: mine.key)
+      rooms[roomID]?.reactionsByEventID.removeValue(forKey: mine.key)
+      // Reposer le même emoji = le retirer.
+      if mine.value.emoji == emoji {
+        persist()
+        return
+      }
+    }
+
+    guard let eventID = try await client.sendReaction(
+      roomID: roomID,
+      targetEventID: messageID,
+      key: emoji
+    ) else { return }
+
+    // Reflet local immédiat : le `/sync` confirmera dans la seconde.
+    rooms[roomID]?.reactionsByEventID[eventID] = MatrixRoomModel.ReactionEvent(
+      targetEventID: messageID,
+      emoji: emoji,
+      senderID: selfUserID,
+      senderName: "Moi",
+      isMine: true
+    )
+    persist()
   }
 
   // MARK: - Connexion WhatsApp

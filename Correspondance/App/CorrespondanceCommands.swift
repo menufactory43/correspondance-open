@@ -38,6 +38,11 @@ struct CorrespondanceCommands: Commands {
 
       Divider()
 
+      Button("Réagir 👍") {
+        Task { @MainActor in await store.quickReactToSelectedMessage() }
+      }
+      .keyboardShortcut("r", modifiers: [.command, .shift])
+
       Button("Rechercher dans le fil") {
         store.toggleThreadSearch()
       }

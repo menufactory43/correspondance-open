@@ -20,6 +20,8 @@ struct MatrixSyncParser: Sendable {
       for event in (room.timeline?.events ?? []) {
         applyState(event, to: &model)
         applyMessage(event, roomID: roomID, to: &model)
+        applyReaction(event, to: &model)
+        applyRedaction(event, to: &model)
       }
       if let heroes = room.summary?.heroes { model.heroes = heroes }
       if let count = room.unreadNotifications?.notificationCount { model.unreadCount = count }
@@ -36,6 +38,8 @@ struct MatrixSyncParser: Sendable {
     for event in events {
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
+      applyReaction(event, to: &model)
+      applyRedaction(event, to: &model)
     }
   }
 
@@ -157,11 +161,54 @@ struct MatrixSyncParser: Sendable {
       text: text,
       sentAt: event.sentAt,
       isFromMe: event.sender == selfUserID,
+      senderID: event.sender,
       attachments: attachments
     )
     guard message.hasVisibleBody else { return }
     model.messagesByID[eventID] = message
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  // MARK: - Réactions
+
+  /// `m.reaction` : une annotation `{rel_type: "m.annotation", event_id, key}`.
+  /// mautrix-whatsapp et mautrix-signal la bridgent dans les deux sens.
+  private func applyReaction(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == "m.reaction",
+          let eventID = event.eventID,
+          let content = event.content,
+          content.string(at: "m.relates_to.rel_type") == "m.annotation",
+          let target = content.string(at: "m.relates_to.event_id"),
+          let key = content.string(at: "m.relates_to.key"),
+          let sender = event.sender
+    else { return }
+
+    model.reactionsByEventID[eventID] = MatrixRoomModel.ReactionEvent(
+      targetEventID: target,
+      emoji: key,
+      senderID: sender,
+      senderName: displayName(of: sender, in: model),
+      isMine: sender == selfUserID
+    )
+  }
+
+  /// `m.room.redaction` : retire la réaction (ou le message) supprimé.
+  /// Retirer une réaction, côté WhatsApp comme Signal, c'est rédiger son event.
+  private func applyRedaction(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == "m.room.redaction", let target = event.redactedEventID else { return }
+    model.reactionsByEventID.removeValue(forKey: target)
+    model.messagesByID.removeValue(forKey: target)
+    // Une réaction dont la cible disparaît n'a plus de sens.
+    for (id, reaction) in model.reactionsByEventID where reaction.targetEventID == target {
+      model.reactionsByEventID.removeValue(forKey: id)
+    }
+  }
+
+  /// Nom affichable d'un expéditeur : le membre du salon, sinon le localpart nu.
+  private func displayName(of userID: String, in model: MatrixRoomModel) -> String {
+    if userID == selfUserID { return "Moi" }
+    if let name = model.members[userID]?.displayName, !name.isEmpty { return name }
+    return MatrixIdentity.localpart(userID)
   }
 
   private static func fallbackMime(for msgtype: String) -> String {

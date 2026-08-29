@@ -155,3 +155,57 @@ final class MatrixSyncParserTests: XCTestCase {
     XCTAssertEqual(rooms.count, 4)
   }
 }
+
+// MARK: - Réactions
+
+extension MatrixSyncParserTests {
+  /// `m.reaction` rattachée à sa cible, jamais affichée comme un message.
+  func testReactionsAreAttachedToTheirTargetMessage() throws {
+    let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
+    // Une réaction n'est pas un message : le fil en compte toujours trois.
+    XCTAssertEqual(room.sortedMessages.map(\.id), ["$msg-alice-1", "$msg-moi-1", "$msg-alice-image"])
+
+    let mine = try XCTUnwrap(room.sortedMessages.first { $0.id == "$msg-moi-1" })
+    XCTAssertEqual(mine.reactions.map(\.emoji), ["❤️"])
+    XCTAssertEqual(mine.reactions.first?.count, 1)
+    XCTAssertFalse(try XCTUnwrap(mine.reactions.first).isMine)
+    XCTAssertEqual(mine.reactions.first?.senders, ["Alice Martin"])
+  }
+
+  /// Ma propre réaction est marquée `isMine` : la pastille se montre active.
+  func testMyOwnReactionIsFlagged() throws {
+    let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
+    let target = try XCTUnwrap(room.sortedMessages.first { $0.id == "$msg-alice-1" })
+    let mine = try XCTUnwrap(target.reactions.first { $0.emoji == "👍" })
+    XCTAssertTrue(mine.isMine)
+    XCTAssertEqual(mine.senders, ["Moi"])
+    XCTAssertEqual(target.myReactionEmoji, "👍")
+  }
+
+  /// Retirer une réaction, c'est rédiger son event : elle disparaît des pastilles.
+  func testRedactedReactionIsRemoved() throws {
+    let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
+    let target = try XCTUnwrap(room.sortedMessages.first { $0.id == "$msg-alice-1" })
+    XCTAssertFalse(target.reactions.contains { $0.emoji == "😂" })
+    XCTAssertNil(room.reactionsByEventID["$rea-annulee"])
+  }
+
+  /// Deux personnes, un seul emoji : une pastille qui compte 2.
+  func testSameEmojiFromTwoPeopleIsAggregated() throws {
+    let room = try XCTUnwrap(try parsedRooms()[groupRoomID])
+    let message = try XCTUnwrap(room.sortedMessages.first)
+    let party = try XCTUnwrap(message.reactions.first { $0.emoji == "🎉" })
+    XCTAssertEqual(party.count, 2)
+    XCTAssertEqual(party.senders.count, 2)
+    XCTAssertFalse(party.isMine)
+  }
+
+  func testReplayingTheSyncDoesNotDuplicateReactions() throws {
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    var rooms: [String: MatrixRoomModel] = [:]
+    parser.apply(try loadSyncFixture(), to: &rooms)
+    parser.apply(try loadSyncFixture(), to: &rooms)
+    let message = try XCTUnwrap(rooms[groupRoomID]?.sortedMessages.first)
+    XCTAssertEqual(message.reactions.first { $0.emoji == "🎉" }?.count, 2)
+  }
+}

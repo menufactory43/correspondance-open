@@ -9,6 +9,11 @@ struct MessageBubbleView: View {
   var highlightQuery: String = ""
   /// Ce message est celui que la navigation ⌘F vise en ce moment.
   var isCurrentMatch: Bool = false
+  /// La bulle est celle que visent les actions du fil (⌘⇧R, ⌘R).
+  var isSelected: Bool = false
+  /// `nil` en aperçu : la bulle est alors purement décorative.
+  var onReact: ((String) -> Void)?
+  var onSelect: (() -> Void)?
 
   var body: some View {
     HStack {
@@ -30,12 +35,78 @@ struct MessageBubbleView: View {
             )
         }
 
+        if !message.reactions.isEmpty {
+          reactionRow
+        }
+
         Text(message.sentAt, format: .dateTime.hour().minute())
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkTertiary)
       }
       .opacity(message.isPending ? 0.55 : 1)
+      .padding(.horizontal, 4)
+      .padding(.vertical, 2)
+      .background(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .fill(isSelected ? theme.accent.opacity(0.10) : .clear)
+      )
+      .contentShape(Rectangle())
+      .onTapGesture { onSelect?() }
+      .contextMenu { bubbleMenu }
       if !message.isFromMe { Spacer(minLength: 48) }
+    }
+  }
+
+  /// Pastilles sous la bulle : emoji, compteur au-delà d'une personne, et un liseré
+  /// quand j'en fais partie. Cliquer une pastille repose (donc retire) le même emoji.
+  private var reactionRow: some View {
+    HStack(spacing: 4) {
+      ForEach(message.reactions) { reaction in
+        Button {
+          onReact?(reaction.emoji)
+        } label: {
+          HStack(spacing: 3) {
+            Text(reaction.emoji).font(.system(size: 11))
+            if reaction.count > 1 {
+              Text("\(reaction.count)")
+                .font(Typography.meta(typeface))
+                .foregroundStyle(theme.inkSecondary)
+            }
+          }
+          .padding(.horizontal, 6)
+          .padding(.vertical, 2)
+          .background(
+            Capsule().fill(theme.paperSecondary)
+          )
+          .overlay(
+            Capsule().stroke(reaction.isMine ? theme.accent : theme.edge, lineWidth: 1)
+          )
+        }
+        .buttonStyle(.plain)
+        .help(reaction.senders.isEmpty ? reaction.emoji : reaction.senders.joined(separator: ", "))
+        .accessibilityLabel("\(reaction.emoji), \(reaction.count)")
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var bubbleMenu: some View {
+    if onReact != nil {
+      ForEach(InboxStore.quickReactions, id: \.self) { emoji in
+        Button {
+          onReact?(emoji)
+        } label: {
+          // Le même emoji déjà posé : le menu propose alors de le retirer.
+          Text(message.myReactionEmoji == emoji ? "\(emoji)  Retirer" : emoji)
+        }
+      }
+    }
+    if !message.text.isEmpty {
+      Divider()
+      Button("Copier le texte") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(message.text, forType: .string)
+      }
     }
   }
 

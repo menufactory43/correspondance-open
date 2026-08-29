@@ -72,7 +72,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | mautrix | Prio |
 |---|---|---|---|---|---|
-| Réactions | `OPEN_REACTION_PICKER` (→), `QUICK_REACT_SELECTED` ⌘⇧R, `Quick reaction emoji`, `Remove %s reaction` ; API `POST /v1/chats/{c}/messages/{m}/reactions` (`reactionKey`) | **Partiel dégradé** : `SignalBridge.parseReceive` transforme `dataMessage.reaction.emoji` en faux message texte ; `MatrixSyncParser.applyMessage` ne traite que `m.room.message` → les `m.reaction` sont perdus. **Envoi absent** | M | ✅ `m.reaction` dans les deux sens sur WhatsApp, Meta, Signal, Telegram | **P0** |
+| Réactions | `OPEN_REACTION_PICKER` (→), `QUICK_REACT_SELECTED` ⌘⇧R, `Quick reaction emoji`, `Remove %s reaction` ; API `POST /v1/chats/{c}/messages/{m}/reactions` (`reactionKey`) | **Fait en lecture partout, en écriture sur 2 réseaux sur 3.** Réception : `m.reaction` + `m.room.redaction` (WhatsApp), `dataMessage.reaction` rattachée à sa cible et non plus muée en faux message (Signal), tapbacks `associated_message_type` 2000-3005 (iMessage). Envoi : `m.reaction` / redaction (WhatsApp), `sendReaction` (Signal). **iMessage en lecture seule** : Messages n'expose aucune commande AppleScript de tapback. UI : pastilles sous la bulle, menu contextuel, ⌘⇧R | — | ✅ `ReactionCount: 1` — un seul emoji par personne, appliqué | Partiel (iMessage) |
 | Réponses / citations | `QUOTE_AND_REPLY` ⌘R, `Message: Quote or Edit Selected Message` (Entrée) ; API `replyToMessageID` → champ `linkedMessageID` | **Absent** | M | ✅ `m.in_reply_to` WhatsApp, Meta, Telegram. Signal : non listé au ROADMAP mautrix-signal | **P0** |
 | Édition de message | `EDIT_MESSAGE` ⌘T ; API `messages.update` (changelog 4.2.499) | **Absent et activement ignoré** : `MatrixSyncParser.applyMessage` fait `if rel_type == "m.replace" { return }` → l'original reste affiché, l'édition disparaît | M | ⚠️ `m.replace` OK sur Meta et Telegram ; **non supporté** WhatsApp ni Signal | P1 |
 | Suppression | `Delete for Everyone` / `Delete for Me`, `Delete message is not supported for %s yet` ; API `messages.delete` | **Absent** | M | ✅ redaction supportée dans les deux sens sur WhatsApp, Meta, Signal, Telegram | P1 |
@@ -166,7 +166,7 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 | ⌘U `SELECT_NEXT_UNREAD_THREAD` | absent | P1 |
 | ⌘⇧U `TOGGLE_THREAD_READ` · ⌘⇧M mute · ⌘P pin | absent (actions présentes au menu contextuel) | P1 |
 | ⌘R `QUOTE_AND_REPLY` | **⌘R = Actualiser** ⚠️ collision à arbitrer | **P0** |
-| ⌘T `EDIT_MESSAGE` · → `OPEN_REACTION_PICKER` · ⌘⇧R quick react | absent | P0/P1 |
+| ⌘T `EDIT_MESSAGE` · → `OPEN_REACTION_PICKER` · ⌘⇧R quick react | **⌘⇧R** ✅ (menu contextuel pour le choix d'emoji) ; ⌘T absent | P1 |
 | ⌘L `OPEN_REMIND_LATER_MENU` · ⌘⇧L `SCHEDULE_MESSAGE` | absent | P1/P2 |
 | ⌘Entrée `SEND_MESSAGE_AND_ARCHIVE` | **⌘Entrée** ✅ | — |
 | ⌘N `CREATE_NEW_CHAT` · ⌘, `TOGGLE_PREFS_PANE` | **⌘N / ⌘,** ✅ | — |

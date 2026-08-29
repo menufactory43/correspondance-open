@@ -172,6 +172,44 @@ actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// `m.reaction` : une annotation sur un event existant.
+  /// mautrix-whatsapp la relaie dans les deux sens (un seul emoji par personne).
+  @discardableResult
+  func sendReaction(
+    roomID: String,
+    targetEventID: String,
+    key: String,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.reaction/\(Self.escape(transactionID))",
+      body: .object([
+        "m.relates_to": .object([
+          "rel_type": .string("m.annotation"),
+          "event_id": .string(targetEventID),
+          "key": .string(key),
+        ])
+      ])
+    )
+    return json.string(at: "event_id")
+  }
+
+  /// Retire un event — c'est ainsi qu'on retire une réaction.
+  @discardableResult
+  func redact(
+    roomID: String,
+    eventID: String,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/redact/\(Self.escape(eventID))/\(Self.escape(transactionID))",
+      body: .object([:])
+    )
+    return json.string(at: "event_id")
+  }
+
   /// Upload puis event `m.image` (ou `m.file` si le type n'est pas une image).
   @discardableResult
   func sendAttachment(

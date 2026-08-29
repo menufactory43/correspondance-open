@@ -4,10 +4,14 @@
     "join": {
       "!dm-alice:correspondance.local": {
         "summary": {
-          "m.heroes": ["@whatsapp_lid-19876543210:correspondance.local"],
+          "m.heroes": [
+            "@whatsapp_lid-19876543210:correspondance.local"
+          ],
           "m.joined_member_count": 3
         },
-        "unread_notifications": { "notification_count": 2 },
+        "unread_notifications": {
+          "notification_count": 2
+        },
         "state": {
           "events": [
             {
@@ -18,7 +22,10 @@
               "origin_server_ts": 1756400000000,
               "content": {
                 "bridgebot": "@whatsappbot:correspondance.local",
-                "protocol": { "id": "whatsapp", "displayname": "WhatsApp" },
+                "protocol": {
+                  "id": "whatsapp",
+                  "displayname": "WhatsApp"
+                },
                 "channel": {
                   "id": "33612345678@s.whatsapp.net",
                   "displayname": "Alice Martin"
@@ -31,7 +38,10 @@
               "sender": "@meffysto:correspondance.local",
               "event_id": "$state-member-self-dm",
               "origin_server_ts": 1756400000001,
-              "content": { "membership": "join", "displayname": "meffysto" }
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
             },
             {
               "type": "m.room.member",
@@ -39,7 +49,10 @@
               "sender": "@whatsapp_lid-19876543210:correspondance.local",
               "event_id": "$state-member-alice",
               "origin_server_ts": 1756400000002,
-              "content": { "membership": "join", "displayname": "Alice Martin" }
+              "content": {
+                "membership": "join",
+                "displayname": "Alice Martin"
+              }
             },
             {
               "type": "m.room.member",
@@ -47,7 +60,10 @@
               "sender": "@whatsappbot:correspondance.local",
               "event_id": "$state-member-bot-dm",
               "origin_server_ts": 1756400000003,
-              "content": { "membership": "join", "displayname": "WhatsApp bridge bot" }
+              "content": {
+                "membership": "join",
+                "displayname": "WhatsApp bridge bot"
+              }
             }
           ]
         },
@@ -60,14 +76,20 @@
               "event_id": "$msg-alice-1",
               "sender": "@whatsapp_lid-19876543210:correspondance.local",
               "origin_server_ts": 1756400100000,
-              "content": { "msgtype": "m.text", "body": "On se voit demain ?" }
+              "content": {
+                "msgtype": "m.text",
+                "body": "On se voit demain ?"
+              }
             },
             {
               "type": "m.room.message",
               "event_id": "$msg-moi-1",
               "sender": "@meffysto:correspondance.local",
               "origin_server_ts": 1756400200000,
-              "content": { "msgtype": "m.text", "body": "Oui, 19 h au comptoir." }
+              "content": {
+                "msgtype": "m.text",
+                "body": "Oui, 19 h au comptoir."
+              }
             },
             {
               "type": "m.room.message",
@@ -78,15 +100,71 @@
                 "msgtype": "m.image",
                 "body": "photo-terrasse.jpg",
                 "url": "mxc://correspondance.local/AbCdEf123456",
-                "info": { "mimetype": "image/jpeg", "size": 84213, "w": 1280, "h": 960 }
+                "info": {
+                  "mimetype": "image/jpeg",
+                  "size": 84213,
+                  "w": 1280,
+                  "h": 960
+                }
               }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-alice-coeur",
+              "sender": "@whatsapp_lid-19876543210:correspondance.local",
+              "origin_server_ts": 1756400400000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-moi-1",
+                  "key": "❤️"
+                }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-moi-pouce",
+              "sender": "@meffysto:correspondance.local",
+              "origin_server_ts": 1756400410000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-alice-1",
+                  "key": "👍"
+                }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-annulee",
+              "sender": "@whatsapp_lid-19876543210:correspondance.local",
+              "origin_server_ts": 1756400420000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-alice-1",
+                  "key": "😂"
+                }
+              }
+            },
+            {
+              "type": "m.room.redaction",
+              "event_id": "$red-1",
+              "sender": "@whatsapp_lid-19876543210:correspondance.local",
+              "origin_server_ts": 1756400430000,
+              "redacts": "$rea-annulee",
+              "content": {}
             }
           ]
         }
       },
       "!groupe-vacances:correspondance.local": {
-        "summary": { "m.joined_member_count": 5 },
-        "unread_notifications": { "notification_count": 0 },
+        "summary": {
+          "m.joined_member_count": 5
+        },
+        "unread_notifications": {
+          "notification_count": 0
+        },
         "state": {
           "events": [
             {
@@ -97,7 +175,10 @@
               "origin_server_ts": 1756400000000,
               "content": {
                 "bridgebot": "@whatsappbot:correspondance.local",
-                "protocol": { "id": "whatsapp", "displayname": "WhatsApp" },
+                "protocol": {
+                  "id": "whatsapp",
+                  "displayname": "WhatsApp"
+                },
                 "channel": {
                   "id": "120363000000000000@g.us",
                   "displayname": "Vacances 2026"
@@ -110,7 +191,9 @@
               "sender": "@whatsappbot:correspondance.local",
               "event_id": "$state-name-groupe",
               "origin_server_ts": 1756400000010,
-              "content": { "name": "Vacances 2026" }
+              "content": {
+                "name": "Vacances 2026"
+              }
             },
             {
               "type": "m.room.member",
@@ -118,7 +201,10 @@
               "sender": "@meffysto:correspondance.local",
               "event_id": "$state-member-self-groupe",
               "origin_server_ts": 1756400000011,
-              "content": { "membership": "join", "displayname": "meffysto" }
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
             },
             {
               "type": "m.room.member",
@@ -126,7 +212,10 @@
               "sender": "@whatsapp_lid-11111111111:correspondance.local",
               "event_id": "$state-member-bob",
               "origin_server_ts": 1756400000012,
-              "content": { "membership": "join", "displayname": "Bob Dupuis" }
+              "content": {
+                "membership": "join",
+                "displayname": "Bob Dupuis"
+              }
             },
             {
               "type": "m.room.member",
@@ -134,7 +223,10 @@
               "sender": "@whatsapp_lid-22222222222:correspondance.local",
               "event_id": "$state-member-clara",
               "origin_server_ts": 1756400000013,
-              "content": { "membership": "join", "displayname": "Clara Nguyen" }
+              "content": {
+                "membership": "join",
+                "displayname": "Clara Nguyen"
+              }
             },
             {
               "type": "m.room.member",
@@ -142,7 +234,10 @@
               "sender": "@whatsapp_lid-33333333333:correspondance.local",
               "event_id": "$state-member-parti",
               "origin_server_ts": 1756400000014,
-              "content": { "membership": "leave", "displayname": "Denis Parti" }
+              "content": {
+                "membership": "leave",
+                "displayname": "Denis Parti"
+              }
             },
             {
               "type": "m.room.member",
@@ -150,7 +245,10 @@
               "sender": "@whatsappbot:correspondance.local",
               "event_id": "$state-member-bot-groupe",
               "origin_server_ts": 1756400000015,
-              "content": { "membership": "join", "displayname": "WhatsApp bridge bot" }
+              "content": {
+                "membership": "join",
+                "displayname": "WhatsApp bridge bot"
+              }
             }
           ]
         },
@@ -162,7 +260,10 @@
               "event_id": "$msg-groupe-1",
               "sender": "@whatsapp_lid-11111111111:correspondance.local",
               "origin_server_ts": 1756400400000,
-              "content": { "msgtype": "m.text", "body": "J'ai réservé le gîte." }
+              "content": {
+                "msgtype": "m.text",
+                "body": "J'ai réservé le gîte."
+              }
             },
             {
               "type": "m.room.message",
@@ -172,15 +273,49 @@
               "content": {
                 "msgtype": "m.text",
                 "body": "* J'ai réservé le gîte pour six.",
-                "m.new_content": { "msgtype": "m.text", "body": "J'ai réservé le gîte pour six." },
-                "m.relates_to": { "rel_type": "m.replace", "event_id": "$msg-groupe-1" }
+                "m.new_content": {
+                  "msgtype": "m.text",
+                  "body": "J'ai réservé le gîte pour six."
+                },
+                "m.relates_to": {
+                  "rel_type": "m.replace",
+                  "event_id": "$msg-groupe-1"
+                }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-g1",
+              "sender": "@whatsapp_lid-11111111111:correspondance.local",
+              "origin_server_ts": 1756400500000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-groupe-1",
+                  "key": "🎉"
+                }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-g2",
+              "sender": "@whatsapp_lid-22222222222:correspondance.local",
+              "origin_server_ts": 1756400510000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-groupe-1",
+                  "key": "🎉"
+                }
               }
             }
           ]
         }
       },
       "!gestion-whatsapp:correspondance.local": {
-        "summary": { "m.joined_member_count": 2 },
+        "summary": {
+          "m.joined_member_count": 2
+        },
         "state": {
           "events": [
             {
@@ -189,7 +324,10 @@
               "sender": "@meffysto:correspondance.local",
               "event_id": "$state-member-self-gestion",
               "origin_server_ts": 1756400000020,
-              "content": { "membership": "join", "displayname": "meffysto" }
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
             },
             {
               "type": "m.room.member",
@@ -197,7 +335,10 @@
               "sender": "@whatsappbot:correspondance.local",
               "event_id": "$state-member-bot-gestion",
               "origin_server_ts": 1756400000021,
-              "content": { "membership": "join", "displayname": "WhatsApp bridge bot" }
+              "content": {
+                "membership": "join",
+                "displayname": "WhatsApp bridge bot"
+              }
             }
           ]
         },
@@ -213,14 +354,19 @@
                 "msgtype": "m.image",
                 "body": "qr.png",
                 "url": "mxc://correspondance.local/QrCode987654",
-                "info": { "mimetype": "image/png", "size": 2048 }
+                "info": {
+                  "mimetype": "image/png",
+                  "size": 2048
+                }
               }
             }
           ]
         }
       },
       "!fil-inconnu:correspondance.local": {
-        "summary": { "m.joined_member_count": 2 },
+        "summary": {
+          "m.joined_member_count": 2
+        },
         "state": {
           "events": [
             {
@@ -230,8 +376,14 @@
               "event_id": "$state-bridge-telegram",
               "origin_server_ts": 1756400000030,
               "content": {
-                "protocol": { "id": "telegram", "displayname": "Telegram" },
-                "channel": { "id": "1", "displayname": "Un fil Telegram" }
+                "protocol": {
+                  "id": "telegram",
+                  "displayname": "Telegram"
+                },
+                "channel": {
+                  "id": "1",
+                  "displayname": "Un fil Telegram"
+                }
               }
             },
             {
@@ -240,11 +392,17 @@
               "sender": "@meffysto:correspondance.local",
               "event_id": "$state-member-self-tg",
               "origin_server_ts": 1756400000031,
-              "content": { "membership": "join", "displayname": "meffysto" }
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
             }
           ]
         },
-        "timeline": { "limited": false, "events": [] }
+        "timeline": {
+          "limited": false,
+          "events": []
+        }
       }
     },
     "leave": {

@@ -34,6 +34,7 @@ enum SignalConversationCache {
     var sentAt: Date
     var isFromMe: Bool
     var attachments: [MessageAttachment]
+    var reactions: [MessageReaction]
 
     init(
       id: String,
@@ -41,7 +42,8 @@ enum SignalConversationCache {
       text: String,
       sentAt: Date,
       isFromMe: Bool,
-      attachments: [MessageAttachment]
+      attachments: [MessageAttachment],
+      reactions: [MessageReaction] = []
     ) {
       self.id = id
       self.conversationID = conversationID
@@ -49,6 +51,7 @@ enum SignalConversationCache {
       self.sentAt = sentAt
       self.isFromMe = isFromMe
       self.attachments = attachments
+      self.reactions = reactions
     }
 
     init(from decoder: Decoder) throws {
@@ -59,6 +62,8 @@ enum SignalConversationCache {
       sentAt = try c.decode(Date.self, forKey: .sentAt)
       isFromMe = try c.decode(Bool.self, forKey: .isFromMe)
       attachments = try c.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
+      // Absent des caches écrits avant les réactions : on ne casse pas l'existant.
+      reactions = try c.decodeIfPresent([MessageReaction].self, forKey: .reactions) ?? []
     }
   }
 
@@ -103,7 +108,8 @@ enum SignalConversationCache {
           text: cached.text,
           sentAt: cached.sentAt,
           isFromMe: cached.isFromMe,
-          attachments: attachments
+          attachments: attachments,
+          reactions: cached.reactions
         )
       }
     }
@@ -134,7 +140,8 @@ enum SignalConversationCache {
             text: $0.text,
             sentAt: $0.sentAt,
             isFromMe: $0.isFromMe,
-            attachments: $0.attachments
+            attachments: $0.attachments,
+            reactions: $0.reactions
           )
         }
       }

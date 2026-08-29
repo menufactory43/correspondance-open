@@ -27,6 +27,8 @@ final class InboxStore {
   var isShowingArchived = false
   /// Champ `.searchable` de la liste. Vide = pas de filtrage.
   var searchQuery = ""
+  /// Bulle visée par les actions du fil (réagir, citer). `nil` = le dernier message.
+  var selectedMessageID: String?
   /// Recherche dans le fil ouvert (⌘F).
   var isThreadSearchActive = false
   var threadSearchQuery = "" {
@@ -297,6 +299,85 @@ final class InboxStore {
     primeNotifications()
     startLiveSync()
     startMatrixSync()
+  }
+
+  // MARK: - Réactions
+
+  /// Palette courte : de quoi accuser réception sans ouvrir un catalogue d'emoji.
+  static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+
+  /// Message visé par une action du fil : la bulle sélectionnée, sinon la dernière.
+  var actionableMessage: ChatMessage? {
+    if let selectedMessageID, let found = messages.first(where: { $0.id == selectedMessageID }) {
+      return found
+    }
+    return messages.last(where: \.hasVisibleBody)
+  }
+
+  func selectMessage(_ id: String?) {
+    selectedMessageID = id
+  }
+
+  /// ⌘⇧R : pose (ou retire) 👍 sur la bulle visée.
+  func quickReactToSelectedMessage() async {
+    guard let message = actionableMessage else { return }
+    await react(messageID: message.id, emoji: Self.quickReactions[0])
+  }
+
+  /// Pose, remplace ou retire ma réaction. Reposer le même emoji le retire :
+  /// les trois réseaux n'en acceptent qu'un par personne et par message.
+  func react(messageID: String, emoji: String) async {
+    guard let conversation = selectedConversation,
+          let message = messages.first(where: { $0.id == messageID })
+    else { return }
+
+    switch conversation.network {
+    case .iMessage:
+      // Les tapbacks se *lisent* dans chat.db mais ne s'*écrivent* pas : le
+      // dictionnaire AppleScript de Messages n'expose aucune commande de tapback.
+      lastErrorMessage = "Les tapbacks iMessage se lisent mais ne s’envoient pas : "
+        + "Messages n’expose aucune commande d’automatisation pour les poser."
+
+    case .signal:
+      // Signal désigne sa cible par (auteur, timestamp) : l'auteur d'un message reçu
+      // est celui du fil, celui d'un message sortant est notre propre numéro.
+      var author = message.senderID
+      if author == nil {
+        author = message.isFromMe ? await signal.accountNumber() : conversation.address
+      }
+      guard let author, !author.isEmpty else {
+        lastErrorMessage = "Auteur du message Signal inconnu — réaction impossible."
+        return
+      }
+      do {
+        try await signal.sendReaction(
+          conversation: conversation,
+          messageID: messageID,
+          emoji: emoji,
+          targetAuthor: author,
+          remove: message.myReactionEmoji == emoji
+        )
+        messages = await signal.fetchMessages(conversationID: conversation.id)
+      } catch {
+        lastErrorMessage = error.localizedDescription
+      }
+
+    case .whatsapp:
+      guard isMatrixConnected else {
+        lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+        return
+      }
+      do {
+        try await matrix.toggleReaction(
+          conversationID: conversation.id,
+          messageID: messageID,
+          emoji: emoji
+        )
+        messages = await matrix.messages(conversationID: conversation.id)
+      } catch {
+        lastErrorMessage = error.localizedDescription
+      }
+    }
   }
 
   // MARK: - Recherche
@@ -719,6 +800,7 @@ final class InboxStore {
 
   func select(_ id: String?) async {
     selectedConversationID = id
+    selectedMessageID = nil
     draftText = ""
     pendingAttachmentPaths = []
     if let id { clearUnread(for: id) }

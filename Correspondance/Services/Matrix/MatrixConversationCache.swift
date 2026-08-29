@@ -37,6 +37,8 @@ enum MatrixConversationCache {
     var sentAt: Date
     var isFromMe: Bool
     var attachments: [MessageAttachment]
+    /// Absent des caches écrits avant les réactions — d'où le repli sur `[]`.
+    var reactions: [MessageReaction]?
   }
 
   static func load() -> (nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
@@ -76,7 +78,8 @@ enum MatrixConversationCache {
           text: cached.text,
           sentAt: cached.sentAt,
           isFromMe: cached.isFromMe,
-          attachments: attachments
+          attachments: attachments,
+          reactions: cached.reactions ?? []
         )
       }
     }
@@ -112,7 +115,8 @@ enum MatrixConversationCache {
               text: $0.text,
               sentAt: $0.sentAt,
               isFromMe: $0.isFromMe,
-              attachments: $0.attachments
+              attachments: $0.attachments,
+              reactions: $0.reactions
             )
           }
         }

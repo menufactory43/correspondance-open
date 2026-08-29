@@ -18,10 +18,23 @@ struct MatrixRoomModel: Sendable {
   var heroes: [String] = []
   var unreadCount: Int = 0
   var messagesByID: [String: ChatMessage] = [:]
+  /// Réactions indexées par **event de réaction**, pas par cible : c'est ce qui permet
+  /// à une `m.room.redaction` d'en retirer une seule, précisément.
+  var reactionsByEventID: [String: ReactionEvent] = [:]
   var lastEventAt: Date = .distantPast
   /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
   /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.
   var bridgeChannelID: String?
+
+  /// Une `m.reaction` reçue. `isMine` est figé à l'analyse : le modèle n'a pas
+  /// besoin de reconnaître notre identité pour rendre les pastilles.
+  struct ReactionEvent: Sendable, Hashable {
+    var targetEventID: String
+    var emoji: String
+    var senderID: String
+    var senderName: String
+    var isMine: Bool
+  }
 
   struct Member: Sendable, Hashable {
     var displayName: String?
@@ -84,8 +97,21 @@ struct MatrixRoomModel: Sendable {
     return roomID
   }
 
+  /// Messages du salon, réactions déjà rattachées et agrégées.
   var sortedMessages: [ChatMessage] {
-    messagesByID.values.sorted { $0.sentAt < $1.sentAt }
+    var byTarget: [String: [(emoji: String, sender: String, isMine: Bool)]] = [:]
+    for reaction in reactionsByEventID.values {
+      byTarget[reaction.targetEventID, default: []]
+        .append((emoji: reaction.emoji, sender: reaction.senderName, isMine: reaction.isMine))
+    }
+    return messagesByID.values
+      .map { message in
+        guard let raw = byTarget[message.id] else { return message }
+        var updated = message
+        updated.reactions = MessageReaction.aggregate(raw)
+        return updated
+      }
+      .sorted { $0.sentAt < $1.sentAt }
   }
 
   /// `nil` tant que le salon n'est pas un portail de bridge reconnu (salon de gestion, espace…).

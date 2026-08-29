@@ -193,10 +193,12 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.text, ''),
       IFNULL(m.date, 0),
       IFNULL(m.is_from_me, 0),
-      c.guid
+      c.guid,
+      IFNULL(h.id, '')
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
+    LEFT JOIN handle h ON h.ROWID = m.handle_id
     WHERE c.guid = ?
       AND (
         (m.text IS NOT NULL AND m.text != '')
@@ -229,6 +231,7 @@ struct IMessageDatabase: Sendable {
       let rawDate = sqlite3_column_int64(statement, 3)
       let fromMe = sqlite3_column_int(statement, 4) != 0
       let conversationID = "imessage:\(stringColumn(statement, 5))"
+      let handle = stringColumn(statement, 6)
 
       drafts.append(
         (
@@ -239,7 +242,8 @@ struct IMessageDatabase: Sendable {
             network: .iMessage,
             text: text,
             sentAt: Self.dateFromApple(rawDate),
-            isFromMe: fromMe
+            isFromMe: fromMe,
+            senderID: handle.isEmpty ? nil : handle
           )
         )
       )
@@ -249,12 +253,14 @@ struct IMessageDatabase: Sendable {
       messageRowIDs: drafts.map(\.rowID),
       db: db
     )
+    let reactionsByGUID = fetchTapbacks(chatGUID: chatGUID, db: db)
 
     var rows: [ChatMessage] = []
     rows.reserveCapacity(drafts.count)
     for draft in drafts {
       var message = draft.message
       message.attachments = attachmentsByRow[draft.rowID] ?? []
+      message.reactions = reactionsByGUID[message.id] ?? []
       if message.text.isEmpty, message.attachments.contains(where: \.isImage) {
         message = ChatMessage(
           id: message.id,
@@ -263,7 +269,8 @@ struct IMessageDatabase: Sendable {
           text: "📷 Photo",
           sentAt: message.sentAt,
           isFromMe: message.isFromMe,
-          attachments: message.attachments
+          attachments: message.attachments,
+          reactions: message.reactions
         )
       } else if message.text.isEmpty, !message.attachments.isEmpty {
         message = ChatMessage(
@@ -273,12 +280,110 @@ struct IMessageDatabase: Sendable {
           text: "Pièce jointe",
           sentAt: message.sentAt,
           isFromMe: message.isFromMe,
-          attachments: message.attachments
+          attachments: message.attachments,
+          reactions: message.reactions
         )
       }
       rows.append(message)
     }
     return rows.reversed()
+  }
+
+  /// Tapbacks d'un fil, agrégés par GUID du message visé.
+  ///
+  /// chat.db range les tapbacks comme des messages à part entière, reliés par
+  /// `associated_message_guid`. `associated_message_type` vaut 2000…2005 pour une pose
+  /// et 3000…3005 pour un retrait (même famille, +1000). Depuis Sonoma, un tapback
+  /// emoji libre porte son caractère dans `associated_message_emoji`.
+  private func fetchTapbacks(chatGUID: String, db: OpaquePointer) -> [String: [MessageReaction]] {
+    let sql = """
+    SELECT
+      IFNULL(m.associated_message_guid, ''),
+      IFNULL(m.associated_message_type, 0),
+      IFNULL(m.is_from_me, 0),
+      IFNULL(h.id, ''),
+      IFNULL(m.date, 0),
+      IFNULL(m.associated_message_emoji, '')
+    FROM message m
+    JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+    JOIN chat c ON c.ROWID = cmj.chat_id
+    LEFT JOIN handle h ON h.ROWID = m.handle_id
+    WHERE c.guid = ?
+      AND m.associated_message_type BETWEEN 2000 AND 3005
+      AND m.associated_message_guid IS NOT NULL
+    ORDER BY m.date ASC;
+    """
+
+    var statement: OpaquePointer?
+    if sqlite3_prepare_v2(db, sql, -1, &statement, nil) != SQLITE_OK {
+      // `associated_message_emoji` n'existe pas avant Sonoma : on retombe sur les
+      // six tapbacks canoniques plutôt que de renoncer à toutes les réactions.
+      sqlite3_finalize(statement)
+      statement = nil
+      let legacy = sql.replacingOccurrences(
+        of: "IFNULL(m.associated_message_emoji, '')",
+        with: "''"
+      )
+      guard sqlite3_prepare_v2(db, legacy, -1, &statement, nil) == SQLITE_OK else { return [:] }
+    }
+    defer { sqlite3_finalize(statement) }
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    _ = chatGUID.withCString { sqlite3_bind_text(statement, 1, $0, -1, transient) }
+
+    // Dernier geste de chaque personne sur chaque message : poser puis retirer = rien.
+    var latest: [String: [String: (emoji: String, isMine: Bool, removed: Bool)]] = [:]
+    while sqlite3_step(statement) == SQLITE_ROW {
+      let rawTarget = stringColumn(statement, 0)
+      let type = Int(sqlite3_column_int(statement, 1))
+      let isFromMe = sqlite3_column_int(statement, 2) != 0
+      let handle = stringColumn(statement, 3)
+      let customEmoji = stringColumn(statement, 5)
+
+      guard let target = Self.tapbackTargetGUID(rawTarget) else { continue }
+      let removed = type >= 3000
+      guard let emoji = Self.tapbackEmoji(type: type, custom: customEmoji) else { continue }
+      let sender = isFromMe ? "Moi" : (handle.isEmpty ? "?" : handle)
+      latest[target, default: [:]][sender] = (emoji: emoji, isMine: isFromMe, removed: removed)
+    }
+
+    return latest.mapValues { bySender in
+      MessageReaction.aggregate(
+        bySender
+          .filter { !$0.value.removed }
+          .map { (emoji: $0.value.emoji, sender: $0.key, isMine: $0.value.isMine) }
+      )
+    }
+    .filter { !$0.value.isEmpty }
+  }
+
+  /// `p:0/GUID`, `bp:GUID` ou `GUID` nu → le GUID du message visé.
+  static func tapbackTargetGUID(_ raw: String) -> String? {
+    let trimmed = raw.trimmingCharacters(in: .whitespaces)
+    guard !trimmed.isEmpty else { return nil }
+    // Le préfixe désigne la partie visée (texte entier, pièce jointe, sous-partie).
+    guard let slash = trimmed.firstIndex(of: "/") else {
+      if let colon = trimmed.firstIndex(of: ":") {
+        let guid = String(trimmed[trimmed.index(after: colon)...])
+        return guid.isEmpty ? nil : guid
+      }
+      return trimmed
+    }
+    let guid = String(trimmed[trimmed.index(after: slash)...])
+    return guid.isEmpty ? nil : guid
+  }
+
+  /// Emoji d'un tapback. 2000…2005 (pose) et 3000…3005 (retrait) partagent la famille.
+  static func tapbackEmoji(type: Int, custom: String = "") -> String? {
+    if !custom.isEmpty { return custom }
+    switch type % 1000 {
+    case 0: return "❤️"
+    case 1: return "👍"
+    case 2: return "👎"
+    case 3: return "😂"
+    case 4: return "‼️"
+    case 5: return "❓"
+    default: return nil
+    }
   }
 
   // MARK: - Private

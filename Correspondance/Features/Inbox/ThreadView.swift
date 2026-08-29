@@ -56,7 +56,14 @@ struct ThreadView: View {
               theme: theme,
               typeface: themes.typeface,
               highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
-              isCurrentMatch: store.threadSearchCurrentID == message.id
+              isCurrentMatch: store.threadSearchCurrentID == message.id,
+              isSelected: store.selectedMessageID == message.id,
+              onReact: { emoji in
+                Task { await store.react(messageID: message.id, emoji: emoji) }
+              },
+              onSelect: {
+                store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
+              }
             )
             .id(message.id)
           }

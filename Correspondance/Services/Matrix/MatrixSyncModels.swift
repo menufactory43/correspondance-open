@@ -69,12 +69,19 @@ struct MatrixEvent: Decodable, Sendable {
   var stateKey: String?
   var originServerTS: Double?
   var content: MatrixJSON?
+  /// `m.room.redaction` : l'event supprimé. Au niveau racine avant la room version 11,
+  /// dans `content` depuis — on lit les deux.
+  var redacts: String?
 
   enum CodingKeys: String, CodingKey {
-    case type, sender, content
+    case type, sender, content, redacts
     case eventID = "event_id"
     case stateKey = "state_key"
     case originServerTS = "origin_server_ts"
+  }
+
+  var redactedEventID: String? {
+    redacts ?? content?.string(at: "redacts")
   }
 
   var sentAt: Date {
