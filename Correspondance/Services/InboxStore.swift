@@ -198,6 +198,14 @@ final class InboxStore {
     }
   }
 
+  /// Les vraies conversations d'un réseau — sans les lignes virtuelles de
+  /// fusion, qui n'ont ni entrée dans `chat.db` ni fiche au carnet d'adresses.
+  /// Les confondre, c'est écrire un identifiant `merged:` dans le cache disque
+  /// iMessage, puis voir cette ligne fantôme survivre à une séparation.
+  private func realConversations(on network: MessageNetwork) -> [Conversation] {
+    conversations.filter { $0.network == network && !MergedContact.isMergedID($0.id) }
+  }
+
   /// Le rail n'affiche un réseau que s'il est réellement branché ou déjà peuplé.
   func hasConversations(on network: MessageNetwork) -> Bool {
     conversations.contains { !$0.isArchived && $0.network == network }
@@ -439,7 +447,7 @@ final class InboxStore {
     }
 
     conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
-    IMessageConversationCache.save(conversations.filter { $0.network == .iMessage })
+    IMessageConversationCache.save(realConversations(on: .iMessage))
 
     if let id = selectedConversationID,
        conversations.first(where: { $0.id == id })?.network == .iMessage
@@ -1972,7 +1980,10 @@ final class InboxStore {
 
     // Un salon quitté côté WhatsApp disparaît de l'inbox.
     let live = Set(incomingList.map(\.id))
-    for (id, conversation) in byID where conversation.network.isMatrixBridged && !live.contains(id) {
+    for (id, conversation) in byID
+    where conversation.network.isMatrixBridged && !live.contains(id)
+      && !MergedContact.isMergedID(id)
+    {
       byID.removeValue(forKey: id)
     }
 
@@ -2069,7 +2080,7 @@ final class InboxStore {
         : "\(fresh.count) conversations iMessage."
     case .denied(let message):
       // Garde le cache si on l’a — mieux que la démo vide.
-      let cached = conversations.filter { $0.network == .iMessage }
+      let cached = realConversations(on: .iMessage)
       if !cached.isEmpty {
         merged.append(contentsOf: cached)
         iMessageStatusFR = "Cache iMessage · \(cached.count) (accès disque refusé)"
@@ -2091,7 +2102,7 @@ final class InboxStore {
     }
 
     // Garder le Signal déjà en mémoire pendant que signal-cli tourne.
-    let previousSignal = conversations.filter { $0.network == .signal }
+    let previousSignal = realConversations(on: .signal)
     if !previousSignal.isEmpty {
       merged.append(contentsOf: previousSignal)
     }
@@ -2175,7 +2186,7 @@ final class InboxStore {
 
   /// Noms (+ index photos) Contacts — ne bloque jamais le chargement inbox.
   private func enrichIMessageContactsInBackground() async {
-    var list = conversations.filter { $0.network == .iMessage }
+    var list = realConversations(on: .iMessage)
     guard !list.isEmpty else { return }
     await ContactDirectory.shared.enrichIMessageTitles(&list)
 
@@ -2193,7 +2204,7 @@ final class InboxStore {
     }
     if changed > 0 {
       conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
-      IMessageConversationCache.save(conversations.filter { $0.network == .iMessage })
+      IMessageConversationCache.save(realConversations(on: .iMessage))
     }
     let named = list.filter { !$0.hasPlaceholderTitle }.count
     iMessageStatusFR = "\(list.count) conversations iMessage · \(named) noms Contacts."
