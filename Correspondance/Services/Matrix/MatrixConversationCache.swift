@@ -39,6 +39,10 @@ enum MatrixConversationCache {
     var attachments: [MessageAttachment]
     /// Absent des caches écrits avant les réactions — d'où le repli sur `[]`.
     var reactions: [MessageReaction]?
+    /// Auteur du message et son nom lisible, pour regrouper les bulles et
+    /// nommer l'expéditeur dans un groupe. Absents des caches plus anciens.
+    var senderID: String?
+    var senderName: String?
   }
 
   static func load() -> (nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
@@ -78,6 +82,8 @@ enum MatrixConversationCache {
           text: cached.text,
           sentAt: cached.sentAt,
           isFromMe: cached.isFromMe,
+          senderID: cached.senderID,
+          senderName: cached.senderName,
           attachments: attachments,
           reactions: cached.reactions ?? []
         )
@@ -116,7 +122,9 @@ enum MatrixConversationCache {
               sentAt: $0.sentAt,
               isFromMe: $0.isFromMe,
               attachments: $0.attachments,
-              reactions: $0.reactions
+              reactions: $0.reactions,
+              senderID: $0.senderID,
+              senderName: $0.senderName
             )
           }
         }

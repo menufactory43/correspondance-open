@@ -143,7 +143,7 @@ struct MatrixRoomModel: Sendable {
     guard let network else { return nil }
     let group = isGroup(selfUserID: selfUserID)
     let last = sortedMessages.last
-    let preview = last?.sidebarPreviewText
+    let preview = last?.listPreview(isGroup: group)
       ?? (group ? "Groupe \(network.labelFR)" : "Écrire sur \(network.labelFR)…")
     var conversation = Conversation(
       id: conversationID,

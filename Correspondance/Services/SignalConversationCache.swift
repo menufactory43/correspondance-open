@@ -35,6 +35,10 @@ enum SignalConversationCache {
     var isFromMe: Bool
     var attachments: [MessageAttachment]
     var reactions: [MessageReaction]
+    /// Auteur du message côté réseau, et son nom lisible. Absents des caches
+    /// écrits avant qu'on sorte le nom du corps du message.
+    var senderID: String?
+    var senderName: String?
 
     init(
       id: String,
@@ -43,7 +47,9 @@ enum SignalConversationCache {
       sentAt: Date,
       isFromMe: Bool,
       attachments: [MessageAttachment],
-      reactions: [MessageReaction] = []
+      reactions: [MessageReaction] = [],
+      senderID: String? = nil,
+      senderName: String? = nil
     ) {
       self.id = id
       self.conversationID = conversationID
@@ -52,6 +58,8 @@ enum SignalConversationCache {
       self.isFromMe = isFromMe
       self.attachments = attachments
       self.reactions = reactions
+      self.senderID = senderID
+      self.senderName = senderName
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +72,8 @@ enum SignalConversationCache {
       attachments = try c.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
       // Absent des caches écrits avant les réactions : on ne casse pas l'existant.
       reactions = try c.decodeIfPresent([MessageReaction].self, forKey: .reactions) ?? []
+      senderID = try c.decodeIfPresent(String.self, forKey: .senderID)
+      senderName = try c.decodeIfPresent(String.self, forKey: .senderName)
     }
   }
 
@@ -89,8 +99,11 @@ enum SignalConversationCache {
       )
     }
 
+    let groupIDs = Set(snap.conversations.filter(\.isGroup).map(\.id))
+
     var messages: [String: [ChatMessage]] = [:]
     for (key, list) in snap.messages {
+      let isGroup = groupIDs.contains(key)
       messages[key] = list.map { cached in
         var attachments = cached.attachments
         // Re-résoudre les chemins locaux (signal-cli attachments/).
@@ -101,13 +114,26 @@ enum SignalConversationCache {
           }
           return copy
         }
+        // Cache écrit avant qu'on sorte le nom du corps : on le récupère plutôt
+        // que d'afficher « Vince : » dans la bulle jusqu'à la prochaine sync.
+        var text = cached.text
+        var senderName = cached.senderName
+        if senderName == nil, isGroup, !cached.isFromMe,
+           let split = SenderPrefix.splittingLegacySenderPrefix(text)
+        {
+          senderName = split.senderName
+          text = split.body
+        }
+
         return ChatMessage(
           id: cached.id,
           conversationID: cached.conversationID,
           network: .signal,
-          text: cached.text,
+          text: text,
           sentAt: cached.sentAt,
           isFromMe: cached.isFromMe,
+          senderID: cached.senderID,
+          senderName: senderName,
           attachments: attachments,
           reactions: cached.reactions
         )
@@ -141,7 +167,9 @@ enum SignalConversationCache {
             sentAt: $0.sentAt,
             isFromMe: $0.isFromMe,
             attachments: $0.attachments,
-            reactions: $0.reactions
+            reactions: $0.reactions,
+            senderID: $0.senderID,
+            senderName: $0.senderName
           )
         }
       }

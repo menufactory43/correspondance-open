@@ -105,6 +105,10 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
   /// Auteur du message côté réseau (numéro Signal, MXID Matrix, handle iMessage).
   /// Indispensable pour réagir ou citer : Signal désigne sa cible par (auteur, timestamp).
   var senderID: String?
+  /// Nom lisible de l'auteur, quand le réseau le donne (les groupes surtout).
+  /// Il n'est PAS collé dans `text` : le fil l'écrit une fois par groupe de
+  /// messages, la liste s'en sert pour son aperçu « Nom : … ».
+  var senderName: String?
   var isPending: Bool
   var attachments: [MessageAttachment]
   /// Réactions reçues sur ce message, déjà agrégées par emoji.
@@ -120,6 +124,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     sentAt: Date,
     isFromMe: Bool,
     senderID: String? = nil,
+    senderName: String? = nil,
     isPending: Bool = false,
     attachments: [MessageAttachment] = [],
     reactions: [MessageReaction] = [],
@@ -132,6 +137,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     self.sentAt = sentAt
     self.isFromMe = isFromMe
     self.senderID = senderID
+    self.senderName = senderName
     self.isPending = isPending
     self.attachments = attachments
     self.reactions = reactions
@@ -143,6 +149,16 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
     if !attachments.isEmpty { return "Pièce jointe" }
     return text
+  }
+
+  /// Aperçu pour la liste des fils. En groupe il annonce qui parle — c'est là
+  /// qu'on en a besoin, le fil, lui, écrit le nom une fois par groupe de bulles.
+  func listPreview(isGroup: Bool) -> String {
+    SenderPrefix.previewLine(
+      sidebarPreviewText,
+      senderName: isFromMe ? nil : senderName,
+      isGroup: isGroup
+    )
   }
 
   var hasVisibleBody: Bool {

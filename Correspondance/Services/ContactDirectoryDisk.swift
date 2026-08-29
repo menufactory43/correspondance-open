@@ -45,6 +45,26 @@ enum ContactDirectoryDisk {
     }
   }
 
+  /// Nomme les auteurs d'un fil iMessage depuis le même cache : sans ça, un
+  /// groupe n'annonce ses interlocuteurs que par leur numéro brut.
+  static func enrichSenderNames(_ messages: inout [ChatMessage]) {
+    guard let data = try? Data(contentsOf: indexURL),
+          let disk = try? JSONDecoder().decode(DiskIndex.self, from: data),
+          !disk.names.isEmpty
+    else { return }
+
+    var resolved: [String: String?] = [:]
+    for index in messages.indices {
+      guard !messages[index].isFromMe,
+            messages[index].senderName == nil,
+            let handle = messages[index].senderID, !handle.isEmpty
+      else { continue }
+      let hit = resolved[handle] ?? name(in: disk.names, for: handle)
+      resolved[handle] = hit
+      messages[index].senderName = hit
+    }
+  }
+
   private static func name(in names: [String: String], for handle: String) -> String? {
     for key in lookupKeys(for: handle) {
       if let value = names[key] { return value }

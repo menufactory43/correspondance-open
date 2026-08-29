@@ -219,12 +219,14 @@ actor SignalBridge {
     Dictionary(uniqueKeysWithValues: cachedMessages.map { ($0.key, $0.value.count) })
   }
 
-  /// Dernier texte connu par conversation (pour resync sidebar).
-  func previewMap() async -> [String: (text: String, date: Date)] {
-    var map: [String: (String, Date)] = [:]
+  /// Dernier message connu par conversation (pour resync sidebar). On rend le
+  /// message et non son aperçu : seul l'appelant sait si le fil est un groupe,
+  /// donc s'il faut annoncer qui parle.
+  func lastMessageMap() async -> [String: ChatMessage] {
+    var map: [String: ChatMessage] = [:]
     for (id, list) in cachedMessages {
       guard let last = list.last else { continue }
-      map[id] = (last.sidebarPreviewText, last.sentAt)
+      map[id] = last
     }
     return map
   }
@@ -285,7 +287,7 @@ actor SignalBridge {
     for (id, list) in messages {
       guard let last = list.last else { continue }
       guard var conversation = conversations[id] else { continue }
-      conversation.preview = last.sidebarPreviewText
+      conversation.preview = last.listPreview(isGroup: conversation.isGroup)
       conversation.lastMessageAt = max(conversation.lastMessageAt, last.sentAt)
       conversation.lastMessageIsFromMe = last.isFromMe
       conversations[id] = conversation
@@ -387,7 +389,7 @@ actor SignalBridge {
     var (stored, msgs) = SignalConversationCache.load()
     msgs[conversation.id] = list
     if let idx = stored.firstIndex(where: { $0.id == conversation.id }) {
-      stored[idx].preview = list.last?.sidebarPreviewText ?? body
+      stored[idx].preview = list.last?.listPreview(isGroup: stored[idx].isGroup) ?? body
       stored[idx].lastMessageAt = Date()
     }
     SignalConversationCache.save(conversations: stored, messages: msgs)
@@ -553,7 +555,7 @@ actor SignalBridge {
           existing.preferTitle(c.title)
           // Aussi si on a des messages en cache pour cet id.
           if let last = messagesByID[c.id]?.last {
-            existing.preview = last.sidebarPreviewText
+            existing.preview = last.listPreview(isGroup: existing.isGroup)
             existing.lastMessageAt = max(existing.lastMessageAt, last.sentAt)
           }
           merged[c.id] = existing
@@ -793,24 +795,20 @@ actor SignalBridge {
         if !candidate.isEmpty { replyTo = candidate }
       }
 
+      // Le nom de l'auteur ne se colle PLUS dans le corps du message : le fil
+      // l'écrit une fois par groupe de bulles (cf. `MessageGrouping`). Il reste
+      // en revanche dans l'APERÇU de la liste, où l'on veut savoir qui parle
+      // sans ouvrir le fil.
+      let senderName: String? = sourceName?.isEmpty == false ? sourceName : nil
+
       let displayText: String = {
-        if !body.isEmpty {
-          if isGroup, let sourceName, !sourceName.isEmpty {
-            return "\(sourceName): \(body)"
-          }
-          return body
-        }
-        if attachments.contains(where: \.isImage) {
-          if isGroup, let sourceName, !sourceName.isEmpty {
-            return "\(sourceName): 📷 Photo"
-          }
-          return "📷 Photo"
-        }
-        if !attachments.isEmpty {
-          return "Pièce jointe"
-        }
+        if !body.isEmpty { return body }
+        if attachments.contains(where: \.isImage) { return "📷 Photo" }
+        if !attachments.isEmpty { return "Pièce jointe" }
         return ""
       }()
+
+      let previewText = SenderPrefix.previewLine(displayText, senderName: senderName, isGroup: isGroup)
 
       let tsMs = Self.int64(dataMessage?["timestamp"])
         ?? Self.int64(envelope["timestamp"])
@@ -822,7 +820,7 @@ actor SignalBridge {
         network: .signal,
         address: address,
         title: title,
-        preview: displayText.isEmpty ? (isGroup ? "Groupe Signal" : "Signal") : displayText,
+        preview: previewText.isEmpty ? (isGroup ? "Groupe Signal" : "Signal") : previewText,
         lastMessageAt: sentAt,
         unreadCount: 0,
         isArchived: false,
@@ -831,7 +829,7 @@ actor SignalBridge {
       )
       conversation.isGroup = isGroup
       if !displayText.isEmpty {
-        conversation.preview = displayText
+        conversation.preview = previewText
         conversation.lastMessageAt = max(conversation.lastMessageAt, sentAt)
         conversation.lastMessageIsFromMe = false
       }
@@ -856,6 +854,7 @@ actor SignalBridge {
           sentAt: sentAt,
           isFromMe: false,
           senderID: sourceNumber ?? sourceUuid,
+          senderName: senderName,
           attachments: attachments,
           replyTo: replyTo
         )

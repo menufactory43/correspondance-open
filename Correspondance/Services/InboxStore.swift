@@ -1315,13 +1315,13 @@ final class InboxStore {
     _ signalList: [Conversation],
     newMessageDeltas: [String: Int] = [:]
   ) async {
-    var previews = await signal.previewMap()
+    var previews = await signal.lastMessageMap()
     var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
 
     for var incoming in signalList {
-      if let p = previews[incoming.id] {
-        incoming.preview = p.text
-        incoming.lastMessageAt = max(incoming.lastMessageAt, p.date)
+      if let last = previews[incoming.id] {
+        incoming.preview = last.listPreview(isGroup: incoming.isGroup)
+        incoming.lastMessageAt = max(incoming.lastMessageAt, last.sentAt)
       }
       if var existing = byID[incoming.id] {
         if incoming.hasLivePreview {
@@ -1339,10 +1339,10 @@ final class InboxStore {
       }
     }
 
-    for (id, p) in previews {
+    for (id, last) in previews {
       guard var c = byID[id] else { continue }
-      c.preview = p.text
-      c.lastMessageAt = max(c.lastMessageAt, p.date)
+      c.preview = last.listPreview(isGroup: c.isGroup)
+      c.lastMessageAt = max(c.lastMessageAt, last.sentAt)
       byID[id] = c
     }
 
@@ -1521,11 +1521,11 @@ final class InboxStore {
         next.removeAll { $0.network == .signal && $0.transportKey == "demo" }
       }
       var signalList = list
-      let previews = await signal.previewMap()
+      let previews = await signal.lastMessageMap()
       for i in signalList.indices {
-        if let p = previews[signalList[i].id] {
-          signalList[i].preview = p.text
-          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, p.date)
+        if let last = previews[signalList[i].id] {
+          signalList[i].preview = last.listPreview(isGroup: signalList[i].isGroup)
+          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
         }
       }
       next.append(contentsOf: signalList)
@@ -1638,9 +1638,11 @@ final class InboxStore {
       }
       let db = iMessageDB
       do {
-        messages = try await Task.detached(priority: .userInitiated) {
+        var fetched = try await Task.detached(priority: .userInitiated) {
           try db.fetchMessages(chatGUID: guid)
         }.value
+        ContactDirectoryDisk.enrichSenderNames(&fetched)
+        messages = fetched
       } catch {
         lastErrorMessage = error.localizedDescription
         messages = []
@@ -1716,7 +1718,7 @@ final class InboxStore {
     if last.id.hasPrefix("matrix-empty-") { return }
     indexMessages(messages, conversationID: conversationID)
     var updated = conversations[idx]
-    updated.preview = last.sidebarPreviewText
+    updated.preview = last.listPreview(isGroup: updated.isGroup)
     updated.lastMessageAt = last.sentAt
     updated.lastDelivery = Self.delivery(after: last, previous: updated.lastDelivery)
     updated.lastMessageIsFromMe = last.isFromMe

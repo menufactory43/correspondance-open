@@ -43,10 +43,6 @@ struct MessageBubbleView: View {
         if !message.reactions.isEmpty {
           reactionRow
         }
-
-        Text(message.sentAt, format: .dateTime.hour().minute())
-          .font(Typography.meta(typeface))
-          .foregroundStyle(theme.inkTertiary)
       }
       .opacity(message.isPending ? 0.55 : 1)
       .padding(.horizontal, 4)
@@ -57,6 +53,11 @@ struct MessageBubbleView: View {
       )
       .contentShape(Rectangle())
       .onTapGesture { onSelect?() }
+      // L'heure a quitté le dessous de chaque bulle (elle noyait le fil) : elle
+      // reste accessible au survol, comme dans Messages.
+      .help(message.sentAt.formatted(date: .abbreviated, time: .shortened))
+      .accessibilityElement(children: .combine)
+      .accessibilityValue(message.sentAt.formatted(date: .omitted, time: .shortened))
       .contextMenu { bubbleMenu }
       if !message.isFromMe { Spacer(minLength: 48) }
     }

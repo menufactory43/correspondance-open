@@ -76,33 +76,43 @@ private struct FocusTranscriptView: View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: Spacing.md) {
-          ForEach(store.messages) { message in
+          ForEach(messageGroups) { group in
             VStack(alignment: .leading, spacing: 6) {
-              Text(message.isFromMe ? "Toi" : "Eux")
-                .font(Typography.meta(themes.typeface))
-                .foregroundStyle(theme.inkTertiary)
-              ForEach(message.attachments) { raw in
-                let attachment = FocusAttachment.repaired(raw)
-                if let url = attachment.resolvedFileURL, attachment.isImage,
-                   let nsImage = NSImage(contentsOf: url)
-                {
-                  Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: 360, maxHeight: 400)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
+              // Une page ne réannonce pas son locuteur à chaque phrase : un
+              // libellé par prise de parole, et rien du tout en tête-à-tête.
+              if let label = focusLabel(for: group) {
+                Text(label)
+                  .font(Typography.toolbarPhrase(themes.typeface))
+                  .foregroundStyle(theme.inkTertiary)
               }
-              if shouldShowFocusText(message) {
-                Text(message.text)
-                  .font(pageFont)
-                  .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
-                  .lineSpacing(theme.lineSpacing * 0.65)
+              ForEach(group.messages) { message in
+                VStack(alignment: .leading, spacing: 6) {
+                  ForEach(message.attachments) { raw in
+                    let attachment = FocusAttachment.repaired(raw)
+                    if let url = attachment.resolvedFileURL, attachment.isImage,
+                       let nsImage = NSImage(contentsOf: url)
+                    {
+                      Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 360, maxHeight: 400)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                  }
+                  if shouldShowFocusText(message) {
+                    Text(message.text)
+                      .font(pageFont)
+                      .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
+                      .lineSpacing(theme.lineSpacing * 0.65)
+                  }
+                }
+                .opacity(message.isPending ? 0.5 : 1)
+                .id(message.id)
+                .frame(maxWidth: .infinity, alignment: .leading)
               }
             }
-            .opacity(message.isPending ? 0.5 : (isWriting ? 0.34 : 1))
+            .opacity(isWriting ? 0.34 : 1)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isWriting)
-            .id(message.id)
             .frame(maxWidth: .infinity, alignment: .leading)
           }
 
@@ -146,6 +156,19 @@ private struct FocusTranscriptView: View {
 
   private var pageFont: Font {
     Typography.letterBody(themes.typeface, size: theme.bodySize * themes.typeScale)
+  }
+
+  private var isGroup: Bool { store.selectedConversation?.isGroup == true }
+
+  private var messageGroups: [MessageGroup] {
+    MessageGrouping.groups(for: store.messages, showsSenderNames: isGroup)
+  }
+
+  /// En groupe, chaque prise de parole s'annonce une fois ; en tête-à-tête, la
+  /// page se lit comme une lettre — l'encre plus pâle dit déjà que c'est moi.
+  private func focusLabel(for group: MessageGroup) -> String? {
+    guard isGroup else { return nil }
+    return group.isFromMe ? "Toi" : group.senderLabel
   }
 }
 

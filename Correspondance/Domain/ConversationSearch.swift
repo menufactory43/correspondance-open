@@ -37,8 +37,14 @@ enum ConversationSearch {
   }
 
   /// Corps replié d'une conversation, prêt pour l'index.
+  ///
+  /// Le nom de l'auteur y entre AVEC le texte : depuis qu'il ne se colle plus
+  /// dans le corps du message, chercher « vince » ne trouverait plus rien de ce
+  /// qu'il a écrit. La recherche du fil (⌘F), elle, reste sur le seul corps —
+  /// elle surligne ce qu'elle trouve, et un nom n'est pas dans la bulle.
   static func blob(for messages: [ChatMessage]) -> String {
-    fold(messages.map(\.text).joined(separator: "\n"))
+    fold(messages.map { [$0.senderName, $0.text].compactMap { $0 }.joined(separator: " ") }
+      .joined(separator: "\n"))
   }
 
   // MARK: - Recherche dans le fil (⌘F)

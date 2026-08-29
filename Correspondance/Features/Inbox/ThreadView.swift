@@ -38,30 +38,55 @@ struct ThreadView: View {
     .background(theme.paper)
   }
 
+  /// Le fil ne montre plus une bulle isolée par message : les prises de parole
+  /// consécutives se serrent, le nom ne s'écrit qu'une fois, l'heure ne revient
+  /// qu'après un silence. Cf. `MessageGrouping`.
+  private var messageGroups: [MessageGroup] {
+    MessageGrouping.groups(
+      for: store.messages,
+      showsSenderNames: store.selectedConversation?.isGroup == true
+    )
+  }
+
   private var messages: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(alignment: .leading, spacing: Spacing.sm) {
-          ForEach(store.messages) { message in
-            MessageBubbleView(
-              message: message,
-              theme: theme,
-              typeface: themes.typeface,
-              highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
-              isCurrentMatch: store.threadSearchCurrentID == message.id,
-              isSelected: store.selectedMessageID == message.id,
-              onReact: { emoji in
-                Task { await store.react(messageID: message.id, emoji: emoji) }
-              },
-              onSelect: {
-                store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
-              },
-              onReply: {
-                store.selectMessage(message.id)
-                store.replyToSelectedMessage()
+        LazyVStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
+          ForEach(messageGroups) { group in
+            if let stamp = group.timeSeparator {
+              ThreadTimeSeparator(date: stamp, theme: theme, typeface: themes.typeface)
+            }
+            VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
+              if let label = group.senderLabel {
+                Text(label)
+                  .font(Typography.meta(themes.typeface))
+                  .foregroundStyle(theme.inkSecondary)
+                  .lineLimit(1)
+                  .padding(.leading, ThreadMetrics.senderLabelLeading)
               }
-            )
-            .id(message.id)
+              ForEach(group.messages) { message in
+                MessageBubbleView(
+                  message: message,
+                  theme: theme,
+                  typeface: themes.typeface,
+                  highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
+                  isCurrentMatch: store.threadSearchCurrentID == message.id,
+                  isSelected: store.selectedMessageID == message.id,
+                  onReact: { emoji in
+                    Task { await store.react(messageID: message.id, emoji: emoji) }
+                  },
+                  onSelect: {
+                    store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
+                  },
+                  onReply: {
+                    store.selectMessage(message.id)
+                    store.replyToSelectedMessage()
+                  }
+                )
+                .id(message.id)
+              }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
           }
 
           if let delivery = store.selectedConversation?.lastDelivery,
@@ -113,6 +138,12 @@ struct ThreadView: View {
 }
 
 enum ThreadMetrics {
+  /// Deux bulles d'une même prise de parole se touchent presque…
+  static let intraGroupSpacing: CGFloat = 2
+  /// …et l'on ne respire qu'entre deux prises de parole.
+  static let interGroupSpacing: CGFloat = 12
+  /// Le nom s'aligne sur le texte de la bulle, pas sur son bord.
+  static let senderLabelLeading: CGFloat = 16
   /// Air au-dessus du premier message, en plus de la zone sûre de la barre
   /// d'outils que le système fournit déjà.
   static let topClearance: CGFloat = 16
@@ -142,6 +173,37 @@ struct TopScrollFade: View {
     .allowsHitTesting(false)
     .ignoresSafeArea(edges: .top)
     .accessibilityHidden(true)
+  }
+}
+
+/// Séparateur horaire centré, discret — comme Messages : on ne redate que
+/// lorsque la conversation a repris après un silence, jamais sous chaque bulle.
+struct ThreadTimeSeparator: View {
+  let date: Date
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+
+  var body: some View {
+    Text(label)
+      .font(Typography.meta(typeface))
+      .foregroundStyle(theme.inkTertiary)
+      .frame(maxWidth: .infinity)
+      .padding(.top, Spacing.xs)
+      .padding(.bottom, Spacing.xxs)
+      .accessibilityLabel("Reprise de la conversation, \(label)")
+  }
+
+  /// Aujourd'hui : l'heure suffit. Plus loin : il faut aussi le jour, sinon
+  /// « 09:12 » ne dit pas si c'était ce matin ou l'an dernier.
+  private var label: String {
+    let calendar = Calendar.current
+    let time = date.formatted(date: .omitted, time: .shortened)
+    if calendar.isDateInToday(date) { return time }
+    if calendar.isDateInYesterday(date) { return "Hier \(time)" }
+    if let days = calendar.dateComponents([.day], from: date, to: .now).day, days < 7 {
+      return "\(date.formatted(.dateTime.weekday(.wide))) \(time)"
+    }
+    return date.formatted(.dateTime.day().month(.abbreviated).hour().minute())
   }
 }
 

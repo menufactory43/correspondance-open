@@ -179,6 +179,9 @@ struct MatrixSyncParser: Sendable {
       sentAt: event.sentAt,
       isFromMe: event.sender == selfUserID,
       senderID: event.sender,
+      // Le fil nomme l'auteur une fois par groupe de bulles : il lui faut le
+      // nom d'affichage de la salle, pas le MXID du bridge.
+      senderName: event.sender.map { displayName(of: $0, in: model) },
       attachments: attachments,
       replyTo: replyTo
     )
