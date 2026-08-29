@@ -41,7 +41,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Multi-comptes par réseau | `%d Account Per Network`, `SELECT_NEXT_ACCOUNT ⌘⇧]`, `FILTER_ACCOUNT ⌘⌥A` ; API `GET /v1/accounts` | **Absent** : `MatrixCredentialStore` a `account = "default"` en dur ; un seul `signal-cli` | M | P2 |
 | Login guidé par réseau | Flows `login_flows.list` / `login_sessions.create` / `steps.submit` (developers.beeper.com/desktop-api-reference/resources/bridges) ; QR, code d'appairage, 2FA | **Partiel** : WhatsApp OK (`WhatsAppLoginSheet.swift` + `startWhatsAppLogin`), Matrix OK (`SettingsView.matrixSection`). Signal = instruction texte à recopier au terminal | S | P1 |
 | Statut de compte | `status ∈ connected, connecting, backfilling, disconnected` + `statusText` (API `Account`) | **Fait** : `SettingsView` — `iMessageStatusFR`, `signalStatusFR`, `contactsStatusFR` | — | — |
-| Fusion de chats multi-réseaux (Merge Chats) | `Merge Chats`, `Keep chats merged`, `Merged Chat` ; blog 2026-08-10 | **Absent** | L | P2 |
+| Fusion de chats multi-réseaux (Merge Chats) | `Merge Chats`, `Keep chats merged`, `Merged Chat` ; blog 2026-08-10 | **Fait** : `Domain/PhoneNormalizer.swift` ramène `+33…`, `0…` et `@whatsapp_33…:serveur` à une seule clé, `MergeCandidates.detect` propose la fusion sous la pilule (✕ persistant), `MergedContact.apply` est rejoué dans le `didSet` de `conversations` comme `ArchiveState` — une ligne, un fil chronologique où le séparateur d'heure annonce « 15:48 · iMessage » à chaque bascule, et un sélecteur de chat dans le composer qui retient le dernier réseau utilisé (`Services/MergedContactStore.swift`) | — | — |
 
 ### 2. Inbox
 

@@ -11,6 +11,7 @@ struct ComposerBar: View {
   var onSendLater: () -> Void = {}
   var onSend: () -> Void
 
+  @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var isFocused: Bool
@@ -59,12 +60,34 @@ struct ComposerBar: View {
     }
   }
 
+  /// Le fil ouvert est-il une fusion ? Alors il faut dire — et pouvoir choisir —
+  /// sur quel réseau part le prochain message.
+  private var mergedID: String? {
+    guard let id = store.selectedConversationID, store.isMerged(id) else { return nil }
+    return id
+  }
+
+  private var activeMember: Conversation? {
+    mergedID.flatMap { store.activeMember(of: $0) }
+  }
+
+  private var placeholder: String {
+    guard let member = activeMember, let merged = mergedID,
+          let contact = store.mergedContact(for: merged)
+    else { return "Message" }
+    return "Écrire à \(contact.title) sur \(member.network.labelFR)"
+  }
+
   private var bubble: some View {
     HStack(alignment: .bottom, spacing: 6) {
+      if let mergedID, let member = activeMember {
+        chatPicker(mergedID: mergedID, active: member)
+      }
+
       TextField(
         "",
         text: $text,
-        prompt: Text("Message").foregroundStyle(theme.inkTertiary),
+        prompt: Text(placeholder).foregroundStyle(theme.inkTertiary),
         axis: .vertical
       )
       .textFieldStyle(.plain)
@@ -107,6 +130,35 @@ struct ComposerBar: View {
   }
 
 
+
+  /// L'avatar du réseau où l'on écrit, cliquable : c'est le sélecteur de chat.
+  /// Il porte déjà sa pastille de réseau (cf. `ConversationAvatarView`), donc on
+  /// voit d'un coup d'œil si le message part sur iMessage ou sur WhatsApp.
+  private func chatPicker(mergedID: String, active: Conversation) -> some View {
+    Menu {
+      Section("Changer de chat") {
+        ForEach(store.memberConversations(of: mergedID)) { member in
+          Button {
+            store.setActiveMember(mergedID: mergedID, conversationID: member.id)
+          } label: {
+            Label {
+              Text("\(member.network.labelFR) · \(member.address)")
+            } icon: {
+              Image(systemName: member.id == active.id ? "checkmark" : member.network.systemImage)
+            }
+          }
+        }
+      }
+    } label: {
+      ConversationAvatarView(conversation: active, size: 20, theme: theme)
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .padding(.bottom, 3)
+    .help("Écrire sur un autre réseau")
+    .accessibilityLabel("Chat actif : \(active.network.labelFR). Changer de réseau d'envoi.")
+  }
 
   private func send() {
     dictation.stop()

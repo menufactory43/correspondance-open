@@ -69,6 +69,7 @@
 		98AD60CDAECCA050179A31E6 /* ConversationSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9E8ECA240D5B5AECEFF32E /* ConversationSearchTests.swift */; };
 		98CC18687A786A47780B32B9 /* IMessageAutomationVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */; };
 		9B74B7C1829C1880CD610B64 /* imessage-macos26.db in Resources */ = {isa = PBXBuildFile; fileRef = 0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */; };
+		9C0BCDAAB919FC4CF2FEE160 /* MergeContactSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0850E1EAEDC823688546AB /* MergeContactSheet.swift */; };
 		9E31BC7D5DA666B3C466FF46 /* ScheduledMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246AB8F9328F449310C7F2BC /* ScheduledMessage.swift */; };
 		9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */; };
 		9F58D1FAA96AD73CCB6B1E00 /* MatrixCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3023A9F526F195791DE5AF5 /* MatrixCredentials.swift */; };
@@ -196,6 +197,7 @@
 		B758EF0696E62CAE3AD887FF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B7EF134955840058275C45E9 /* ConversationRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRowView.swift; sourceTree = "<group>"; };
 		BB0D1E8427D27EC144EE5979 /* AudioMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMessageView.swift; sourceTree = "<group>"; };
+		BC0850E1EAEDC823688546AB /* MergeContactSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeContactSheet.swift; sourceTree = "<group>"; };
 		BC47469B7E80A1746977143F /* Correspondance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Correspondance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPillHeader.swift; sourceTree = "<group>"; };
 		BE7CEB6200455BD5DDD609F4 /* PhoneNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneNormalizer.swift; sourceTree = "<group>"; };
@@ -336,6 +338,7 @@
 				BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */,
 				B7EF134955840058275C45E9 /* ConversationRowView.swift */,
 				388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */,
+				BC0850E1EAEDC823688546AB /* MergeContactSheet.swift */,
 				EC9204E0947294308F58D53C /* MessageBubbleView.swift */,
 				7C72EC2976B9D7432A734100 /* NetworkRailView.swift */,
 				225E93B93CBA37AE52390551 /* NewConversationSheet.swift */,
@@ -654,6 +657,7 @@
 				DCF0104A7F5C0B8B7C4B310C /* MatrixSyncModels.swift in Sources */,
 				3D2A11F3742DBE9FB279F832 /* MatrixSyncParser.swift in Sources */,
 				8F731A81F8D37773A8A5BD7E /* MatrixTransactionLedger.swift in Sources */,
+				9C0BCDAAB919FC4CF2FEE160 /* MergeContactSheet.swift in Sources */,
 				234B2DB02BA3C6D309DD95A4 /* MergedContact.swift in Sources */,
 				1EF6D47DEDC45B31A6A6DA4A /* MergedContactStore.swift in Sources */,
 				73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */,

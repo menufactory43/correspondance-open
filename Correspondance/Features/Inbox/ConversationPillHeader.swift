@@ -12,32 +12,63 @@ struct ConversationPillHeader: View {
   let conversation: Conversation
   let theme: WritingTheme
 
+  @Environment(InboxStore.self) private var store
   @State private var isShowingInfo = false
+  @State private var isShowingMergeSuggestion = false
+
+  /// Les mêmes chiffres sur deux réseaux : il y a peut-être une fusion à faire.
+  private var mergeCandidates: [Conversation]? {
+    store.mergeCandidates(for: conversation)
+  }
 
   var body: some View {
-    Button {
-      isShowingInfo.toggle()
-    } label: {
-      HStack(spacing: 6) {
-        ConversationAvatarView(conversation: conversation, size: 20, theme: theme)
-        Text(conversation.title)
-          .font(.system(size: 13, weight: .semibold))
-          .lineLimit(1)
-          .truncationMode(.tail)
-        Image(systemName: "chevron.right")
-          .font(.system(size: 9, weight: .semibold))
-          .foregroundStyle(theme.inkTertiary)
+    HStack(spacing: 6) {
+      Button {
+        isShowingInfo.toggle()
+      } label: {
+        HStack(spacing: 6) {
+          ConversationAvatarView(conversation: conversation, size: 20, theme: theme)
+          Text(conversation.title)
+            .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .truncationMode(.tail)
+          Image(systemName: "chevron.right")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(theme.inkTertiary)
+        }
+        .frame(maxWidth: 320)
       }
-      .frame(maxWidth: 320)
+      .accessibilityLabel(
+        conversation.isGroup
+          ? "Infos du groupe \(conversation.title)"
+          : "Fiche de \(conversation.title)"
+      )
+      .accessibilityHint("Ouvre les informations de la conversation")
+      .popover(isPresented: $isShowingInfo, arrowEdge: .bottom) {
+        ConversationInfoCard(conversation: conversation, theme: theme)
+      }
+
+      // La proposition ne s'affiche pas d'elle-même en travers du fil : elle
+      // pose une pastille dans la pilule, et se déplie dessous si on la touche.
+      if let candidates = mergeCandidates {
+        Button {
+          isShowingMergeSuggestion.toggle()
+        } label: {
+          Image(systemName: "arrow.triangle.merge")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(theme.accent)
+        }
+        .buttonStyle(.plain)
+        .help("Cette personne a un autre chat — fusionner ?")
+        .accessibilityLabel("Fusion possible : \(candidates.count) chats pour \(conversation.title)")
+        .popover(isPresented: $isShowingMergeSuggestion, arrowEdge: .bottom) {
+          MergeSuggestionBar(candidates: candidates, theme: theme)
+        }
+      }
     }
-    .accessibilityLabel(
-      conversation.isGroup
-        ? "Infos du groupe \(conversation.title)"
-        : "Fiche de \(conversation.title)"
-    )
-    .accessibilityHint("Ouvre les informations de la conversation")
-    .popover(isPresented: $isShowingInfo, arrowEdge: .bottom) {
-      ConversationInfoCard(conversation: conversation, theme: theme)
+    .onChange(of: conversation.id) { _, _ in
+      isShowingInfo = false
+      isShowingMergeSuggestion = false
     }
   }
 }
@@ -46,6 +77,13 @@ struct ConversationPillHeader: View {
 private struct ConversationInfoCard: View {
   let conversation: Conversation
   let theme: WritingTheme
+
+  @Environment(InboxStore.self) private var store
+
+  /// Les fils réunis sous cette ligne, s'il s'agit d'un contact fusionné.
+  private var members: [Conversation] {
+    store.isMerged(conversation.id) ? store.memberConversations(of: conversation.id) : []
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -63,7 +101,29 @@ private struct ConversationInfoCard: View {
         }
       }
 
-      if !conversation.isGroup {
+      if !members.isEmpty {
+        Divider()
+        Text("Chats réunis")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(.secondary)
+        ForEach(members) { member in
+          Label {
+            Text("\(member.network.labelFR) · \(member.address)")
+              .font(.system(size: 11))
+              .lineLimit(1)
+              .truncationMode(.middle)
+          } icon: {
+            Image(systemName: member.network.systemImage)
+          }
+        }
+        Button("Séparer") {
+          let id = conversation.id
+          Task { await store.unmerge(id) }
+        }
+        .buttonStyle(.link)
+      }
+
+      if !conversation.isGroup, members.isEmpty {
         LabeledContent("Adresse") {
           Text(conversation.address)
             .textSelection(.enabled)

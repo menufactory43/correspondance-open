@@ -182,7 +182,11 @@ final class InboxStore {
 
   private func matchesNetworkFilter(_ conversation: Conversation) -> Bool {
     guard let networkFilter else { return true }
-    return conversation.network == networkFilter
+    if conversation.network == networkFilter { return true }
+    // Une ligne fusionnée porte le réseau de son dernier message : elle doit
+    // quand même apparaître sous le rail de l'autre réseau qu'elle réunit.
+    guard isMerged(conversation.id) else { return false }
+    return memberConversations(of: conversation.id).contains { $0.network == networkFilter }
   }
 
   /// Non-lus du rail. `nil` = « Tous ».
