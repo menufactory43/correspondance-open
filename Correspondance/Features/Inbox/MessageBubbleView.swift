@@ -17,12 +17,12 @@ struct MessageBubbleView: View {
         if showsTextBubble {
           Text(displayText)
             .font(Typography.bubble(typeface))
-            .foregroundStyle(message.isFromMe ? theme.paper : theme.ink)
+            .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
               RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(message.isFromMe ? theme.accent : theme.paperSecondary)
+                .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
             )
         }
 
@@ -76,7 +76,7 @@ struct MessageBubbleView: View {
         .font(Typography.meta)
         .foregroundStyle(theme.inkSecondary)
         .padding(10)
-        .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture { NSWorkspace.shared.open(url) }
         .help("Ouvrir la vidéo")
     } else if repaired.isImage {
@@ -84,13 +84,13 @@ struct MessageBubbleView: View {
         .font(Typography.meta)
         .foregroundStyle(theme.inkSecondary)
         .padding(10)
-        .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     } else {
       Label(repaired.filename ?? "Pièce jointe", systemImage: "paperclip")
         .font(Typography.meta)
         .foregroundStyle(theme.inkSecondary)
         .padding(10)
-        .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
   }
 

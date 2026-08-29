@@ -26,6 +26,9 @@ struct NetworkRailView: View {
     .padding(.vertical, Spacing.xs)
     .frame(width: RailMetrics.width)
     .frame(maxHeight: .infinity)
+    // Le rail se creuse d'un cran dans la sidebar, sans jamais s'en détacher :
+    // même matériau, même continuité verticale, y compris sous la barre de titre.
+    .background { theme.rail.opacity(0.5).ignoresSafeArea() }
     .opacity(controlActiveState == .inactive ? 0.55 : 1)
     .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: controlActiveState)
     .accessibilityElement(children: .contain)
@@ -94,10 +97,10 @@ private struct RailUnreadBadge: View {
     Text(count > 99 ? "99+" : "\(count)")
       .font(.system(size: 9, weight: .bold, design: .rounded))
       .monospacedDigit()
-      .foregroundStyle(theme.paper)
+      .foregroundStyle(theme.badgeInk)
       .padding(.horizontal, count > 9 ? 4 : 3)
       .padding(.vertical, 1)
-      .background(theme.accent, in: Capsule())
+      .background(theme.badge, in: Capsule())
       .accessibilityHidden(true)
   }
 }
