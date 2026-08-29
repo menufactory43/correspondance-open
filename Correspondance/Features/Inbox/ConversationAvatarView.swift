@@ -77,16 +77,22 @@ struct ConversationAvatarView: View {
     }
   }
 
+  /// Pastille réseau — la même partout (inbox, fil, Focus).
+  private var badgeTint: Color {
+    switch conversation.network {
+    case .iMessage: Color(red: 0.25, green: 0.75, blue: 0.45)
+    case .signal: theme.accent
+    case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)
+    }
+  }
+
   private var networkBadge: some View {
-    Image(systemName: conversation.network == .iMessage ? "message.fill" : "antenna.radiowaves.left.and.right")
+    Image(systemName: conversation.network.systemImage)
       .font(.system(size: max(7, size * 0.22), weight: .bold))
       .foregroundStyle(theme.paper)
       .padding(2)
-      .background(
-        Circle()
-          .fill(conversation.network == .iMessage ? Color(red: 0.25, green: 0.75, blue: 0.45) : theme.accent)
-      )
+      .background(Circle().fill(badgeTint))
       .overlay(Circle().strokeBorder(theme.sidebar, lineWidth: 1))
-      .accessibilityHidden(true)
+      .accessibilityLabel(conversation.network.labelFR)
   }
 }

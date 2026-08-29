@@ -38,6 +38,7 @@
 		A1623A6B1884B563A84216CC /* MatrixRoomModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6D8CF46418259CE1F7458E /* MatrixRoomModel.swift */; };
 		A9DACCFAB7B9CA3F0400BDBE /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625768DBC8A0E14E8A2D098D /* Spacing.swift */; };
 		ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB68DB666AD5741B836D9D65 /* Typography.swift */; };
+		B15011E6BAE0518CF597D735 /* WhatsAppLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */; };
 		B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B762FB62E00183DD0A339B2C /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF0FB534C12237850268E15 /* Conversation.swift */; };
@@ -121,6 +122,7 @@
 		DCF0FB534C12237850268E15 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		EAD00CD1C7485D79E4CB665C /* SignalBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalBridge.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsAppLoginSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -232,6 +234,7 @@
 			isa = PBXGroup;
 			children = (
 				B758EF0696E62CAE3AD887FF /* SettingsView.swift */,
+				F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -452,6 +455,7 @@
 				FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */,
 				8520F818A51D69AE23716712 /* ThreadView.swift in Sources */,
 				ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */,
+				B15011E6BAE0518CF597D735 /* WhatsAppLoginSheet.swift in Sources */,
 				F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */,
 				32A646B5D7E12EC285FB4506 /* WritingTheme.swift in Sources */,
 				78BFBD5B379BEE287754BD07 /* WritingTypeface.swift in Sources */,

@@ -117,7 +117,7 @@ struct FocusConversationView: View {
       if let conversation = store.selectedConversation {
         HStack(spacing: 6) {
           Image(systemName: conversation.rowSystemImage)
-          Text(conversation.isGroup ? "Signal · groupe" : conversation.network.labelFR)
+          Text(conversation.isGroup ? "\(conversation.network.labelFR) · groupe" : conversation.network.labelFR)
         }
         .font(Typography.meta)
         .foregroundStyle(theme.inkTertiary)

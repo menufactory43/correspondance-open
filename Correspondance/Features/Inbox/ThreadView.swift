@@ -45,7 +45,7 @@ struct ThreadView: View {
             .foregroundStyle(theme.ink)
           HStack(spacing: 6) {
             Image(systemName: conversation.rowSystemImage)
-            Text(conversation.isGroup ? "Signal · groupe" : conversation.network.labelFR)
+            Text(conversation.isGroup ? "\(conversation.network.labelFR) · groupe" : conversation.network.labelFR)
             if !conversation.isGroup {
               Text("·")
               Text(conversation.address)

@@ -17,11 +17,24 @@ struct NewConversationSheet: View {
     query.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  /// WhatsApp n'apparaît que si le homeserver répond : sinon le bouton ne mènerait nulle part.
+  private var availableNetworks: [MessageNetwork] {
+    MessageNetwork.allCases.filter { !$0.isMatrixBridged || store.isMatrixConnected }
+  }
+
   private var canWriteFreeform: Bool {
     let value = trimmedQuery
     guard !value.isEmpty else { return false }
+    // Le bridge WhatsApp ne prend qu'un numéro (commande bot `pm`).
+    if network.isMatrixBridged { return value.filter(\.isNumber).count >= 8 }
     if value.contains("@") { return value.contains(".") }
     return value.filter(\.isNumber).count >= 8
+  }
+
+  /// Une adresse e-mail n'a aucun sens sur WhatsApp.
+  private func canCompose(_ handle: String) -> Bool {
+    guard network.isMatrixBridged else { return true }
+    return handle.filter(\.isNumber).count >= 8 && !handle.contains("@")
   }
 
   var body: some View {
@@ -29,15 +42,18 @@ struct NewConversationSheet: View {
       header
       Divider()
       Picker("Réseau", selection: $network) {
-        ForEach(MessageNetwork.allCases) { item in
+        ForEach(availableNetworks) { item in
           Text(item.labelFR).tag(item)
         }
       }
       .pickerStyle(.segmented)
+      .onChange(of: store.isMatrixConnected) { _, connected in
+        if !connected && network.isMatrixBridged { network = .iMessage }
+      }
       .padding(.horizontal, Spacing.md)
       .padding(.vertical, Spacing.sm)
 
-      TextField("Nom, numéro ou e-mail", text: $query)
+      TextField(network.isMatrixBridged ? "Numéro WhatsApp" : "Nom, numéro ou e-mail", text: $query)
         .textFieldStyle(.roundedBorder)
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.sm)
@@ -54,7 +70,7 @@ struct NewConversationSheet: View {
           }
         }
 
-        ForEach(hits) { hit in
+        ForEach(hits.filter { canCompose($0.handle) }) { hit in
           Button {
             compose(handle: hit.handle, title: hit.name)
           } label: {
