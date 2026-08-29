@@ -193,8 +193,14 @@ final class InboxStore {
   func unreadCount(for network: MessageNetwork?) -> Int {
     conversations.reduce(0) { total, conversation in
       guard !conversation.isArchived else { return total }
-      guard network == nil || conversation.network == network else { return total }
-      return total + conversation.unreadCount
+      guard let network else { return total + conversation.unreadCount }
+      if conversation.network == network { return total + conversation.unreadCount }
+      // Une ligne réunie ne porte que le réseau de son dernier message : ses
+      // non-lus se comptent sous chacun des réseaux qu'elle rassemble.
+      guard isMerged(conversation.id) else { return total }
+      return total + memberConversations(of: conversation.id)
+        .filter { $0.network == network }
+        .reduce(0) { $0 + $1.unreadCount }
     }
   }
 
@@ -208,7 +214,13 @@ final class InboxStore {
 
   /// Le rail n'affiche un réseau que s'il est réellement branché ou déjà peuplé.
   func hasConversations(on network: MessageNetwork) -> Bool {
-    conversations.contains { !$0.isArchived && $0.network == network }
+    conversations.contains { conversation in
+      guard !conversation.isArchived else { return false }
+      if conversation.network == network { return true }
+      // Sans ça, fusionner l'unique fil d'un réseau ferait disparaître son rail.
+      guard isMerged(conversation.id) else { return false }
+      return memberConversations(of: conversation.id).contains { $0.network == network }
+    }
   }
 
   func setNetworkFilter(_ network: MessageNetwork?) {
