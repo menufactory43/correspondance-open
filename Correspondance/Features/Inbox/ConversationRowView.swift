@@ -126,10 +126,10 @@ private struct UnreadBadge: View {
   var body: some View {
     Text(label)
       .font(.system(size: 10, weight: .bold, design: .rounded))
-      .foregroundStyle(theme.paper)
+      .foregroundStyle(theme.badgeInk)
       .padding(.horizontal, count > 9 ? 6 : 5)
       .padding(.vertical, 2)
-      .background(theme.accent, in: Capsule())
+      .background(theme.badge, in: Capsule())
       .accessibilityLabel("\(count) nouveaux messages")
   }
 }

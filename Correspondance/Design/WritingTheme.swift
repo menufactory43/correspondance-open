@@ -25,12 +25,12 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
 
   var subtitleFR: String {
     switch self {
-    case .papier: "Ivoire chaud, silence de matin"
-    case .dune: "Sable et sépia, lumière basse"
-    case .clairDeLune: "Gris bleuté, air frais"
-    case .encreDeNuit: "Nuit profonde, encre claire"
-    case .vieuxBureau: "Lampe de bureau, vert olive"
-    case .cireEtChene: "Bois sombre, cire rouge"
+    case .papier: "Parchemin tiède, rose fané"
+    case .dune: "Sable et sépia, encre brûlée"
+    case .clairDeLune: "Brume claire, bleu franc"
+    case .encreDeNuit: "Nuit indigo, bleu de lune"
+    case .vieuxBureau: "Lampe verte, forêt sombre"
+    case .cireEtChene: "Bois brûlé, cire orangée"
     }
   }
 
@@ -53,144 +53,263 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
   }
 }
 
+/// LE SYSTÈME DE COULEURS D'UN THÈME — des rôles, pas des teintes.
+///
+/// Méthode reprise de `FauconnierKit/ThemeCouleurs` : un thème se DÉCLARE en
+/// quatre teintes de caractère (papier, encre, accent, accent doux) et tout le
+/// reste — surfaces creusées, liserés, encres secondaires, bulles, pastilles —
+/// se DÉRIVE par mélange et par contrat de contraste. Deux conséquences :
+/// aucune valeur n'est posée « à l'œil », et un thème ne peut pas naître
+/// illisible (`WritingThemeContrastTests` le rejoue à chaque build).
+///
+/// Les quatre teintes de caractère viennent de palettes éprouvées (Rosé Pine
+/// Dawn, Gruvbox, Catppuccin Latte, Tokyo Night, Everforest — licences MIT) :
+/// leurs fonds et leurs accents ont été accordés ensemble par leurs auteurs,
+/// c'est ce qui évite les gris tristes et les accents qui hurlent.
+struct WritingPalette: Equatable, Sendable {
+  let isDark: Bool
+
+  // Surfaces
+  let paper: RGB
+  let paperSecondary: RGB
+  let sidebar: RGB
+  let rail: RGB
+  let room: RGB
+  let glow: RGB
+  let selection: RGB
+  let separator: RGB
+
+  // Encres
+  let ink: RGB
+  let inkSecondary: RGB
+  let inkTertiary: RGB
+
+  // Accent
+  let accent: RGB
+  let accentSoft: RGB
+  let accentFill: RGB
+  let accentInk: RGB
+  let caret: RGB
+
+  // Bulles et pastilles
+  let bubbleIn: RGB
+  let bubbleInInk: RGB
+  let bubbleOut: RGB
+  let bubbleOutInk: RGB
+  let badge: RGB
+  let badgeInk: RGB
+
+  /// Les surfaces sur lesquelles du texte courant peut atterrir. Les encres
+  /// secondaires se calibrent sur la PIRE d'entre elles, jamais sur le papier
+  /// (le papier est toujours le cas facile).
+  var textSurfaces: [RGB] {
+    [paper, paperSecondary, sidebar, rail, room, selection, bubbleIn]
+  }
+
+  /// LE BÂTISSEUR. Quatre teintes entrent, un système sort.
+  static func make(
+    paper: RGB,
+    ink: RGB,
+    accent: RGB,
+    accentSoft: RGB,
+    isDark: Bool
+  ) -> WritingPalette {
+    // Les surfaces : « creuser » va vers le noir la nuit, vers l'encre le jour
+    // (un papier clair se creuse en se salissant, pas en s'éteignant).
+    let hollow = isDark ? RGB.black : ink
+    let paperSecondary = paper.mix(ink, 0.07)
+    let sidebar = paper.mix(hollow, isDark ? 0.42 : 0.05)
+    let rail = paper.mix(hollow, isDark ? 0.60 : 0.09)
+    let room = paper.mix(hollow, isDark ? 0.72 : 0.13)
+    let glow = isDark ? paper.mix(ink, 0.10) : paper.mix(.white, 0.60)
+    let selection = paper.mix(accent, isDark ? 0.24 : 0.18)
+    let separator = paper.mix(ink, isDark ? 0.22 : 0.17)
+    let bubbleIn = paper.mix(ink, isDark ? 0.13 : 0.09)
+
+    // Les encres secondaires se dérivent sur la surface la MOINS favorable.
+    let surfaces = [paper, paperSecondary, sidebar, rail, room, selection, bubbleIn]
+    let worst = surfaces.min { RGB.contrast($0, ink) < RGB.contrast($1, ink) } ?? paper
+    let inkSecondary = RGB.step(on: worst, toward: ink, minRatio: 7.0)
+    let inkTertiary = RGB.step(on: worst, toward: ink, minRatio: 4.8)
+
+    // L'accent PLEIN : bulles sortantes, pastilles non lues, badges du rail.
+    // Son encre est calculée, jamais choisie.
+    let lightInk = RGB.white.mix(accent, 0.06)
+    let darkInk = RGB.black.mix(accent, 0.10)
+    let filled = RGB.filledAccent(accent, lightInk: lightInk, darkInk: darkInk, minRatio: 4.6)
+
+    return WritingPalette(
+      isDark: isDark,
+      paper: paper,
+      paperSecondary: paperSecondary,
+      sidebar: sidebar,
+      rail: rail,
+      room: room,
+      glow: glow,
+      selection: selection,
+      separator: separator,
+      ink: ink,
+      inkSecondary: inkSecondary,
+      inkTertiary: inkTertiary,
+      accent: accent,
+      accentSoft: accentSoft,
+      accentFill: filled.fill,
+      accentInk: filled.ink,
+      caret: accent,
+      bubbleIn: bubbleIn,
+      bubbleInInk: ink,
+      bubbleOut: filled.fill,
+      bubbleOutInk: filled.ink,
+      badge: filled.fill,
+      badgeInk: filled.ink
+    )
+  }
+}
+
 struct WritingTheme: Equatable, Sendable {
   let id: WritingThemeID
-  let paper: Color
-  let paperSecondary: Color
-  let ink: Color
-  let inkSecondary: Color
-  let inkTertiary: Color
-  let accent: Color
-  let accentSoft: Color
-  let sidebar: Color
-  let selection: Color
-  let edge: Color
-  let glow: Color
-  let room: Color
-  let caret: Color
+  let palette: WritingPalette
   let bodySize: CGFloat
   let lineSpacing: CGFloat
   let letterTracking: CGFloat
 
+  // MARK: - Jetons sémantiques (les vues ne voient QUE ça)
+
+  var paper: Color { palette.paper.color }
+  var paperSecondary: Color { palette.paperSecondary.color }
+  var sidebar: Color { palette.sidebar.color }
+  var rail: Color { palette.rail.color }
+  var room: Color { palette.room.color }
+  var glow: Color { palette.glow.color }
+  var selection: Color { palette.selection.color }
+  var separator: Color { palette.separator.color }
+  /// Ancien nom du liseré — les vues historiques l'appellent encore ainsi.
+  var edge: Color { palette.separator.color }
+
+  var ink: Color { palette.ink.color }
+  var inkSecondary: Color { palette.inkSecondary.color }
+  var inkTertiary: Color { palette.inkTertiary.color }
+
+  var accent: Color { palette.accent.color }
+  var accentSoft: Color { palette.accentSoft.color }
+  var accentFill: Color { palette.accentFill.color }
+  var accentInk: Color { palette.accentInk.color }
+  var caret: Color { palette.caret.color }
+
+  var bubbleIn: Color { palette.bubbleIn.color }
+  var bubbleInInk: Color { palette.bubbleInInk.color }
+  var bubbleOut: Color { palette.bubbleOut.color }
+  var bubbleOutInk: Color { palette.bubbleOutInk.color }
+  var badge: Color { palette.badge.color }
+  var badgeInk: Color { palette.badgeInk.color }
+
+  var isDark: Bool { palette.isDark }
+
+  // MARK: - La table
+
   static func resolve(_ id: WritingThemeID) -> WritingTheme {
     switch id {
+    // « Papier » — Rosé Pine Dawn : parchemin tiède, encre prune, rose fané.
+    // Le thème clair par défaut : chaud sans être jaune, doux sans être fade.
     case .papier:
       WritingTheme(
         id: .papier,
-        paper: Color(hex: 0xFAF7F2),
-        paperSecondary: Color(hex: 0xF3EEE6),
-        ink: Color(hex: 0x1C1917),
-        inkSecondary: Color(hex: 0x6B6560),
-        inkTertiary: Color(hex: 0x9C958C),
-        accent: Color(hex: 0x8B5E3C),
-        accentSoft: Color(hex: 0xC4A484),
-        sidebar: Color(hex: 0xF0EBE3),
-        selection: Color(hex: 0xE6DCCF),
-        edge: Color(hex: 0xE0D6C8),
-        glow: Color(hex: 0xFFFCF8),
-        room: Color(hex: 0xEDE6DC),
-        caret: Color(hex: 0x8B5E3C),
+        palette: .make(
+          paper: RGB(0xFAF4ED),
+          ink: RGB(0x4A4462),
+          // Le « love » de Rosé Pine Dawn (#B4637A) ne fait que 3,84:1 sur son
+          // parchemin : assombri d'un cran pour porter du texte (4,78:1).
+          accent: RGB(0xA4536A),
+          accentSoft: RGB(0xD7827E),
+          isDark: false
+        ),
         bodySize: 18,
         lineSpacing: 8,
         letterTracking: 0.2
       )
+
+    // « Dune » — Gruvbox light : le sépia d'iA Writer, mais avec une encre
+    // brûlée qui tient debout. Le thème des longues séances de lecture.
     case .dune:
       WritingTheme(
         id: .dune,
-        paper: Color(hex: 0xF4E8D4),
-        paperSecondary: Color(hex: 0xEBD9BE),
-        ink: Color(hex: 0x3B2A1A),
-        inkSecondary: Color(hex: 0x7A5C3E),
-        inkTertiary: Color(hex: 0xA88968),
-        accent: Color(hex: 0xA65C2E),
-        accentSoft: Color(hex: 0xD4A574),
-        sidebar: Color(hex: 0xE8D7BE),
-        selection: Color(hex: 0xDFC9A8),
-        edge: Color(hex: 0xD4C0A0),
-        glow: Color(hex: 0xFFF4E4),
-        room: Color(hex: 0xD9C4A4),
-        caret: Color(hex: 0xA65C2E),
+        palette: .make(
+          paper: RGB(0xFBF1C7),
+          ink: RGB(0x3C3836),
+          accent: RGB(0xAF3A03),
+          accentSoft: RGB(0xD79921),
+          isDark: false
+        ),
         bodySize: 18,
         lineSpacing: 9,
         letterTracking: 0.15
       )
+
+    // « Clair de lune » — Catppuccin Latte : brume froide, bleu franc.
+    // Le contrepoint frais des deux papiers chauds.
     case .clairDeLune:
       WritingTheme(
         id: .clairDeLune,
-        paper: Color(hex: 0xF2F4F7),
-        paperSecondary: Color(hex: 0xE8ECF2),
-        ink: Color(hex: 0x1E2430),
-        inkSecondary: Color(hex: 0x5C6778),
-        inkTertiary: Color(hex: 0x8B95A5),
-        accent: Color(hex: 0x4A6FA5),
-        accentSoft: Color(hex: 0x9BB0CC),
-        sidebar: Color(hex: 0xE6EAF0),
-        selection: Color(hex: 0xD5DDE8),
-        edge: Color(hex: 0xCDD5E0),
-        glow: Color(hex: 0xFFFFFF),
-        room: Color(hex: 0xD8DEE8),
-        caret: Color(hex: 0x4A6FA5),
+        palette: .make(
+          paper: RGB(0xEFF1F5),
+          ink: RGB(0x4C4F69),
+          // Le bleu Latte publié (#1E66F5) ne fait que 4,34:1 sur sa propre
+          // brume : assombri d'un cran pour porter du texte (5,11:1).
+          accent: RGB(0x1A5DDB),
+          accentSoft: RGB(0x7287FD),
+          isDark: false
+        ),
         bodySize: 17.5,
         lineSpacing: 8,
         letterTracking: 0.1
       )
+
+    // « Encre de nuit » — Tokyo Night : une nuit INDIGO, pas un gris éteint.
+    // Le fond porte encore du bleu, l'encre aussi : rien n'est neutre.
     case .encreDeNuit:
       WritingTheme(
         id: .encreDeNuit,
-        paper: Color(hex: 0x141820),
-        paperSecondary: Color(hex: 0x1A2030),
-        ink: Color(hex: 0xE8ECF4),
-        inkSecondary: Color(hex: 0xA8B2C4),
-        // Assez clair pour les placeholders sur fond sombre.
-        inkTertiary: Color(hex: 0x8E98AA),
-        accent: Color(hex: 0x7EA0D4),
-        accentSoft: Color(hex: 0x3D5278),
-        sidebar: Color(hex: 0x10141C),
-        selection: Color(hex: 0x243048),
-        edge: Color(hex: 0x2A3348),
-        glow: Color(hex: 0x1C2438),
-        room: Color(hex: 0x0C0F16),
-        caret: Color(hex: 0x9BB8E8),
+        palette: .make(
+          paper: RGB(0x1A1B26),
+          ink: RGB(0xC0CAF5),
+          accent: RGB(0x7AA2F7),
+          accentSoft: RGB(0x3D59A1),
+          isDark: true
+        ),
         bodySize: 18,
         lineSpacing: 9,
         letterTracking: 0.25
       )
+
+    // « Vieux bureau » — Everforest dark : la lampe verte du bureau, un sombre
+    // qui tire sur la forêt plutôt que sur l'ardoise.
     case .vieuxBureau:
       WritingTheme(
         id: .vieuxBureau,
-        paper: Color(hex: 0x1A2218),
-        paperSecondary: Color(hex: 0x222C1E),
-        ink: Color(hex: 0xD8E0C8),
-        inkSecondary: Color(hex: 0xA0B090),
-        inkTertiary: Color(hex: 0x8A9A78),
-        accent: Color(hex: 0xA8C478),
-        accentSoft: Color(hex: 0x4A5C38),
-        sidebar: Color(hex: 0x141A12),
-        selection: Color(hex: 0x2C3826),
-        edge: Color(hex: 0x303C2A),
-        glow: Color(hex: 0x24301E),
-        room: Color(hex: 0x0E120C),
-        caret: Color(hex: 0xC4E090),
+        palette: .make(
+          paper: RGB(0x2B3339),
+          ink: RGB(0xD3C6AA),
+          accent: RGB(0xA7C080),
+          accentSoft: RGB(0x4F5B45),
+          isDark: true
+        ),
         bodySize: 17.5,
         lineSpacing: 8,
         letterTracking: 0.3
       )
+
+    // « Cire et chêne » — Gruvbox dark réchauffé jusqu'au bois : fond brun,
+    // parchemin en encre, cire orangée en accent.
     case .cireEtChene:
       WritingTheme(
         id: .cireEtChene,
-        paper: Color(hex: 0x1E1612),
-        paperSecondary: Color(hex: 0x281E18),
-        ink: Color(hex: 0xF0E4D4),
-        inkSecondary: Color(hex: 0xC4B09C),
-        inkTertiary: Color(hex: 0xA09080),
-        accent: Color(hex: 0xC45C3A),
-        accentSoft: Color(hex: 0x6B3A28),
-        sidebar: Color(hex: 0x16100C),
-        selection: Color(hex: 0x342820),
-        edge: Color(hex: 0x3A2C24),
-        glow: Color(hex: 0x2A1E16),
-        room: Color(hex: 0x100C0A),
-        caret: Color(hex: 0xE07048),
+        palette: .make(
+          paper: RGB(0x221A15),
+          ink: RGB(0xEBDBB2),
+          accent: RGB(0xFE8019),
+          accentSoft: RGB(0x7C4A2A),
+          isDark: true
+        ),
         bodySize: 18,
         lineSpacing: 9,
         letterTracking: 0.2

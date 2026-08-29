@@ -28,7 +28,9 @@ struct ContentView: View {
     // .navigationTransition(.crossFade)
     .navigationTitle("")
     .toolbar { toolbarContent }
-    .toolbarBackground(theme.paper, for: .windowToolbar)
+    // La barre d'outils ne peint RIEN : le fond continu vient de la sidebar
+    // (à gauche) et du papier de la fenêtre (à droite). Cf. WindowChrome.swift.
+    .correspondanceTransparentToolbar()
     .correspondanceWindowBackground(theme.paper)
     .tint(theme.accent)
     .correspondanceWindowChrome(theme)
@@ -65,7 +67,8 @@ struct ContentView: View {
 
   // MARK: - Colonnes
 
-  /// Rail de réseaux + liste : une seule colonne sidebar, matériau système.
+  /// Rail de réseaux + liste : une seule colonne sidebar, matériau système
+  /// teinté par le thème, continu du haut de la fenêtre jusqu'en bas.
   private var sidebar: some View {
     HStack(spacing: 0) {
       NetworkRailView()
@@ -74,6 +77,7 @@ struct ContentView: View {
       InboxListPane()
         .frame(maxWidth: .infinity)
     }
+    .background { SidebarSurface(theme: theme) }
   }
 
   @ViewBuilder

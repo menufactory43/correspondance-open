@@ -4,6 +4,13 @@ import SwiftUI
 /// Ce que le système ne fournit pas encore : l'apparence claire/sombre suivant
 /// le thème d'écriture, et le titre de fenêtre masqué (la barre d'outils native
 /// et le fond de fenêtre viennent de `containerBackground`, plus de bricolage).
+///
+/// LA COUTURE : une barre de titre OPAQUE coupe la sidebar en deux — une bande
+/// haute d'une couleur, la sidebar d'une autre, avec une arête nette au milieu.
+/// La réparation tient en deux gestes, tous deux natifs : la fenêtre passe en
+/// `fullSizeContentView` + titre transparent (le contenu monte SOUS la barre),
+/// et la barre d'outils rend son fond (`toolbarBackgroundVisibility(.hidden)`).
+/// La sidebar peint alors elle-même, du haut de la fenêtre jusqu'en bas.
 struct WindowChromeModifier: ViewModifier {
   let theme: WritingTheme
 
@@ -28,14 +35,52 @@ private struct WindowChromeApplicator: NSViewRepresentable {
     DispatchQueue.main.async {
       guard let window = nsView.window else { return }
       window.titleVisibility = .hidden
+      window.titlebarAppearsTransparent = true
+      window.styleMask.insert(.fullSizeContentView)
       window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
     }
+  }
+}
+
+/// Le fond de la sidebar, D'UN SEUL TENANT du haut de la fenêtre jusqu'en bas.
+///
+/// La colonne latérale d'un `NavigationSplitView` pose déjà le matériau
+/// « sidebar » du système sur toute la hauteur ; on ne le remplace pas, on le
+/// TEINTE. Sous `Reduce Transparency` (ou contraste renforcé) le système peint
+/// opaque : on fait pareil, avec la teinte pleine du thème.
+struct SidebarSurface: View {
+  let theme: WritingTheme
+
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.colorSchemeContrast) private var contrast
+
+  private var prefersOpaque: Bool {
+    reduceTransparency || contrast == .increased
+  }
+
+  var body: some View {
+    theme.sidebar
+      // Assez opaque pour que le thème gagne (une teinte trop légère laisse le
+      // matériau système reprendre la main et la sidebar vire au gris), assez
+      // translucide pour garder la profondeur du matériau.
+      .opacity(prefersOpaque ? 1 : 0.88)
+      .ignoresSafeArea()
   }
 }
 
 extension View {
   func correspondanceWindowChrome(_ theme: WritingTheme) -> some View {
     modifier(WindowChromeModifier(theme: theme))
+  }
+
+  /// Barre d'outils SANS fond : c'est elle qui créait la bande cousue en haut.
+  @ViewBuilder
+  func correspondanceTransparentToolbar() -> some View {
+    if #available(macOS 15.0, *) {
+      toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+    } else {
+      toolbarBackground(.hidden, for: .windowToolbar)
+    }
   }
 }
 
