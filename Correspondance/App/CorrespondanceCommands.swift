@@ -20,14 +20,16 @@ struct CorrespondanceCommands: Commands {
 
     CommandMenu("Inbox") {
       Button("Mode Focus") {
-        store.setMode(.focus)
+        store.setMode(store.mode == .focus ? .inbox : .focus)
       }
-      .keyboardShortcut("1", modifiers: [.command])
+      .keyboardShortcut("f", modifiers: [.command, .shift])
 
-      Button("Mode Inbox") {
-        store.setMode(.inbox)
+      Divider()
+
+      // Rail de réseaux : ⌘1 = Tous, puis l'ordre de `MessageNetwork`.
+      ForEach(Array(NetworkRailView.slots.enumerated()), id: \.offset) { index, network in
+        NetworkFilterCommand(store: store, network: network, position: index + 1)
       }
-      .keyboardShortcut("2", modifiers: [.command])
 
       Divider()
 
@@ -53,5 +55,24 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut(",", modifiers: [.command])
     }
+  }
+}
+
+/// Un cran du rail dans le menu. Au-delà de ⌘9 on n'attribue plus de raccourci.
+private struct NetworkFilterCommand: View {
+  let store: InboxStore
+  let network: MessageNetwork?
+  let position: Int
+
+  var body: some View {
+    Button(network?.labelFR ?? "Tous les réseaux") {
+      store.setNetworkFilter(network)
+    }
+    .keyboardShortcut(shortcut)
+  }
+
+  private var shortcut: KeyboardShortcut? {
+    guard (1...9).contains(position), let digit = "\(position)".first else { return nil }
+    return KeyboardShortcut(KeyEquivalent(digit), modifiers: [.command])
   }
 }

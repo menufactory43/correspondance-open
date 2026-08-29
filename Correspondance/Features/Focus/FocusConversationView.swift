@@ -6,7 +6,6 @@ struct FocusConversationView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var chromeRevealed = false
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
@@ -54,78 +53,13 @@ struct FocusConversationView: View {
       .padding(.trailing, Spacing.xl)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .animation(chromeAnimation, value: isWriting)
-
-      VStack {
-        focusChrome
-          .opacity(showsChrome ? 1 : 0)
-          .animation(chromeAnimation, value: showsChrome)
-        Spacer()
-      }
-      .padding(.top, 8)
-      .allowsHitTesting(showsChrome)
-    }
-    .onContinuousHover { phase in
-      switch phase {
-      case .active(let point):
-        chromeRevealed = !isWriting && point.y < 52
-      case .ended:
-        chromeRevealed = false
-      }
-    }
-    .onChange(of: store.selectedConversationID) { _, _ in
-      chromeRevealed = false
     }
   }
-
-  private var showsChrome: Bool { chromeRevealed && !isWriting }
 
   private var chromeAnimation: Animation? {
     reduceMotion ? nil : .easeOut(duration: 0.15)
   }
 
-  private var focusChrome: some View {
-    HStack(spacing: Spacing.sm) {
-      SoftToolButton(
-        systemImage: "chevron.left",
-        helpText: "Conversation précédente",
-        isDisabled: store.focusIndex == nil || store.focusIndex == 0
-      ) {
-        Task { await store.focusPrevious() }
-      }
-
-      SoftToolButton(
-        systemImage: "chevron.right",
-        helpText: "Conversation suivante",
-        isDisabled: {
-          guard let index = store.focusIndex else { return true }
-          return index >= store.activeQueue.count - 1
-        }()
-      ) {
-        Task { await store.focusNext() }
-      }
-
-      SoftToolButton(systemImage: "archivebox", helpText: "Archiver (⌘E)") {
-        Task { await store.archiveSelected() }
-      }
-
-      SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
-        store.presentNewConversation()
-      }
-
-      Spacer()
-
-      if let conversation = store.selectedConversation {
-        HStack(spacing: 6) {
-          Image(systemName: conversation.rowSystemImage)
-          Text(conversation.isGroup ? "\(conversation.network.labelFR) · groupe" : conversation.network.labelFR)
-        }
-        .font(Typography.meta)
-        .foregroundStyle(theme.inkTertiary)
-      }
-    }
-    .padding(.horizontal, Spacing.md)
-    .padding(.vertical, Spacing.xs)
-  }
 }
 
 /// Fil en prose — le brouillon est le dernier paragraphe de la page.
