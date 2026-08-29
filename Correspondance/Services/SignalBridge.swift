@@ -284,6 +284,7 @@ actor SignalBridge {
       guard var conversation = conversations[id] else { continue }
       conversation.preview = last.sidebarPreviewText
       conversation.lastMessageAt = max(conversation.lastMessageAt, last.sentAt)
+      conversation.lastMessageIsFromMe = last.isFromMe
       conversations[id] = conversation
     }
   }
@@ -691,6 +692,7 @@ actor SignalBridge {
       if !displayText.isEmpty {
         conversation.preview = displayText
         conversation.lastMessageAt = max(conversation.lastMessageAt, sentAt)
+        conversation.lastMessageIsFromMe = false
       }
       if let groupName, !groupName.isEmpty {
         conversation.preferTitle(groupName)

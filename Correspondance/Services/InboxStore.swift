@@ -15,7 +15,9 @@ final class InboxStore {
     didSet { UserDefaults.standard.set(networkFilter?.rawValue ?? "", forKey: Keys.networkFilter) }
   }
 
-  var conversations: [Conversation] = []
+  var conversations: [Conversation] = [] {
+    didSet { conversationsDidChange(previous: oldValue) }
+  }
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
   var draftText: String = ""
@@ -36,6 +38,7 @@ final class InboxStore {
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
   var messagesAutomationStatusFR = "…"
+  var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
   /// Matrix joignable et session valide — conditionne WhatsApp dans l'UI.
   var isMatrixConnected = false
@@ -62,6 +65,11 @@ final class InboxStore {
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
   private var matrixSyncTask: Task<Void, Never>?
   private var whatsAppLoginTask: Task<Void, Never>?
+  /// Dernier `lastMessageAt` déjà notifié, par conversation — évite de re-sonner
+  /// pour un fil qu'un simple refresh a fait remonter sans nouveau message.
+  private var lastNotifiedAt: [String: Date] = [:]
+  /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
+  private var isNotificationPrimed = false
 
   var selectedConversation: Conversation? {
     guard let selectedConversationID else { return nil }
@@ -234,9 +242,77 @@ final class InboxStore {
     // Demande Contacts tout de suite (sinon l’app n’apparaît pas dans Confidentialité).
     await requestContactsPermission()
     requestMessagesAutomation()
+    NotificationService.shared.onOpenConversation = { [weak self] id in
+      guard let self else { return }
+      Task { @MainActor in
+        self.mode = .inbox
+        await self.select(id)
+      }
+    }
+    await NotificationService.shared.requestAuthorization()
     await load()
+    // Ce qui est déjà là au démarrage n'est pas « nouveau » : on prend l'état pour
+    // référence, puis seuls les messages suivants déclenchent une notification.
+    primeNotifications()
     startLiveSync()
     startMatrixSync()
+  }
+
+  // MARK: - Notifications système
+
+  /// Bouton « Autoriser les notifications » des Réglages.
+  func requestNotificationPermission() async {
+    await NotificationService.shared.requestAuthorization()
+    notificationStatusFR = NotificationService.shared.authorizationStatusFR
+  }
+
+  func openNotificationSettings() {
+    NotificationService.shared.openNotificationSettings()
+  }
+
+  private func primeNotifications() {
+    for conversation in conversations {
+      lastNotifiedAt[conversation.id] = conversation.lastMessageAt
+    }
+    isNotificationPrimed = true
+    notificationStatusFR = NotificationService.shared.authorizationStatusFR
+    updateDockBadge()
+  }
+
+  /// Un message entrant sur un fil non muet et non sélectionné = une notification.
+  private func conversationsDidChange(previous: [Conversation]) {
+    updateDockBadge()
+    guard isNotificationPrimed else { return }
+    let before = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    for conversation in conversations {
+      guard shouldNotify(conversation, previous: before[conversation.id]) else { continue }
+      lastNotifiedAt[conversation.id] = conversation.lastMessageAt
+      NotificationService.shared.postIncoming(
+        conversationID: conversation.id,
+        title: conversation.title,
+        networkLabel: conversation.network.labelFR,
+        body: conversation.preview
+      )
+    }
+  }
+
+  private func shouldNotify(_ conversation: Conversation, previous: Conversation?) -> Bool {
+    NotificationPolicy.shouldNotify(
+      current: conversation,
+      previous: previous,
+      isMuted: mutedIDs.contains(conversation.id),
+      isSelected: conversation.id == selectedConversationID,
+      alreadyNotifiedAt: lastNotifiedAt[conversation.id]
+    )
+  }
+
+  /// Pastille du Dock : total des non-lus, hors fils archivés ou muets.
+  private func updateDockBadge() {
+    let total = conversations.reduce(0) { partial, conversation in
+      guard !conversation.isArchived, !mutedIDs.contains(conversation.id) else { return partial }
+      return partial + conversation.unreadCount
+    }
+    NotificationService.shared.updateDockBadge(count: total)
   }
 
   /// Boîte macOS « Correspondance souhaite contrôler Messages » (comme Beeper).
@@ -563,6 +639,7 @@ final class InboxStore {
       mutedIDs.insert(conversationID)
     }
     persistFlags()
+    updateDockBadge()
   }
 
   func clearChatHistory(conversationID: String) async {
@@ -1173,6 +1250,7 @@ final class InboxStore {
     updated.preview = last.sidebarPreviewText
     updated.lastMessageAt = last.sentAt
     updated.lastDelivery = Self.delivery(after: last, previous: updated.lastDelivery)
+    updated.lastMessageIsFromMe = last.isFromMe
     conversations[idx] = updated
   }
 

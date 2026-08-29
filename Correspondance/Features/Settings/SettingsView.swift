@@ -43,6 +43,13 @@ struct SettingsView: View {
             .frame(maxWidth: 320, alignment: .trailing)
         }
 
+        LabeledContent("Notifications") {
+          Text(store.notificationStatusFR)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: 320, alignment: .trailing)
+        }
+
         Text("Lier Signal (terminal) :\nsignal-cli link -n Correspondance\nPuis scanne le QR avec Signal → Appareils liés.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -50,6 +57,16 @@ struct SettingsView: View {
 
         Button("Autoriser Contacts…") {
           Task { await store.requestContactsPermission() }
+        }
+
+        Button("Autoriser les notifications…") {
+          Task {
+            await store.requestNotificationPermission()
+            // Déjà refusé : macOS ne réaffiche plus la boîte, on ouvre les Réglages.
+            if store.notificationStatusFR.contains("refus") {
+              store.openNotificationSettings()
+            }
+          }
         }
 
         Button("Autoriser Messages (Automatisation)…") {

@@ -108,6 +108,7 @@ struct MatrixRoomModel: Sendable {
       transportKey: roomID,
       isGroup: group
     )
+    conversation.lastMessageIsFromMe = last?.isFromMe ?? false
     if conversation.lastMessageAt == .distantPast {
       conversation.lastMessageAt = Date(timeIntervalSince1970: 0)
     }

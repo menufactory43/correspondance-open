@@ -54,7 +54,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Action après archivage | Réglages `AFTER_ARCHIVE` / `AFTER_TOGGLE_READ` → `SELECT_NEXT_THREAD` par défaut | **Fait de fait** : le mode Focus enchaîne déjà (`focusNext()` après `archiveSelected()`) — c'est notre cœur | — | — |
 | Recherche | ⌘K global (`SEARCH`), ⌘F dans le fil (`SEARCH_ROOM`) ; API `GET /v1/search`, `GET /v1/messages/search` (filtres `sender`, `mediaTypes`, `dateAfter`, `chatType`) ; « Only messages loaded in Beeper can be searched. » | **Absent** : aucun `.searchable`. Seule recherche = carnet d'adresses (`ContactDirectory.searchPeople`) | M | **P0** |
 | Épingles | `TOGGLE_THREAD_PIN` ⌘P, `Pinned chats can't be archived` | **Fait + persisté** : `togglePinned`, `UserDefaults correspondance.pinnedConversationIDs` | — | — |
-| Muet | `TOGGLE_THREAD_MUTE` ⌘⇧M | **Partiel décoratif** : `mutedIDs` persistés mais aucune notification n'existe → sans effet | S | P0 (avec notifications) |
+| Muet | `TOGGLE_THREAD_MUTE` ⌘⇧M | **Fait** : `mutedIDs` persistés, respectés par les notifications *et* par la pastille du Dock | — | — |
 | Non-lus / marquer lu-non lu | `TOGGLE_THREAD_READ` ⌘⇧U, `SELECT_NEXT_UNREAD_THREAD` ⌘U, `Mark All as Read` | **Fait localement** : `clearUnread`, `markUnread`. iMessage renvoie toujours 0 non-lu | S | P1 |
 | Rappels / snooze | `OPEN_REMIND_LATER_MENU` ⌘L ; « Remind Me marks this chat as new at the scheduled time, if there is no reply » ; API `POST /v1/chats/{id}/reminders` (`remindAt`, `dismissOnIncomingMessage`) + champ `snooze` | **Absent** | M | P1 |
 | Filtres | `TOGGLE_FILTER_UNREAD` ⌘⇧Y, `CYCLE_TABS` ⌥⇥ ; jeu de dossiers `UNREAD, UNRESPONDED, DRAFTS, ARCHIVED, MUTED, HIDDEN, REQUESTS, LOW_PRIORITY, REMINDERS, SCHEDULED` ; API `chats/search?inbox=primary` / `low-priority` / `archive` | **Absent** (le rail de réseaux n'existe que dans `PLAN-matrix.md`) | M | P1 |
@@ -111,8 +111,8 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Notifications système | `Enable notifications`, `MESSAGE_NOTIFICATIONS`, `macOS Notifications`, `Open Notifications in System Preferences`, `notification replied` | **Absent** — zéro `UserNotifications` dans tout le dépôt | M | **P0** |
-| Badge Dock | `Dock badge count`, `BADGE_COUNT` | **Absent** | S | **P0** |
+| Notifications système | `Enable notifications`, `MESSAGE_NOTIFICATIONS`, `macOS Notifications`, `Open Notifications in System Preferences`, `notification replied` | **Fait** : `Services/NotificationService.swift` + `Domain/NotificationPolicy.swift`. Notification par message entrant, tous réseaux ; respecte `mutedIDs`, le fil ouvert et les messages sortants ; clic → sélection du fil. Autorisation au premier lancement + bouton dans Réglages | — | — |
+| Badge Dock | `Dock badge count`, `BADGE_COUNT` | **Fait** : `NotificationService.updateDockBadge`, total des non-lus hors archivés et muets | — | — |
 | Répondre depuis la notification | `notification replied`, `notification action button ⇒ Remind in 1 Hour / 8 Hours` | **Absent** | S | P1 |
 | Regroupement / anti-spam | `DEBOUNCE_NOTIFICATIONS` (« delay and batch notifications for successive texts… OTP/2FA codes are always notified immediately »), `RENOTIFY_UNREAD_DELAY` | **Absent** | M | P1 — c'est la fonction la plus « Focus » de tout Beeper |
 | Sons | `NOTIFICATION_SOUND_NAME`, sons par réseau (help/desktop) | **Absent** | S | P2 |

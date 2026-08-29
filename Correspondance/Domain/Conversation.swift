@@ -17,6 +17,8 @@ struct Conversation: Identifiable, Hashable, Sendable {
   /// Acheminement du dernier message *sortant*, si le réseau l'expose (iMessage).
   /// `nil` = information indisponible → aucune coche affichée.
   var lastDelivery: MessageDelivery?
+  /// Le dernier message de l'aperçu vient de moi. Seul un `false` déclenche une notification.
+  var lastMessageIsFromMe: Bool = false
 
   var hasUnread: Bool { unreadCount > 0 }
 

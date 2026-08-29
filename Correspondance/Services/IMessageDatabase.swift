@@ -123,7 +123,8 @@ struct IMessageDatabase: Sendable {
           isArchived: false,
           transportKey: "\(rowID)|\(guid)|\(identifier)\(handleSuffix)",
           isGroup: isGroup,
-          lastDelivery: Self.delivery(fromMe: lastFromMe, delivered: lastDelivered, read: lastRead)
+          lastDelivery: Self.delivery(fromMe: lastFromMe, delivered: lastDelivered, read: lastRead),
+          lastMessageIsFromMe: lastFromMe
         )
       )
       if results.count >= limit { break }

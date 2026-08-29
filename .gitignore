@@ -31,3 +31,6 @@ build/
 # Optional large local masters (icns/png stay tracked if under Resources)
 docs/app-icon-preview.png
 docs/verify-*.png
+
+# Worktrees d'agents — jamais versionnés.
+.claude/worktrees/
