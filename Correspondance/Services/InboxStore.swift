@@ -89,30 +89,33 @@ final class InboxStore {
   private let iMessageSender = IMessageSender()
   private let signal = SignalBridge()
   private let matrix = MatrixBridgeService()
-  private var loadTask: Task<Void, Never>?
-  private var liveSyncTask: Task<Void, Never>?
+  @ObservationIgnored private var loadTask: Task<Void, Never>?
+  @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
-  private var matrixSyncTask: Task<Void, Never>?
-  private var whatsAppLoginTask: Task<Void, Never>?
+  @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
+  @ObservationIgnored private var whatsAppLoginTask: Task<Void, Never>?
   /// Temps réel iMessage : `chat.db-wal` surveillé plutôt qu'interrogé.
-  private let iMessageWatcher = IMessageWatcher()
+  @ObservationIgnored private let iMessageWatcher = IMessageWatcher()
+  /// Un rafraîchissement iMessage copie `chat.db` en entier : jamais deux à la fois.
+  @ObservationIgnored private var isRefreshingIMessage = false
+  @ObservationIgnored private var lastIMessageRefreshAt: Date = .distantPast
   /// Dernier `lastMessageAt` déjà notifié, par conversation — évite de re-sonner
   /// pour un fil qu'un simple refresh a fait remonter sans nouveau message.
-  private var lastNotifiedAt: [String: Date] = [:]
+  @ObservationIgnored private var lastNotifiedAt: [String: Date] = [:]
   /// État de référence pour la comparaison : `oldValue` du `didSet` ne convient pas,
   /// la normalisation de l'archivage produit une passe intermédiaire.
-  private var notificationBaseline: [String: Conversation] = [:]
+  @ObservationIgnored private var notificationBaseline: [String: Conversation] = [:]
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
-  private var searchIndex: [String: String] = [:]
+  @ObservationIgnored private var searchIndex: [String: String] = [:]
   /// Brouillons par conversation, restaurés au retour sur un fil.
-  private var drafts: [String: DraftStore.Draft] = [:]
+  @ObservationIgnored private var drafts: [String: DraftStore.Draft] = [:]
   /// Vrai le temps de réinstaller un brouillon : le `didSet` ne doit pas l'écraser.
-  private var isRestoringDraft = false
+  @ObservationIgnored private var isRestoringDraft = false
   /// Écriture disque différée — on n'écrit pas un fichier à chaque frappe.
-  private var draftPersistTask: Task<Void, Never>?
+  @ObservationIgnored private var draftPersistTask: Task<Void, Never>?
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
-  private var isNotificationPrimed = false
+  @ObservationIgnored private var isNotificationPrimed = false
 
   var selectedConversation: Conversation? {
     guard let selectedConversationID else { return nil }
@@ -319,6 +322,10 @@ final class InboxStore {
 
   // MARK: - Temps réel iMessage
 
+  /// Intervalle plancher entre deux relectures de chat.db. Le debounce du watcher
+  /// (500 ms) absorbe une rafale ; celui-ci protège d'une écriture continue.
+  static let minimumIMessageRefreshInterval: TimeInterval = 3
+
   /// Messages écrit dans le journal WAL de chat.db à chaque message : on y réagit
   /// plutôt que d'attendre un ⌘⇧R. Sans accès disque, le statut le dit.
   func startIMessageWatch() {
@@ -338,6 +345,17 @@ final class InboxStore {
   /// le fil ouvert. Ne touche ni à Signal ni à Matrix, qui ont leurs propres boucles.
   private func refreshIMessageIncrementally() async {
     guard !isLoading, !usingDemoData else { return }
+    // Chaque passe copie `chat.db` (liste, puis fil ouvert). Messages écrit dans le WAL
+    // en rafale : sans ces deux garde-fous, on empile des copies de la base entière.
+    guard !isRefreshingIMessage else { return }
+    guard Date().timeIntervalSince(lastIMessageRefreshAt) >= Self.minimumIMessageRefreshInterval else {
+      return
+    }
+    isRefreshingIMessage = true
+    defer {
+      isRefreshingIMessage = false
+      lastIMessageRefreshAt = Date()
+    }
     guard case .success(let fresh) = await loadIMessageOffMain() else { return }
 
     var byID = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
