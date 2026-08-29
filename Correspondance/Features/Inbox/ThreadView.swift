@@ -151,31 +151,6 @@ enum ThreadMetrics {
   static let topFadeHeight: CGFloat = 64
 }
 
-/// Le fil passe SOUS la barre d'outils transparente : sans transition il s'y
-/// coupe net, à mi-bulle. On dissout la bande haute dans le papier — pas de
-/// filet, pas d'arête — comme le fait Messages sous sa barre en verre.
-struct TopScrollFade: View {
-  let theme: WritingTheme
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
-  var body: some View {
-    LinearGradient(
-      stops: [
-        .init(color: theme.paper, location: 0),
-        .init(color: theme.paper, location: reduceTransparency ? 0.8 : 0.62),
-        .init(color: theme.paper.opacity(0), location: 1),
-      ],
-      startPoint: .top,
-      endPoint: .bottom
-    )
-    .frame(height: ThreadMetrics.topFadeHeight)
-    .frame(maxWidth: .infinity)
-    .allowsHitTesting(false)
-    .ignoresSafeArea(edges: .top)
-    .accessibilityHidden(true)
-  }
-}
-
 /// Séparateur horaire centré, discret — comme Messages : on ne redate que
 /// lorsque la conversation a repris après un silence, jamais sous chaque bulle.
 struct ThreadTimeSeparator: View {

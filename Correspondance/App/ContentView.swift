@@ -28,6 +28,22 @@ struct ContentView: View {
     // .navigationTransition(.crossFade)
     .navigationTitle("")
     .toolbar { toolbarContent }
+    // Focus = chrome fantôme : la barre d'outils s'efface au repos, et revient
+    // quand la souris monte en haut de la fenêtre ou qu'on remonte le fil.
+    // TODO(macOS 27) : `toolbarMinimizeBehavior(.onScrollDown)` remplacera
+    // cette lisière par le comportement natif.
+    .correspondanceToolbarVisibility(focusToolbarVisibility)
+    .overlay(alignment: .top) {
+      if isFocus {
+        HoverZone { hovering in
+          withAnimation(chromeAnimation) { store.setFocusChromeHovered(hovering) }
+        }
+        // Une vue AppKit n'a pas de taille idéale : sans cadre explicite la
+        // lisière ferait zéro pixel de large et n'attraperait jamais la souris.
+        .frame(maxWidth: .infinity, maxHeight: LayoutMetrics.focusChromeHoverHeight)
+        .accessibilityHidden(true)
+      }
+    }
     // La barre d'outils ne peint RIEN : le fond continu vient de la sidebar
     // (à gauche) et du papier de la fenêtre (à droite). Cf. WindowChrome.swift.
     .correspondanceTransparentToolbar()
@@ -36,6 +52,7 @@ struct ContentView: View {
     .correspondanceWindowChrome(theme)
     .onAppear { syncColumns(animated: false) }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
+    .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }
     .onReceive(NotificationCenter.default.publisher(for: .correspondanceOpenSettings)) { _ in
       showSettingsSheet = true
     }
@@ -63,6 +80,16 @@ struct ContentView: View {
     } message: {
       Text(store.lastErrorMessage ?? "")
     }
+  }
+
+  /// Hors Focus la barre reste franche. En Focus elle n'existe qu'au rappel.
+  private var focusToolbarVisibility: Visibility {
+    guard isFocus else { return .automatic }
+    return store.isFocusChromeRevealed ? .visible : .hidden
+  }
+
+  private var chromeAnimation: Animation? {
+    reduceMotion ? nil : .smooth(duration: 0.25)
   }
 
   // MARK: - Colonnes

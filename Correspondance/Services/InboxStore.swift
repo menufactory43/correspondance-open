@@ -52,6 +52,12 @@ final class InboxStore {
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
   var isComposerFocused = false
+  /// Chrome fantôme du Focus : la barre d'outils s'efface au repos et ne
+  /// revient que si la souris monte en haut de la fenêtre, ou si l'on remonte
+  /// le fil. Faux hors Focus, où la barre reste franchement visible.
+  var isFocusChromeRevealed = false
+  @ObservationIgnored private var isHoveringWindowTop = false
+  @ObservationIgnored private var focusChromeHideTask: Task<Void, Never>?
   var isLoading = false
   /// Sync receive en cours (poll live).
   var isLiveSyncing = false
@@ -983,6 +989,45 @@ final class InboxStore {
 
   func setMode(_ newMode: InboxMode) {
     mode = newMode
+    // Sortir du Focus (⌘⇧F, Échap) rend son chrome à la fenêtre, tout de suite.
+    resetFocusChrome()
+  }
+
+  // MARK: - Chrome fantôme du Focus
+
+  /// La souris entre ou sort de la lisière haute : la barre suit, et reste
+  /// tant qu'on la survole.
+  func setFocusChromeHovered(_ hovering: Bool) {
+    isHoveringWindowTop = hovering
+    focusChromeHideTask?.cancel()
+    if hovering {
+      isFocusChromeRevealed = true
+    } else {
+      scheduleFocusChromeHide(after: 0.4)
+    }
+  }
+
+  /// On remonte le fil : la barre se montre le temps qu'on la voie, puis
+  /// s'efface d'elle-même.
+  func flashFocusChrome() {
+    isFocusChromeRevealed = true
+    scheduleFocusChromeHide(after: 1.8)
+  }
+
+  func resetFocusChrome() {
+    focusChromeHideTask?.cancel()
+    focusChromeHideTask = nil
+    isHoveringWindowTop = false
+    isFocusChromeRevealed = false
+  }
+
+  private func scheduleFocusChromeHide(after delay: Double) {
+    focusChromeHideTask?.cancel()
+    focusChromeHideTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(delay))
+      guard let self, !Task.isCancelled, !self.isHoveringWindowTop else { return }
+      self.isFocusChromeRevealed = false
+    }
   }
 
   func markUnread(conversationID: String) {

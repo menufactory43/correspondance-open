@@ -130,6 +130,18 @@ private struct FocusTranscriptView: View {
       }
       .defaultScrollAnchor(.bottom)
       .scrollIndicators(.never)
+      // Remonter le fil rappelle la barre d'outils, comme un geste de retour
+      // en arrière ; descendre la laisse dormir.
+      .overlay(alignment: .top) {
+        // Même soin qu'en Inbox : le fil se dissout sous le titre de la page
+        // au lieu d'y être tranché.
+        TopScrollFade(theme: theme, height: Spacing.lg, reachesWindowEdge: false)
+      }
+      .onScrollUp {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
+          store.flashFocusChrome()
+        }
+      }
       .opacity(isShowingThread ? 1 : 0)
       .overlay {
         MacOverlayScrollerHider()

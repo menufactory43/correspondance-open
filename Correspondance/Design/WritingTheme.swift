@@ -408,4 +408,7 @@ enum LayoutMetrics {
   static let pageBottomInset: CGFloat = 120
   /// Marge gauche type iA Writer — à gauche du centre, loin des feux.
   static let pageLeading: CGFloat = 168
+  /// Lisière haute qui rappelle la barre d'outils en Focus : assez haute pour
+  /// qu'on la trouve sans viser, assez basse pour ne pas s'ouvrir par accident.
+  static let focusChromeHoverHeight: CGFloat = 56
 }

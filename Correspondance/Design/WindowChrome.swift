@@ -73,6 +73,29 @@ extension View {
     modifier(WindowChromeModifier(theme: theme))
   }
 
+  /// Chrome fantôme : la barre d'outils s'efface, et revient sur demande.
+  @ViewBuilder
+  func correspondanceToolbarVisibility(_ visibility: Visibility) -> some View {
+    if #available(macOS 15.0, *) {
+      toolbarVisibility(visibility, for: .windowToolbar)
+    } else {
+      toolbar(visibility, for: .windowToolbar)
+    }
+  }
+
+  /// « On remonte le fil » — le geste, pas la position. En dessous de macOS 15
+  /// la géométrie du défilement n'est pas observable : le survol suffit alors.
+  @ViewBuilder
+  func onScrollUp(threshold: CGFloat = 4, perform action: @escaping () -> Void) -> some View {
+    if #available(macOS 15.0, *) {
+      onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+        if new < old - threshold { action() }
+      }
+    } else {
+      self
+    }
+  }
+
   /// Barre d'outils SANS fond : c'est elle qui créait la bande cousue en haut.
   @ViewBuilder
   func correspondanceTransparentToolbar() -> some View {
