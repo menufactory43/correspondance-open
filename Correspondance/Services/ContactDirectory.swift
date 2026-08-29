@@ -141,7 +141,22 @@ actor ContactDirectory {
     CNContactStore.authorizationStatus(for: .contacts)
   }
 
-  /// Enrichit les titres iMessage (1:1 + groupes sans vrai nom).
+  /// Fils bridgés (WhatsApp…) : `address` porte le numéro quand le bridge l'expose.
+  /// Un titre encore technique (« +33612345678 ») devient le nom du carnet d'adresses.
+  func enrichBridgedTitles(_ conversations: inout [Conversation]) async {
+    await ensureIndex()
+    for index in conversations.indices {
+      let conversation = conversations[index]
+      guard conversation.network != .iMessage, conversation.network != .signal,
+            !conversation.isGroup, conversation.hasPlaceholderTitle,
+            conversation.address.hasPrefix("+")
+      else { continue }
+      var name = cachedName(for: conversation.address)
+      if name == nil { name = await displayName(forHandle: conversation.address) }
+      if let name { conversations[index].preferTitle(name) }
+    }
+  }
+
   func enrichIMessageTitles(_ conversations: inout [Conversation]) async {
     // Utilise d’abord le cache disque (instantané), puis complète via Contacts.
     await ensureIndex()

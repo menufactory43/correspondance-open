@@ -21,6 +21,11 @@ actor ConversationAvatarStore {
       resolved = loadSignalAvatarData(for: conversation)
     case .iMessage:
       resolved = await ContactDirectory.shared.imageData(for: conversation)
+    case .whatsapp:
+      // Fil bridgé : photo du carnet d'adresses si le bridge a exposé le numéro.
+      resolved = conversation.address.hasPrefix("+")
+        ? await ContactDirectory.shared.imageData(forHandle: conversation.address)
+        : nil
     }
 
     if let resolved {

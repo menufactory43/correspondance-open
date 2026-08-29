@@ -11,6 +11,9 @@ struct MatrixRoomModel: Sendable {
   var bridgeChannelName: String?
   /// Numéro si — et seulement si — le bridge l'expose. Jamais déduit du MXID (ghosts LID).
   var bridgePhoneNumber: String?
+  /// `com.beeper.room_type` de l'état de bridge : `dm` / `group`. Fait foi sur le comptage
+  /// des membres (le bridge ajoute aussi notre propre ghost dans les DM).
+  var bridgeRoomType: String?
   var members: [String: Member] = [:]
   var heroes: [String] = []
   var unreadCount: Int = 0
@@ -45,7 +48,11 @@ struct MatrixRoomModel: Sendable {
   }
 
   func isGroup(selfUserID: String) -> Bool {
-    remoteMembers(selfUserID: selfUserID).count > 1
+    switch bridgeRoomType {
+    case "dm": return false
+    case "group", "space": return true
+    default: return remoteMembers(selfUserID: selfUserID).count > 1
+    }
   }
 
   /// Titre humain : nom du salon, puis nom annoncé par le bridge, puis le correspondant.
@@ -106,6 +113,18 @@ enum MatrixIdentity {
   static func isBridgeBot(_ userID: String) -> Bool {
     let local = localpart(userID)
     return local.hasSuffix("bot") && MessageNetwork.allCases.contains { local.hasPrefix($0.rawValue.lowercased()) }
+  }
+
+  /// « Malo (WA) » → « Malo » : mautrix suffixe les noms de ghosts avec le réseau.
+  static func stripBridgeSuffix(_ name: String) -> String {
+    var trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    for suffix in [" (WA)", " (WhatsApp)", " (IG)", " (Instagram)", " (FB)", " (Messenger)", " (Signal)"] {
+      if trimmed.hasSuffix(suffix) {
+        trimmed = String(trimmed.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+        break
+      }
+    }
+    return trimmed
   }
 
   static func isGhost(_ userID: String) -> Bool {

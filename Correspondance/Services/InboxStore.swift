@@ -486,9 +486,10 @@ final class InboxStore {
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {
-          let updated = try await self.matrix.syncOnce()
+          var updated = try await self.matrix.syncOnce()
           guard !Task.isCancelled else { return }
           backoffSeconds = 2
+          await ContactDirectory.shared.enrichBridgedTitles(&updated)
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(updated.count) fils WhatsApp"
           await self.refreshSelectedMatrixMessages()

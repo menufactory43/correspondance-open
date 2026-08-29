@@ -95,6 +95,10 @@ enum MatrixJSON: Codable, Hashable, Sendable {
   }
 
   /// Chaîne au chemin donné, en ignorant les vides.
+  func bool(at path: String) -> Bool? {
+    value(at: path)?.boolValue
+  }
+
   func string(at path: String) -> String? {
     guard let raw = value(at: path)?.stringValue else { return nil }
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

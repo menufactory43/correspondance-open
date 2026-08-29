@@ -45,12 +45,18 @@ struct MatrixSyncParser: Sendable {
     guard let content = event.content else { return }
     switch event.type {
     case "m.room.name":
-      if let name = content.string(at: "name") { model.explicitName = name }
+      // `fi.mau.implicit_name` : nom dérivé du ghost par le bridge, pas un vrai nom de groupe.
+      // On le laisse vide : le titre repartira du correspondant, puis du carnet d'adresses.
+      if content.bool(at: "fi.mau.implicit_name") == true {
+        model.explicitName = nil
+      } else if let name = content.string(at: "name") {
+        model.explicitName = MatrixIdentity.stripBridgeSuffix(name)
+      }
 
     case "m.room.member":
       guard let userID = event.stateKey else { return }
       let membership = content.string(at: "membership") ?? "leave"
-      let displayName = content.string(at: "displayname")
+      let displayName = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
       // Un `leave` ne doit pas effacer le nom déjà connu (on garde l'historique lisible).
       var member = model.members[userID] ?? MatrixRoomModel.Member(displayName: nil, membership: membership)
       member.membership = membership
@@ -82,7 +88,10 @@ struct MatrixSyncParser: Sendable {
       model.network = network
     }
     if let channelName = content.string(at: "channel.displayname") {
-      model.bridgeChannelName = channelName
+      model.bridgeChannelName = MatrixIdentity.stripBridgeSuffix(channelName)
+    }
+    if let roomType = content.string(at: "com.beeper.room_type.v2") ?? content.string(at: "com.beeper.room_type") {
+      model.bridgeRoomType = roomType
     }
     // Le bridge peut exposer le numéro (`channel.id` en JID, ou un extra explicite).
     // On ne prend que ce qui ressemble vraiment à un numéro ; sinon on s'en passe.
