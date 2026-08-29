@@ -65,25 +65,30 @@ struct ThreadView: View {
                   .padding(.leading, ThreadMetrics.senderLabelLeading)
               }
               ForEach(group.messages) { message in
-                MessageBubbleView(
-                  message: message,
-                  theme: theme,
-                  typeface: themes.typeface,
-                  highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
-                  isCurrentMatch: store.threadSearchCurrentID == message.id,
-                  isSelected: store.selectedMessageID == message.id,
-                  onReact: { emoji in
-                    Task { await store.react(messageID: message.id, emoji: emoji) }
-                  },
-                  onSelect: {
-                    store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
-                  },
-                  onReply: {
-                    store.selectMessage(message.id)
-                    store.replyToSelectedMessage()
-                  }
-                )
-                .id(message.id)
+                if let event = message.systemEventText {
+                  ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
+                    .id(message.id)
+                } else {
+                  MessageBubbleView(
+                    message: message,
+                    theme: theme,
+                    typeface: themes.typeface,
+                    highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
+                    isCurrentMatch: store.threadSearchCurrentID == message.id,
+                    isSelected: store.selectedMessageID == message.id,
+                    onReact: { emoji in
+                      Task { await store.react(messageID: message.id, emoji: emoji) }
+                    },
+                    onSelect: {
+                      store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
+                    },
+                    onReply: {
+                      store.selectMessage(message.id)
+                      store.replyToSelectedMessage()
+                    }
+                  )
+                  .id(message.id)
+                }
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -179,6 +184,24 @@ struct ThreadTimeSeparator: View {
       return "\(date.formatted(.dateTime.weekday(.wide))) \(time)"
     }
     return date.formatted(.dateTime.day().month(.abbreviated).hour().minute())
+  }
+}
+
+/// Événement de conversation (« X a ajouté Y », renommage, départ) : une ligne
+/// centrée, du même gris que les horodatages — présente, jamais bavarde.
+struct ThreadEventSeparator: View {
+  let text: String
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+
+  var body: some View {
+    Text(text)
+      .font(Typography.meta(typeface))
+      .foregroundStyle(theme.inkTertiary)
+      .multilineTextAlignment(.center)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, Spacing.xxs)
+      .accessibilityLabel(text)
   }
 }
 

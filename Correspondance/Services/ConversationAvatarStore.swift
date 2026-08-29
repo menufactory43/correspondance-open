@@ -20,7 +20,13 @@ actor ConversationAvatarStore {
     case .signal:
       resolved = loadSignalAvatarData(for: conversation)
     case .iMessage:
-      resolved = await ContactDirectory.shared.imageData(for: conversation)
+      // Un groupe iMessage porte sa propre photo (chat.properties → pièce jointe) ;
+      // le carnet d'adresses ne sait répondre que pour un tête-à-tête.
+      if let groupPhoto = loadGroupPhotoData(for: conversation) {
+        resolved = groupPhoto
+      } else {
+        resolved = await ContactDirectory.shared.imageData(for: conversation)
+      }
     case .whatsapp:
       // Fil bridgé : photo du carnet d'adresses si le bridge a exposé le numéro.
       resolved = conversation.address.hasPrefix("+")
@@ -36,6 +42,12 @@ actor ConversationAvatarStore {
 
   func invalidate(conversationID: String) {
     memory.removeValue(forKey: conversationID)
+  }
+
+  /// Photo de groupe déjà localisée par `IMessageDatabase`.
+  private func loadGroupPhotoData(for conversation: Conversation) -> Data? {
+    guard let path = conversation.groupPhotoPath, !path.isEmpty else { return nil }
+    return try? Data(contentsOf: URL(fileURLWithPath: path))
   }
 
   // MARK: - Signal

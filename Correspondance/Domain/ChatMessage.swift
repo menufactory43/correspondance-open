@@ -24,6 +24,16 @@ struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
     return ["mp4", "mov", "m4v"].contains(ext)
   }
 
+  /// Message audio : iMessage les dépose en `.caf` (`audio/x-caf`), les autres
+  /// réseaux en `.ogg`, `.m4a` ou `.mp3`. Le fil les joue sur place.
+  var isAudio: Bool {
+    if contentType.hasPrefix("audio/") { return true }
+    let ext = (filename.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? localPath.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? "").lowercased()
+    return ["caf", "m4a", "mp3", "aac", "wav", "ogg", "opus", "amr"].contains(ext)
+  }
+
   var resolvedFileURL: URL? {
     guard let localPath, !localPath.isEmpty else { return nil }
     let url = URL(fileURLWithPath: localPath)
@@ -99,7 +109,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
   let id: String
   let conversationID: String
   let network: MessageNetwork
-  let text: String
+  var text: String
   let sentAt: Date
   let isFromMe: Bool
   /// Auteur du message côté réseau (numéro Signal, MXID Matrix, handle iMessage).
@@ -115,6 +125,22 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
   var reactions: [MessageReaction]
   /// Message auquel celui-ci répond, si c'en est une.
   var replyTo: QuotedMessage?
+  /// Date de la dernière modification, quand l'auteur a modifié son message
+  /// (iMessage, 15 minutes). La bulle porte alors la mention « Modifié ».
+  var editedAt: Date?
+  /// Versions antérieures du texte, de la plus ancienne à la plus récente.
+  /// Elles se lisent au survol de la mention « Modifié ».
+  var editHistory: [String]
+  /// L'auteur a annulé l'envoi : la bulle reste, vidée, en italique.
+  var isRetracted: Bool
+  /// Effet d'envoi reçu (`expressive_send_style_id`), déjà traduit — « Confettis ».
+  var expressiveEffectName: String?
+  /// Événement de conversation (« X a ajouté Y ») plutôt qu'un message :
+  /// le fil l'affiche en séparateur discret, sans bulle ni auteur.
+  var systemEventText: String?
+
+  /// Un événement de conversation, pas une prise de parole.
+  var isSystemEvent: Bool { systemEventText != nil }
 
   init(
     id: String,
@@ -128,7 +154,12 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     isPending: Bool = false,
     attachments: [MessageAttachment] = [],
     reactions: [MessageReaction] = [],
-    replyTo: QuotedMessage? = nil
+    replyTo: QuotedMessage? = nil,
+    editedAt: Date? = nil,
+    editHistory: [String] = [],
+    isRetracted: Bool = false,
+    expressiveEffectName: String? = nil,
+    systemEventText: String? = nil
   ) {
     self.id = id
     self.conversationID = conversationID
@@ -142,11 +173,19 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     self.attachments = attachments
     self.reactions = reactions
     self.replyTo = replyTo
+    self.editedAt = editedAt
+    self.editHistory = editHistory
+    self.isRetracted = isRetracted
+    self.expressiveEffectName = expressiveEffectName
+    self.systemEventText = systemEventText
   }
 
   var sidebarPreviewText: String {
+    if let systemEventText { return systemEventText }
+    if isRetracted { return "Message annulé" }
     if !text.isEmpty { return text }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
+    if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }
     if !attachments.isEmpty { return "Pièce jointe" }
     return text
   }
@@ -162,7 +201,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
   }
 
   var hasVisibleBody: Bool {
-    !text.isEmpty || !attachments.isEmpty
+    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent
   }
 
   /// L'emoji que j'ai déjà posé sur ce message, s'il y en a un.
