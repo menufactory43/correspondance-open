@@ -107,3 +107,45 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
   `facebook` peuvent parfaitement venir de deux bridges différents.
 - It. 3 : mautrix-signal, suppression de `SignalBridge.swift`/signal-cli après parité (groupes, pièces jointes, timers).
 - It. 4 : cible iOS (SwiftUI partagé, `MatrixClient` réutilisé tel quel, accès homeserver via Tailscale sur iPhone).
+
+## Itération « Chrome Golden Gate » (UI, après l'it. 1, indépendante des bridges)
+
+Objectif : le rendu « Apple 2026 » natif là où Beeper reste visiblement web. On adopte le chrome macOS 27 /
+iOS 27 (Liquid Glass révisé) et on ne garde de Beeper que ce qui n'est pas du chrome.
+
+### Prérequis
+- **Xcode 27 beta** (macOS 27 SDK) : https://developer.apple.com/download/ — installer côte à côte
+  (`/Applications/Xcode-27-beta.app`), sélectionner avec `sudo xcode-select -s`, ou `DEVELOPER_DIR=…` pour xcodebuild.
+  Aujourd'hui : Xcode 26.6 sur macOS 26.6.2. Sans SDK 27, les modificateurs ci-dessous ne compilent pas → tous
+  derrière `#available(macOS 27, iOS 27, *)` avec repli Tahoe, pour que le build Xcode 26 reste vert.
+- Cible de déploiement inchangée (macOS 14) tant que l'app n'est pas publiée ; repli visuel Tahoe/Sonoma obligatoire.
+
+### Ce que recommande Apple (vérifié, WWDC26 / macOS 27 Golden Gate)
+- Sidebar **bord à bord** (plus d'inset ni de carte flottante) ; icônes de sidebar colorées seulement pour l'app active.
+- Toolbar **uniforme givrée** au-dessus du contenu qui défile ; rayons de coin de fenêtre harmonisés ; bords de verre
+  assombris + reflets plus vifs ; curseur système de transparence (respecter `Reduce Transparency` / `Increase Contrast`).
+- Tout cela s'applique **automatiquement** aux apps compilées avec Xcode 27 : ne pas le réimplémenter à la main.
+- SwiftUI WWDC26 : `.navigationTransition(.crossFade)`, `.toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)`,
+  `ToolbarItem(placement: .topBarPinnedTrailing)`, `.visibilityPriority(.high)`, `ToolbarOverflowMenu`,
+  environnement `appearsActive`, `.swipeActions` hors `List` (`.swipeActionsContainer()`), `.reorderable()`.
+
+### Ce qu'on garde de Beeper (hors chrome)
+- **Rail de réseaux** à gauche de la liste (Tous / iMessage / Signal / WhatsApp / Instagram / Messenger), filtre + badge non-lus.
+  Remplace le picker `iMessage ⌃` en tête de liste. Icône réseau = `MessageNetwork.systemImage`.
+- **Entête pilule** en tête de conversation (avatar + « Nom › »), cliquable → fiche contact / infos groupe.
+- **Composer pilule** pleine largeur, bouton `+` séparé à gauche, envoi à droite ; hérite de `Features/Composer/`.
+- Liste sans séparateurs lourds, aperçu sur 2 lignes, coche « vu » / « livré » dans l'aperçu.
+
+### Chantier
+1. `App/ContentView.swift` : `NavigationSplitView` natif (sidebar = rail + liste, détail = conversation), suppression du
+   chrome maison qui simule l'inset ; `WindowChrome.swift` réduit à ce que Golden Gate ne fournit pas.
+2. `Features/Inbox/NetworkRailView.swift` (nouveau) + `InboxStore.networkFilter`.
+3. `ThreadView` : toolbar givrée + `.toolbarMinimizeBehavior(.onScrollDown…)` derrière `#available` ; entête pilule.
+4. **Focus** : `FocusConversationView` devient l'état « chrome minimisé » du même écran, transition
+   `.navigationTransition(.crossFade)` (repli : `withAnimation(.smooth)` sur Tahoe). Sidebar masquée
+   (`columnVisibility = .detailOnly`), toolbar minimisée, composer seul. Aucune régression de la typo `Design/Writing*`.
+5. `appearsActive` : chrome grisé fenêtre inactive ; états `Reduce Transparency` testés.
+6. Vérification : build Xcode 26 **et** Xcode 27 verts ; captures light/dark/transparence réduite dans `docs/screens/`.
+
+### Hors périmètre
+- Refonte iOS (it. 4) : le rail et la pilule se transposent en `TabView` `.prominent` + `NavigationStack`, plus tard.
