@@ -90,22 +90,16 @@ struct ComposerBar: View {
     .padding(.trailing, 4)
     .padding(.vertical, 4)
     .frame(minHeight: ComposerMetrics.bubbleMinHeight)
-    .background(bubbleBackground)
+    .frame(maxWidth: .infinity)
+    .glassSurface(
+      cornerRadius: ComposerMetrics.bubbleCorner,
+      tint: dictation.isListening ? theme.accent.opacity(0.2) : nil,
+      fallbackFill: theme.paperSecondary,
+      border: isFocused ? theme.accent.opacity(0.4) : theme.edge
+    )
   }
 
-  private var bubbleBackground: some View {
-    RoundedRectangle(cornerRadius: ComposerMetrics.bubbleCorner, style: .continuous)
-      .fill(theme.paperSecondary)
-      .overlay(
-        RoundedRectangle(cornerRadius: ComposerMetrics.bubbleCorner, style: .continuous)
-          .strokeBorder(
-            dictation.isListening
-              ? theme.accent.opacity(0.45)
-              : (isFocused ? theme.accent.opacity(0.28) : theme.edge.opacity(0.75)),
-            lineWidth: 1
-          )
-      )
-  }
+
 
   private func send() {
     dictation.stop()
