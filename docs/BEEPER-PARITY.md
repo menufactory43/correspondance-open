@@ -95,7 +95,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Brouillons par conversation | `Filter: Drafts`, `No drafts…`, champ `draft{text, attachments}` sur l'objet Chat (API), `PATCH /v1/chats/{id}` avec `draft` | **Partiel** : `InboxStore.draftText` est **un seul brouillon global**, remis à `""` à chaque `select(_:)`. Aucune persistance disque | M | **P0** |
+| Brouillons par conversation | `Filter: Drafts`, `No drafts…`, champ `draft{text, attachments}` sur l'objet Chat (API), `PATCH /v1/chats/{id}` avec `draft` | **Fait** : `Services/DraftStore.swift` — texte **et** pièces jointes en attente, par `conversationID`, persistés en JSON dans Application Support et restaurés au retour sur le fil. Écriture différée (600 ms) pour ne pas écrire à chaque frappe ; les pièces jointes disparues du disque sont écartées au chargement. Filtre « Drafts » non repris | — | P1 (filtre) |
 | Envoi et nouvelle ligne | `SEND_MESSAGE` Entrée, `NEW_LINE` ⇧/⌥/⌃+Entrée | **Fait** : `onKeyPress(.return)`, `.shift` → `.ignored`, `TextField(axis: .vertical)` | — | — |
 | Envoyer et archiver | `SEND_MESSAGE_AND_ARCHIVE` ⌘Entrée | **Fait** : `InboxStore.sendDraftAndArchive()`, commande de menu ⌘Entrée (vaut donc en Inbox *et* en Focus). Un envoi échoué restaure le brouillon et n'archive pas | — | — |
 | Annuler l'envoi | `Allow undo send (%s) for`, `UNDO_SEND_DELAY_MS`, `Click pending messages to undo send` | **Absent** | S | P1 |

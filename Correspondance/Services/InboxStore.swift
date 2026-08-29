@@ -42,9 +42,13 @@ final class InboxStore {
   private(set) var threadSearchCursor = 0
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
-  var draftText: String = ""
+  var draftText: String = "" {
+    didSet { captureDraft() }
+  }
   /// Chemins locaux d’images à envoyer (Signal).
-  var pendingAttachmentPaths: [String] = []
+  var pendingAttachmentPaths: [String] = [] {
+    didSet { captureDraft() }
+  }
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
   var isComposerFocused = false
@@ -99,6 +103,12 @@ final class InboxStore {
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   private var searchIndex: [String: String] = [:]
+  /// Brouillons par conversation, restaurés au retour sur un fil.
+  private var drafts: [String: DraftStore.Draft] = [:]
+  /// Vrai le temps de réinstaller un brouillon : le `didSet` ne doit pas l'écraser.
+  private var isRestoringDraft = false
+  /// Écriture disque différée — on n'écrit pas un fichier à chaque frappe.
+  private var draftPersistTask: Task<Void, Never>?
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
   private var isNotificationPrimed = false
 
@@ -218,6 +228,7 @@ final class InboxStore {
     pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.pinnedIDs) ?? [])
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
+    drafts = DraftStore.load()
     if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
        let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
     {
@@ -301,6 +312,48 @@ final class InboxStore {
     primeNotifications()
     startLiveSync()
     startMatrixSync()
+  }
+
+  // MARK: - Brouillons
+
+  /// Un fil porte un brouillon non envoyé — la liste peut le signaler.
+  func hasDraft(_ conversationID: String) -> Bool {
+    drafts[conversationID]?.isEmpty == false
+  }
+
+  private func captureDraft() {
+    guard !isRestoringDraft, let id = selectedConversationID else { return }
+    let draft = DraftStore.Draft(text: draftText, attachmentPaths: pendingAttachmentPaths)
+    if draft.isEmpty {
+      drafts.removeValue(forKey: id)
+    } else {
+      drafts[id] = draft
+    }
+    scheduleDraftPersist()
+  }
+
+  private func restoreDraft(for id: String?) {
+    isRestoringDraft = true
+    defer { isRestoringDraft = false }
+    let draft = id.flatMap { drafts[$0] } ?? DraftStore.Draft()
+    draftText = draft.text
+    pendingAttachmentPaths = draft.attachmentPaths
+  }
+
+  /// Écriture différée : une frappe ne doit pas déclencher une écriture disque.
+  private func scheduleDraftPersist() {
+    draftPersistTask?.cancel()
+    let snapshot = drafts
+    draftPersistTask = Task { @MainActor in
+      try? await Task.sleep(for: .milliseconds(600))
+      guard !Task.isCancelled else { return }
+      DraftStore.save(snapshot)
+    }
+  }
+
+  private func persistDraftsNow() {
+    draftPersistTask?.cancel()
+    DraftStore.save(drafts)
   }
 
   // MARK: - Réponses citées
@@ -819,11 +872,13 @@ final class InboxStore {
   }
 
   func select(_ id: String?) async {
+    // Le brouillon en cours appartient au fil qu'on quitte.
+    captureDraft()
+    persistDraftsNow()
     selectedConversationID = id
     selectedMessageID = nil
     replyingToMessageID = nil
-    draftText = ""
-    pendingAttachmentPaths = []
+    restoreDraft(for: id)
     if let id { clearUnread(for: id) }
     await loadMessagesForSelection()
     if let id { indexMessages(messages, conversationID: id) }
@@ -1089,6 +1144,8 @@ final class InboxStore {
     draftText = ""
     pendingAttachmentPaths = []
     replyingToMessageID = nil
+    drafts.removeValue(forKey: conversation.id)
+    persistDraftsNow()
 
     do {
       switch conversation.network {
