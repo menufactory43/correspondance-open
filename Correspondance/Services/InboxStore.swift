@@ -20,6 +20,7 @@ final class InboxStore {
     // plus rien à corriger et laisse passer la notification.
     didSet {
       if normalizeArchiveState() { return }
+      if normalizeMergedContacts() { return }
       conversationsDidChange()
     }
   }
@@ -118,6 +119,16 @@ final class InboxStore {
   /// d'un réseau ne connaît pas notre archivage et renvoie toujours `isArchived: false`).
   private(set) var archivedIDs: Set<String> = []
   private(set) var disappearingSecondsByID: [String: Int] = [:]
+  /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
+  /// après chaque fusion de catalogue, exactement comme l'archivage.
+  private(set) var mergedContacts: [MergedContact] = []
+  /// Propositions de fusion déjà refusées, pour qu'elles ne reviennent plus.
+  private(set) var dismissedMergePairs: Set<String> = []
+  /// Les fils membres, retirés de `conversations` mais gardés sous la main :
+  /// c'est eux qu'on interroge pour charger le fil et pour envoyer. Sans ce
+  /// cache, un rafraîchissement qui ne ramène qu'un seul membre casserait la
+  /// ligne fusionnée en deux.
+  @ObservationIgnored private var mergedMemberCache: [String: Conversation] = [:]
 
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
@@ -268,6 +279,9 @@ final class InboxStore {
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
     drafts = DraftStore.load()
+    let mergeStore = MergedContactStore.load()
+    mergedContacts = mergeStore.merged
+    dismissedMergePairs = mergeStore.dismissedPairs
     scheduledMessages = ScheduledMessageStore.load()
     startScheduleDispatcher()
     if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
@@ -345,7 +359,9 @@ final class InboxStore {
       guard let self else { return }
       Task { @MainActor in
         self.mode = .inbox
-        await self.select(id)
+        // Une notification peut viser un fil désormais replié : on ouvre la
+        // ligne fusionnée, pas un membre qui n'est plus dans la liste.
+        await self.select(self.displayRowID(for: id))
       }
     }
     await NotificationService.shared.requestAuthorization()
@@ -517,8 +533,10 @@ final class InboxStore {
   /// Pose, remplace ou retire ma réaction. Reposer le même emoji le retire :
   /// les trois réseaux n'en acceptent qu'un par personne et par message.
   func react(messageID: String, emoji: String) async {
-    guard let conversation = selectedConversation,
-          let message = messages.first(where: { $0.id == messageID })
+    guard let message = messages.first(where: { $0.id == messageID }),
+          // Sur un fil fusionné, la réaction part sur le réseau de la bulle
+          // visée — pas sur celui où l'on écrit en ce moment.
+          let conversation = conversation(ofMessage: message)
     else { return }
 
     switch conversation.network {
@@ -546,7 +564,8 @@ final class InboxStore {
           targetAuthor: author,
           remove: message.myReactionEmoji == emoji
         )
-        messages = await signal.fetchMessages(conversationID: conversation.id)
+        // Recharge par le fil, pas par le réseau : une fusion en a deux.
+        await loadMessagesForSelection()
       } catch {
         lastErrorMessage = error.localizedDescription
       }
@@ -562,7 +581,8 @@ final class InboxStore {
           messageID: messageID,
           emoji: emoji
         )
-        messages = await matrix.messages(conversationID: conversation.id)
+        // Recharge par le fil, pas par le réseau : une fusion en a deux.
+        await loadMessagesForSelection()
       } catch {
         lastErrorMessage = error.localizedDescription
       }
@@ -678,6 +698,178 @@ final class InboxStore {
     }
     conversations = normalized
     return true
+  }
+
+  // MARK: - Fusion de contacts
+
+  /// Replie les membres fusionnés en une seule ligne. Comme l'archivage, aucun
+  /// réseau ne connaît nos fusions : la passe se rejoue après chaque catalogue.
+  /// Renvoie `true` si la liste a été ré-assignée (le `didSet` va repasser).
+  @discardableResult
+  private func normalizeMergedContacts() -> Bool {
+    guard !mergedContacts.isEmpty else { return false }
+    cacheMergedMembers()
+    // Les membres absents de la liste (un rafraîchissement partiel les a effacés)
+    // reviennent du cache : sans eux, la ligne se rouvrirait en deux.
+    let present = Set(conversations.map(\.id))
+    let pool = conversations + mergedMemberCache.values
+      .filter { !present.contains($0.id) }
+      .sorted { $0.id < $1.id }
+
+    let next = MergedContact.apply(to: pool, merged: mergedContacts)
+    guard next != conversations else { return false }
+    conversations = next
+    return true
+  }
+
+  /// Mémorise les fils membres encore visibles, avant qu'ils ne quittent la liste.
+  private func cacheMergedMembers() {
+    let wanted = Set(mergedContacts.flatMap(\.memberIDs))
+    guard !wanted.isEmpty else { return }
+    for conversation in conversations where wanted.contains(conversation.id) {
+      mergedMemberCache[conversation.id] = conversation
+    }
+  }
+
+  func isMerged(_ id: String) -> Bool {
+    MergedContact.isMergedID(id) && mergedContacts.contains { $0.id == id }
+  }
+
+  func mergedContact(for id: String) -> MergedContact? {
+    mergedContacts.first { $0.id == id }
+  }
+
+  /// Les fils réunis sous une ligne fusionnée, du plus récent au plus ancien.
+  func memberConversations(of id: String) -> [Conversation] {
+    guard let contact = mergedContact(for: id) else { return [] }
+    let byID = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    return contact.memberIDs
+      .compactMap { byID[$0] ?? mergedMemberCache[$0] }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  /// Le fil où l'on écrit : le dernier réseau utilisé, sinon le chat par défaut.
+  func activeMember(of id: String) -> Conversation? {
+    guard let contact = mergedContact(for: id) else { return nil }
+    let members = memberConversations(of: id)
+    guard let activeID = contact.activeMemberID(among: Set(members.map(\.id))) else {
+      return members.first
+    }
+    return members.first { $0.id == activeID } ?? members.first
+  }
+
+  /// La conversation que vise réellement un envoi : le membre actif d'une ligne
+  /// fusionnée, la conversation elle-même sinon.
+  var sendingConversation: Conversation? {
+    guard let selected = selectedConversation else { return nil }
+    guard isMerged(selected.id) else { return selected }
+    return activeMember(of: selected.id)
+  }
+
+  /// La conversation d'où vient une bulle — pour réagir, citer ou accuser
+  /// réception sur le bon réseau quand le fil est fusionné.
+  func conversation(ofMessage message: ChatMessage) -> Conversation? {
+    if let selected = selectedConversation, selected.id == message.conversationID { return selected }
+    if let selected = selectedConversation, isMerged(selected.id) {
+      if let member = memberConversations(of: selected.id).first(where: { $0.id == message.conversationID }) {
+        return member
+      }
+      return activeMember(of: selected.id)
+    }
+    return conversations.first { $0.id == message.conversationID } ?? selectedConversation
+  }
+
+  /// La ligne visible pour un identifiant : la fusionnée si le fil y est replié.
+  func displayRowID(for conversationID: String) -> String {
+    if let contact = mergedContacts.first(where: { $0.memberIDs.contains(conversationID) }) {
+      return contact.id
+    }
+    return conversationID
+  }
+
+  /// Un geste posé sur une ligne fusionnée (archiver, épingler, taire, marquer
+  /// lu) vaut pour tous ses fils : c'est une seule personne.
+  private func expandedIDs(for conversationID: String) -> [String] {
+    guard let contact = mergedContact(for: conversationID) else { return [conversationID] }
+    return [contact.id] + contact.memberIDs
+  }
+
+  /// Fusions possibles pour le fil ouvert : même numéro, réseaux différents.
+  func mergeCandidates(for conversation: Conversation) -> [Conversation]? {
+    guard !isMerged(conversation.id), !conversation.isGroup else { return nil }
+    let groups = MergeCandidates.detect(in: conversations, dismissedPairs: dismissedMergePairs)
+    return groups.first { group in group.contains { $0.id == conversation.id } }
+  }
+
+  /// Réunit des fils sous un seul contact, et ouvre la ligne qui en résulte.
+  func merge(
+    _ toMerge: [Conversation],
+    title: String,
+    avatarConversationID: String?,
+    defaultConversationID: String
+  ) async {
+    let members = toMerge.filter { !$0.isGroup && !MergedContact.isMergedID($0.id) }
+    guard members.count >= 2 else { return }
+    let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let contact = MergedContact(
+      title: cleanTitle.isEmpty ? (members.first?.title ?? "Contact") : cleanTitle,
+      memberIDs: members.map(\.id),
+      avatarConversationID: avatarConversationID,
+      defaultConversationID: members.contains { $0.id == defaultConversationID }
+        ? defaultConversationID
+        : members[0].id
+    )
+    for member in members { mergedMemberCache[member.id] = member }
+    mergedContacts.append(contact)
+    persistMergedContacts()
+    normalizeMergedContacts()
+    await select(contact.id)
+  }
+
+  /// Sépare : les fils repartent chacun de leur côté, et la paire ne se
+  /// repropose pas d'elle-même dans la foulée.
+  func unmerge(_ mergedID: String) async {
+    guard let contact = mergedContact(for: mergedID) else { return }
+    mergedContacts.removeAll { $0.id == mergedID }
+    dismissedMergePairs.insert(MergeCandidates.pairKey(contact.memberIDs))
+    persistMergedContacts()
+    // La ligne virtuelle disparaît, ses membres reviennent du cache.
+    let restored = contact.memberIDs.compactMap { mergedMemberCache[$0] }
+    var list = conversations.filter { $0.id != mergedID }
+    let present = Set(list.map(\.id))
+    list.append(contentsOf: restored.filter { !present.contains($0.id) })
+    for id in contact.memberIDs { mergedMemberCache.removeValue(forKey: id) }
+    archivedIDs.remove(mergedID)
+    pinnedIDs.remove(mergedID)
+    mutedIDs.remove(mergedID)
+    persistFlags()
+    conversations = list
+    if selectedConversationID == mergedID {
+      await select(restored.first?.id ?? activeQueue.first?.id)
+    }
+  }
+
+  /// « ✕ » sur la proposition : cette paire ne se repropose plus.
+  func dismissMergeCandidate(_ conversations: [Conversation]) {
+    guard conversations.count >= 2 else { return }
+    dismissedMergePairs.insert(MergeCandidates.pairKey(conversations.map(\.id)))
+    persistMergedContacts()
+  }
+
+  /// « Changer de chat » : le réseau choisi devient celui où part le prochain
+  /// message, et il le reste (c'est le `lastUsedConversationID`).
+  func setActiveMember(mergedID: String, conversationID: String) {
+    guard let index = mergedContacts.firstIndex(where: { $0.id == mergedID }),
+          mergedContacts[index].memberIDs.contains(conversationID)
+    else { return }
+    mergedContacts[index].lastUsedConversationID = conversationID
+    persistMergedContacts()
+  }
+
+  private func persistMergedContacts() {
+    MergedContactStore.save(
+      MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs)
+    )
   }
 
   private func shouldNotify(_ conversation: Conversation, previous: Conversation?) -> Bool {
@@ -1009,6 +1201,17 @@ final class InboxStore {
   /// En tâche détachée — l'ouverture ne doit jamais attendre le réseau.
   private func markConversationRead() async {
     guard let conversation = selectedConversation else { return }
+    // Ouvrir une ligne fusionnée, c'est lire les deux fils.
+    if isMerged(conversation.id) {
+      for member in memberConversations(of: conversation.id) {
+        await markRead(member)
+      }
+      return
+    }
+    await markRead(conversation)
+  }
+
+  private func markRead(_ conversation: Conversation) async {
     switch conversation.network {
     case .iMessage:
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
@@ -1084,27 +1287,32 @@ final class InboxStore {
     var updated = conversations[idx]
     updated.unreadCount = max(1, updated.unreadCount)
     conversations[idx] = updated
-    // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
-    if updated.network == .iMessage {
-      markUnreadViaAutomation(conversation: updated)
+    // Sur une ligne fusionnée, le geste vaut pour chaque fil réuni : c'est le
+    // membre iMessage, pas la ligne virtuelle, que Messages sait rouvrir.
+    let targets = isMerged(conversationID) ? memberConversations(of: conversationID) : [updated]
+    for target in targets where target.network == .iMessage {
+      // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
+      markUnreadViaAutomation(conversation: target)
     }
   }
 
   func togglePinned(conversationID: String) {
+    let ids = expandedIDs(for: conversationID)
     if pinnedIDs.contains(conversationID) {
-      pinnedIDs.remove(conversationID)
+      for id in ids { pinnedIDs.remove(id) }
     } else {
-      pinnedIDs.insert(conversationID)
+      for id in ids { pinnedIDs.insert(id) }
     }
     persistFlags()
     conversations.sort(by: { sortForInbox($0, $1) })
   }
 
   func toggleMuted(conversationID: String) {
+    let ids = expandedIDs(for: conversationID)
     if mutedIDs.contains(conversationID) {
-      mutedIDs.remove(conversationID)
+      for id in ids { mutedIDs.remove(id) }
     } else {
-      mutedIDs.insert(conversationID)
+      for id in ids { mutedIDs.insert(id) }
     }
     persistFlags()
     updateDockBadge()
@@ -1189,10 +1397,12 @@ final class InboxStore {
 
   private func setArchived(_ archived: Bool, conversationID: String) async {
     guard conversations.contains(where: { $0.id == conversationID }) else { return }
-    if archived {
-      archivedIDs.insert(conversationID)
-    } else {
-      archivedIDs.remove(conversationID)
+    // Ranger une ligne fusionnée range les deux fils : sinon celui qu'on aurait
+    // oublié la ferait remonter au prochain rafraîchissement.
+    let ids = expandedIDs(for: conversationID)
+    for id in ids {
+      if archived { archivedIDs.insert(id) } else { archivedIDs.remove(id) }
+      mergedMemberCache[id]?.isArchived = archived
     }
     persistFlags()
     normalizeArchiveState()
@@ -1258,7 +1468,9 @@ final class InboxStore {
   func sendDraft() async {
     let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
     let attachments = pendingAttachmentPaths
-    guard let conversation = selectedConversation else { return }
+    // Le brouillon appartient à la ligne ouverte ; l'envoi, lui, part sur le
+    // réseau du membre actif quand cette ligne est une fusion.
+    guard let row = selectedConversation, let conversation = sendingConversation else { return }
     guard !text.isEmpty || !attachments.isEmpty else { return }
 
     if let blocker = sendBlocker(for: conversation, attachments: attachments, interactive: true) {
@@ -1268,7 +1480,7 @@ final class InboxStore {
 
     // « Plus tard » posé sur le composer : le message se range au lieu de partir.
     if let config = sendLaterConfig {
-      scheduleDraft(config, text: text, attachments: attachments, conversation: conversation)
+      scheduleDraft(config, text: text, attachments: attachments, conversation: row)
       return
     }
 
@@ -1280,7 +1492,7 @@ final class InboxStore {
         if await sendQuotedReplyViaAutomation(conversation: conversation, quotedID: quotedID, text: text) {
           draftText = ""
           replyingToMessageID = nil
-          drafts.removeValue(forKey: conversation.id)
+          drafts.removeValue(forKey: row.id)
           persistDraftsNow()
           await reloadMessagesAfterAutomation()
         }
@@ -1303,7 +1515,7 @@ final class InboxStore {
     draftText = ""
     pendingAttachmentPaths = []
     replyingToMessageID = nil
-    drafts.removeValue(forKey: conversation.id)
+    drafts.removeValue(forKey: row.id)
     persistDraftsNow()
 
     do {
@@ -1553,7 +1765,10 @@ final class InboxStore {
       lastErrorMessage = "Relance pour \(conversation.title) annulée : une réponse est arrivée entre-temps."
       return
     }
-    if let blocker = sendBlocker(for: conversation, attachments: message.attachmentPaths, interactive: false) {
+    // Une ligne fusionnée n'est pas un transport : l'échéance part sur le
+    // réseau du membre actif, comme si on avait appuyé sur Entrée.
+    let target = isMerged(conversation.id) ? (activeMember(of: conversation.id) ?? conversation) : conversation
+    if let blocker = sendBlocker(for: target, attachments: message.attachmentPaths, interactive: false) {
       markScheduledFailed(message.id, blocker)
       return
     }
@@ -1561,7 +1776,7 @@ final class InboxStore {
     let isOpen = selectedConversationID == conversation.id
     let quoted = isOpen ? message.replyToMessageID.flatMap { id in messages.first { $0.id == id } } : nil
     let optimistic = Self.optimisticMessage(
-      text: message.text, attachments: message.attachmentPaths, conversation: conversation, quoted: quoted
+      text: message.text, attachments: message.attachmentPaths, conversation: target, quoted: quoted
     )
     if isOpen { messages.append(optimistic) }
     // Retiré avant l'envoi : un échec le remet, une réussite ne l'a jamais réenvoyé.
@@ -1569,7 +1784,7 @@ final class InboxStore {
 
     do {
       try await deliver(
-        text: message.text, attachments: message.attachmentPaths, conversation: conversation,
+        text: message.text, attachments: message.attachmentPaths, conversation: target,
         quoted: quoted, localID: optimistic.id
       )
       if isOpen {
@@ -1754,6 +1969,11 @@ final class InboxStore {
   }
 
   private func clearUnread(for id: String) {
+    // Une ligne fusionnée additionne les non-lus de ses fils : les remettre à
+    // zéro veut dire les remettre à zéro partout, cache compris.
+    for memberID in expandedIDs(for: id) where memberID != id {
+      mergedMemberCache[memberID]?.unreadCount = 0
+    }
     guard let idx = conversations.firstIndex(where: { $0.id == id }) else { return }
     guard conversations[idx].unreadCount != 0 else { return }
     var updated = conversations[idx]
@@ -1979,15 +2199,38 @@ final class InboxStore {
       return
     }
 
+    // Fil fusionné : on va chercher chaque réseau, et le temps remet tout en ordre.
+    if isMerged(conversation.id) {
+      var merged: [ChatMessage] = []
+      for member in memberConversations(of: conversation.id) {
+        merged.append(contentsOf: await fetchMessages(for: member))
+      }
+      // Les repères « Synchronisation… » d'un réseau vide n'ont pas de place
+      // dans un fil qui, lui, a des messages ailleurs.
+      let real = merged.filter { !Self.isPlaceholderMessageID($0.id) }
+      messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
+      applySidebarPreview(conversationID: conversation.id, from: messages)
+      return
+    }
+
+    messages = await fetchMessages(for: conversation)
+  }
+
+  /// Un message-repère (« Synchronisation… », « Pas encore de messages ») plutôt
+  /// qu'une vraie prise de parole.
+  private static func isPlaceholderMessageID(_ id: String) -> Bool {
+    id.hasPrefix("signal-empty-") || id.hasPrefix("signal-sync-") || id.hasPrefix("matrix-empty-")
+  }
+
+  /// Le fil d'UNE conversation, réseau par réseau. Le fil fusionné les empile.
+  private func fetchMessages(for conversation: Conversation) async -> [ChatMessage] {
     switch conversation.network {
     case .iMessage:
       if usingDemoData {
-        messages = Self.demoMessages(for: conversation.id)
-        return
+        return Self.demoMessages(for: conversation.id)
       }
       guard let guid = IMessageDatabase.guid(fromConversationID: conversation.id) else {
-        messages = []
-        return
+        return []
       }
       let db = iMessageDB
       do {
@@ -1995,10 +2238,10 @@ final class InboxStore {
           try db.fetchMessages(chatGUID: guid)
         }.value
         ContactDirectoryDisk.enrichSenderNames(&fetched)
-        messages = fetched
+        return fetched
       } catch {
         lastErrorMessage = error.localizedDescription
-        messages = []
+        return []
       }
     case .signal:
       await signal.ensureMemoryCacheLoaded()
@@ -2020,10 +2263,10 @@ final class InboxStore {
         cached = await signal.ensureLocalAttachments(cached, conversationID: conversation.id)
       }
       if !cached.isEmpty {
-        messages = cached
         applySidebarPreview(conversationID: conversation.id, from: cached)
-      } else if messages.isEmpty || messages.first?.id.hasPrefix("signal-") == true {
-        messages = [
+        return cached
+      } else {
+        return [
           ChatMessage(
             id: "signal-empty-\(conversation.id)",
             conversationID: conversation.id,
@@ -2044,7 +2287,7 @@ final class InboxStore {
         cached = await matrix.backfill(conversationID: conversation.id)
       }
       if cached.isEmpty {
-        messages = [
+        return [
           ChatMessage(
             id: "matrix-empty-\(conversation.id)",
             conversationID: conversation.id,
@@ -2056,20 +2299,24 @@ final class InboxStore {
             isFromMe: false
           )
         ]
-        return
       }
-      messages = await matrix.ensureLocalAttachments(cached)
-      applySidebarPreview(conversationID: conversation.id, from: messages)
+      let resolved = await matrix.ensureLocalAttachments(cached)
+      applySidebarPreview(conversationID: conversation.id, from: resolved)
+      return resolved
     }
   }
 
   private func applySidebarPreview(conversationID: String, from messages: [ChatMessage]) {
+    // Un fil replié n'a plus de ligne à lui : c'est la fusionnée qu'on résume.
+    let rowID = displayRowID(for: conversationID)
     guard let last = messages.last,
-          let idx = conversations.firstIndex(where: { $0.id == conversationID })
+          let idx = conversations.firstIndex(where: { $0.id == rowID })
     else { return }
-    if last.id.hasPrefix("signal-empty-") || last.id.hasPrefix("signal-sync-") { return }
-    if last.id.hasPrefix("matrix-empty-") { return }
-    indexMessages(messages, conversationID: conversationID)
+    if Self.isPlaceholderMessageID(last.id) { return }
+    // Sur une fusionnée, le réseau qu'on vient de charger n'est pas forcément
+    // celui qui a parlé en dernier : ne jamais faire reculer l'aperçu.
+    if rowID != conversationID, last.sentAt < conversations[idx].lastMessageAt { return }
+    indexMessages(messages, conversationID: rowID)
     var updated = conversations[idx]
     updated.preview = last.listPreview(isGroup: updated.isGroup)
     updated.lastMessageAt = last.sentAt
