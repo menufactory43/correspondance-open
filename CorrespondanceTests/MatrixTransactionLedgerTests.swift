@@ -68,3 +68,23 @@ final class MatrixJSONPathTests: XCTestCase {
     XCTAssertNil(json.string(at: "name"))
   }
 }
+
+/// Réponses réelles de `@whatsappbot` (mautrix-whatsapp v26.08).
+final class WhatsAppBotReplyTests: XCTestCase {
+  func testPairingCodeIsExtracted() {
+    XCTAssertEqual(
+      MatrixBridgeService.pairingCode(in: "Input the pairing code L7X2-N4KP in the WhatsApp app"),
+      "L7X2-N4KP"
+    )
+    XCTAssertEqual(
+      MatrixBridgeService.pairingCode(in: "Input the pairing code `l7x2-n4kp` in the WhatsApp app"),
+      "L7X2-N4KP"
+    )
+  }
+
+  func testNonPairingRepliesYieldNoCode() {
+    XCTAssertNil(MatrixBridgeService.pairingCode(in: "Scan the QR code with the WhatsApp mobile app to log in"))
+    XCTAssertNil(MatrixBridgeService.pairingCode(in: "Login cancelled."))
+    XCTAssertNil(MatrixBridgeService.pairingCode(in: "Input the pairing code soon"))
+  }
+}

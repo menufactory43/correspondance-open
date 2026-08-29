@@ -10,6 +10,8 @@ actor MatrixBridgeService {
   private var didHydrate = false
   /// Salon de gestion du bot WhatsApp (commandes `login`, `pm`…).
   private var managementRoomID: String?
+  /// Event de la dernière commande `login` envoyée : borne basse de lecture des réponses du bot.
+  private var loginCommandEventID: String?
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
   private var ledger = MatrixTransactionLedger()
 
@@ -60,6 +62,7 @@ actor MatrixBridgeService {
     nextBatch = nil
     selfUserID = ""
     managementRoomID = nil
+    loginCommandEventID = nil
   }
 
   // MARK: - Sync
@@ -188,14 +191,23 @@ actor MatrixBridgeService {
   func startWhatsAppLogin(usingPhoneNumber phoneNumber: String? = nil) async throws {
     let roomID = try await ensureManagementRoom()
     let command = phoneNumber.map { "login phone \($0)" } ?? "login qr"
-    try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
+    // On retient l'event de la commande : tout ce qui la précède appartient à une
+    // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
+    loginCommandEventID = try await client.sendText(
+      roomID: roomID,
+      body: command,
+      transactionID: UUID().uuidString
+    )
   }
 
-  /// Dernier état publié par le bot dans le salon de gestion.
+  /// Dernier état publié par le bot **depuis** notre commande de connexion.
   func whatsAppLoginStep() async throws -> WhatsAppLoginStep {
     let roomID = try await ensureManagementRoom()
     let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 20)
     for event in response.chunk {
+      // `dir=b` : du plus récent au plus ancien. Arrivé à notre propre commande,
+      // la suite est l'historique d'avant — on s'arrête là.
+      if let loginCommandEventID, event.eventID == loginCommandEventID { break }
       guard event.type == "m.room.message",
             let content = event.content,
             let sender = event.sender,
@@ -253,11 +265,12 @@ actor MatrixBridgeService {
   }
 
   static func pairingCode(in body: String) -> String? {
-    // Le bot annonce « Input the pairing code ABCD-EFGH in the WhatsApp app ».
+    // Le bot annonce « Input the pairing code ABCD-EFGH in the WhatsApp app »,
+    // parfois entre accents graves. La casse n'est pas garantie d'une version à l'autre.
     guard body.lowercased().contains("pairing code") else { return nil }
-    let pattern = #"\b[A-Z0-9]{4}-[A-Z0-9]{4}\b"#
-    guard let range = body.range(of: pattern, options: .regularExpression) else { return nil }
-    return String(body[range])
+    let pattern = #"\b[A-Za-z0-9]{4}-[A-Za-z0-9]{4}\b"#
+    guard let range = body.range(of: pattern, options: [.regularExpression]) else { return nil }
+    return String(body[range]).uppercased()
   }
 
   // MARK: - Privé
