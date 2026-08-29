@@ -149,11 +149,23 @@ struct ComposerAttachmentStrip: View {
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
-              Image(systemName: "doc")
-                .foregroundStyle(theme.inkSecondary)
-                .frame(width: 56, height: 56)
-                .background(theme.paperSecondary)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+              // Pas une image (PDF, son, archive…) : l'aperçu, c'est l'icône du
+              // type et le nom du fichier — de quoi vérifier avant d'envoyer.
+              VStack(spacing: 2) {
+                Image(systemName: Self.symbol(forPath: path))
+                  .font(.system(size: 16))
+                  .foregroundStyle(theme.inkSecondary)
+                Text(URL(fileURLWithPath: path).lastPathComponent)
+                  .font(.system(size: 8))
+                  .foregroundStyle(theme.inkTertiary)
+                  .lineLimit(2)
+                  .multilineTextAlignment(.center)
+                  .padding(.horizontal, 3)
+              }
+              .frame(width: 56, height: 56)
+              .background(theme.paperSecondary)
+              .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+              .help(path)
             }
             Button {
               paths.remove(at: index)
@@ -170,6 +182,17 @@ struct ComposerAttachmentStrip: View {
         }
       }
       .padding(.horizontal, horizontalPadding)
+    }
+  }
+
+  /// Icône du type de fichier, à l'extension.
+  static func symbol(forPath path: String) -> String {
+    switch URL(fileURLWithPath: path).pathExtension.lowercased() {
+    case "pdf": return "doc.richtext"
+    case "mp4", "mov", "m4v": return "film"
+    case "caf", "m4a", "mp3", "aac", "wav", "ogg", "opus": return "waveform"
+    case "zip", "gz", "tar": return "doc.zipper"
+    default: return "doc"
     }
   }
 }

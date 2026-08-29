@@ -37,11 +37,17 @@ enum MessageGrouping {
         $0.isFromMe != message.isFromMe || authorKey($0) != authorKey(message)
       } ?? true
 
-      if silence || changedAuthor {
+      // Un événement de conversation (« X a ajouté Y ») ne se groupe avec rien :
+      // il s'écrit seul, en travers du fil, sans nom d'auteur au-dessus.
+      let isolated = message.isSystemEvent || previous?.isSystemEvent == true
+
+      if silence || changedAuthor || isolated {
         groups.append(
           MessageGroup(
             messages: [message],
-            senderLabel: showsSenderNames && !message.isFromMe ? label(for: message) : nil,
+            senderLabel: showsSenderNames && !message.isFromMe && !message.isSystemEvent
+              ? label(for: message)
+              : nil,
             timeSeparator: silence ? message.sentAt : nil
           )
         )

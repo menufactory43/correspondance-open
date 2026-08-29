@@ -19,6 +19,11 @@ struct Conversation: Identifiable, Hashable, Sendable {
   var lastDelivery: MessageDelivery?
   /// Le dernier message de l'aperçu vient de moi. Seul un `false` déclenche une notification.
   var lastMessageIsFromMe: Bool = false
+  /// Participants du fil, côté réseau (`chat_handle_join` pour iMessage).
+  /// Vide quand le réseau ne les expose pas.
+  var participantHandles: [String] = []
+  /// Photo du groupe déjà résolue sur le disque, quand il y en a une.
+  var groupPhotoPath: String? = nil
 
   var hasUnread: Bool { unreadCount > 0 }
 

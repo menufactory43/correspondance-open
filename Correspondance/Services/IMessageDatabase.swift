@@ -21,7 +21,14 @@ enum IMessageAccessError: LocalizedError, Sendable {
 /// Lecture locale de `~/Library/Messages/chat.db` via **copie temporaire**
 /// (évite les locks / freezes avec l’app Messages).
 struct IMessageDatabase: Sendable {
-  var databaseURL: URL {
+  /// Base à lire — celle de Messages par défaut, une fixture réduite en test.
+  var databaseURL: URL
+
+  init(databaseURL: URL = IMessageDatabase.defaultDatabaseURL) {
+    self.databaseURL = databaseURL
+  }
+
+  static var defaultDatabaseURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent("Library/Messages/chat.db")
   }
@@ -50,7 +57,8 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.is_from_me, 0),
       IFNULL(m.is_delivered, 0),
       IFNULL(m.is_read, 0),
-      IFNULL(c.style, 0)
+      IFNULL(c.style, 0),
+      c.properties
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -94,6 +102,7 @@ struct IMessageDatabase: Sendable {
       let lastDelivered = sqlite3_column_int(statement, 9) != 0
       let lastRead = sqlite3_column_int(statement, 10) != 0
       let style = Int(sqlite3_column_int(statement, 11))
+      let properties = blobColumn(statement, 12)
 
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
         // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
@@ -119,6 +128,12 @@ struct IMessageDatabase: Sendable {
       // address = identifiant chat (envoi). transportKey embarque les handles Contacts.
       let handlesForLookup = isGroup ? participantHandles : (participantHandles.isEmpty ? [peerHandle] : participantHandles)
       let handleSuffix = handlesForLookup.isEmpty ? "" : "|\(handlesForLookup.joined(separator: ","))"
+      // Photo du groupe : `chat.properties` porte le GUID de la pièce jointe
+      // « GroupPhotoImage » (il n'y a pas de colonne dédiée sur macOS 26).
+      let groupPhotoPath = isGroup
+        ? Self.groupPhotoGUID(inProperties: properties)
+          .flatMap { attachmentPath(guid: $0, db: db) }
+        : nil
       results.append(
         Conversation(
           id: "imessage:\(guid)",
@@ -132,7 +147,9 @@ struct IMessageDatabase: Sendable {
           transportKey: "\(rowID)|\(guid)|\(identifier)\(handleSuffix)",
           isGroup: isGroup,
           lastDelivery: Self.delivery(fromMe: lastFromMe, delivered: lastDelivered, read: lastRead),
-          lastMessageIsFromMe: lastFromMe
+          lastMessageIsFromMe: lastFromMe,
+          participantHandles: participantHandles,
+          groupPhotoPath: groupPhotoPath
         )
       )
       if results.count >= limit { break }
@@ -194,7 +211,9 @@ struct IMessageDatabase: Sendable {
     let db = try openReadOnly(at: snapshot)
     defer { sqlite3_close(db) }
 
-    // Inclut les messages texte ET les messages image-only (sans texte).
+    // Inclut les messages texte, les messages image-only (sans texte), les envois
+    // annulés (`date_retracted` — leur texte a disparu) et les événements de
+    // groupe (`item_type` ≠ 0, sans corps eux non plus).
     let sql = """
     SELECT
       m.ROWID,
@@ -204,11 +223,20 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.is_from_me, 0),
       c.guid,
       IFNULL(h.id, ''),
-      IFNULL(m.thread_originator_guid, '')
+      IFNULL(m.thread_originator_guid, ''),
+      IFNULL(m.date_edited, 0),
+      IFNULL(m.date_retracted, 0),
+      m.message_summary_info,
+      IFNULL(m.expressive_send_style_id, ''),
+      IFNULL(m.item_type, 0),
+      IFNULL(m.group_action_type, 0),
+      IFNULL(m.group_title, ''),
+      IFNULL(oh.id, '')
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
     LEFT JOIN handle h ON h.ROWID = m.handle_id
+    LEFT JOIN handle oh ON oh.ROWID = m.other_handle
     WHERE c.guid = ?
       -- Les tapbacks deviennent des pastilles sous leur cible, pas des bulles.
       AND IFNULL(m.associated_message_type, 0) = 0
@@ -218,6 +246,8 @@ struct IMessageDatabase: Sendable {
           SELECT 1 FROM message_attachment_join maj
           WHERE maj.message_id = m.ROWID
         )
+        OR IFNULL(m.date_retracted, 0) != 0
+        OR IFNULL(m.item_type, 0) != 0
       )
     ORDER BY m.date DESC
     LIMIT ?;
@@ -246,6 +276,23 @@ struct IMessageDatabase: Sendable {
       let handle = stringColumn(statement, 6)
       // `thread_originator_guid` porte le même préfixe de partie que les tapbacks.
       let originator = Self.tapbackTargetGUID(stringColumn(statement, 7))
+      let rawEdited = sqlite3_column_int64(statement, 8)
+      let rawRetracted = sqlite3_column_int64(statement, 9)
+      let summaryInfo = blobColumn(statement, 10)
+      let expressive = stringColumn(statement, 11)
+      let itemType = Int(sqlite3_column_int(statement, 12))
+      let actionType = Int(sqlite3_column_int(statement, 13))
+      let groupTitle = stringColumn(statement, 14)
+      let otherHandle = stringColumn(statement, 15)
+
+      let eventText = itemType == 0 ? nil : IMessageGroupEvent.label(
+        itemType: itemType,
+        actionType: actionType,
+        groupTitle: groupTitle,
+        actor: handle,
+        target: otherHandle,
+        isFromMe: fromMe
+      )
 
       drafts.append(
         (
@@ -254,12 +301,19 @@ struct IMessageDatabase: Sendable {
             id: guid.isEmpty ? "imessage-msg-\(rowID)" : guid,
             conversationID: conversationID,
             network: .iMessage,
-            text: text,
+            text: rawRetracted != 0 ? "" : text,
             sentAt: Self.dateFromApple(rawDate),
             isFromMe: fromMe,
             senderID: handle.isEmpty ? nil : handle,
             // Le texte et l'auteur cités sont résolus après coup, le fil en main.
-            replyTo: originator.map { QuotedMessage(messageID: $0, senderName: "", text: "") }
+            replyTo: originator.map { QuotedMessage(messageID: $0, senderName: "", text: "") },
+            editedAt: rawEdited == 0 ? nil : Self.dateFromApple(rawEdited),
+            editHistory: rawEdited == 0
+              ? []
+              : (summaryInfo.map { IMessageSummaryInfo.editHistory(from: $0, currentText: text) } ?? []),
+            isRetracted: rawRetracted != 0,
+            expressiveEffectName: IMessageExpressiveEffect.name(for: expressive),
+            systemEventText: eventText
           )
         )
       )
@@ -277,28 +331,16 @@ struct IMessageDatabase: Sendable {
       var message = draft.message
       message.attachments = attachmentsByRow[draft.rowID] ?? []
       message.reactions = reactionsByGUID[message.id] ?? []
-      if message.text.isEmpty, message.attachments.contains(where: \.isImage) {
-        message = ChatMessage(
-          id: message.id,
-          conversationID: message.conversationID,
-          network: message.network,
-          text: "📷 Photo",
-          sentAt: message.sentAt,
-          isFromMe: message.isFromMe,
-          attachments: message.attachments,
-          reactions: message.reactions
-        )
-      } else if message.text.isEmpty, !message.attachments.isEmpty {
-        message = ChatMessage(
-          id: message.id,
-          conversationID: message.conversationID,
-          network: message.network,
-          text: "Pièce jointe",
-          sentAt: message.sentAt,
-          isFromMe: message.isFromMe,
-          attachments: message.attachments,
-          reactions: message.reactions
-        )
+      // Un envoi annulé et un événement de groupe n'ont pas de corps : ils
+      // portent leur propre libellé, on ne leur colle pas « Pièce jointe ».
+      if message.text.isEmpty, !message.isRetracted, !message.isSystemEvent {
+        if message.attachments.contains(where: \.isImage) {
+          message.text = "📷 Photo"
+        } else if message.attachments.contains(where: \.isAudio) {
+          message.text = "🎤 Message audio"
+        } else if !message.attachments.isEmpty {
+          message.text = "Pièce jointe"
+        }
       }
       rows.append(message)
     }
@@ -479,6 +521,13 @@ struct IMessageDatabase: Sendable {
     return String(cString: cString)
   }
 
+  private func blobColumn(_ statement: OpaquePointer?, _ index: Int32) -> Data? {
+    guard let bytes = sqlite3_column_blob(statement, index) else { return nil }
+    let count = Int(sqlite3_column_bytes(statement, index))
+    guard count > 0 else { return nil }
+    return Data(bytes: bytes, count: count)
+  }
+
   private func fetchAttachments(
     messageRowIDs: [Int64],
     db: OpaquePointer
@@ -582,6 +631,31 @@ struct IMessageDatabase: Sendable {
       if uti.contains("movie") || uti.contains("video") { return "video/mp4" }
       return "application/octet-stream"
     }
+  }
+
+  /// GUID de la photo du groupe, planqué dans le plist binaire `chat.properties`
+  /// sous la clé `groupPhotoGuid` (macOS 26 n'a plus de colonne dédiée).
+  static func groupPhotoGUID(inProperties data: Data?) -> String? {
+    guard let data,
+          let plist = try? PropertyListSerialization.propertyList(
+            from: data, options: [], format: nil
+          ) as? [String: Any],
+          let guid = plist["groupPhotoGuid"] as? String,
+          !guid.isEmpty
+    else { return nil }
+    return guid
+  }
+
+  /// Chemin disque d'une pièce jointe désignée par son GUID.
+  private func attachmentPath(guid: String, db: OpaquePointer) -> String? {
+    let sql = "SELECT IFNULL(filename, '') FROM attachment WHERE guid = ? LIMIT 1;"
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+    defer { sqlite3_finalize(statement) }
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    _ = guid.withCString { sqlite3_bind_text(statement, 1, $0, -1, transient) }
+    guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+    return resolveAttachmentFilesystemPath(stringColumn(statement, 0))
   }
 
   private func fetchHandles(chatRowID: Int64, db: OpaquePointer) -> [String] {

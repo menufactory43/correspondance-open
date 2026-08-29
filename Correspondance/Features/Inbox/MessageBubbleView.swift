@@ -36,7 +36,9 @@ struct MessageBubbleView: View {
           attachmentView(attachment)
         }
 
-        if showsTextBubble {
+        if message.isRetracted {
+          retractedBubble
+        } else if showsTextBubble {
           Text(highlighted)
             .font(Typography.bubble(typeface))
             .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
@@ -46,6 +48,14 @@ struct MessageBubbleView: View {
               RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
             )
+        }
+
+        if let footnote = footnoteLabel {
+          Text(footnote.text)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.inkTertiary)
+            .help(footnote.help)
+            .accessibilityLabel(footnote.help)
         }
 
         if !message.reactions.isEmpty {
@@ -76,6 +86,45 @@ struct MessageBubbleView: View {
     } message: {
       Text("Messages n’autorise la modification que 15 minutes après l’envoi.")
     }
+  }
+
+  /// Un envoi annulé laisse sa place dans le fil, vidée : Messages fait pareil,
+  /// et effacer la bulle ferait mentir la conversation.
+  private var retractedBubble: some View {
+    Text("Message annulé")
+      .font(Typography.bubble(typeface).italic())
+      .foregroundStyle(theme.inkTertiary)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .strokeBorder(theme.edge, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+      )
+      .accessibilityLabel("Message annulé par son auteur")
+  }
+
+  /// Mention sous la bulle : « Modifié » (historique au survol) ou l'effet reçu.
+  /// Les deux ensemble tiennent sur une ligne, séparés d'un point médian.
+  private var footnoteLabel: (text: String, help: String)? {
+    var parts: [String] = []
+    var help: [String] = []
+    if message.editedAt != nil, !message.isRetracted {
+      parts.append("Modifié")
+      if message.editHistory.isEmpty {
+        help.append("Message modifié après envoi")
+      } else {
+        help.append(
+          "Versions précédentes :\n"
+            + message.editHistory.map { "• \($0)" }.joined(separator: "\n")
+        )
+      }
+    }
+    if let effect = message.expressiveEffectName, !message.isRetracted {
+      parts.append("envoyé avec \(effect)")
+      help.append("Effet d’envoi : \(effect)")
+    }
+    guard !parts.isEmpty else { return nil }
+    return (parts.joined(separator: " · "), help.joined(separator: "\n\n"))
   }
 
   /// Citation compacte au-dessus de la bulle : un filet, l'auteur, une ligne de texte.
@@ -183,6 +232,14 @@ struct MessageBubbleView: View {
     if hasVisibleImage, trimmed.isEmpty || trimmed == "📷 Photo" {
       return ""
     }
+    // Un audio joué sur place n'a pas besoin de son libellé de secours.
+    let hasPlayableAudio = message.attachments.contains {
+      let repaired = Self.repaired($0)
+      return repaired.isAudio && repaired.resolvedFileURL != nil
+    }
+    if hasPlayableAudio, trimmed.isEmpty || trimmed == "🎤 Message audio" {
+      return ""
+    }
     return trimmed
   }
 
@@ -207,7 +264,14 @@ struct MessageBubbleView: View {
   @ViewBuilder
   private func attachmentView(_ attachment: MessageAttachment) -> some View {
     let repaired = Self.repaired(attachment)
-    if let url = repaired.resolvedFileURL, repaired.isImage,
+    if repaired.isAudio, repaired.resolvedFileURL != nil {
+      AudioMessageView(
+        attachment: repaired,
+        theme: theme,
+        typeface: typeface,
+        isFromMe: message.isFromMe
+      )
+    } else if let url = repaired.resolvedFileURL, repaired.isImage,
        let nsImage = NSImage(contentsOf: url)
     {
       Image(nsImage: nsImage)
