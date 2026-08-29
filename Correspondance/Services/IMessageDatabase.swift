@@ -54,10 +54,16 @@ struct IMessageDatabase: Sendable {
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
     WHERE
-      (m.text IS NOT NULL AND m.text != '')
-      OR EXISTS (
-        SELECT 1 FROM message_attachment_join maj
-        WHERE maj.message_id = m.ROWID
+      -- Un tapback est une ligne `message` à part entière, avec un texte comme
+      -- « A ajouté un “J'adore” à … ». Ce n'est pas le dernier message du fil :
+      -- il est rattaché à sa cible par `fetchTapbacks`.
+      IFNULL(m.associated_message_type, 0) = 0
+      AND (
+        (m.text IS NOT NULL AND m.text != '')
+        OR EXISTS (
+          SELECT 1 FROM message_attachment_join maj
+          WHERE maj.message_id = m.ROWID
+        )
       )
     ORDER BY m.date DESC
     LIMIT 800;
@@ -150,6 +156,7 @@ struct IMessageDatabase: Sendable {
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
     WHERE m.text IS NOT NULL AND m.text != ''
+      AND IFNULL(m.associated_message_type, 0) = 0
     ORDER BY m.date DESC
     LIMIT ?;
     """
@@ -201,6 +208,8 @@ struct IMessageDatabase: Sendable {
     JOIN chat c ON c.ROWID = cmj.chat_id
     LEFT JOIN handle h ON h.ROWID = m.handle_id
     WHERE c.guid = ?
+      -- Les tapbacks deviennent des pastilles sous leur cible, pas des bulles.
+      AND IFNULL(m.associated_message_type, 0) = 0
       AND (
         (m.text IS NOT NULL AND m.text != '')
         OR EXISTS (
