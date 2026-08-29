@@ -113,6 +113,12 @@ struct ContentView: View {
       }
     }
 
+    if !isFocus, let conversation = store.selectedConversation {
+      ToolbarItem(placement: .principal) {
+        ConversationPillHeader(conversation: conversation, theme: theme)
+      }
+    }
+
     if isFocus {
       ToolbarItemGroup(placement: .navigation) {
         Button("Conversation précédente", systemImage: "chevron.left") {

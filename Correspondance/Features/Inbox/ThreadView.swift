@@ -4,15 +4,13 @@ import SwiftUI
 struct ThreadView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
-  @Environment(\.controlActiveState) private var controlActiveState
   @State private var isShowingThread = false
-  @State private var isShowingInfo = false
 
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
     Group {
-      if let conversation = store.selectedConversation {
+      if store.selectedConversation != nil {
         VStack(spacing: 0) {
           if store.isThreadSearchActive {
             ThreadSearchBar(theme: theme, typeface: themes.typeface)
@@ -29,15 +27,6 @@ struct ThreadView: View {
             onAttach: { store.pickAttachments() },
             onSend: { Task { await store.sendDraft() } }
           )
-        }
-        .overlay(alignment: .top) {
-          ConversationPillHeader(
-            conversation: conversation,
-            theme: theme,
-            isShowingInfo: $isShowingInfo
-          )
-          .padding(.top, Spacing.xs)
-          .opacity(controlActiveState == .inactive ? 0.6 : 1)
         }
       } else {
         Text("Aucune conversation")
@@ -84,10 +73,9 @@ struct ThreadView: View {
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.md)
       }
-      // La pilule flotte : on réserve sa hauteur dans le contenu défilant.
       // `contentMargins` s'AJOUTE à la zone sûre de la barre d'outils — inutile
       // d'y recompter la hauteur du titre.
-      .contentMargins(.top, ThreadMetrics.pillClearance, for: .scrollContent)
+      .contentMargins(.top, ThreadMetrics.topClearance, for: .scrollContent)
       .defaultScrollAnchor(.bottom)
       .overlay(alignment: .top) { TopScrollFade(theme: theme) }
       // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
@@ -125,11 +113,11 @@ struct ThreadView: View {
 }
 
 enum ThreadMetrics {
-  /// Air réservé au-dessus du premier message : la pilule flottante et sa marge.
-  /// S'ajoute à la zone sûre de la barre d'outils, que le système fournit déjà.
-  static let pillClearance: CGFloat = 44
+  /// Air au-dessus du premier message, en plus de la zone sûre de la barre
+  /// d'outils que le système fournit déjà.
+  static let topClearance: CGFloat = 16
   /// Hauteur de la bande où le fil se dissout sous la barre d'outils.
-  static let topFadeHeight: CGFloat = 76
+  static let topFadeHeight: CGFloat = 64
 }
 
 /// Le fil passe SOUS la barre d'outils transparente : sans transition il s'y
@@ -143,7 +131,7 @@ struct TopScrollFade: View {
     LinearGradient(
       stops: [
         .init(color: theme.paper, location: 0),
-        .init(color: theme.paper, location: reduceTransparency ? 0.72 : 0.5),
+        .init(color: theme.paper, location: reduceTransparency ? 0.8 : 0.62),
         .init(color: theme.paper.opacity(0), location: 1),
       ],
       startPoint: .top,
@@ -154,103 +142,6 @@ struct TopScrollFade: View {
     .allowsHitTesting(false)
     .ignoresSafeArea(edges: .top)
     .accessibilityHidden(true)
-  }
-}
-
-/// Entête pilule en verre : avatar + « Nom › », clic → fiche contact / infos groupe.
-struct ConversationPillHeader: View {
-  let conversation: Conversation
-  let theme: WritingTheme
-  @Binding var isShowingInfo: Bool
-
-  var body: some View {
-    Button {
-      isShowingInfo.toggle()
-    } label: {
-      HStack(spacing: 7) {
-        ConversationAvatarView(conversation: conversation, size: 22, theme: theme)
-        Text(conversation.title)
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(theme.ink)
-          .lineLimit(1)
-        Image(systemName: "chevron.right")
-          .font(.system(size: 9, weight: .semibold))
-          .foregroundStyle(theme.inkTertiary)
-      }
-      .padding(.leading, 5)
-      .padding(.trailing, 10)
-      .padding(.vertical, 5)
-      .glassSurface(
-        cornerRadius: 17,
-        fallbackFill: theme.paperSecondary,
-        border: theme.edge,
-        isInteractive: true
-      )
-      .contentShape(Capsule())
-    }
-    .buttonStyle(ComposerPressStyle())
-    .accessibilityLabel(conversation.isGroup ? "Infos du groupe \(conversation.title)" : "Fiche de \(conversation.title)")
-    .accessibilityHint("Ouvre les informations de la conversation")
-    .popover(isPresented: $isShowingInfo, arrowEdge: .bottom) {
-      ConversationInfoCard(conversation: conversation, theme: theme)
-    }
-  }
-}
-
-/// Fiche contact / infos groupe — ce que l'app sait déjà, sans permission de plus.
-private struct ConversationInfoCard: View {
-  let conversation: Conversation
-  let theme: WritingTheme
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: Spacing.sm) {
-      HStack(spacing: Spacing.xs) {
-        ConversationAvatarView(conversation: conversation, size: 44, theme: theme)
-        VStack(alignment: .leading, spacing: 2) {
-          Text(conversation.title)
-            .font(.system(size: 15, weight: .semibold))
-          Label(
-            conversation.isGroup ? "\(conversation.network.labelFR) · groupe" : conversation.network.labelFR,
-            systemImage: conversation.rowSystemImage
-          )
-          .font(.system(size: 11))
-          .foregroundStyle(.secondary)
-        }
-      }
-
-      if !conversation.isGroup {
-        LabeledContent("Adresse") {
-          Text(conversation.address)
-            .textSelection(.enabled)
-            .lineLimit(2)
-        }
-        .font(.system(size: 11))
-      }
-
-      if let delivery = conversation.lastDelivery {
-        LabeledContent("Dernier envoi") {
-          Label(delivery.labelFR, systemImage: delivery.systemImage)
-        }
-        .font(.system(size: 11))
-      }
-
-      LabeledContent("Dernier message") {
-        Text(conversation.lastMessageAt, format: .dateTime.day().month().hour().minute())
-      }
-      .font(.system(size: 11))
-
-      if !conversation.isGroup, conversation.network == .iMessage {
-        Divider()
-        Button("Ouvrir dans Contacts") {
-          if let url = URL(string: "addressbook://") {
-            NSWorkspace.shared.open(url)
-          }
-        }
-        .buttonStyle(.link)
-      }
-    }
-    .padding(Spacing.md)
-    .frame(width: 280, alignment: .leading)
   }
 }
 
