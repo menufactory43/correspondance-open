@@ -14,11 +14,16 @@ struct MessageBubbleView: View {
   /// `nil` en aperçu : la bulle est alors purement décorative.
   var onReact: ((String) -> Void)?
   var onSelect: (() -> Void)?
+  var onReply: (() -> Void)?
 
   var body: some View {
     HStack {
       if message.isFromMe { Spacer(minLength: 48) }
       VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
+        if let quote = message.replyTo, !quote.isEmpty {
+          quoteChip(quote)
+        }
+
         ForEach(visibleAttachments) { attachment in
           attachmentView(attachment)
         }
@@ -57,6 +62,29 @@ struct MessageBubbleView: View {
     }
   }
 
+  /// Citation compacte au-dessus de la bulle : un filet, l'auteur, une ligne de texte.
+  private func quoteChip(_ quote: QuotedMessage) -> some View {
+    HStack(spacing: 6) {
+      RoundedRectangle(cornerRadius: 1, style: .continuous)
+        .fill(theme.accent.opacity(0.6))
+        .frame(width: 2)
+      VStack(alignment: .leading, spacing: 1) {
+        if !quote.senderName.isEmpty {
+          Text(quote.senderName)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.accent)
+        }
+        Text(quote.text)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkSecondary)
+          .lineLimit(2)
+      }
+    }
+    .padding(.leading, 2)
+    .frame(maxWidth: 260, alignment: .leading)
+    .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
+  }
+
   /// Pastilles sous la bulle : emoji, compteur au-delà d'une personne, et un liseré
   /// quand j'en fais partie. Cliquer une pastille repose (donc retire) le même emoji.
   private var reactionRow: some View {
@@ -91,6 +119,10 @@ struct MessageBubbleView: View {
 
   @ViewBuilder
   private var bubbleMenu: some View {
+    if let onReply {
+      Button("Répondre en citant") { onReply() }
+      Divider()
+    }
     if onReact != nil {
       ForEach(InboxStore.quickReactions, id: \.self) { emoji in
         Button {

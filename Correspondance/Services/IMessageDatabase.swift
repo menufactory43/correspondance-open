@@ -194,7 +194,8 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.date, 0),
       IFNULL(m.is_from_me, 0),
       c.guid,
-      IFNULL(h.id, '')
+      IFNULL(h.id, ''),
+      IFNULL(m.thread_originator_guid, '')
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -232,6 +233,8 @@ struct IMessageDatabase: Sendable {
       let fromMe = sqlite3_column_int(statement, 4) != 0
       let conversationID = "imessage:\(stringColumn(statement, 5))"
       let handle = stringColumn(statement, 6)
+      // `thread_originator_guid` porte le même préfixe de partie que les tapbacks.
+      let originator = Self.tapbackTargetGUID(stringColumn(statement, 7))
 
       drafts.append(
         (
@@ -243,7 +246,9 @@ struct IMessageDatabase: Sendable {
             text: text,
             sentAt: Self.dateFromApple(rawDate),
             isFromMe: fromMe,
-            senderID: handle.isEmpty ? nil : handle
+            senderID: handle.isEmpty ? nil : handle,
+            // Le texte et l'auteur cités sont résolus après coup, le fil en main.
+            replyTo: originator.map { QuotedMessage(messageID: $0, senderName: "", text: "") }
           )
         )
       )
@@ -286,7 +291,26 @@ struct IMessageDatabase: Sendable {
       }
       rows.append(message)
     }
-    return rows.reversed()
+    return Self.resolvingQuotes(in: rows.reversed())
+  }
+
+  /// Complète les citations iMessage : `thread_originator_guid` ne donne que le GUID,
+  /// l'auteur et le texte se lisent dans le fil qu'on vient de charger.
+  static func resolvingQuotes(in messages: [ChatMessage]) -> [ChatMessage] {
+    let byID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    return messages.map { message in
+      guard let target = message.replyTo?.messageID, let origin = byID[target] else {
+        // Cible hors de la fenêtre chargée : une citation vide n'apprend rien.
+        return message.replyTo?.isEmpty == true ? { var m = message; m.replyTo = nil; return m }() : message
+      }
+      var updated = message
+      updated.replyTo = QuotedMessage(
+        messageID: target,
+        senderName: origin.isFromMe ? "Moi" : (origin.senderID ?? ""),
+        text: origin.sidebarPreviewText
+      )
+      return updated
+    }
   }
 
   /// Tapbacks d'un fil, agrégés par GUID du message visé.

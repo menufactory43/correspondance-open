@@ -161,12 +161,32 @@ actor MatrixClient {
 
   /// `txnId` idempotent : deux appels avec le même identifiant n'envoient qu'un message.
   @discardableResult
-  func sendText(roomID: String, body text: String, transactionID: String = UUID().uuidString) async throws -> String? {
+  func sendText(
+    roomID: String,
+    body text: String,
+    replyToEventID: String? = nil,
+    replyFallback: (sender: String, text: String)? = nil,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
     guard !ledger.isUsed(transactionID) else { return nil }
+    var content: [String: MatrixJSON] = [
+      "msgtype": .string("m.text"),
+      "body": .string(text),
+    ]
+    if let replyToEventID {
+      content["m.relates_to"] = .object([
+        "m.in_reply_to": .object(["event_id": .string(replyToEventID)])
+      ])
+      // Repli de citation : les clients qui ne comprennent pas `m.in_reply_to`
+      // (et le bridge, pour composer la citation WhatsApp) lisent le corps.
+      if let replyFallback {
+        content["body"] = .string("> <\(replyFallback.sender)> \(replyFallback.text)\n\n\(text)")
+      }
+    }
     let json = try await request(
       method: "PUT",
       path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.room.message/\(Self.escape(transactionID))",
-      body: .object(["msgtype": .string("m.text"), "body": .string(text)])
+      body: .object(content)
     )
     ledger.markUsed(transactionID)
     return json.string(at: "event_id")

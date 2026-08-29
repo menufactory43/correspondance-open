@@ -84,8 +84,9 @@ final class MatrixSyncParserTests: XCTestCase {
     XCTAssertEqual(conversation.unreadCount, 2)
     // Numéro exposé par l'état de bridge (`channel.id` en JID) — jamais déduit du MXID.
     XCTAssertEqual(conversation.address, "+33612345678")
-    XCTAssertEqual(conversation.preview, "📷 Photo")
-    XCTAssertEqual(conversation.lastMessageAt, Date(timeIntervalSince1970: 1_756_400_300))
+    // Le dernier message du fil est désormais la réponse citée « orpheline ».
+    XCTAssertEqual(conversation.preview, "Je confirme.")
+    XCTAssertEqual(conversation.lastMessageAt, Date(timeIntervalSince1970: 1_756_400_700))
   }
 
   func testGhostLIDNeverYieldsAPhoneNumber() throws {
@@ -119,7 +120,10 @@ final class MatrixSyncParserTests: XCTestCase {
   func testTextAndImageMessagesAreParsed() throws {
     let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
     let messages = room.sortedMessages
-    XCTAssertEqual(messages.map(\.id), ["$msg-alice-1", "$msg-moi-1", "$msg-alice-image"])
+    XCTAssertEqual(
+      messages.map(\.id),
+      ["$msg-alice-1", "$msg-moi-1", "$msg-alice-image", "$msg-alice-reponse", "$msg-alice-reponse-orpheline"]
+    )
     XCTAssertTrue(messages.allSatisfy { $0.network == .whatsapp })
     XCTAssertTrue(messages.allSatisfy { $0.conversationID == "whatsapp:\(dmRoomID)" })
 
@@ -162,8 +166,11 @@ extension MatrixSyncParserTests {
   /// `m.reaction` rattachée à sa cible, jamais affichée comme un message.
   func testReactionsAreAttachedToTheirTargetMessage() throws {
     let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
-    // Une réaction n'est pas un message : le fil en compte toujours trois.
-    XCTAssertEqual(room.sortedMessages.map(\.id), ["$msg-alice-1", "$msg-moi-1", "$msg-alice-image"])
+    // Une réaction n'est pas un message : le fil ne compte que ses cinq `m.room.message`.
+    XCTAssertEqual(
+      room.sortedMessages.map(\.id),
+      ["$msg-alice-1", "$msg-moi-1", "$msg-alice-image", "$msg-alice-reponse", "$msg-alice-reponse-orpheline"]
+    )
 
     let mine = try XCTUnwrap(room.sortedMessages.first { $0.id == "$msg-moi-1" })
     XCTAssertEqual(mine.reactions.map(\.emoji), ["❤️"])

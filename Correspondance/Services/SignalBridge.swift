@@ -292,10 +292,18 @@ actor SignalBridge {
     }
   }
 
+  /// Citation à joindre à un envoi Signal (`--quote-*`).
+  struct OutgoingQuote: Sendable {
+    var timestamp: Int64
+    var author: String
+    var text: String
+  }
+
   func send(
     text: String,
     conversation: Conversation,
-    attachmentPaths: [String] = []
+    attachmentPaths: [String] = [],
+    quote: OutgoingQuote? = nil
   ) async throws {
     guard let cli = resolvedCLI() else { throw SignalBridgeError.cliMissing }
 
@@ -310,6 +318,13 @@ actor SignalBridge {
       arguments += ["-g", conversation.transportKey]
     }
     arguments += ["-m", trimmed]
+    if let quote {
+      arguments += [
+        "--quote-timestamp", "\(quote.timestamp)",
+        "--quote-author", quote.author,
+        "--quote-message", quote.text,
+      ]
+    }
     for path in attachmentPaths {
       arguments += ["-a", path]
     }
@@ -361,7 +376,10 @@ actor SignalBridge {
         text: body,
         sentAt: Date(),
         isFromMe: true,
-        attachments: outgoingAttachments
+        attachments: outgoingAttachments,
+        replyTo: quote.map {
+          QuotedMessage(messageID: "signal-\($0.timestamp)-", senderName: $0.author, text: $0.text)
+        }
       )
     )
     cachedMessages[conversation.id] = list
@@ -742,6 +760,19 @@ actor SignalBridge {
         continue
       }
 
+      // `dataMessage.quote` : Signal désigne le message cité par (auteur, timestamp).
+      var replyTo: QuotedMessage?
+      if let quote = dataMessage?["quote"] as? [String: Any] {
+        let quotedText = (quote["text"] as? String) ?? ""
+        let quotedAuthor = (quote["authorName"] as? String)
+          ?? (quote["author"] as? String)
+          ?? (quote["authorNumber"] as? String)
+          ?? ""
+        let quotedID = Self.int64(quote["id"]).map { "signal-\($0)-" }
+        let candidate = QuotedMessage(messageID: quotedID, senderName: quotedAuthor, text: quotedText)
+        if !candidate.isEmpty { replyTo = candidate }
+      }
+
       let displayText: String = {
         if !body.isEmpty {
           if isGroup, let sourceName, !sourceName.isEmpty {
@@ -805,7 +836,8 @@ actor SignalBridge {
           sentAt: sentAt,
           isFromMe: false,
           senderID: sourceNumber ?? sourceUuid,
-          attachments: attachments
+          attachments: attachments,
+          replyTo: replyTo
         )
         messages[conversationKey, default: []].append(msg)
       }

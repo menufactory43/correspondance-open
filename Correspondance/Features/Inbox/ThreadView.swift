@@ -18,6 +18,9 @@ struct ThreadView: View {
             ThreadSearchBar(theme: theme, typeface: themes.typeface)
           }
           messages
+          if let quoted = store.replyingToMessage {
+            ReplyBanner(message: quoted, theme: theme, typeface: themes.typeface)
+          }
           ComposerBar(
             text: Bindable(store).draftText,
             attachmentPaths: Bindable(store).pendingAttachmentPaths,
@@ -63,6 +66,10 @@ struct ThreadView: View {
               },
               onSelect: {
                 store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
+              },
+              onReply: {
+                store.selectMessage(message.id)
+                store.replyToSelectedMessage()
               }
             )
             .id(message.id)
@@ -276,5 +283,40 @@ private struct ThreadSearchBar: View {
       Rectangle().fill(theme.edge).frame(height: 1)
     }
     .onAppear { isFocused = true }
+  }
+}
+
+/// Bandeau « en réponse à… » au-dessus du composer, avec sa croix pour annuler.
+private struct ReplyBanner: View {
+  @Environment(InboxStore.self) private var store
+  let message: ChatMessage
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+
+  var body: some View {
+    HStack(spacing: 8) {
+      RoundedRectangle(cornerRadius: 1, style: .continuous)
+        .fill(theme.accent)
+        .frame(width: 2, height: 26)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(message.isFromMe ? "Réponse à moi-même" : "En réponse à \(message.senderID ?? "ce message")")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.accent)
+        Text(message.sidebarPreviewText)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkSecondary)
+          .lineLimit(1)
+      }
+      Spacer(minLength: 8)
+      Button { store.cancelReply() } label: {
+        Image(systemName: "xmark")
+          .font(.system(size: 10, weight: .semibold))
+      }
+      .buttonStyle(.borderless)
+      .accessibilityLabel("Annuler la citation")
+    }
+    .padding(.horizontal, Spacing.md)
+    .padding(.vertical, 6)
+    .background(theme.paperSecondary)
   }
 }

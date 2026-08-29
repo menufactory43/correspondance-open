@@ -132,7 +132,23 @@ struct MatrixSyncParser: Sendable {
 
     let network = model.network ?? .whatsapp
     let msgtype = content.string(at: "msgtype") ?? "m.text"
-    let body = content.string(at: "body") ?? ""
+    var body = content.string(at: "body") ?? ""
+
+    // `m.in_reply_to` : mautrix-whatsapp le bridge dans les deux sens.
+    // Le corps embarque un repli « > <@x> texte » qu'il faut retirer de l'affichage.
+    var replyTo: QuotedMessage?
+    if let targetID = content.string(at: "m.relates_to.m.in_reply_to.event_id") {
+      body = QuotedMessage.strippingReplyFallback(body)
+      let quoted = model.messagesByID[targetID]
+      replyTo = QuotedMessage(
+        messageID: targetID,
+        senderName: quoted.map { $0.isFromMe ? "Moi" : displayName(of: $0.senderID ?? "", in: model) }
+          ?? Self.fallbackQuotedSender(in: content.string(at: "body") ?? ""),
+        text: quoted?.sidebarPreviewText ?? Self.fallbackQuotedText(in: content.string(at: "body") ?? "")
+      )
+      if replyTo?.isEmpty == true { replyTo = nil }
+    }
+
     var text = ""
     var attachments: [MessageAttachment] = []
 
@@ -162,7 +178,8 @@ struct MatrixSyncParser: Sendable {
       sentAt: event.sentAt,
       isFromMe: event.sender == selfUserID,
       senderID: event.sender,
-      attachments: attachments
+      attachments: attachments,
+      replyTo: replyTo
     )
     guard message.hasVisibleBody else { return }
     model.messagesByID[eventID] = message
@@ -209,6 +226,33 @@ struct MatrixSyncParser: Sendable {
     if userID == selfUserID { return "Moi" }
     if let name = model.members[userID]?.displayName, !name.isEmpty { return name }
     return MatrixIdentity.localpart(userID)
+  }
+
+  /// Quand la cible n'est pas (encore) dans le modèle, le repli de citation reste
+  /// la seule source : « > <@whatsapp_x:serveur> On se voit demain ? ».
+  static func fallbackQuotedSender(in body: String) -> String {
+    guard let first = body.split(separator: "\n", omittingEmptySubsequences: false).first,
+          first.hasPrefix("> <"),
+          let open = first.firstIndex(of: "<"),
+          let close = first[first.index(after: open)...].firstIndex(of: ">")
+    else { return "" }
+    let mxid = String(first[first.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
+    return MatrixIdentity.localpart(mxid)
+  }
+
+  static func fallbackQuotedText(in body: String) -> String {
+    let quoted = body
+      .split(separator: "\n", omittingEmptySubsequences: false)
+      .prefix { $0.hasPrefix("> ") }
+      .map { line -> String in
+        var trimmed = String(line.dropFirst(2))
+        // La première ligne porte « <@mxid> » avant le texte.
+        if trimmed.hasPrefix("<"), let end = trimmed.firstIndex(of: ">") {
+          trimmed = String(trimmed[trimmed.index(after: end)...])
+        }
+        return trimmed.trimmingCharacters(in: .whitespaces)
+      }
+    return quoted.joined(separator: " ").trimmingCharacters(in: .whitespaces)
   }
 
   private static func fallbackMime(for msgtype: String) -> String {

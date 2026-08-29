@@ -30,6 +30,7 @@
 		40013AB522A26DC3DC959F30 /* ArchiveStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD11D73A4B8A9CCA1A978CA4 /* ArchiveStateTests.swift */; };
 		4B2E24964C3FC6F31BB87BB2 /* MatrixClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E4B7561B8ADEA64F9D25BD /* MatrixClient.swift */; };
 		5ACE090A9482584EB9F3C4A9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */; };
+		62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */; };
 		663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */; };
 		691461685065A0072D19B637 /* SignalAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53171D7D92759527790B24B9 /* SignalAttachmentStore.swift */; };
 		6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72EC2976B9D7432A734100 /* NetworkRailView.swift */; };
@@ -155,6 +156,7 @@
 		E9B5F5874770558B125F18B0 /* ReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactionTests.swift; sourceTree = "<group>"; };
 		EAD00CD1C7485D79E4CB665C /* SignalBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalBridge.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotedReplyTests.swift; sourceTree = "<group>"; };
 		F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsAppLoginSheet.swift; sourceTree = "<group>"; };
 		FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSurface.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -230,6 +232,7 @@
 				3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */,
 				6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */,
 				109ADEF4B669502B537627AE /* NotificationPolicyTests.swift */,
+				F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */,
 				E9B5F5874770558B125F18B0 /* ReactionTests.swift */,
 			);
 			path = CorrespondanceTests;
@@ -481,6 +484,7 @@
 				A3EB2437D379451E47247B37 /* MatrixTransactionLedgerTests.swift in Sources */,
 				CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */,
 				375829E6CF2BBC585E4D3807 /* NotificationPolicyTests.swift in Sources */,
+				62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */,
 				1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

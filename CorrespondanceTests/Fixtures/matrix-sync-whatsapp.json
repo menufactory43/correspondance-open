@@ -154,6 +154,36 @@
               "origin_server_ts": 1756400430000,
               "redacts": "$rea-annulee",
               "content": {}
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-alice-reponse",
+              "sender": "@whatsapp_lid-19876543210:correspondance.local",
+              "origin_server_ts": 1756400600000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "> <@meffysto:correspondance.local> Oui, 19 h au comptoir.\n\nParfait, à tout à l'heure.",
+                "m.relates_to": {
+                  "m.in_reply_to": {
+                    "event_id": "$msg-moi-1"
+                  }
+                }
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-alice-reponse-orpheline",
+              "sender": "@whatsapp_lid-19876543210:correspondance.local",
+              "origin_server_ts": 1756400700000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "> <@whatsapp_lid-19876543210:correspondance.local> Message d'avant\n\nJe confirme.",
+                "m.relates_to": {
+                  "m.in_reply_to": {
+                    "event_id": "$msg-jamais-vu"
+                  }
+                }
+              }
             }
           ]
         }

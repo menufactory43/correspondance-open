@@ -29,6 +29,8 @@ final class InboxStore {
   var searchQuery = ""
   /// Bulle visée par les actions du fil (réagir, citer). `nil` = le dernier message.
   var selectedMessageID: String?
+  /// Message que le brouillon en cours cite (⌘R). `nil` = réponse simple.
+  private(set) var replyingToMessageID: String?
   /// Recherche dans le fil ouvert (⌘F).
   var isThreadSearchActive = false
   var threadSearchQuery = "" {
@@ -299,6 +301,24 @@ final class InboxStore {
     primeNotifications()
     startLiveSync()
     startMatrixSync()
+  }
+
+  // MARK: - Réponses citées
+
+  /// La citation affichée au-dessus du composer, s'il y en a une.
+  var replyingToMessage: ChatMessage? {
+    guard let replyingToMessageID else { return nil }
+    return messages.first { $0.id == replyingToMessageID }
+  }
+
+  /// ⌘R : cite la bulle visée. Rappuyer sur la même annule la citation.
+  func replyToSelectedMessage() {
+    guard let message = actionableMessage else { return }
+    replyingToMessageID = replyingToMessageID == message.id ? nil : message.id
+  }
+
+  func cancelReply() {
+    replyingToMessageID = nil
   }
 
   // MARK: - Réactions
@@ -801,6 +821,7 @@ final class InboxStore {
   func select(_ id: String?) async {
     selectedConversationID = id
     selectedMessageID = nil
+    replyingToMessageID = nil
     draftText = ""
     pendingAttachmentPaths = []
     if let id { clearUnread(for: id) }
@@ -997,6 +1018,13 @@ final class InboxStore {
       }
     }
 
+    if conversation.network == .iMessage, replyingToMessageID != nil {
+      // `thread_originator_guid` se *lit* dans chat.db, mais AppleScript ne sait
+      // envoyer qu'un message nu : pas de commande « répondre à ».
+      lastErrorMessage = "Répondre en citant n’existe pas sur iMessage depuis "
+        + "l’automatisation : le message part sans citation."
+      replyingToMessageID = nil
+    }
     if conversation.network == .iMessage, !attachments.isEmpty {
       lastErrorMessage = "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
       return
@@ -1019,6 +1047,7 @@ final class InboxStore {
       )
     }
 
+    let quoted = replyingToMessage
     let optimistic = ChatMessage(
       id: "local-\(UUID().uuidString)",
       conversationID: conversation.id,
@@ -1027,11 +1056,19 @@ final class InboxStore {
       sentAt: Date(),
       isFromMe: true,
       isPending: true,
-      attachments: outgoingAttachments
+      attachments: outgoingAttachments,
+      replyTo: quoted.map {
+        QuotedMessage(
+          messageID: $0.id,
+          senderName: $0.isFromMe ? "Moi" : ($0.senderID ?? conversation.title),
+          text: $0.sidebarPreviewText
+        )
+      }
     )
     messages.append(optimistic)
     draftText = ""
     pendingAttachmentPaths = []
+    replyingToMessageID = nil
 
     do {
       switch conversation.network {
@@ -1041,7 +1078,8 @@ final class InboxStore {
         try await signal.send(
           text: text,
           conversation: conversation,
-          attachmentPaths: attachments
+          attachmentPaths: attachments,
+          quote: Self.signalQuote(for: quoted, conversation: conversation)
         )
       case .whatsapp:
         try await matrix.send(
@@ -1049,7 +1087,8 @@ final class InboxStore {
           text: text,
           attachmentPaths: attachments,
           // Le txnId dérive de l'id optimiste : un renvoi ne duplique pas le message.
-          localID: optimistic.id
+          localID: optimistic.id,
+          replyToMessageID: quoted?.id
         )
       }
       if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
@@ -1060,8 +1099,26 @@ final class InboxStore {
       messages.removeAll { $0.id == optimistic.id }
       draftText = text
       pendingAttachmentPaths = attachments
+      replyingToMessageID = quoted?.id
       lastErrorMessage = error.localizedDescription
     }
+  }
+
+  /// Traduit une citation en arguments `--quote-*` de signal-cli.
+  /// Sans timestamp lisible dans l'identifiant, la citation est abandonnée
+  /// plutôt que d'envoyer une citation fausse.
+  private static func signalQuote(
+    for message: ChatMessage?,
+    conversation: Conversation
+  ) -> SignalBridge.OutgoingQuote? {
+    guard let message,
+          let timestamp = SignalBridge.timestamp(inMessageID: message.id)
+    else { return nil }
+    return SignalBridge.OutgoingQuote(
+      timestamp: timestamp,
+      author: message.senderID ?? conversation.address,
+      text: message.sidebarPreviewText
+    )
   }
 
   // MARK: - Private

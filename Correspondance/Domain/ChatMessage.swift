@@ -70,6 +70,31 @@ struct MessageReaction: Identifiable, Hashable, Codable, Sendable {
   }
 }
 
+/// Le message cité au-dessus d'une réponse. On n'en garde que de quoi afficher
+/// une citation compacte : le fil complet est déjà là si l'on veut y remonter.
+struct QuotedMessage: Hashable, Codable, Sendable {
+  /// Identifiant de la cible dans notre modèle, quand on a pu la retrouver.
+  var messageID: String?
+  var senderName: String
+  var text: String
+
+  /// Une citation vide n'a rien à montrer.
+  var isEmpty: Bool {
+    senderName.trimmingCharacters(in: .whitespaces).isEmpty
+      && text.trimmingCharacters(in: .whitespaces).isEmpty
+  }
+
+  /// Retire le repli de citation Matrix : les lignes `> …` puis la ligne vide.
+  /// Sans ça, chaque réponse WhatsApp s'afficherait avec le message d'origine recopié.
+  static func strippingReplyFallback(_ body: String) -> String {
+    var lines = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    guard lines.first?.hasPrefix("> ") == true else { return body }
+    while lines.first?.hasPrefix("> ") == true { lines.removeFirst() }
+    while lines.first?.trimmingCharacters(in: .whitespaces).isEmpty == true { lines.removeFirst() }
+    return lines.joined(separator: "\n")
+  }
+}
+
 struct ChatMessage: Identifiable, Hashable, Sendable {
   let id: String
   let conversationID: String
@@ -84,6 +109,8 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
   var attachments: [MessageAttachment]
   /// Réactions reçues sur ce message, déjà agrégées par emoji.
   var reactions: [MessageReaction]
+  /// Message auquel celui-ci répond, si c'en est une.
+  var replyTo: QuotedMessage?
 
   init(
     id: String,
@@ -95,7 +122,8 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     senderID: String? = nil,
     isPending: Bool = false,
     attachments: [MessageAttachment] = [],
-    reactions: [MessageReaction] = []
+    reactions: [MessageReaction] = [],
+    replyTo: QuotedMessage? = nil
   ) {
     self.id = id
     self.conversationID = conversationID
@@ -107,6 +135,7 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     self.isPending = isPending
     self.attachments = attachments
     self.reactions = reactions
+    self.replyTo = replyTo
   }
 
   var sidebarPreviewText: String {

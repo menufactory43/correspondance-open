@@ -189,7 +189,13 @@ actor MatrixBridgeService {
 
   // MARK: - Envoi
 
-  func send(conversationID: String, text: String, attachmentPaths: [String], localID: String) async throws {
+  func send(
+    conversationID: String,
+    text: String,
+    attachmentPaths: [String],
+    localID: String,
+    replyToMessageID: String? = nil
+  ) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
@@ -204,7 +210,14 @@ actor MatrixBridgeService {
       )
     }
     if !text.isEmpty {
-      try await client.sendText(roomID: roomID, body: text, transactionID: txnID)
+      let quoted = replyToMessageID.flatMap { rooms[roomID]?.messagesByID[$0] }
+      try await client.sendText(
+        roomID: roomID,
+        body: text,
+        replyToEventID: replyToMessageID,
+        replyFallback: quoted.map { (sender: $0.senderID ?? selfUserID, text: $0.sidebarPreviewText) },
+        transactionID: txnID
+      )
     }
   }
 

@@ -15,12 +15,14 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("n", modifiers: [.command])
 
+      // ⌘R appartient à « Répondre en citant » (comme Beeper) : l'actualisation
+      // manuelle, rare depuis que les trois réseaux syncent tout seuls, passe en ⌘⇧R.
       Button("Actualiser l’inbox") {
         Task { @MainActor in
           await store.refresh()
         }
       }
-      .keyboardShortcut("r", modifiers: [.command])
+      .keyboardShortcut("r", modifiers: [.command, .shift])
     }
 
     CommandMenu("Inbox") {
@@ -38,10 +40,16 @@ struct CorrespondanceCommands: Commands {
 
       Divider()
 
+      Button("Répondre en citant") {
+        store.replyToSelectedMessage()
+      }
+      .keyboardShortcut("r", modifiers: [.command])
+
+      // ⌘⇧R est pris par l'actualisation : le « quick react » de Beeper passe en ⌘⌥R.
       Button("Réagir 👍") {
         Task { @MainActor in await store.quickReactToSelectedMessage() }
       }
-      .keyboardShortcut("r", modifiers: [.command, .shift])
+      .keyboardShortcut("r", modifiers: [.command, .option])
 
       Button("Rechercher dans le fil") {
         store.toggleThreadSearch()
