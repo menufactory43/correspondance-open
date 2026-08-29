@@ -5,6 +5,11 @@ struct CorrespondanceCommands: Commands {
 
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
+      Button("Nouvelle conversation") {
+        store.presentNewConversation()
+      }
+      .keyboardShortcut("n", modifiers: [.command])
+
       Button("Actualiser l’inbox") {
         Task { @MainActor in
           await store.refresh()

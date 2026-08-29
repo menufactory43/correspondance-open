@@ -11,6 +11,7 @@
 		008F0335DF322F07E1AAC636 /* IMessageConversationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */; };
 		04796917C093653EA2BEC5AC /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29785E397E832EDCE2150AC /* Theme.swift */; };
 		05CA4EB313BD72270FA81E71 /* InboxMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 445D3B44D6F503508070D241 /* InboxMode.swift */; };
+		14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 225E93B93CBA37AE52390551 /* NewConversationSheet.swift */; };
 		2084E9571D670203C4BC5118 /* ContactsPermissionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */; };
 		24C149E00176D210AC30D511 /* MessageNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF503338243AC9298D7EF4B4 /* MessageNetwork.swift */; };
 		31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C41963F5AA875508D844FF1 /* IMessageSender.swift */; };
@@ -38,10 +39,12 @@
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
 		DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */; };
 		EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B758EF0696E62CAE3AD887FF /* SettingsView.swift */; };
+		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
 		F53476CF874BDBEE84CB1E91 /* ContactDirectoryDisk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873ABAD6A5B9F61135B01377 /* ContactDirectoryDisk.swift */; };
 		F914B746732291C118D874F4 /* SignalConversationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC91D9CDB44F433194BD0458 /* SignalConversationCache.swift */; };
+		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
 /* End PBXBuildFile section */
 
@@ -60,7 +63,9 @@
 		14C444A549BA3C7D7093F38E /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
 		16EE06AF0526360BC841BE21 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
+		225E93B93CBA37AE52390551 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
 		258F2B6AE43BCA594215DA3E /* Correspondance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Correspondance.entitlements; sourceTree = "<group>"; };
+		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		3796849D6D70116DE246282E /* FocusConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusConversationView.swift; sourceTree = "<group>"; };
 		388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxListPane.swift; sourceTree = "<group>"; };
 		3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceSmokeTests.swift; sourceTree = "<group>"; };
@@ -73,6 +78,7 @@
 		5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceApp.swift; sourceTree = "<group>"; };
 		625768DBC8A0E14E8A2D098D /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingTypeface.swift; sourceTree = "<group>"; };
+		67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDictation.swift; sourceTree = "<group>"; };
 		6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBar.swift; sourceTree = "<group>"; };
 		70003B06F876183A6C85B0DE /* PermissionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionBanner.swift; sourceTree = "<group>"; };
 		73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarStore.swift; sourceTree = "<group>"; };
@@ -117,6 +123,15 @@
 			path = Editor;
 			sourceTree = "<group>";
 		};
+		5587C74F773C91B534214D11 /* Composer */ = {
+			isa = PBXGroup;
+			children = (
+				2F765AC3695AED34BF7336EE /* ComposerControls.swift */,
+				67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */,
+			);
+			path = Composer;
+			sourceTree = "<group>";
+		};
 		6CFDFAF0F6D7A5D0B208EA53 /* CorrespondanceTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -134,6 +149,7 @@
 				B7EF134955840058275C45E9 /* ConversationRowView.swift */,
 				388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */,
 				EC9204E0947294308F58D53C /* MessageBubbleView.swift */,
+				225E93B93CBA37AE52390551 /* NewConversationSheet.swift */,
 				70003B06F876183A6C85B0DE /* PermissionBanner.swift */,
 				9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */,
 			);
@@ -203,6 +219,7 @@
 		BDF5B0CD8E1B14A77DA01D26 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				5587C74F773C91B534214D11 /* Composer */,
 				274A188A8D259FDEB2EBA0FC /* Editor */,
 				B6A0E8410B55AEC9C67E76B9 /* Focus */,
 				7185301BB697D6D80C250DFF /* Inbox */,
@@ -354,6 +371,8 @@
 			files = (
 				C57C42F7B623ACE2AF159F2E /* ChatMessage.swift in Sources */,
 				B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */,
+				FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */,
+				F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */,
 				716B7107C8A9273931B2FB62 /* ContactDirectory.swift in Sources */,
 				F53476CF874BDBEE84CB1E91 /* ContactDirectoryDisk.swift in Sources */,
 				2084E9571D670203C4BC5118 /* ContactsPermissionBanner.swift in Sources */,
@@ -373,6 +392,7 @@
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,
 				73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */,
 				24C149E00176D210AC30D511 /* MessageNetwork.swift in Sources */,
+				14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */,
 				003EBAD13023436D77C15471 /* PermissionBanner.swift in Sources */,
 				3FDB287BCE157F43106C3209 /* ProcessRunner.swift in Sources */,
 				EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */,

@@ -83,7 +83,10 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         ATSApplicationFontsPath: Fonts
+        NSAppleEventsUsageDescription: Correspondance envoie tes iMessages via l’app Messages (automatisation).
         NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
+        NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages.
+        NSSpeechRecognitionUsageDescription: Correspondance convertit votre dictée en texte dans le composer.
   CorrespondanceTests:
     type: bundle.unit-test
     platform: macOS

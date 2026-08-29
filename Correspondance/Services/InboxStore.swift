@@ -34,6 +34,8 @@ final class InboxStore {
   var contactsStatusFR: String = "…"
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
+  var messagesAutomationStatusFR = "…"
+  var isPresentingNewConversation = false
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
@@ -184,8 +186,63 @@ final class InboxStore {
   func start() async {
     // Demande Contacts tout de suite (sinon l’app n’apparaît pas dans Confidentialité).
     await requestContactsPermission()
+    requestMessagesAutomation()
     await load()
     startLiveSync()
+  }
+
+  /// Boîte macOS « Correspondance souhaite contrôler Messages » (comme Beeper).
+  @discardableResult
+  func requestMessagesAutomation() -> Bool {
+    let ok = iMessageSender.requestAutomationAccess()
+    messagesAutomationStatusFR = ok
+      ? "Messages : automatisation autorisée."
+      : "Messages : autorise Correspondance dans Confidentialité → Automatisation."
+    return ok
+  }
+
+  func openAutomationPrivacySettings() {
+    let urls = [
+      "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation",
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+    ]
+    for raw in urls {
+      if let url = URL(string: raw) {
+        NSWorkspace.shared.open(url)
+        return
+      }
+    }
+  }
+
+  func presentNewConversation() {
+    isPresentingNewConversation = true
+  }
+
+  func openOrCreateConversation(network: MessageNetwork, handle: String, title: String) async {
+    let trimmed = handle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+
+    if let existing = conversations.first(where: { Self.matchesHandle($0, network: network, handle: trimmed) }) {
+      mode = .inbox
+      await select(existing.id)
+      return
+    }
+
+    let conversation = Conversation(
+      id: "\(network.rawValue):compose:\(trimmed.lowercased())",
+      network: network,
+      address: trimmed,
+      title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? trimmed : title,
+      preview: "Nouvelle conversation",
+      lastMessageAt: Date(),
+      unreadCount: 0,
+      isArchived: false,
+      transportKey: trimmed,
+      isGroup: false
+    )
+    conversations.insert(conversation, at: 0)
+    mode = .inbox
+    await select(conversation.id)
   }
 
   /// Déclenche la boîte système Contacts. À rappeler depuis Réglages / bannière.
@@ -395,6 +452,14 @@ final class InboxStore {
     if usingDemoData && conversation.network == .iMessage {
       lastErrorMessage = "Données démo — accorde l’accès disque pour envoyer via Messages."
       return
+    }
+    if conversation.network == .iMessage, !iMessageSender.automationAuthorized() {
+      let granted = requestMessagesAutomation()
+      if !granted {
+        lastErrorMessage = IMessageSendError.automationDenied.localizedDescription
+        openAutomationPrivacySettings()
+        return
+      }
     }
 
     if conversation.network == .iMessage, !attachments.isEmpty {
@@ -613,6 +678,8 @@ final class InboxStore {
       merged.append(contentsOf: previousSignal)
     }
 
+    preserveComposing(into: &merged)
+
     let keepSelection = selectedConversationID
     conversations = merged.sorted(by: { sortForInbox($0, $1) })
     if keepSelection == nil
@@ -674,6 +741,8 @@ final class InboxStore {
         signalStatusFR += " (cache local · \(previousSignal.filter(\.isGroup).count) groupes)"
       }
     }
+
+    preserveComposing(into: &next)
 
     let selection = selectedConversationID
     conversations = next.sorted(by: { sortForInbox($0, $1) })
@@ -821,6 +890,33 @@ final class InboxStore {
     updated.preview = last.sidebarPreviewText
     updated.lastMessageAt = last.sentAt
     conversations[idx] = updated
+  }
+
+  /// Une conv. ouverte au composeur ne doit pas disparaître au refresh.
+  private func preserveComposing(into merged: inout [Conversation]) {
+    let drafts = conversations.filter { $0.id.contains(":compose:") }
+    for draft in drafts {
+      if merged.contains(where: { Self.matchesHandle($0, network: draft.network, handle: draft.address) }) {
+        continue
+      }
+      merged.append(draft)
+    }
+  }
+
+  private static func matchesHandle(_ conversation: Conversation, network: MessageNetwork, handle: String) -> Bool {
+    guard conversation.network == network else { return false }
+    let needle = normalizeHandle(handle)
+    if normalizeHandle(conversation.address) == needle { return true }
+    return conversation.transportKey
+      .split(separator: ",")
+      .map { normalizeHandle(String($0)) }
+      .contains(needle)
+  }
+
+  private static func normalizeHandle(_ raw: String) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if trimmed.contains("@") { return trimmed }
+    return trimmed.filter(\.isNumber)
   }
 
   private func persistFlags() {

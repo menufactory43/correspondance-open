@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 struct ComposerBar: View {
@@ -10,70 +9,111 @@ struct ComposerBar: View {
   var onSend: () -> Void
 
   @Environment(ThemePreferences.self) private var themes
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @FocusState private var isFocused: Bool
+  @State private var dictation = ComposerDictationController()
 
   private var canSend: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
   }
 
+  private var trailingAction: ComposerTrailingAction {
+    .resolve(canSend: canSend, isListening: dictation.isListening)
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       if !attachmentPaths.isEmpty {
-        ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 8) {
-            ForEach(Array(attachmentPaths.enumerated()), id: \.offset) { index, path in
-              ZStack(alignment: .topTrailing) {
-                if let img = NSImage(contentsOfFile: path) {
-                  Image(nsImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                } else {
-                  Image(systemName: "doc")
-                    .frame(width: 64, height: 64)
-                    .background(theme.paperSecondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                Button {
-                  attachmentPaths.remove(at: index)
-                } label: {
-                  Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.white, .black.opacity(0.55))
-                }
-                .buttonStyle(.plain)
-                .offset(x: 4, y: -4)
-              }
-            }
-          }
-          .padding(.horizontal, Spacing.md)
-        }
+        ComposerAttachmentStrip(
+          paths: $attachmentPaths,
+          theme: theme,
+          horizontalPadding: Spacing.md
+        )
+        .padding(.top, 8)
       }
 
-      HStack(alignment: .bottom, spacing: Spacing.sm) {
-        SoftToolButton(systemImage: "photo", helpText: "Joindre une image") {
-          onAttach()
-        }
+      HStack(alignment: .bottom, spacing: 8) {
+        ComposerCircleButton(
+          systemImage: "plus.circle",
+          helpText: "Joindre une image",
+          theme: theme,
+          iconSize: 28,
+          symbolFillsControl: true,
+          action: onAttach
+        )
+        .padding(.bottom, 2)
 
-        TextField("Écrire une réponse…", text: $text, axis: .vertical)
-          .textFieldStyle(.plain)
-          .font(Typography.composer(themes.typeface))
-          .foregroundStyle(theme.ink)
-          .lineLimit(1...6)
-          .padding(.horizontal, 12)
-          .padding(.vertical, 10)
-          .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-        SoftToolButton(
-          systemImage: "arrow.up.circle.fill",
-          helpText: "Envoyer",
-          isEmphasized: true,
-          isDisabled: !canSend || isSending
-        ) {
-          onSend()
-        }
+        bubble
       }
       .padding(.horizontal, Spacing.md)
-      .padding(.vertical, Spacing.sm)
+      .padding(.top, 8)
+      .padding(.bottom, 10)
     }
+    .onDisappear { dictation.stop() }
+  }
+
+  private var bubble: some View {
+    HStack(alignment: .bottom, spacing: 6) {
+      TextField(
+        "",
+        text: $text,
+        prompt: Text("Message").foregroundStyle(theme.inkTertiary),
+        axis: .vertical
+      )
+      .textFieldStyle(.plain)
+      .font(Typography.composer(themes.typeface))
+      .foregroundStyle(theme.ink)
+      .lineLimit(1...6)
+      .focused($isFocused)
+      .focusEffectDisabled()
+      .padding(.leading, 2)
+      .padding(.vertical, 4)
+      .onKeyPress(.return) {
+        if NSEvent.modifierFlags.contains(.shift) { return .ignored }
+        guard canSend, !isSending else { return .handled }
+        send()
+        return .handled
+      }
+
+      ComposerTrailingControl(
+        action: trailingAction,
+        theme: theme,
+        isSending: isSending,
+        canSend: canSend,
+        isListening: dictation.isListening,
+        onSend: send,
+        onDictate: startOrStopDictation
+      )
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: trailingAction)
+    }
+    .padding(.leading, 12)
+    .padding(.trailing, 4)
+    .padding(.vertical, 4)
+    .frame(minHeight: ComposerMetrics.bubbleMinHeight)
+    .background(bubbleBackground)
+  }
+
+  private var bubbleBackground: some View {
+    RoundedRectangle(cornerRadius: ComposerMetrics.bubbleCorner, style: .continuous)
+      .fill(theme.paperSecondary)
+      .overlay(
+        RoundedRectangle(cornerRadius: ComposerMetrics.bubbleCorner, style: .continuous)
+          .strokeBorder(
+            dictation.isListening
+              ? theme.accent.opacity(0.45)
+              : (isFocused ? theme.accent.opacity(0.28) : theme.edge.opacity(0.75)),
+            lineWidth: 1
+          )
+      )
+  }
+
+  private func send() {
+    dictation.stop()
+    onSend()
+  }
+
+  private func startOrStopDictation() {
+    isFocused = true
+    Task { await dictation.toggle(currentText: text) { text = $0 } }
   }
 }

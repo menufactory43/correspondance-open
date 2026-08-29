@@ -5,6 +5,7 @@ struct ThreadView: View {
 
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @State private var isShowingThread = false
 
   private var theme: WritingTheme { themes.theme }
 
@@ -21,7 +22,6 @@ struct ThreadView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         messages
-        Divider().overlay(theme.edge.opacity(0.6))
         ComposerBar(
           text: Bindable(store).draftText,
           attachmentPaths: Bindable(store).pendingAttachmentPaths,
@@ -77,18 +77,29 @@ struct ThreadView: View {
         }
         .padding(Spacing.md)
       }
+      .defaultScrollAnchor(.bottom)
+      .opacity(isShowingThread ? 1 : 0)
+      .onAppear { pinToBottom(proxy) }
       .onChange(of: store.messages.count) { _, _ in
-        if let last = store.messages.last?.id {
-          withAnimation(.easeOut(duration: 0.2)) {
-            proxy.scrollTo(last, anchor: .bottom)
-          }
-        }
+        pinToBottom(proxy)
       }
       .onChange(of: store.selectedConversationID) { _, _ in
-        if let last = store.messages.last?.id {
-          proxy.scrollTo(last, anchor: .bottom)
-        }
+        isShowingThread = false
+        pinToBottom(proxy)
       }
+    }
+  }
+
+  private func pinToBottom(_ proxy: ScrollViewProxy) {
+    let target = store.messages.last?.id
+    if let target {
+      proxy.scrollTo(target, anchor: .bottom)
+    }
+    DispatchQueue.main.async {
+      if let id = store.messages.last?.id {
+        proxy.scrollTo(id, anchor: .bottom)
+      }
+      isShowingThread = true
     }
   }
 }

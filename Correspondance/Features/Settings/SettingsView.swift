@@ -31,6 +31,13 @@ struct SettingsView: View {
             .frame(maxWidth: 320, alignment: .trailing)
         }
 
+        LabeledContent("Messages") {
+          Text(store.messagesAutomationStatusFR)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: 320, alignment: .trailing)
+        }
+
         Text("Lier Signal (terminal) :\nsignal-cli link -n Correspondance\nPuis scanne le QR avec Signal → Appareils liés.")
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -38,6 +45,11 @@ struct SettingsView: View {
 
         Button("Autoriser Contacts…") {
           Task { await store.requestContactsPermission() }
+        }
+
+        Button("Autoriser Messages (Automatisation)…") {
+          let ok = store.requestMessagesAutomation()
+          if !ok { store.openAutomationPrivacySettings() }
         }
 
         Button("Ouvrir Confidentialité → Accès disque") {
@@ -50,6 +62,10 @@ struct SettingsView: View {
           if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts") {
             NSWorkspace.shared.open(url)
           }
+        }
+
+        Button("Ouvrir Confidentialité → Automatisation") {
+          store.openAutomationPrivacySettings()
         }
 
         Button("Actualiser les comptes") {

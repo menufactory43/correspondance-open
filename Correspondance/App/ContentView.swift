@@ -60,6 +60,11 @@ struct ContentView: View {
         .environment(themes)
         .frame(minWidth: 540, minHeight: 460)
     }
+    .sheet(isPresented: Bindable(store).isPresentingNewConversation) {
+      NewConversationSheet()
+        .environment(store)
+        .environment(themes)
+    }
     .alert(
       "Une difficulté",
       isPresented: Binding(

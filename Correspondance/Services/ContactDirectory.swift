@@ -85,6 +85,42 @@ actor ContactDirectory {
     return ResolvedContact(name: name, imageData: image)
   }
 
+  struct DirectoryHit: Identifiable, Hashable, Sendable {
+    var name: String
+    var handle: String
+    var id: String { handle }
+  }
+
+  func searchPeople(query: String, limit: Int = 40) async -> [DirectoryHit] {
+    await ensureIndex()
+    let needle = query
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    var unique: [String: DirectoryHit] = [:]
+    for (handle, name) in nameByKey {
+      guard Self.isCanonicalHandle(handle) else { continue }
+      if !needle.isEmpty {
+        let hay = (name + " " + handle)
+          .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        guard hay.contains(needle) else { continue }
+      }
+      if unique[handle] == nil {
+        unique[handle] = DirectoryHit(name: name, handle: handle)
+      }
+    }
+    return unique.values
+      .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+      .prefix(limit)
+      .map { $0 }
+  }
+
+  private static func isCanonicalHandle(_ handle: String) -> Bool {
+    if handle.contains("@") { return handle.contains(".") }
+    if handle.hasPrefix("+") { return handle.filter(\.isNumber).count >= 10 }
+    let digits = handle.filter(\.isNumber)
+    return digits.count >= 10 && handle.filter { !$0.isNumber && $0 != "+" && !$0.isWhitespace }.isEmpty
+  }
+
   func displayName(forHandle handle: String) async -> String? {
     await resolve(handle: handle).name
   }

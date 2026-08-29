@@ -89,7 +89,13 @@ struct InboxListPane: View {
             .font(Typography.meta)
             .foregroundStyle(theme.accent)
         }
+        SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
+          store.presentNewConversation()
+        }
       } else {
+        SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
+          store.presentNewConversation()
+        }
         Spacer(minLength: 0)
       }
 

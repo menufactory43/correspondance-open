@@ -108,6 +108,10 @@ struct FocusConversationView: View {
         Task { await store.archiveSelected() }
       }
 
+      SoftToolButton(systemImage: "square.and.pencil", helpText: "Nouvelle conversation (⌘N)") {
+        store.presentNewConversation()
+      }
+
       Spacer()
 
       if let conversation = store.selectedConversation {
@@ -129,6 +133,7 @@ private struct FocusTranscriptView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var isShowingThread = false
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
@@ -179,19 +184,29 @@ private struct FocusTranscriptView: View {
         }
         .padding(.bottom, LayoutMetrics.pageBottomInset)
       }
+      .defaultScrollAnchor(.bottom)
       .scrollIndicators(.never)
+      .opacity(isShowingThread ? 1 : 0)
       .overlay {
         MacOverlayScrollerHider()
           .allowsHitTesting(false)
       }
+      .onAppear { pinToBottom(proxy) }
       .onChange(of: store.messages.count) { _, _ in
-        withAnimation(.easeOut(duration: 0.2)) {
-          proxy.scrollTo("draft", anchor: .bottom)
-        }
+        pinToBottom(proxy)
       }
       .onChange(of: store.selectedConversationID) { _, _ in
-        proxy.scrollTo("draft", anchor: .bottom)
+        isShowingThread = false
+        pinToBottom(proxy)
       }
+    }
+  }
+
+  private func pinToBottom(_ proxy: ScrollViewProxy) {
+    proxy.scrollTo("draft", anchor: .bottom)
+    DispatchQueue.main.async {
+      proxy.scrollTo("draft", anchor: .bottom)
+      isShowingThread = true
     }
   }
 

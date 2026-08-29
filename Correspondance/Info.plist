@@ -30,7 +30,13 @@
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Correspondance envoie tes iMessages via l’app Messages (automatisation).</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Correspondance utilise le micro pour dicter vos messages.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Correspondance convertit votre dictée en texte dans le composer.</string>
 </dict>
 </plist>
