@@ -110,7 +110,8 @@ schemes:
         Correspondance: all
     run:
       config: Debug
-    # Les tests unitaires existent (CorrespondanceTests) mais le host
-    # SwiftUI @main + XCTest crée un double NSApplication sur macOS —
-    # à brancher plus tard via un target Framework Core.
+    test:
+      config: Debug
+      targets:
+        - CorrespondanceTests
 
