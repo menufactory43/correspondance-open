@@ -209,10 +209,10 @@ actor MatrixClient {
 
   func upload(data: Data, filename: String, contentType: String) async throws -> String {
     guard let creds = credentials else { throw MatrixError.notConfigured }
-    var components = URLComponents(
-      url: creds.homeserver.appendingPathComponent("/_matrix/media/v3/upload"),
-      resolvingAgainstBaseURL: false
-    )
+    var components = URLComponents(url: creds.homeserver, resolvingAgainstBaseURL: false)
+    var basePath = components?.percentEncodedPath ?? ""
+    while basePath.hasSuffix("/") { basePath.removeLast() }
+    components?.percentEncodedPath = basePath + "/_matrix/media/v3/upload"
     components?.queryItems = [URLQueryItem(name: "filename", value: filename)]
     guard let url = components?.url else { throw MatrixError.invalidHomeserver(creds.homeserver.absoluteString) }
 
@@ -244,7 +244,10 @@ actor MatrixClient {
     var lastError: Error = MatrixError.transport("média indisponible")
     for path in paths {
       do {
-        var req = URLRequest(url: creds.homeserver.appendingPathComponent(path))
+        guard let url = Self.makeURL(base: creds.homeserver, path: path) else {
+          throw MatrixError.invalidHomeserver(creds.homeserver.absoluteString)
+        }
+        var req = URLRequest(url: url)
         req.setValue("Bearer \(creds.accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else {
@@ -313,9 +316,7 @@ actor MatrixClient {
       throw MatrixError.notConfigured
     }
 
-    var components = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)
-    if !query.isEmpty { components?.queryItems = query }
-    guard let url = components?.url else {
+    guard let url = Self.makeURL(base: base, path: path, query: query) else {
       throw MatrixError.invalidHomeserver(base.absoluteString)
     }
 
@@ -363,6 +364,18 @@ actor MatrixClient {
       )
     }
     return data
+  }
+
+  /// Colle un chemin déjà percent-encodé (`escape`) au homeserver **sans** ré-encoder :
+  /// `appendingPathComponent` transformerait `%21` en `%2521` et Synapse verrait un
+  /// salon `%21…` inexistant (« User not in room »).
+  static func makeURL(base: URL, path: String, query: [URLQueryItem] = []) -> URL? {
+    var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+    var basePath = components?.percentEncodedPath ?? ""
+    while basePath.hasSuffix("/") { basePath.removeLast() }
+    components?.percentEncodedPath = basePath + path
+    if !query.isEmpty { components?.queryItems = query }
+    return components?.url
   }
 
   static func escape(_ value: String) -> String {
