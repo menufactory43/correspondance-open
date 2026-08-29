@@ -59,8 +59,15 @@ struct ThreadView: View {
   private var messageGroups: [MessageGroup] {
     MessageGrouping.groups(
       for: store.messages,
-      showsSenderNames: store.selectedConversation?.isGroup == true
+      showsSenderNames: store.selectedConversation?.isGroup == true,
+      // Fil fusionné : le séparateur d'heure dit sur quel réseau on repart.
+      showsNetworkOrigin: isMergedThread
     )
+  }
+
+  private var isMergedThread: Bool {
+    guard let id = store.selectedConversationID else { return false }
+    return store.isMerged(id)
   }
 
   private var messages: some View {
@@ -69,7 +76,12 @@ struct ThreadView: View {
         LazyVStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
           ForEach(messageGroups) { group in
             if let stamp = group.timeSeparator {
-              ThreadTimeSeparator(date: stamp, theme: theme, typeface: themes.typeface)
+              ThreadTimeSeparator(
+                date: stamp,
+                network: group.networkOrigin,
+                theme: theme,
+                typeface: themes.typeface
+              )
             }
             VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
               if let label = group.senderLabel {
@@ -202,17 +214,31 @@ enum ThreadMetrics {
 /// lorsque la conversation a repris après un silence, jamais sous chaque bulle.
 struct ThreadTimeSeparator: View {
   let date: Date
+  /// Sur un fil fusionné : le réseau d'où repart la suite (« 15:48 · iMessage »).
+  var network: MessageNetwork?
   let theme: WritingTheme
   let typeface: WritingTypeface
 
   var body: some View {
-    Text(label)
-      .font(Typography.meta(typeface))
-      .foregroundStyle(theme.inkTertiary)
-      .frame(maxWidth: .infinity)
-      .padding(.top, Spacing.xs)
-      .padding(.bottom, Spacing.xxs)
-      .accessibilityLabel("Reprise de la conversation, \(label)")
+    HStack(spacing: 4) {
+      Text(label)
+      if let network {
+        Text("·")
+        Image(systemName: network.systemImage)
+          .font(.system(size: 9, weight: .semibold))
+        Text(network.labelFR)
+      }
+    }
+    .font(Typography.meta(typeface))
+    .foregroundStyle(theme.inkTertiary)
+    .frame(maxWidth: .infinity)
+    .padding(.top, Spacing.xs)
+    .padding(.bottom, Spacing.xxs)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(
+      network.map { "Reprise de la conversation sur \($0.labelFR), \(label)" }
+        ?? "Reprise de la conversation, \(label)"
+    )
   }
 
   /// Aujourd'hui : l'heure suffit. Plus loin : il faut aussi le jour, sinon

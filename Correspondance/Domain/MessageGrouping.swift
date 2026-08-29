@@ -10,9 +10,16 @@ struct MessageGroup: Identifiable, Equatable, Sendable {
   /// Horodatage à poser en séparateur AVANT le groupe. `nil` quand la
   /// conversation n'a pas assez respiré pour qu'on la redate.
   var timeSeparator: Date?
+  /// Réseau d'où viennent ces bulles. Un groupe n'en mêle jamais deux.
+  var network: MessageNetwork?
+  /// Annoncer l'origine sur le séparateur (« 15:48 · iMessage »). Vrai au
+  /// premier groupe d'un fil fusionné, et à chaque fois qu'on change de réseau.
+  var showsNetworkOrigin: Bool = false
 
   var id: String { messages.first?.id ?? "" }
   var isFromMe: Bool { messages.first?.isFromMe ?? false }
+  /// Le réseau à écrire dans le séparateur, s'il y a lieu de l'écrire.
+  var networkOrigin: MessageNetwork? { showsNetworkOrigin ? network : nil }
 }
 
 /// Le découpage du fil en groupes — fonction pure, testée, sans SwiftUI.
@@ -27,7 +34,13 @@ enum MessageGrouping {
 
   /// - Parameter showsSenderNames: vrai en groupe, faux en tête-à-tête — où
   ///   nommer l'auteur à chaque prise de parole n'apprend rien.
-  static func groups(for messages: [ChatMessage], showsSenderNames: Bool) -> [MessageGroup] {
+  /// - Parameter showsNetworkOrigin: vrai sur un fil fusionné, où deux réseaux
+  ///   se succèdent : le séparateur d'heure dit alors d'où vient la suite.
+  static func groups(
+    for messages: [ChatMessage],
+    showsSenderNames: Bool,
+    showsNetworkOrigin: Bool = false
+  ) -> [MessageGroup] {
     var groups: [MessageGroup] = []
 
     for message in messages {
@@ -36,19 +49,27 @@ enum MessageGrouping {
       let changedAuthor = previous.map {
         $0.isFromMe != message.isFromMe || authorKey($0) != authorKey(message)
       } ?? true
+      // Deux réseaux ne se serrent jamais dans la même bulle : la même personne
+      // sur iMessage et sur WhatsApp, ce sont deux prises de parole distinctes.
+      let changedNetwork = previous.map { $0.network != message.network } ?? true
 
       // Un événement de conversation (« X a ajouté Y ») ne se groupe avec rien :
       // il s'écrit seul, en travers du fil, sans nom d'auteur au-dessus.
       let isolated = message.isSystemEvent || previous?.isSystemEvent == true
 
-      if silence || changedAuthor || isolated {
+      if silence || changedAuthor || isolated || changedNetwork {
+        // On n'annonce l'origine qu'au premier groupe et aux bascules — pas à
+        // chaque respiration à l'intérieur d'un même réseau.
+        let marksOrigin = showsNetworkOrigin && changedNetwork
         groups.append(
           MessageGroup(
             messages: [message],
             senderLabel: showsSenderNames && !message.isFromMe && !message.isSystemEvent
               ? label(for: message)
               : nil,
-            timeSeparator: silence ? message.sentAt : nil
+            timeSeparator: silence || marksOrigin ? message.sentAt : nil,
+            network: message.network,
+            showsNetworkOrigin: marksOrigin
           )
         )
       } else {

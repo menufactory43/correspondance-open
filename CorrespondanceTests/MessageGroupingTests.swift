@@ -147,6 +147,58 @@ final class MessageGroupingTests: XCTestCase {
     XCTAssertTrue(MessageGrouping.groups(for: [], showsSenderNames: true).isEmpty)
   }
 
+  // MARK: - Fil fusionné
+
+  /// Deux bulles d'affilée, mais pas du même réseau : deux groupes.
+  private func onNetwork(_ id: String, _ network: MessageNetwork, minutes: Double) -> ChatMessage {
+    ChatMessage(
+      id: id,
+      conversationID: network == .iMessage ? "imessage:1" : "matrix:1",
+      network: network,
+      text: "coucou \(id)",
+      sentAt: origin.addingTimeInterval(minutes * 60),
+      isFromMe: false,
+      senderID: "+33612345678",
+      senderName: "Vince"
+    )
+  }
+
+  func testUnChangementDeReseauCasseLeGroupe() {
+    let groups = MessageGrouping.groups(
+      for: [
+        onNetwork("1", .iMessage, minutes: 0),
+        onNetwork("2", .iMessage, minutes: 1),
+        onNetwork("3", .whatsapp, minutes: 2),
+      ],
+      showsSenderNames: false
+    )
+
+    XCTAssertEqual(groups.count, 2)
+    XCTAssertEqual(groups[0].messages.map(\.id), ["1", "2"])
+    XCTAssertEqual(groups[0].network, .iMessage)
+    XCTAssertEqual(groups[1].network, .whatsapp)
+  }
+
+  func testLOrigineNeSAnnonceQuAuxBascules() {
+    let messages = [
+      onNetwork("1", .iMessage, minutes: 0),
+      onNetwork("2", .iMessage, minutes: 30),
+      onNetwork("3", .whatsapp, minutes: 31),
+    ]
+
+    let merged = MessageGrouping.groups(for: messages, showsSenderNames: false, showsNetworkOrigin: true)
+    XCTAssertEqual(merged.map(\.showsNetworkOrigin), [true, false, true])
+    XCTAssertEqual(merged.map(\.networkOrigin), [.iMessage, nil, .whatsapp])
+    // Une bascule redate même sans silence : sans ça, l'origine n'aurait nulle
+    // part où s'écrire.
+    XCTAssertNotNil(merged[2].timeSeparator)
+
+    // Fil ordinaire : personne n'annonce rien.
+    let plain = MessageGrouping.groups(for: messages, showsSenderNames: false)
+    XCTAssertEqual(plain.map(\.showsNetworkOrigin), [false, false, false])
+    XCTAssertNil(plain[2].networkOrigin)
+  }
+
   func testLIdentifiantDuGroupeEstCeluiDeSonPremierMessage() {
     let groups = MessageGrouping.groups(
       for: [message("1", "a", minutes: 0), message("2", "b", minutes: 1)],

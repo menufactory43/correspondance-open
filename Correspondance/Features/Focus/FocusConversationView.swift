@@ -78,6 +78,13 @@ private struct FocusTranscriptView: View {
         LazyVStack(alignment: .leading, spacing: Spacing.md) {
           ForEach(messageGroups) { group in
             VStack(alignment: .leading, spacing: 6) {
+              // Fil fusionné : la page dit d'où repart la suite, une fois par
+              // bascule de réseau — jamais plus.
+              if let origin = group.networkOrigin {
+                Label(origin.labelFR, systemImage: origin.systemImage)
+                  .font(Typography.toolbarPhrase(themes.typeface))
+                  .foregroundStyle(theme.inkTertiary)
+              }
               // Une page ne réannonce pas son locuteur à chaque phrase : un
               // libellé par prise de parole, et rien du tout en tête-à-tête.
               if let label = focusLabel(for: group) {
@@ -196,7 +203,16 @@ private struct FocusTranscriptView: View {
   private var isGroup: Bool { store.selectedConversation?.isGroup == true }
 
   private var messageGroups: [MessageGroup] {
-    MessageGrouping.groups(for: store.messages, showsSenderNames: isGroup)
+    MessageGrouping.groups(
+      for: store.messages,
+      showsSenderNames: isGroup,
+      showsNetworkOrigin: isMergedThread
+    )
+  }
+
+  private var isMergedThread: Bool {
+    guard let id = store.selectedConversationID else { return false }
+    return store.isMerged(id)
   }
 
   /// En groupe, chaque prise de parole s'annonce une fois ; en tête-à-tête, la
