@@ -126,7 +126,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Sync temps réel | WebSocket local `ws://localhost:23373/v1/ws` : `chat.upserted`, `message.upserted`, `message.deleted` (developers.beeper.com/desktop-api/websocket-experimental) | **Partiel** : Matrix en long-poll `/sync` 30 s avec backoff 2→60 s (`startMatrixSync`) ; Signal en polling 10 s (`pollSignalOnce`) ; **iMessage sans temps réel** — lecture uniquement à `load()`/`refresh()`, aucun FSEvents sur chat.db | M | **P0** (iMessage est le réseau n°1 du dogfood) |
+| Sync temps réel | WebSocket local `ws://localhost:23373/v1/ws` : `chat.upserted`, `message.upserted`, `message.deleted` (developers.beeper.com/desktop-api/websocket-experimental) | **Fait sur les trois réseaux** : Matrix en long-poll `/sync` 30 s avec backoff 2→60 s ; Signal en polling 10 s ; **iMessage par `Services/IMessageWatcher.swift`** — `DispatchSource` sur `chat.db-wal`, debounce 500 ms, rafraîchissement incrémental (conversations iMessage + fil ouvert, sans toucher aux autres réseaux). Le point de contrôle SQLite qui recrée le WAL est géré par un ré-armement | — | — |
 | Cache disque / démarrage instantané | `Storage by Chat`, `Clear storage older than` | **Fait** : `hydrateFromDiskCache()` sur 4 caches JSON (`imessage-`, `signal-`, `matrix-conversations.json`, `contacts-index.json`) | — | — |
 | Hors-ligne | `Offline`, `Queued` | **Partiel** : lecture hors-ligne OK, **envoi sans file d'attente** (échec immédiat, texte restauré) | M | P1 |
 | Export | `Export all loaded messages to .txt file` | **Absent** | S | P2 |

@@ -52,6 +52,7 @@
 		A115DEED0F22CA051301CA3D /* ConversationTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E28BD58F9681C394ECC6E76 /* ConversationTitleTests.swift */; };
 		A1623A6B1884B563A84216CC /* MatrixRoomModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6D8CF46418259CE1F7458E /* MatrixRoomModel.swift */; };
 		A3EB2437D379451E47247B37 /* MatrixTransactionLedgerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */; };
+		A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */; };
 		A9DACCFAB7B9CA3F0400BDBE /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625768DBC8A0E14E8A2D098D /* Spacing.swift */; };
 		ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB68DB666AD5741B836D9D65 /* Typography.swift */; };
 		B15011E6BAE0518CF597D735 /* WhatsAppLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */; };
@@ -70,6 +71,7 @@
 		DCF0104A7F5C0B8B7C4B310C /* MatrixSyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138212902ED48F144DFA0511 /* MatrixSyncModels.swift */; };
 		E43F7F490F35FB679E964BB2 /* MatrixError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E2089D4CA3878C9CAC6892 /* MatrixError.swift */; };
 		EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B758EF0696E62CAE3AD887FF /* SettingsView.swift */; };
+		EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */; };
 		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
@@ -101,6 +103,7 @@
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
 		1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeService.swift; sourceTree = "<group>"; };
 		225E93B93CBA37AE52390551 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
+		23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageWatcherTests.swift; sourceTree = "<group>"; };
 		258F2B6AE43BCA594215DA3E /* Correspondance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Correspondance.entitlements; sourceTree = "<group>"; };
 		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		31F7A73102F13A76EF33CAD9 /* MatrixTransactionLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixTransactionLedger.swift; sourceTree = "<group>"; };
@@ -140,6 +143,7 @@
 		A3023A9F526F195791DE5AF5 /* MatrixCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixCredentials.swift; sourceTree = "<group>"; };
 		A76851FF7793F1D948CC6D49 /* MatrixSyncParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixSyncParser.swift; sourceTree = "<group>"; };
 		AB68DB666AD5741B836D9D65 /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageWatcher.swift; sourceTree = "<group>"; };
 		B4E2089D4CA3878C9CAC6892 /* MatrixError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixError.swift; sourceTree = "<group>"; };
 		B6647DD0CC086B1DA3F2A0C7 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
 		B758EF0696E62CAE3AD887FF /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -235,6 +239,7 @@
 				6E28BD58F9681C394ECC6E76 /* ConversationTitleTests.swift */,
 				3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */,
 				B6647DD0CC086B1DA3F2A0C7 /* DraftStoreTests.swift */,
+				23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */,
 				3725D6114DB7A83300EF89D5 /* MatrixSyncParserTests.swift */,
 				3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */,
 				6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */,
@@ -348,6 +353,7 @@
 				4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */,
 				9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */,
 				9C41963F5AA875508D844FF1 /* IMessageSender.swift */,
+				AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */,
 				16EE06AF0526360BC841BE21 /* InboxStore.swift */,
 				76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */,
 				7A8318D812881F5319CCFB34 /* ProcessRunner.swift */,
@@ -490,6 +496,7 @@
 				A115DEED0F22CA051301CA3D /* ConversationTitleTests.swift in Sources */,
 				B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */,
 				48EEC6CF71BE4E21E2025571 /* DraftStoreTests.swift in Sources */,
+				A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */,
 				197A14DC76960829F24066DE /* MatrixSyncParserTests.swift in Sources */,
 				A3EB2437D379451E47247B37 /* MatrixTransactionLedgerTests.swift in Sources */,
 				CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */,
@@ -526,6 +533,7 @@
 				008F0335DF322F07E1AAC636 /* IMessageConversationCache.swift in Sources */,
 				DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */,
 				31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */,
+				EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */,
 				7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */,
 				05CA4EB313BD72270FA81E71 /* InboxMode.swift in Sources */,
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,

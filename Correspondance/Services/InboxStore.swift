@@ -94,6 +94,8 @@ final class InboxStore {
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
   private var matrixSyncTask: Task<Void, Never>?
   private var whatsAppLoginTask: Task<Void, Never>?
+  /// Temps réel iMessage : `chat.db-wal` surveillé plutôt qu'interrogé.
+  private let iMessageWatcher = IMessageWatcher()
   /// Dernier `lastMessageAt` déjà notifié, par conversation — évite de re-sonner
   /// pour un fil qu'un simple refresh a fait remonter sans nouveau message.
   private var lastNotifiedAt: [String: Date] = [:]
@@ -312,6 +314,61 @@ final class InboxStore {
     primeNotifications()
     startLiveSync()
     startMatrixSync()
+    startIMessageWatch()
+  }
+
+  // MARK: - Temps réel iMessage
+
+  /// Messages écrit dans le journal WAL de chat.db à chaque message : on y réagit
+  /// plutôt que d'attendre un ⌘⇧R. Sans accès disque, le statut le dit.
+  func startIMessageWatch() {
+    let armed = iMessageWatcher.start { [weak self] in
+      await self?.refreshIMessageIncrementally()
+    }
+    if !armed, !usingDemoData {
+      iMessageStatusFR += " (temps réel indisponible — vérifie l’accès disque)"
+    }
+  }
+
+  func stopIMessageWatch() {
+    iMessageWatcher.stop()
+  }
+
+  /// Relecture ciblée de chat.db : les conversations iMessage et, si c'en est une,
+  /// le fil ouvert. Ne touche ni à Signal ni à Matrix, qui ont leurs propres boucles.
+  private func refreshIMessageIncrementally() async {
+    guard !isLoading, !usingDemoData else { return }
+    guard case .success(let fresh) = await loadIMessageOffMain() else { return }
+
+    var byID = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+    var enriched = fresh
+    ContactDirectoryDisk.enrichIMessageTitles(&enriched)
+
+    for incoming in enriched {
+      if var existing = byID[incoming.id] {
+        // Le titre déjà résolu par Contacts vaut mieux qu'un handle brut.
+        existing.preview = incoming.preview
+        existing.lastMessageAt = max(existing.lastMessageAt, incoming.lastMessageAt)
+        existing.lastDelivery = incoming.lastDelivery
+        existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
+        existing.preferTitle(incoming.title)
+        byID[incoming.id] = existing
+      } else {
+        byID[incoming.id] = incoming
+      }
+    }
+
+    conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+    IMessageConversationCache.save(conversations.filter { $0.network == .iMessage })
+
+    if let id = selectedConversationID,
+       conversations.first(where: { $0.id == id })?.network == .iMessage
+    {
+      await loadMessagesForSelection()
+      indexMessages(messages, conversationID: id)
+      refreshThreadSearchMatches()
+      clearUnread(for: id)
+    }
   }
 
   // MARK: - Brouillons
@@ -836,6 +893,7 @@ final class InboxStore {
     liveSyncTask = nil
     matrixSyncTask?.cancel()
     matrixSyncTask = nil
+    iMessageWatcher.stop()
   }
 
   /// Boucle `/sync` Matrix : long-poll côté serveur, donc pas de sleep entre deux passes.
