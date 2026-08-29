@@ -85,9 +85,11 @@ struct ThreadView: View {
         .padding(.bottom, Spacing.md)
       }
       // La pilule flotte : on réserve sa hauteur dans le contenu défilant.
-      .contentMargins(.top, 52, for: .scrollContent)
+      // `contentMargins` s'AJOUTE à la zone sûre de la barre d'outils — inutile
+      // d'y recompter la hauteur du titre.
+      .contentMargins(.top, ThreadMetrics.pillClearance, for: .scrollContent)
       .defaultScrollAnchor(.bottom)
-      .softTopScrollEdge()
+      .overlay(alignment: .top) { TopScrollFade(theme: theme) }
       // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
       // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
       .opacity(isShowingThread ? 1 : 0)
@@ -119,6 +121,39 @@ struct ThreadView: View {
       }
       isShowingThread = true
     }
+  }
+}
+
+enum ThreadMetrics {
+  /// Air réservé au-dessus du premier message : la pilule flottante et sa marge.
+  /// S'ajoute à la zone sûre de la barre d'outils, que le système fournit déjà.
+  static let pillClearance: CGFloat = 44
+  /// Hauteur de la bande où le fil se dissout sous la barre d'outils.
+  static let topFadeHeight: CGFloat = 76
+}
+
+/// Le fil passe SOUS la barre d'outils transparente : sans transition il s'y
+/// coupe net, à mi-bulle. On dissout la bande haute dans le papier — pas de
+/// filet, pas d'arête — comme le fait Messages sous sa barre en verre.
+struct TopScrollFade: View {
+  let theme: WritingTheme
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+  var body: some View {
+    LinearGradient(
+      stops: [
+        .init(color: theme.paper, location: 0),
+        .init(color: theme.paper, location: reduceTransparency ? 0.72 : 0.5),
+        .init(color: theme.paper.opacity(0), location: 1),
+      ],
+      startPoint: .top,
+      endPoint: .bottom
+    )
+    .frame(height: ThreadMetrics.topFadeHeight)
+    .frame(maxWidth: .infinity)
+    .allowsHitTesting(false)
+    .ignoresSafeArea(edges: .top)
+    .accessibilityHidden(true)
   }
 }
 
