@@ -872,6 +872,36 @@ final class InboxStore {
     mutedIDs.remove(mergedID)
     persistFlags()
     await ConversationAvatarStore.shared.invalidate(conversationID: mergedID)
+    // Ce qui visait la ligne réunie doit suivre un fil réel, sinon le brouillon
+    // se perd et l'échéance échoue sur « Conversation introuvable ».
+    let heir = contact.activeMemberID(among: Set(restored.map(\.id)))
+      ?? contact.memberIDs.first
+    if let heir {
+      if let draft = drafts.removeValue(forKey: mergedID), drafts[heir] == nil {
+        drafts[heir] = draft
+      }
+      var rescheduled = false
+      for (index, scheduled) in scheduledMessages.enumerated()
+      where scheduled.conversationID == mergedID {
+        scheduledMessages[index] = ScheduledMessage(
+          id: scheduled.id,
+          conversationID: heir,
+          text: scheduled.text,
+          attachmentPaths: scheduled.attachmentPaths,
+          replyToMessageID: scheduled.replyToMessageID,
+          sendAt: scheduled.sendAt,
+          onlyIfNoReply: scheduled.onlyIfNoReply,
+          createdAt: scheduled.createdAt,
+          lastError: scheduled.lastError
+        )
+        rescheduled = true
+      }
+      if rescheduled { scheduledDidChange() }
+    } else {
+      drafts.removeValue(forKey: mergedID)
+    }
+    persistDraftsNow()
+    disappearingSecondsByID.removeValue(forKey: mergedID)
     conversations = list
     if selectedConversationID == mergedID {
       await select(restored.first?.id ?? activeQueue.first?.id)
