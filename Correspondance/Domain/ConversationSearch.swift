@@ -21,6 +21,9 @@ enum ConversationSearch {
       fold(conversation.title),
       fold(conversation.address),
       fold(conversation.preview),
+      // Les adresses des participants : le numéro d'un fil replié sous une
+      // ligne fusionnée n'apparaît nulle part ailleurs.
+      fold(conversation.participantHandles.joined(separator: " ")),
       messageBlob ?? "",
     ].joined(separator: "\n")
     return terms.allSatisfy { haystack.contains($0) }

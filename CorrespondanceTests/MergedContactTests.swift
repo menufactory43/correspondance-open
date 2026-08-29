@@ -194,6 +194,27 @@ final class MergedContactTests: XCTestCase {
     XCTAssertEqual(MergedContact.apply(to: once, merged: [merged]), once)
   }
 
+  func testLaRechercheRetrouveLaLigneParLAdresseDUnFilReplie() throws {
+    let imessage = conversation("im", network: .iMessage, address: "+33612345678", minutes: 10)
+    let whatsapp = conversation("wa", network: .whatsapp, address: "@whatsapp_33799887766:serveur")
+    let contact = MergedContact(
+      id: "merged:vince",
+      title: "Vince",
+      memberIDs: ["im", "wa"],
+      defaultConversationID: "im"
+    )
+    let row = try XCTUnwrap(contact.row(from: [imessage, whatsapp]))
+    // L'adresse portée par la ligne est celle du chat par défaut…
+    XCTAssertEqual(row.address, "+33612345678")
+    // …mais taper le numéro de l'autre chat la trouve quand même.
+    XCTAssertEqual(
+      ConversationSearch.filter([row], query: "33799887766", index: [:]).map(\.id),
+      ["merged:vince"]
+    )
+    // Et une adresse qu'aucun des deux fils ne porte ne la trouve pas.
+    XCTAssertTrue(ConversationSearch.filter([row], query: "33111111111", index: [:]).isEmpty)
+  }
+
   func testActiveMemberPrefersTheLastUsedChat() {
     var merged = MergedContact(
       title: "Vince", memberIDs: ["imessage:1", "matrix:1"], defaultConversationID: "imessage:1"

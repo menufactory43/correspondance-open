@@ -78,7 +78,10 @@ struct MergedContact: Identifiable, Codable, Hashable, Sendable {
       isGroup: false,
       lastDelivery: newest.lastDelivery,
       lastMessageIsFromMe: newest.lastMessageIsFromMe,
-      participantHandles: members.flatMap(\.participantHandles),
+      // Les adresses des fils réunis entrent dans les participants : c'est par
+      // là que la recherche retrouve la ligne quand on tape le numéro WhatsApp
+      // d'un contact dont la ligne, elle, porte l'adresse iMessage.
+      participantHandles: members.flatMap { [$0.address] + $0.participantHandles },
       groupPhotoPath: nil
     )
   }
