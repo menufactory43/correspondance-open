@@ -64,13 +64,20 @@ actor MatrixBridgeService {
 
   // MARK: - Sync
 
-  /// Hydrate depuis le cache disque — affichage immédiat au démarrage.
-  func hydrateFromCache() -> (conversations: [Conversation], messages: [String: [ChatMessage]]) {
-    guard !didHydrate else { return ([], [:]) }
-    didHydrate = true
-    let (batch, conversations, messages) = MatrixConversationCache.load()
-    nextBatch = batch
-    return (conversations, messages)
+  /// Reprend le curseur `next_batch` du cache et vérifie que la session tient encore.
+  /// `false` = pas de credentials ou token périmé : l'appelant n'ouvre pas de boucle.
+  func restoreCursorAndCheckSession() async -> Bool {
+    if !didHydrate {
+      didHydrate = true
+      nextBatch = MatrixConversationCache.load().nextBatch
+    }
+    guard await client.isConfigured else { return false }
+    do {
+      selfUserID = try await client.whoami()
+      return true
+    } catch {
+      return false
+    }
   }
 
   /// Une passe de `/sync`. Long-poll : renvoie dès qu'il se passe quelque chose.

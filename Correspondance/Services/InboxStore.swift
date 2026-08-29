@@ -31,11 +31,19 @@ final class InboxStore {
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
   var signalStatusFR: String = "…"
+  var matrixStatusFR: String = "…"
   var contactsStatusFR: String = "…"
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
   var messagesAutomationStatusFR = "…"
   var isPresentingNewConversation = false
+  /// Matrix joignable et session valide — conditionne WhatsApp dans l'UI.
+  var isMatrixConnected = false
+  /// Feuille « Connecter WhatsApp ».
+  var isPresentingWhatsAppLogin = false
+  var whatsAppLoginQRData: Data?
+  var whatsAppLoginPairingCode: String?
+  var whatsAppLoginStatusFR = "…"
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
@@ -48,8 +56,12 @@ final class InboxStore {
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
   private let signal = SignalBridge()
+  private let matrix = MatrixBridgeService()
   private var loadTask: Task<Void, Never>?
   private var liveSyncTask: Task<Void, Never>?
+  /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
+  private var matrixSyncTask: Task<Void, Never>?
+  private var whatsAppLoginTask: Task<Void, Never>?
 
   var selectedConversation: Conversation? {
     guard let selectedConversationID else { return nil }
@@ -171,14 +183,27 @@ final class InboxStore {
       signalStatusFR = "Cache · \(signalList.count) fils · \(groups) groupes · \(live) avec messages — sync…"
     }
 
+    // Le cache Matrix est un simple fichier : lisible sans passer par l'actor.
+    let (_, matrixConversations, matrixMessages) = MatrixConversationCache.load()
+    if !matrixConversations.isEmpty {
+      list.append(contentsOf: matrixConversations)
+      matrixStatusFR = "Cache · \(matrixConversations.count) fils WhatsApp — sync…"
+    } else {
+      matrixStatusFR = "Matrix : non connecté."
+    }
+
     guard !list.isEmpty else { return }
 
     conversations = list.sorted(by: { sortForInbox($0, $1) })
     selectedConversationID = inboxRecents.first?.id
       ?? inboxGroups.first?.id
       ?? activeQueue.first?.id
-    if let id = selectedConversationID, let cached = msgs[id], !cached.isEmpty {
-      messages = cached
+    if let id = selectedConversationID {
+      if let cached = msgs[id], !cached.isEmpty {
+        messages = cached
+      } else if let cached = matrixMessages[id], !cached.isEmpty {
+        messages = cached
+      }
     }
   }
 
@@ -189,6 +214,7 @@ final class InboxStore {
     requestMessagesAutomation()
     await load()
     startLiveSync()
+    startMatrixSync()
   }
 
   /// Boîte macOS « Correspondance souhaite contrôler Messages » (comme Beeper).
@@ -218,6 +244,109 @@ final class InboxStore {
     isPresentingNewConversation = true
   }
 
+  // MARK: - Matrix / WhatsApp
+
+  /// Adresse par défaut du homeserver (NUC via Tailscale).
+  static let defaultHomeserver = "http://100.64.0.7:8008"
+
+  func connectMatrix(homeserver: String, user: String, password: String) async {
+    let trimmed = homeserver.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let url = URL(string: trimmed), url.scheme != nil, url.host != nil else {
+      matrixStatusFR = MatrixError.invalidHomeserver(trimmed).localizedDescription
+      return
+    }
+    matrixStatusFR = "Matrix : connexion…"
+    do {
+      let creds = try await matrix.connect(homeserver: url, user: user, password: password)
+      isMatrixConnected = true
+      matrixStatusFR = "Matrix connecté (\(creds.userID))."
+      startMatrixSync()
+    } catch {
+      isMatrixConnected = false
+      matrixStatusFR = error.localizedDescription
+    }
+  }
+
+  func disconnectMatrix() async {
+    matrixSyncTask?.cancel()
+    matrixSyncTask = nil
+    stopWhatsAppLoginPolling()
+    await matrix.disconnect()
+    isMatrixConnected = false
+    conversations.removeAll { $0.network.isMatrixBridged }
+    if let id = selectedConversationID, !conversations.contains(where: { $0.id == id }) {
+      await select(activeQueue.first?.id)
+    }
+    matrixStatusFR = "Matrix : déconnecté."
+  }
+
+  func refreshMatrixStatus() async {
+    matrixStatusFR = await matrix.statusMessageFR()
+    isMatrixConnected = await matrix.isConnected
+  }
+
+  /// Ouvre la feuille QR et lance la commande `login qr` auprès du bot.
+  func presentWhatsAppLogin(phoneNumber: String? = nil) {
+    whatsAppLoginQRData = nil
+    whatsAppLoginPairingCode = nil
+    whatsAppLoginStatusFR = "Demande du QR au bot WhatsApp…"
+    isPresentingWhatsAppLogin = true
+    whatsAppLoginTask?.cancel()
+    whatsAppLoginTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      do {
+        try await self.matrix.startWhatsAppLogin(usingPhoneNumber: phoneNumber)
+      } catch {
+        self.whatsAppLoginStatusFR = error.localizedDescription
+        return
+      }
+      // Le bot répond en quelques secondes ; le QR tourne toutes les ~20 s.
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(3))
+        guard !Task.isCancelled else { return }
+        do {
+          switch try await self.matrix.whatsAppLoginStep() {
+          case .qrCode(let data):
+            self.whatsAppLoginQRData = data
+            self.whatsAppLoginPairingCode = nil
+            self.whatsAppLoginStatusFR = "Scanne ce QR : WhatsApp → Réglages → Appareils liés."
+          case .pairingCode(let code):
+            self.whatsAppLoginPairingCode = code
+            self.whatsAppLoginStatusFR = "Saisis ce code dans WhatsApp → Appareils liés."
+          case .success(let detail):
+            self.whatsAppLoginStatusFR = "WhatsApp connecté. \(detail)"
+            self.startMatrixSync()
+            return
+          case .failure(let detail):
+            self.whatsAppLoginStatusFR = "Échec : \(detail)"
+            return
+          case .waiting:
+            break
+          }
+        } catch {
+          self.whatsAppLoginStatusFR = error.localizedDescription
+          return
+        }
+      }
+    }
+  }
+
+  func stopWhatsAppLoginPolling() {
+    whatsAppLoginTask?.cancel()
+    whatsAppLoginTask = nil
+  }
+
+  /// Nouvelle conversation WhatsApp : commande bot `pm <numéro>`, le salon arrive par /sync.
+  func startWhatsAppConversation(phoneNumber: String) async {
+    do {
+      try await matrix.startWhatsAppConversation(phoneNumber: phoneNumber)
+      matrixStatusFR = "WhatsApp : ouverture du fil vers \(phoneNumber)…"
+      mode = .inbox
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
   func openOrCreateConversation(network: MessageNetwork, handle: String, title: String) async {
     let trimmed = handle.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
@@ -225,6 +354,12 @@ final class InboxStore {
     if let existing = conversations.first(where: { Self.matchesHandle($0, network: network, handle: trimmed) }) {
       mode = .inbox
       await select(existing.id)
+      return
+    }
+
+    // WhatsApp n'a pas de brouillon local : c'est le bridge qui crée le salon.
+    if network.isMatrixBridged {
+      await startWhatsAppConversation(phoneNumber: trimmed)
       return
     }
 
@@ -321,6 +456,40 @@ final class InboxStore {
   func stopLiveSync() {
     liveSyncTask?.cancel()
     liveSyncTask = nil
+    matrixSyncTask?.cancel()
+    matrixSyncTask = nil
+  }
+
+  /// Boucle `/sync` Matrix : long-poll côté serveur, donc pas de sleep entre deux passes.
+  func startMatrixSync() {
+    matrixSyncTask?.cancel()
+    matrixSyncTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      guard await self.matrix.restoreCursorAndCheckSession() else {
+        self.isMatrixConnected = false
+        self.matrixStatusFR = "Matrix : non connecté."
+        return
+      }
+      self.isMatrixConnected = true
+      var backoffSeconds = 2
+      while !Task.isCancelled {
+        do {
+          let updated = try await self.matrix.syncOnce()
+          guard !Task.isCancelled else { return }
+          backoffSeconds = 2
+          self.mergeMatrixConversations(updated)
+          self.matrixStatusFR = "Matrix live · \(updated.count) fils WhatsApp"
+          await self.refreshSelectedMatrixMessages()
+        } catch is CancellationError {
+          return
+        } catch {
+          self.matrixStatusFR = "Matrix : \(error.localizedDescription)"
+          // Coupure réseau ou homeserver au tapis : on ralentit au lieu de marteler.
+          try? await Task.sleep(for: .seconds(backoffSeconds))
+          backoffSeconds = min(backoffSeconds * 2, 60)
+        }
+      }
+    }
   }
 
   func select(_ id: String?) async {
@@ -466,6 +635,10 @@ final class InboxStore {
       lastErrorMessage = "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
       return
     }
+    if conversation.network.isMatrixBridged, !isMatrixConnected {
+      lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      return
+    }
 
     isSending = true
     defer { isSending = false }
@@ -503,6 +676,14 @@ final class InboxStore {
           text: text,
           conversation: conversation,
           attachmentPaths: attachments
+        )
+      case .whatsapp:
+        try await matrix.send(
+          conversationID: conversation.id,
+          text: text,
+          attachmentPaths: attachments,
+          // Le txnId dérive de l'id optimiste : un renvoi ne duplique pas le message.
+          localID: optimistic.id
         )
       }
       if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
@@ -596,6 +777,48 @@ final class InboxStore {
     }
 
     conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+  }
+
+  /// Fusion des fils bridgés — même logique que Signal, sans jamais toucher aux autres réseaux.
+  private func mergeMatrixConversations(_ incomingList: [Conversation]) {
+    guard !incomingList.isEmpty else { return }
+    var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
+
+    for incoming in incomingList {
+      if var existing = byID[incoming.id] {
+        if incoming.hasLivePreview {
+          existing.preview = incoming.preview
+          existing.lastMessageAt = max(existing.lastMessageAt, incoming.lastMessageAt)
+        }
+        existing.preferTitle(incoming.title)
+        existing.isGroup = incoming.isGroup
+        // Le fil ouvert est lu : ne pas y réinstaller un badge.
+        existing.unreadCount = incoming.id == selectedConversationID ? 0 : incoming.unreadCount
+        byID[incoming.id] = existing
+      } else {
+        byID[incoming.id] = incoming
+      }
+    }
+
+    // Un salon quitté côté WhatsApp disparaît de l'inbox.
+    let live = Set(incomingList.map(\.id))
+    for (id, conversation) in byID where conversation.network.isMatrixBridged && !live.contains(id) {
+      byID.removeValue(forKey: id)
+    }
+
+    conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+  }
+
+  private func refreshSelectedMatrixMessages() async {
+    guard let id = selectedConversationID,
+          let conversation = conversations.first(where: { $0.id == id }),
+          conversation.network.isMatrixBridged
+    else { return }
+    let fetched = await matrix.messages(conversationID: id)
+    guard !fetched.isEmpty else { return }
+    messages = await matrix.ensureLocalAttachments(fetched)
+    applySidebarPreview(conversationID: id, from: messages)
+    clearUnread(for: id)
   }
 
   private func clearUnread(for id: String) {
@@ -878,6 +1101,30 @@ final class InboxStore {
           )
         ]
       }
+
+    case .whatsapp:
+      var cached = await matrix.messages(conversationID: conversation.id)
+      if cached.isEmpty {
+        // Fil jamais ouvert : on va chercher l'historique que le bridge a backfillé.
+        cached = await matrix.backfill(conversationID: conversation.id)
+      }
+      if cached.isEmpty {
+        messages = [
+          ChatMessage(
+            id: "matrix-empty-\(conversation.id)",
+            conversationID: conversation.id,
+            network: .whatsapp,
+            text: isMatrixConnected
+              ? "Pas encore de messages ici. Écris ci-dessous."
+              : "Matrix n’est pas connecté — ouvre Réglages → Matrix.",
+            sentAt: Date(),
+            isFromMe: false
+          )
+        ]
+        return
+      }
+      messages = await matrix.ensureLocalAttachments(cached)
+      applySidebarPreview(conversationID: conversation.id, from: messages)
     }
   }
 
@@ -886,6 +1133,7 @@ final class InboxStore {
           let idx = conversations.firstIndex(where: { $0.id == conversationID })
     else { return }
     if last.id.hasPrefix("signal-empty-") || last.id.hasPrefix("signal-sync-") { return }
+    if last.id.hasPrefix("matrix-empty-") { return }
     var updated = conversations[idx]
     updated.preview = last.sidebarPreviewText
     updated.lastMessageAt = last.sentAt
