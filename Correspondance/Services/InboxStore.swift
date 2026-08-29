@@ -1290,10 +1290,19 @@ final class InboxStore {
     guard let idx = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
     var updated = conversations[idx]
     updated.unreadCount = max(1, updated.unreadCount)
-    conversations[idx] = updated
     // Sur une ligne fusionnée, le geste vaut pour chaque fil réuni : c'est le
     // membre iMessage, pas la ligne virtuelle, que Messages sait rouvrir.
     let targets = isMerged(conversationID) ? memberConversations(of: conversationID) : [updated]
+    // Le compteur d'une ligne fusionnée est *recalculé* depuis ses fils : le
+    // poser sur la seule ligne virtuelle, c'est le voir effacé par la passe de
+    // fusion dans la foulée. On le pose donc sur le fil qui a parlé en dernier.
+    if isMerged(conversationID), let newest = targets.first,
+       var cached = mergedMemberCache[newest.id]
+    {
+      cached.unreadCount = max(1, cached.unreadCount)
+      mergedMemberCache[newest.id] = cached
+    }
+    conversations[idx] = updated
     for target in targets where target.network == .iMessage {
       // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
       markUnreadViaAutomation(conversation: target)
@@ -1919,7 +1928,8 @@ final class InboxStore {
     }
 
     for (id, delta) in newMessageDeltas where delta > 0 {
-      guard id != selectedConversationID, var c = byID[id] else { continue }
+      // Le fil ouvert est lu — et un membre replié se lit sous sa ligne fusionnée.
+      guard displayRowID(for: id) != selectedConversationID, var c = byID[id] else { continue }
       c.unreadCount += delta
       byID[id] = c
     }
@@ -1933,6 +1943,9 @@ final class InboxStore {
     var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
 
     for incoming in incomingList {
+      // Le fil ouvert est lu : ne pas y réinstaller un badge. Un membre replié
+      // se lit sous sa ligne fusionnée — c'est elle que la sélection désigne.
+      let isOpen = displayRowID(for: incoming.id) == selectedConversationID
       if var existing = byID[incoming.id] {
         if incoming.hasLivePreview {
           existing.preview = incoming.preview
@@ -1943,11 +1956,12 @@ final class InboxStore {
         // Les accusés viennent du `/sync` : ils font autorité sur l'état local.
         existing.lastDelivery = incoming.lastDelivery
         existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
-        // Le fil ouvert est lu : ne pas y réinstaller un badge.
-        existing.unreadCount = incoming.id == selectedConversationID ? 0 : incoming.unreadCount
+        existing.unreadCount = isOpen ? 0 : incoming.unreadCount
         byID[incoming.id] = existing
       } else {
-        byID[incoming.id] = incoming
+        var fresh = incoming
+        if isOpen { fresh.unreadCount = 0 }
+        byID[incoming.id] = fresh
       }
     }
 
