@@ -301,11 +301,23 @@ final class InboxStore {
         return
       }
       // Le bot répond en quelques secondes ; le QR tourne toutes les ~20 s.
+      // Sans la moindre réponse en 90 s, on arrête : pas de boucle silencieuse.
+      var silentRounds = 0
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(3))
         guard !Task.isCancelled else { return }
         do {
-          switch try await self.matrix.whatsAppLoginStep() {
+          let step = try await self.matrix.whatsAppLoginStep()
+          if case .waiting = step {
+            silentRounds += 1
+            if silentRounds >= 30 {
+              self.whatsAppLoginStatusFR = MatrixError.whatsAppBotSilent.localizedDescription
+              return
+            }
+          } else {
+            silentRounds = 0
+          }
+          switch step {
           case .qrCode(let data):
             self.whatsAppLoginQRData = data
             self.whatsAppLoginPairingCode = nil

@@ -262,7 +262,11 @@ actor MatrixBridgeService {
 
   /// Envoie une commande au bot ; si le salon retenu n'est plus valide (403), on le
   /// jette et on réessaie une fois avec un salon de gestion neuf.
-  private func sendBotCommand(_ command: String) async throws -> String? {
+  private func sendBotCommand(_ rawCommand: String) async throws -> String? {
+    // Préfixe `!wa` : accepté par mautrix dans tous les salons. Sans lui, un DM
+    // créé par nous (et non par le bot) n'est pas traité comme salon de gestion
+    // et la commande est ignorée en silence.
+    let command = rawCommand.hasPrefix("!") ? rawCommand : "!wa \(rawCommand)"
     let roomID = try await ensureManagementRoom()
     do {
       return try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
