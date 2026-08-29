@@ -1483,7 +1483,13 @@ final class InboxStore {
     let attachments = pendingAttachmentPaths
     // Le brouillon appartient à la ligne ouverte ; l'envoi, lui, part sur le
     // réseau du membre actif quand cette ligne est une fusion.
-    guard let row = selectedConversation, let conversation = sendingConversation else { return }
+    guard let row = selectedConversation else { return }
+    // Citer, c'est répondre là où la bulle a été dite : sur un fil fusionné, la
+    // citation impose son réseau, sinon la réponse partirait sur l'autre chat
+    // en désignant un message qu'il ne connaît pas.
+    let quoted = replyingToMessage
+    let routed = quoted.flatMap { self.conversation(ofMessage: $0) } ?? sendingConversation
+    guard let conversation = routed else { return }
     guard !text.isEmpty || !attachments.isEmpty else { return }
 
     if let blocker = sendBlocker(for: conversation, attachments: attachments, interactive: true) {
@@ -1520,7 +1526,6 @@ final class InboxStore {
     isSending = true
     defer { isSending = false }
 
-    let quoted = replyingToMessage
     let optimistic = Self.optimisticMessage(
       text: text, attachments: attachments, conversation: conversation, quoted: quoted
     )
