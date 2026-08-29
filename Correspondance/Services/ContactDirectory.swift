@@ -372,7 +372,7 @@ actor ContactDirectory {
       if !listed.isEmpty { return listed }
     }
     let address = conversation.address.trimmingCharacters(in: .whitespacesAndNewlines)
-    if address.hasPrefix("chat") { return [] }
+    if conversation.isGroup || address.hasPrefix("chat") { return [] }
     return address.isEmpty ? [] : [address]
   }
 

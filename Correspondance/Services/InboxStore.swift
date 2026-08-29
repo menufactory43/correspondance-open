@@ -375,6 +375,10 @@ final class InboxStore {
         existing.lastMessageAt = max(existing.lastMessageAt, incoming.lastMessageAt)
         existing.lastDelivery = incoming.lastDelivery
         existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
+        // chat.db fait foi sur la nature du fil : un cache d'avant la
+        // détection par `style` tenait certains groupes pour des tête-à-tête.
+        existing.isGroup = incoming.isGroup
+        existing.transportKey = incoming.transportKey
         existing.preferTitle(incoming.title)
         byID[incoming.id] = existing
       } else {

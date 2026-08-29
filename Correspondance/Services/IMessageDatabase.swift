@@ -49,7 +49,8 @@ struct IMessageDatabase: Sendable {
       ) THEN 1 ELSE 0 END,
       IFNULL(m.is_from_me, 0),
       IFNULL(m.is_delivered, 0),
-      IFNULL(m.is_read, 0)
+      IFNULL(m.is_read, 0),
+      IFNULL(c.style, 0)
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -92,13 +93,14 @@ struct IMessageDatabase: Sendable {
       let lastFromMe = sqlite3_column_int(statement, 8) != 0
       let lastDelivered = sqlite3_column_int(statement, 9) != 0
       let lastRead = sqlite3_column_int(statement, 10) != 0
+      let style = Int(sqlite3_column_int(statement, 11))
 
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
         // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
         text = "📷 Photo"
       }
 
-      let isGroup = identifier.hasPrefix("chat")
+      let isGroup = Self.isGroupChat(style: style, identifier: identifier)
       // Toujours récupérer les handles (1:1 = peer ; groupe = participants).
       let participantHandles = fetchHandles(chatRowID: rowID, db: db)
       let peerHandle = participantHandles.first ?? identifier
@@ -608,6 +610,15 @@ struct IMessageDatabase: Sendable {
       }
     }
     return handles
+  }
+
+  /// Un groupe se reconnaît à `chat.style` (43 = groupe, 45 = tête-à-tête).
+  /// Le préfixe `chat…` de l'identifiant n'est qu'un indice de secours :
+  /// depuis quelques versions de Messages, un groupe porte un GUID hexadécimal nu.
+  static let groupChatStyle = 43
+
+  static func isGroupChat(style: Int, identifier: String) -> Bool {
+    style == groupChatStyle || identifier.hasPrefix("chat")
   }
 
   private func prettyHandle(_ identifier: String) -> String {
