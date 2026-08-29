@@ -10,15 +10,15 @@ struct Conversation: Identifiable, Hashable, Sendable {
   var lastMessageAt: Date
   var unreadCount: Int
   var isArchived: Bool
-  /// Clé chat.db / bridge pour l’envoi.
+  /// Clé chat.db / bridge pour l’envoi. Room ID Matrix pour les réseaux bridgés.
   var transportKey: String
-  /// Groupe Signal (envoi via `-g`).
+  /// Groupe Signal (envoi via `-g`) ou salon Matrix à plus de 2 membres humains.
   var isGroup: Bool
 
   var hasUnread: Bool { unreadCount > 0 }
 
   var rowSystemImage: String {
-    if network == .signal && isGroup { return "person.3.fill" }
+    if isGroup && network != .iMessage { return "person.3.fill" }
     return network.systemImage
   }
 
@@ -28,6 +28,9 @@ struct Conversation: Identifiable, Hashable, Sendable {
       "Groupe Signal",
       "Écrire sur Signal…",
       "Signal",
+      "Groupe WhatsApp",
+      "Écrire sur WhatsApp…",
+      "WhatsApp",
     ]
     return !placeholders.contains(preview)
   }
@@ -42,7 +45,13 @@ struct Conversation: Identifiable, Hashable, Sendable {
     if trimmed.hasPrefix("signal-group:") || trimmed.hasPrefix("signal:") || trimmed.hasPrefix("imessage:") {
       return true
     }
-    if trimmed.hasPrefix("Groupe") && (trimmed == "Groupe" || trimmed.hasPrefix("Groupe (") || trimmed == "Groupe Signal") {
+    // Room ID Matrix nu (`!abc:correspondance.local`) ou ghost LID non résolu.
+    if trimmed.hasPrefix("!") || trimmed.hasPrefix("@whatsapp_") || trimmed.hasPrefix("whatsapp:") {
+      return true
+    }
+    if trimmed.hasPrefix("Groupe")
+      && (trimmed == "Groupe" || trimmed.hasPrefix("Groupe (") || trimmed == "Groupe Signal" || trimmed == "Groupe WhatsApp")
+    {
       return true
     }
     // UUID nu ou numéro seul : pas un libellé humain.
