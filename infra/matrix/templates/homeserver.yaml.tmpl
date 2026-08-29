@@ -1,0 +1,88 @@
+# Synapse — Correspondance. Homeserver privé, joignable via Tailscale uniquement.
+# Généré par infra/matrix/bootstrap.sh : les __PLACEHOLDER__ sont remplacés à l'installation.
+server_name: "correspondance.local"
+pid_file: /data/homeserver.pid
+public_baseurl: "http://__SYNAPSE_PUBLIC_IP__:8008/"
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    # 0.0.0.0 dans le conteneur ; l'exposition hôte est restreinte par docker-compose.
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: matrix
+    password: "__POSTGRES_PASSWORD__"
+    database: synapse
+    host: postgres
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+
+log_config: "/data/correspondance.local.log.config"
+media_store_path: /data/media_store
+signing_key_path: "/data/correspondance.local.signing.key"
+
+macaroon_secret_key: "__MACAROON_SECRET__"
+form_secret: "__FORM_SECRET__"
+registration_shared_secret: "__REGISTRATION_SECRET__"
+
+# Homeserver privé : personne ne s'inscrit, pas de fédération sortante utile.
+enable_registration: false
+report_stats: false
+suppress_key_server_warning: true
+trusted_key_servers: []
+federation_domain_whitelist: []
+
+# La présence coûte cher et n'apporte rien à une inbox.
+presence:
+  enabled: false
+
+# L'appservice pousse tout l'historique d'un coup : les limites par défaut le stranglent.
+rc_message:
+  per_second: 1000
+  burst_count: 10000
+rc_registration:
+  per_second: 1000
+  burst_count: 3000
+rc_login:
+  address:
+    per_second: 1000
+    burst_count: 3000
+  account:
+    per_second: 1000
+    burst_count: 3000
+  failed_attempts:
+    per_second: 1000
+    burst_count: 3000
+rc_joins:
+  local:
+    per_second: 1000
+    burst_count: 10000
+  remote:
+    per_second: 1000
+    burst_count: 10000
+rc_invites:
+  per_room:
+    per_second: 1000
+    burst_count: 10000
+  per_user:
+    per_second: 1000
+    burst_count: 10000
+rc_admin_redaction:
+  per_second: 1000
+  burst_count: 10000
+
+# Pièces jointes WhatsApp : 100 Mo suffisent largement.
+max_upload_size: 100M
+url_preview_enabled: false
+
+app_service_config_files:
+  - /data/whatsapp-registration.yaml

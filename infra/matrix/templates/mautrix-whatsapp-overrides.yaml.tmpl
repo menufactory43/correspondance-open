@@ -1,0 +1,51 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-whatsapp.
+# Fusion profonde (bootstrap.sh) : on ne fige pas les 38 ko du config amont, seulement nos choix.
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-whatsapp:29318
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  port: 29318
+  id: whatsapp
+  bot:
+    username: whatsappbot
+    displayname: WhatsApp bridge bot
+  username_template: whatsapp_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_whatsapp?sslmode=disable
+
+bridge:
+  command_prefix: '!wa'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Historique initial : sans ça les salons arrivent vides côté Correspondance.
+backfill:
+  enabled: true
+  max_initial_messages: 50
+  max_catchup_messages: 500
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

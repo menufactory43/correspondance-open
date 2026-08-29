@@ -1,0 +1,9 @@
+# Rien de généré ni de secret ne remonte dans le repo.
+.env
+CREDENTIALS.txt
+data/
+registration.yaml
+*-registration.yaml
+*.signing.key
+homeserver.yaml
+config.yaml
