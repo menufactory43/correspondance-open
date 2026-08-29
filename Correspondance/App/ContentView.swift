@@ -78,6 +78,19 @@ struct ContentView: View {
         .frame(maxWidth: .infinity)
     }
     .background { SidebarSurface(theme: theme) }
+    // « Nouvelle conversation » appartient à la LISTE, pas au fil : posée sur
+    // la colonne latérale, elle s'aligne avec elle au lieu de flotter contre
+    // le bord gauche du détail. C'est la place que lui donnent Mail et Messages.
+    .toolbar {
+      if !isFocus {
+        ToolbarItem(placement: .primaryAction) {
+          Button("Nouvelle conversation", systemImage: "square.and.pencil") {
+            store.presentNewConversation()
+          }
+          .help("Nouvelle conversation (⌘N)")
+        }
+      }
+    }
   }
 
   @ViewBuilder
@@ -104,15 +117,6 @@ struct ContentView: View {
 
   @ToolbarContentBuilder
   private var toolbarContent: some ToolbarContent {
-    if !isFocus {
-      ToolbarItem(placement: .navigation) {
-        Button("Nouvelle conversation", systemImage: "square.and.pencil") {
-          store.presentNewConversation()
-        }
-        .help("Nouvelle conversation (⌘N)")
-      }
-    }
-
     if !isFocus, let conversation = store.selectedConversation {
       ToolbarItem(placement: .principal) {
         ConversationPillHeader(conversation: conversation, theme: theme)
