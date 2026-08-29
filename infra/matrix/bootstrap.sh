@@ -20,6 +20,9 @@ SYNAPSE_PUBLIC_IP="${SYNAPSE_PUBLIC_IP:-100.64.0.7}"
 MATRIX_USER="${MATRIX_USER:-meffysto}"
 MATRIX_ADMIN="@${MATRIX_USER}:${SERVER_NAME}"
 WHATSAPP_IMAGE_TAG="${WHATSAPP_IMAGE_TAG:-v26.08}"
+# Instagram : même image que Messenger, tag préfixé `ig-`. Depuis v26.08 mautrix-meta ne fait
+# plus que Messenger — Instagram est passé au binaire mautrix-instagram.
+META_IMAGE_TAG="${META_IMAGE_TAG:-ig-v26.08}"
 
 # ---------------------------------------------------------------- phase locale
 if [[ "${1:-}" != "--remote" ]]; then
@@ -29,17 +32,18 @@ if [[ "${1:-}" != "--remote" ]]; then
   scp -q -r \
     "$HERE/docker-compose.yml" \
     "$HERE/bootstrap.sh" \
+    "$HERE/merge-overrides.py" \
     "$HERE/templates" \
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
 # ---------------------------------------------------------------- phase distante
 cd "$HOME/$REMOTE_DIR"
-mkdir -p data/synapse data/mautrix-whatsapp data/postgres
+mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/postgres
 CREDS="$HOME/$REMOTE_DIR/CREDENTIALS.txt"
 
 # 1) Secrets — générés une seule fois, relus ensuite (idempotence).
@@ -86,71 +90,76 @@ sed \
   templates/homeserver.yaml.tmpl > data/synapse/homeserver.yaml
 chmod 600 data/synapse/homeserver.yaml
 
-# 4) Postgres d'abord — Synapse et le bridge en dépendent.
+# 4) Postgres d'abord — Synapse et les bridges en dépendent.
 echo "→ docker-compose up postgres"
 docker-compose up -d postgres
 for _ in $(seq 1 30); do
   docker-compose exec -T postgres pg_isready -U matrix -d synapse >/dev/null 2>&1 && break
   sleep 2
 done
-# La base du bridge : initdb ne tourne que sur volume vide, donc on la crée aussi ici.
-docker-compose exec -T postgres psql -U matrix -d postgres -tc \
-  "SELECT 1 FROM pg_database WHERE datname='mautrix_whatsapp'" | grep -q 1 || \
-  docker-compose exec -T postgres psql -U matrix -d postgres -c \
-    "CREATE DATABASE mautrix_whatsapp OWNER matrix ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0" >/dev/null
 
-# 5) Config du bridge : config amont généré par l'image + fusion de nos overrides.
-if [[ ! -f data/mautrix-whatsapp/config.yaml ]]; then
-  echo "→ mautrix-whatsapp : génération du config par défaut"
-  docker run --rm -u 1000:1000 \
-    -v "$HOME/$REMOTE_DIR/data/mautrix-whatsapp:/data" \
-    dock.mau.dev/mautrix/whatsapp:${WHATSAPP_IMAGE_TAG} >/dev/null 2>&1 || true
-fi
+# Les bases des bridges : initdb ne tourne que sur volume vide, donc on les crée aussi ici.
+ensure_database() {
+  local dbname="$1"
+  docker-compose exec -T postgres psql -U matrix -d postgres -tc \
+    "SELECT 1 FROM pg_database WHERE datname='${dbname}'" | grep -q 1 || \
+    docker-compose exec -T postgres psql -U matrix -d postgres -c \
+      "CREATE DATABASE ${dbname} OWNER matrix ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0" >/dev/null
+}
+ensure_database mautrix_whatsapp
+ensure_database mautrix_meta
 
-echo "→ mautrix-whatsapp : fusion des overrides"
-sed \
-  -e "s|__POSTGRES_PASSWORD__|${POSTGRES_PASSWORD}|g" \
-  -e "s|__MATRIX_ADMIN__|${MATRIX_ADMIN}|g" \
-  templates/mautrix-whatsapp-overrides.yaml.tmpl > /tmp/wa-overrides.yaml
-python3 - "$HOME/$REMOTE_DIR/data/mautrix-whatsapp/config.yaml" /tmp/wa-overrides.yaml <<'PY'
-import sys, yaml
+# 5) Config et registration de chaque pont — même mécanique pour les deux, d'où la fonction :
+#    l'image écrit son config par défaut (`-e`), on fusionne nos overrides par-dessus, puis
+#    l'image produit la registration (`-g`) qu'on dépose chez Synapse.
+#
+#    setup_bridge <service> <image> <tag> <template-overrides> <registration> <binaire>
+#
+#    Le binaire est passé explicitement : l'image `ig-` n'embarque que `mautrix-instagram`,
+#    alors que son `/docker-run.sh` appelle un `mautrix-meta` qui n'y est plus.
+setup_bridge() {
+  local name="$1" image="$2" tag="$3" tmpl="$4" registration="$5" binary="$6"
+  local dir="$HOME/$REMOTE_DIR/data/${name}"
 
-base_path, over_path = sys.argv[1], sys.argv[2]
-with open(base_path) as f: base = yaml.safe_load(f)
-with open(over_path) as f: over = yaml.safe_load(f)
+  if [[ ! -f "${dir}/config.yaml" ]]; then
+    echo "→ ${name} : génération du config par défaut"
+    docker run --rm -u 1000:1000 -v "${dir}:/data" \
+      --entrypoint "/usr/bin/${binary}" "${image}:${tag}" \
+      -c /data/config.yaml -e >/dev/null 2>&1 || true
+  fi
+  [[ -f "${dir}/config.yaml" ]] || { echo "✗ ${name} : config.yaml absent"; exit 1; }
 
-def merge(dst, src):
-    for k, v in src.items():
-        if isinstance(v, dict) and isinstance(dst.get(k), dict):
-            merge(dst[k], v)
-        else:
-            dst[k] = v
-    return dst
+  echo "→ ${name} : fusion des overrides"
+  local merged="/tmp/${name}-overrides.yaml"
+  sed \
+    -e "s|__POSTGRES_PASSWORD__|${POSTGRES_PASSWORD}|g" \
+    -e "s|__MATRIX_ADMIN__|${MATRIX_ADMIN}|g" \
+    "templates/${tmpl}" > "$merged"
+  python3 merge-overrides.py "${dir}/config.yaml" "$merged"
+  rm -f "$merged"
+  chmod 600 "${dir}/config.yaml"
 
-# as_token / hs_token sont générés par le bridge : ne jamais les écraser.
-merge(base, over)
-with open(base_path, "w") as f:
-    yaml.safe_dump(base, f, sort_keys=False, allow_unicode=True, width=4096)
-PY
-rm -f /tmp/wa-overrides.yaml
-chmod 600 data/mautrix-whatsapp/config.yaml
+  if [[ ! -f "${dir}/registration.yaml" ]]; then
+    echo "→ ${name} : génération de la registration"
+    docker run --rm -u 1000:1000 -v "${dir}:/data" \
+      --entrypoint "/usr/bin/${binary}" "${image}:${tag}" \
+      -g -c /data/config.yaml -r /data/registration.yaml >/dev/null 2>&1 || true
+  fi
+  [[ -f "${dir}/registration.yaml" ]] || { echo "✗ ${name} : registration.yaml absent"; exit 1; }
+  cp "${dir}/registration.yaml" "data/synapse/${registration}"
+  chmod 600 "data/synapse/${registration}"
+}
 
-# 6) registration.yaml : l'image la produit au 2e lancement (pas de flag -g dans l'entrypoint).
-if [[ ! -f data/mautrix-whatsapp/registration.yaml ]]; then
-  echo "→ mautrix-whatsapp : génération de la registration"
-  docker run --rm -u 1000:1000 \
-    -v "$HOME/$REMOTE_DIR/data/mautrix-whatsapp:/data" \
-    dock.mau.dev/mautrix/whatsapp:${WHATSAPP_IMAGE_TAG} >/dev/null 2>&1 || true
-fi
-[[ -f data/mautrix-whatsapp/registration.yaml ]] || { echo "✗ registration.yaml absent"; exit 1; }
-cp data/mautrix-whatsapp/registration.yaml data/synapse/whatsapp-registration.yaml
-chmod 600 data/synapse/whatsapp-registration.yaml
+setup_bridge mautrix-whatsapp dock.mau.dev/mautrix/whatsapp "$WHATSAPP_IMAGE_TAG" \
+  mautrix-whatsapp-overrides.yaml.tmpl whatsapp-registration.yaml mautrix-whatsapp
+setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
+  mautrix-meta-overrides.yaml.tmpl meta-registration.yaml mautrix-instagram
 
-# 7) La pile complète.
+# 6) La pile complète.
 echo "→ docker-compose up -d"
 docker-compose up -d
 
-# 8) Attente de Synapse.
+# 7) Attente de Synapse.
 echo "→ Attente du homeserver"
 OK=0
 for _ in $(seq 1 45); do
@@ -162,7 +171,7 @@ for _ in $(seq 1 45); do
 done
 [[ "$OK" == 1 ]] || { echo "✗ Synapse ne répond pas"; docker-compose logs --tail=40 synapse; exit 1; }
 
-# 9) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
+# 8) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
 if [[ ! -f "$CREDS" ]]; then
   MATRIX_PASSWORD="$(openssl rand -base64 24)"
   echo "→ Création de l'utilisateur ${MATRIX_ADMIN}"
@@ -177,12 +186,21 @@ server_name = ${SERVER_NAME}
 mxid        = ${MATRIX_ADMIN}
 user        = ${MATRIX_USER}
 password    = ${MATRIX_PASSWORD}
-bot         = @whatsappbot:${SERVER_NAME}
 EOF
   chmod 600 "$CREDS"
 fi
 
+# Un CREDENTIALS.txt écrit par une passe plus ancienne ignore les bots ajoutés depuis :
+# on complète ligne par ligne, sans jamais réécrire le fichier — le mot de passe est
+# la seule chose qu'on ne saurait pas régénérer.
+add_credentials_line() {
+  local key="$1" value="$2"
+  grep -q "^${key}[[:space:]]*=" "$CREDS" || printf '%-13s = %s\n' "$key" "$value" >> "$CREDS"
+}
+add_credentials_line "bot_whatsapp" "@whatsappbot:${SERVER_NAME}"
+add_credentials_line "bot_instagram" "@instagrambot:${SERVER_NAME}"
+
 echo
 docker-compose ps
 echo
-echo "✓ Pile Matrix prête. Identifiants : ${CREDS} (chmod 600, hors repo)."
+echo "✓ Pile Matrix prête (WhatsApp + Instagram). Identifiants : ${CREDS} (chmod 600, hors repo)."

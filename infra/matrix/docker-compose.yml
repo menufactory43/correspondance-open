@@ -60,6 +60,26 @@ services:
     networks:
       - matrix
 
+  mautrix-meta:
+    # Tag épinglé, préfixe `ig-` : depuis v26.08 mautrix-meta ne fait plus que Messenger,
+    # Instagram est passé au binaire mautrix-instagram, publié sur la même image.
+    image: dock.mau.dev/mautrix/meta:ig-v26.08
+    container_name: correspondance-mautrix-meta
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - postgres
+    # Le `/docker-run.sh` de l'image `ig-` lance `/usr/bin/mautrix-meta`, absent de cette
+    # variante (elle n'embarque que `mautrix-instagram`) : on court-circuite l'entrypoint.
+    # Du coup pas de chown au démarrage — d'où le `user:` explicite, le même UID que `meff`.
+    user: "1000:1000"
+    working_dir: /data
+    entrypoint: ["/usr/bin/mautrix-instagram", "-c", "/data/config.yaml", "-r", "/data/registration.yaml"]
+    volumes:
+      - ./data/mautrix-meta:/data
+    networks:
+      - matrix
+
 networks:
   matrix:
     driver: bridge
