@@ -8,6 +8,7 @@ struct ContentView: View {
 
   private var theme: WritingTheme { themes.theme }
   private var isFocus: Bool { store.mode == .focus }
+  private var showsModeChrome: Bool { chromeRevealed && !store.isComposerFocused }
 
   var body: some View {
     Group {
@@ -22,16 +23,20 @@ struct ContentView: View {
     .background((isFocus ? theme.paper : theme.room).ignoresSafeArea())
     .overlay(alignment: .topTrailing) {
       modeChrome
-        .opacity(isFocus ? (chromeRevealed ? 1 : 0) : 1)
-        .animation(.easeOut(duration: 0.15), value: chromeRevealed)
+        .opacity(isFocus ? (showsModeChrome ? 1 : 0) : 1)
+        .animation(.easeOut(duration: 0.15), value: showsModeChrome)
         .animation(.easeOut(duration: 0.15), value: isFocus)
+        .allowsHitTesting(!isFocus || showsModeChrome)
     }
     .overlay(alignment: .topTrailing) {
       if isFocus {
         Color.clear
           .frame(width: 220, height: 56)
           .contentShape(Rectangle())
-          .onHover { chromeRevealed = $0 }
+          .onHover { hovering in
+            chromeRevealed = hovering && !store.isComposerFocused
+          }
+          .allowsHitTesting(!store.isComposerFocused)
       }
     }
     .tint(theme.accent)
@@ -45,6 +50,9 @@ struct ContentView: View {
     }
     .onChange(of: store.mode) { _, newMode in
       chromeRevealed = newMode != .focus
+    }
+    .onChange(of: store.isComposerFocused) { _, focused in
+      if focused { chromeRevealed = false }
     }
     .sheet(isPresented: $showSettingsSheet) {
       SettingsView()
@@ -71,8 +79,11 @@ struct ContentView: View {
   private var inboxSplit: some View {
     HStack(spacing: 0) {
       InboxListPane()
-        .frame(width: LayoutMetrics.sidebarWidth + 40)
+        .frame(width: store.isSidebarCompact
+          ? LayoutMetrics.sidebarCompactWidth
+          : LayoutMetrics.sidebarWidth + 40)
         .frame(maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.22), value: store.isSidebarCompact)
 
       Rectangle()
         .fill(theme.edge.opacity(0.55))
@@ -94,9 +105,6 @@ struct ContentView: View {
         isDisabled: store.isLoading
       ) {
         Task { await store.refresh() }
-      }
-      SoftToolButton(systemImage: "gearshape", helpText: "Réglages") {
-        showSettingsSheet = true
       }
     }
     .padding(.trailing, Spacing.md)

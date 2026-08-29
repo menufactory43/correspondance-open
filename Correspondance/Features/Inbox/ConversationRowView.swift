@@ -6,6 +6,9 @@ struct ConversationRowView: View {
   let theme: WritingTheme
   var typeface: WritingTypeface = .quattro
   var isSyncing: Bool = false
+  var isPinned: Bool = false
+  var isMuted: Bool = false
+  var isCompact: Bool = false
 
   private var subtitle: String {
     if conversation.hasLivePreview { return conversation.preview }
@@ -15,12 +18,39 @@ struct ConversationRowView: View {
   }
 
   var body: some View {
-    HStack(alignment: .top, spacing: Spacing.sm) {
-      Image(systemName: conversation.rowSystemImage)
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(theme.accent)
-        .frame(width: 22, height: 22)
-        .background(theme.selection.opacity(0.85), in: Circle())
+    Group {
+      if isCompact {
+        compactBody
+      } else {
+        expandedBody
+      }
+    }
+  }
+
+  private var compactBody: some View {
+    ZStack(alignment: .topTrailing) {
+      ConversationAvatarView(conversation: conversation, size: 40, theme: theme)
+      if conversation.hasUnread {
+        Circle()
+          .fill(theme.accent)
+          .frame(width: 10, height: 10)
+          .overlay(Circle().strokeBorder(theme.sidebar, lineWidth: 1.5))
+          .offset(x: 2, y: -1)
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 6)
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(isSelected ? theme.selection : Color.clear)
+    )
+    .contentShape(Rectangle())
+    .help(conversation.title)
+  }
+
+  private var expandedBody: some View {
+    HStack(alignment: .center, spacing: Spacing.sm) {
+      ConversationAvatarView(conversation: conversation, size: 34, theme: theme)
 
       VStack(alignment: .leading, spacing: 3) {
         HStack(alignment: .firstTextBaseline) {
@@ -28,6 +58,16 @@ struct ConversationRowView: View {
             .font(Typography.sidebarItem(typeface))
             .foregroundStyle(theme.ink.opacity(conversation.hasUnread ? 1 : 0.92))
             .lineLimit(1)
+          if isPinned {
+            Image(systemName: "pin.fill")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(theme.inkTertiary)
+          }
+          if isMuted {
+            Image(systemName: "bell.slash.fill")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(theme.inkTertiary)
+          }
           if conversation.isGroup {
             Text("groupe")
               .font(Typography.meta(typeface))

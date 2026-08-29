@@ -33,7 +33,7 @@ struct IMessageDatabase: Sendable {
     let db = try openReadOnly(at: snapshot)
     defer { sqlite3_close(db) }
 
-    // Requête plate + dédup en Swift — évite le sous-select corrélé (très lent).
+    // Requête plate + dédup en Swift — texte OU pièce jointe (photos sans légende).
     let sql = """
     SELECT
       c.ROWID,
@@ -42,11 +42,20 @@ struct IMessageDatabase: Sendable {
       IFNULL(c.display_name, ''),
       IFNULL(c.service_name, ''),
       IFNULL(m.text, ''),
-      IFNULL(m.date, 0)
+      IFNULL(m.date, 0),
+      CASE WHEN EXISTS (
+        SELECT 1 FROM message_attachment_join maj
+        WHERE maj.message_id = m.ROWID
+      ) THEN 1 ELSE 0 END
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
-    WHERE m.text IS NOT NULL AND m.text != ''
+    WHERE
+      (m.text IS NOT NULL AND m.text != '')
+      OR EXISTS (
+        SELECT 1 FROM message_attachment_join maj
+        WHERE maj.message_id = m.ROWID
+      )
     ORDER BY m.date DESC
     LIMIT 800;
     """
@@ -68,10 +77,34 @@ struct IMessageDatabase: Sendable {
       let identifier = stringColumn(statement, 2)
       let displayName = stringColumn(statement, 3)
       _ = stringColumn(statement, 4)
-      let text = stringColumn(statement, 5)
+      var text = stringColumn(statement, 5)
       let rawDate = sqlite3_column_int64(statement, 6)
+      let hasAttachment = sqlite3_column_int(statement, 7) != 0
 
-      let title = displayName.isEmpty ? prettyHandle(identifier) : displayName
+      if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
+        // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
+        text = "📷 Photo"
+      }
+
+      let isGroup = identifier.hasPrefix("chat")
+      // Toujours récupérer les handles (1:1 = peer ; groupe = participants).
+      let participantHandles = fetchHandles(chatRowID: rowID, db: db)
+      let peerHandle = participantHandles.first ?? identifier
+      let title: String = {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        if isGroup {
+          if participantHandles.isEmpty { return "Groupe" }
+          // Libellé provisoire — ContactDirectory enrichira avec les vrais noms.
+          return participantHandles.prefix(3).map(prettyHandle).joined(separator: ", ")
+            + (participantHandles.count > 3 ? "…" : "")
+        }
+        return prettyHandle(peerHandle)
+      }()
+
+      // address = identifiant chat (envoi). transportKey embarque les handles Contacts.
+      let handlesForLookup = isGroup ? participantHandles : (participantHandles.isEmpty ? [peerHandle] : participantHandles)
+      let handleSuffix = handlesForLookup.isEmpty ? "" : "|\(handlesForLookup.joined(separator: ","))"
       results.append(
         Conversation(
           id: "imessage:\(guid)",
@@ -82,8 +115,8 @@ struct IMessageDatabase: Sendable {
           lastMessageAt: Self.dateFromApple(rawDate),
           unreadCount: 0,
           isArchived: false,
-          transportKey: "\(rowID)|\(guid)|\(identifier)",
-          isGroup: identifier.hasPrefix("chat")
+          transportKey: "\(rowID)|\(guid)|\(identifier)\(handleSuffix)",
+          isGroup: isGroup
         )
       )
       if results.count >= limit { break }
@@ -98,6 +131,7 @@ struct IMessageDatabase: Sendable {
     let db = try openReadOnly(at: snapshot)
     defer { sqlite3_close(db) }
 
+    // Inclut les messages texte ET les messages image-only (sans texte).
     let sql = """
     SELECT
       m.ROWID,
@@ -110,8 +144,13 @@ struct IMessageDatabase: Sendable {
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
     WHERE c.guid = ?
-      AND m.text IS NOT NULL
-      AND m.text != ''
+      AND (
+        (m.text IS NOT NULL AND m.text != '')
+        OR EXISTS (
+          SELECT 1 FROM message_attachment_join maj
+          WHERE maj.message_id = m.ROWID
+        )
+      )
     ORDER BY m.date DESC
     LIMIT ?;
     """
@@ -128,7 +167,7 @@ struct IMessageDatabase: Sendable {
     }
     sqlite3_bind_int(statement, 2, Int32(limit))
 
-    var rows: [ChatMessage] = []
+    var drafts: [(rowID: Int64, message: ChatMessage)] = []
     while sqlite3_step(statement) == SQLITE_ROW {
       let rowID = sqlite3_column_int64(statement, 0)
       let guid = stringColumn(statement, 1)
@@ -137,16 +176,53 @@ struct IMessageDatabase: Sendable {
       let fromMe = sqlite3_column_int(statement, 4) != 0
       let conversationID = "imessage:\(stringColumn(statement, 5))"
 
-      rows.append(
-        ChatMessage(
-          id: guid.isEmpty ? "imessage-msg-\(rowID)" : guid,
-          conversationID: conversationID,
-          network: .iMessage,
-          text: text,
-          sentAt: Self.dateFromApple(rawDate),
-          isFromMe: fromMe
+      drafts.append(
+        (
+          rowID,
+          ChatMessage(
+            id: guid.isEmpty ? "imessage-msg-\(rowID)" : guid,
+            conversationID: conversationID,
+            network: .iMessage,
+            text: text,
+            sentAt: Self.dateFromApple(rawDate),
+            isFromMe: fromMe
+          )
         )
       )
+    }
+
+    let attachmentsByRow = fetchAttachments(
+      messageRowIDs: drafts.map(\.rowID),
+      db: db
+    )
+
+    var rows: [ChatMessage] = []
+    rows.reserveCapacity(drafts.count)
+    for draft in drafts {
+      var message = draft.message
+      message.attachments = attachmentsByRow[draft.rowID] ?? []
+      if message.text.isEmpty, message.attachments.contains(where: \.isImage) {
+        message = ChatMessage(
+          id: message.id,
+          conversationID: message.conversationID,
+          network: message.network,
+          text: "📷 Photo",
+          sentAt: message.sentAt,
+          isFromMe: message.isFromMe,
+          attachments: message.attachments
+        )
+      } else if message.text.isEmpty, !message.attachments.isEmpty {
+        message = ChatMessage(
+          id: message.id,
+          conversationID: message.conversationID,
+          network: message.network,
+          text: "Pièce jointe",
+          sentAt: message.sentAt,
+          isFromMe: message.isFromMe,
+          attachments: message.attachments
+        )
+      }
+      rows.append(message)
     }
     return rows.reversed()
   }
@@ -207,6 +283,139 @@ struct IMessageDatabase: Sendable {
   private func stringColumn(_ statement: OpaquePointer?, _ index: Int32) -> String {
     guard let cString = sqlite3_column_text(statement, index) else { return "" }
     return String(cString: cString)
+  }
+
+  private func fetchAttachments(
+    messageRowIDs: [Int64],
+    db: OpaquePointer
+  ) -> [Int64: [MessageAttachment]] {
+    guard !messageRowIDs.isEmpty else { return [:] }
+
+    // Chunk pour rester sous la limite SQLite de variables liées.
+    var result: [Int64: [MessageAttachment]] = [:]
+    let chunkSize = 200
+    var start = 0
+    while start < messageRowIDs.count {
+      let end = min(start + chunkSize, messageRowIDs.count)
+      let chunk = Array(messageRowIDs[start..<end])
+      start = end
+
+      let placeholders = Array(repeating: "?", count: chunk.count).joined(separator: ",")
+      let sql = """
+      SELECT
+        maj.message_id,
+        a.ROWID,
+        IFNULL(a.guid, ''),
+        IFNULL(a.filename, ''),
+        IFNULL(a.mime_type, ''),
+        IFNULL(a.transfer_name, ''),
+        IFNULL(a.uti, '')
+      FROM message_attachment_join maj
+      JOIN attachment a ON a.ROWID = maj.attachment_id
+      WHERE maj.message_id IN (\(placeholders));
+      """
+
+      var statement: OpaquePointer?
+      guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { continue }
+      defer { sqlite3_finalize(statement) }
+
+      for (index, rowID) in chunk.enumerated() {
+        sqlite3_bind_int64(statement, Int32(index + 1), rowID)
+      }
+
+      while sqlite3_step(statement) == SQLITE_ROW {
+        let messageID = sqlite3_column_int64(statement, 0)
+        let attachmentRow = sqlite3_column_int64(statement, 1)
+        let guid = stringColumn(statement, 2)
+        let filename = stringColumn(statement, 3)
+        let mime = stringColumn(statement, 4)
+        let transferName = stringColumn(statement, 5)
+        let uti = stringColumn(statement, 6)
+
+        let contentType = resolvedContentType(mime: mime, uti: uti, path: filename)
+        let localPath = resolveAttachmentFilesystemPath(filename)
+        let displayName = transferName.isEmpty
+          ? (localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "fichier")
+          : transferName
+
+        let attachment = MessageAttachment(
+          id: guid.isEmpty ? "imsg-att-\(attachmentRow)" : guid,
+          contentType: contentType,
+          filename: displayName,
+          localPath: localPath
+        )
+        result[messageID, default: []].append(attachment)
+      }
+    }
+    return result
+  }
+
+  /// `attachment.filename` est souvent `~/Library/Messages/Attachments/...`.
+  private func resolveAttachmentFilesystemPath(_ stored: String) -> String? {
+    let trimmed = stored.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    let expanded: String
+    if trimmed.hasPrefix("~/") {
+      expanded = FileManager.default.homeDirectoryForCurrentUser.path
+        + String(trimmed.dropFirst())
+    } else if trimmed.hasPrefix("/") {
+      expanded = trimmed
+    } else {
+      expanded = FileManager.default.homeDirectoryForCurrentUser.path
+        + "/Library/Messages/" + trimmed
+    }
+
+    if FileManager.default.fileExists(atPath: expanded) {
+      return expanded
+    }
+    return nil
+  }
+
+  private func resolvedContentType(mime: String, uti: String, path: String) -> String {
+    if !mime.isEmpty { return mime }
+    let ext = URL(fileURLWithPath: path).pathExtension.lowercased()
+    switch ext {
+    case "jpg", "jpeg": return "image/jpeg"
+    case "png": return "image/png"
+    case "gif": return "image/gif"
+    case "heic", "heif": return "image/heic"
+    case "webp": return "image/webp"
+    case "tif", "tiff": return "image/tiff"
+    case "mp4", "mov", "m4v": return "video/mp4"
+    default:
+      if uti.contains("image") { return "image/jpeg" }
+      if uti.contains("movie") || uti.contains("video") { return "video/mp4" }
+      return "application/octet-stream"
+    }
+  }
+
+  private func fetchHandles(chatRowID: Int64, db: OpaquePointer) -> [String] {
+    let sql = """
+    SELECT IFNULL(h.id, ''), IFNULL(h.uncanonicalized_id, '')
+    FROM chat_handle_join chj
+    JOIN handle h ON h.ROWID = chj.handle_id
+    WHERE chj.chat_id = ?
+    ORDER BY h.ROWID ASC
+    LIMIT 8;
+    """
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return [] }
+    defer { sqlite3_finalize(statement) }
+    sqlite3_bind_int64(statement, 1, chatRowID)
+
+    var handles: [String] = []
+    var seen = Set<String>()
+    while sqlite3_step(statement) == SQLITE_ROW {
+      for index: Int32 in [0, 1] {
+        let handle = stringColumn(statement, index)
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !handle.isEmpty, !seen.contains(handle) else { continue }
+        seen.insert(handle)
+        handles.append(handle)
+      }
+    }
+    return handles
   }
 
   private func prettyHandle(_ identifier: String) -> String {

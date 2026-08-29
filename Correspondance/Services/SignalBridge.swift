@@ -140,7 +140,76 @@ actor SignalBridge {
   }
 
   func fetchMessages(conversationID: String) async -> [ChatMessage] {
-    cachedMessages[conversationID] ?? []
+    let messages = cachedMessages[conversationID] ?? []
+    return await ensureLocalAttachments(messages, conversationID: conversationID)
+  }
+
+  /// Télécharge les pièces jointes manquantes via `signal-cli getAttachment`.
+  func ensureLocalAttachments(
+    _ messages: [ChatMessage],
+    conversationID: String
+  ) async -> [ChatMessage] {
+    guard let cli = resolvedCLI() else { return messages }
+    let isGroup = conversationID.hasPrefix("signal-group:")
+    let address = conversationID
+      .replacingOccurrences(of: "signal-group:", with: "")
+      .replacingOccurrences(of: "signal:", with: "")
+
+    var updated = messages
+    var didChange = false
+
+    for index in updated.indices {
+      guard !updated[index].attachments.isEmpty else { continue }
+      var atts = updated[index].attachments
+      var attChanged = false
+
+      for attIndex in atts.indices {
+        if atts[attIndex].resolvedFileURL != nil { continue }
+        if let existing = SignalAttachmentStore.localPath(forAttachmentID: atts[attIndex].id) {
+          atts[attIndex].localPath = existing
+          attChanged = true
+          continue
+        }
+
+        var arguments = ["getAttachment", "--id", atts[attIndex].id]
+        if isGroup {
+          arguments += ["-g", address]
+        } else {
+          // Recipient = expéditeur. Pour messages from me, getAttachment peut échouer —
+          // on tente quand même avec l’adresse du fil.
+          arguments += ["--recipient", address]
+        }
+
+        do {
+          let result = try await ProcessRunner.run(
+            executable: cli,
+            arguments: arguments,
+            timeoutSeconds: 60
+          )
+          if result.exitCode == 0,
+             let path = SignalAttachmentStore.localPath(forAttachmentID: atts[attIndex].id)
+          {
+            atts[attIndex].localPath = path
+            attChanged = true
+          }
+        } catch {
+          // Silencieux — l’UI montrera un placeholder.
+        }
+      }
+
+      if attChanged {
+        updated[index].attachments = atts
+        didChange = true
+      }
+    }
+
+    if didChange {
+      cachedMessages[conversationID] = updated
+      var (stored, msgs) = SignalConversationCache.load()
+      msgs[conversationID] = updated
+      SignalConversationCache.save(conversations: stored, messages: msgs)
+    }
+    return updated
   }
 
   func messageCounts() async -> [String: Int] {
@@ -297,6 +366,66 @@ actor SignalBridge {
     SignalConversationCache.save(conversations: stored, messages: msgs)
   }
 
+  /// Efface l’historique local d’un fil (signal-cli ne garde pas l’historique serveur).
+  func clearLocalHistory(conversationID: String) {
+    ensureMemoryCacheLoaded()
+    cachedMessages[conversationID] = []
+    var (stored, msgs) = SignalConversationCache.load()
+    msgs[conversationID] = []
+    if let idx = stored.firstIndex(where: { $0.id == conversationID }) {
+      stored[idx].preview = stored[idx].isGroup ? "Groupe Signal" : "Écrire sur Signal…"
+    }
+    SignalConversationCache.save(conversations: stored, messages: msgs)
+  }
+
+  /// Quitte un groupe Signal (`quitGroup`).
+  func quitGroup(conversation: Conversation, deleteLocal: Bool = true) async throws {
+    guard let cli = resolvedCLI() else { throw SignalBridgeError.cliMissing }
+    guard conversation.isGroup || conversation.id.hasPrefix("signal-group:") else {
+      throw SignalBridgeError.commandFailed("Ce fil n’est pas un groupe.")
+    }
+
+    var arguments = ["quitGroup", "-g", conversation.transportKey]
+    if deleteLocal { arguments.append("--delete") }
+
+    let result = try await ProcessRunner.run(
+      executable: cli,
+      arguments: arguments,
+      timeoutSeconds: 90
+    )
+    guard result.exitCode == 0 else {
+      throw SignalBridgeError.commandFailed(result.stderr.isEmpty ? result.stdout : result.stderr)
+    }
+
+    cachedMessages.removeValue(forKey: conversation.id)
+    var (stored, msgs) = SignalConversationCache.load()
+    stored.removeAll { $0.id == conversation.id }
+    msgs.removeValue(forKey: conversation.id)
+    SignalConversationCache.save(conversations: stored, messages: msgs)
+  }
+
+  /// Messages éphémères : `updateGroup -e` / `updateContact -e` (secondes, 0 = off).
+  func setDisappearingMessages(conversation: Conversation, expirationSeconds: Int) async throws {
+    guard let cli = resolvedCLI() else { throw SignalBridgeError.cliMissing }
+    let seconds = max(0, expirationSeconds)
+
+    let arguments: [String]
+    if conversation.isGroup || conversation.id.hasPrefix("signal-group:") {
+      arguments = ["updateGroup", "-g", conversation.transportKey, "-e", "\(seconds)"]
+    } else {
+      arguments = ["updateContact", "-e", "\(seconds)", conversation.address]
+    }
+
+    let result = try await ProcessRunner.run(
+      executable: cli,
+      arguments: arguments,
+      timeoutSeconds: 90
+    )
+    guard result.exitCode == 0 else {
+      throw SignalBridgeError.commandFailed(result.stderr.isEmpty ? result.stdout : result.stderr)
+    }
+  }
+
   // MARK: - Merge helpers
 
   private static func mergeGroups(_ raw: String, into conversations: inout [String: Conversation]) {
@@ -319,11 +448,9 @@ actor SignalBridge {
 
       let id = "signal-group:\(groupID)"
       if var existing = conversations[id] {
-        // Enrichir le titre si on n’avait qu’un placeholder.
-        if existing.title.hasPrefix("Groupe"), let name, !name.isEmpty {
-          existing.title = name
-          conversations[id] = existing
-        }
+        // Toujours réparer un titre technique / placeholder avec le vrai nom.
+        existing.preferTitle(title)
+        conversations[id] = existing
         continue
       }
 
@@ -363,21 +490,25 @@ actor SignalBridge {
         return cachedMessages[conversationID] ?? []
       }
 
-      var byID: [String: Conversation] = [:]
-      for (id, _) in cachedMessages {
+      let (stored, _) = SignalConversationCache.load()
+      var byID = Dictionary(uniqueKeysWithValues: stored.map { ($0.id, $0) })
+      // Seed minimal pour parseReceive — jamais avec title = id (écrase les noms).
+      for (id, _) in cachedMessages where byID[id] == nil {
+        let address = id
+          .replacingOccurrences(of: "signal-group:", with: "")
+          .replacingOccurrences(of: "signal:", with: "")
+        let isGroup = id.hasPrefix("signal-group:")
         byID[id] = Conversation(
           id: id,
           network: .signal,
-          address: id.replacingOccurrences(of: "signal-group:", with: "")
-            .replacingOccurrences(of: "signal:", with: ""),
-          title: id,
+          address: address,
+          title: isGroup ? "Groupe Signal" : address,
           preview: "",
           lastMessageAt: Date(),
           unreadCount: 0,
           isArchived: false,
-          transportKey: id.replacingOccurrences(of: "signal-group:", with: "")
-            .replacingOccurrences(of: "signal:", with: ""),
-          isGroup: id.hasPrefix("signal-group:")
+          transportKey: address,
+          isGroup: isGroup
         )
       }
       var messagesByID = cachedMessages
@@ -385,18 +516,17 @@ actor SignalBridge {
       cachedMessages = messagesByID
       Self.syncPreviews(from: messagesByID, into: &byID)
 
-      let (stored, _) = SignalConversationCache.load()
       var merged = Dictionary(uniqueKeysWithValues: stored.map { ($0.id, $0) })
       for (_, c) in byID {
         if var existing = merged[c.id] {
           if c.hasLivePreview {
             existing.preview = c.preview
             existing.lastMessageAt = max(existing.lastMessageAt, c.lastMessageAt)
-            existing.title = c.title
           }
+          existing.preferTitle(c.title)
           // Aussi si on a des messages en cache pour cet id.
           if let last = messagesByID[c.id]?.last {
-            existing.preview = last.text
+            existing.preview = last.sidebarPreviewText
             existing.lastMessageAt = max(existing.lastMessageAt, last.sentAt)
           }
           merged[c.id] = existing
@@ -561,11 +691,11 @@ actor SignalBridge {
       if !displayText.isEmpty {
         conversation.preview = displayText
         conversation.lastMessageAt = max(conversation.lastMessageAt, sentAt)
-        if let groupName, !groupName.isEmpty {
-          conversation.title = groupName
-        } else if !isGroup, let sourceName, !sourceName.isEmpty {
-          conversation.title = sourceName
-        }
+      }
+      if let groupName, !groupName.isEmpty {
+        conversation.preferTitle(groupName)
+      } else if !isGroup, let sourceName, !sourceName.isEmpty {
+        conversation.preferTitle(sourceName)
       }
       conversations[conversationKey] = conversation
 

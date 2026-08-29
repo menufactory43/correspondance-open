@@ -24,13 +24,30 @@ struct SettingsView: View {
             .frame(maxWidth: 320, alignment: .trailing)
         }
 
+        LabeledContent("Contacts") {
+          Text(store.contactsStatusFR)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: 320, alignment: .trailing)
+        }
+
         Text("Lier Signal (terminal) :\nsignal-cli link -n Correspondance\nPuis scanne le QR avec Signal → Appareils liés.")
           .font(.caption)
           .foregroundStyle(.secondary)
           .textSelection(.enabled)
 
+        Button("Autoriser Contacts…") {
+          Task { await store.requestContactsPermission() }
+        }
+
         Button("Ouvrir Confidentialité → Accès disque") {
           if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+            NSWorkspace.shared.open(url)
+          }
+        }
+
+        Button("Ouvrir Confidentialité → Contacts") {
+          if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts") {
             NSWorkspace.shared.open(url)
           }
         }

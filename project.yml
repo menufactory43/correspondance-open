@@ -65,6 +65,7 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Correspondance/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Correspondance/Correspondance.entitlements
         DEVELOPMENT_TEAM: AKMNXGVVGX
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
@@ -82,6 +83,7 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         ATSApplicationFontsPath: Fonts
+        NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
   CorrespondanceTests:
     type: bundle.unit-test
     platform: macOS

@@ -10,12 +10,20 @@ final class InboxStore {
     didSet { UserDefaults.standard.set(mode.rawValue, forKey: Keys.mode) }
   }
 
+  /// Sidebar inbox réduite (avatars seulement, type Messages).
+  var isSidebarCompact: Bool = false {
+    didSet { UserDefaults.standard.set(isSidebarCompact, forKey: Keys.sidebarCompact) }
+  }
+
   var conversations: [Conversation] = []
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
   var draftText: String = ""
   /// Chemins locaux d’images à envoyer (Signal).
   var pendingAttachmentPaths: [String] = []
+  /// True seulement pendant la frappe active (pas le simple focus).
+  /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
+  var isComposerFocused = false
   var isLoading = false
   /// Sync receive en cours (poll live).
   var isLiveSyncing = false
@@ -23,9 +31,17 @@ final class InboxStore {
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
   var signalStatusFR: String = "…"
+  var contactsStatusFR: String = "…"
+  /// Affiche une bannière si Contacts n’est pas encore autorisé.
+  var needsContactsPermission = false
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
+
+  /// Préférences locales (pin / mute / timer) — pas dans le catalogue Signal.
+  private(set) var pinnedIDs: Set<String> = []
+  private(set) var mutedIDs: Set<String> = []
+  private(set) var disappearingSecondsByID: [String: Int] = [:]
 
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
@@ -41,7 +57,7 @@ final class InboxStore {
   var activeQueue: [Conversation] {
     conversations
       .filter { !$0.isArchived }
-      .sorted(by: Self.sortForInbox)
+      .sorted(by: { sortForInbox($0, $1) })
   }
 
   var inboxRecents: [Conversation] {
@@ -50,12 +66,34 @@ final class InboxStore {
 
   var inboxGroups: [Conversation] {
     activeQueue.filter { $0.isGroup && !$0.hasLivePreview }
-      .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+      .sorted { lhs, rhs in
+        if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
+        return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+      }
   }
 
   var inboxContacts: [Conversation] {
     activeQueue.filter { !$0.isGroup && !$0.hasLivePreview }
-      .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+      .sorted { lhs, rhs in
+        if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
+        return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+      }
+  }
+
+  /// File compacte : récents d’abord, puis le reste (pour la vue avatars).
+  var inboxCompactQueue: [Conversation] {
+    let recents = inboxRecents
+    let rest = activeQueue.filter { conv in !recents.contains(where: { $0.id == conv.id }) }
+    return recents + rest
+  }
+
+  func isPinned(_ id: String) -> Bool { pinnedIDs.contains(id) }
+  func isMuted(_ id: String) -> Bool { mutedIDs.contains(id) }
+  func disappearingSeconds(for id: String) -> Int { disappearingSecondsByID[id] ?? 0 }
+
+  private func sortForInbox(_ a: Conversation, _ b: Conversation) -> Bool {
+    if isPinned(a.id) != isPinned(b.id) { return isPinned(a.id) }
+    return Self.sortForInbox(a, b)
   }
 
   private static func sortForInbox(_ a: Conversation, _ b: Conversation) -> Bool {
@@ -85,30 +123,58 @@ final class InboxStore {
     } else {
       mode = .focus
     }
+    isSidebarCompact = UserDefaults.standard.bool(forKey: Keys.sidebarCompact)
+    pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.pinnedIDs) ?? [])
+    mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
+    if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
+       let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+    {
+      disappearingSecondsByID = decoded
+    }
     hydrateFromDiskCache()
   }
 
-  /// Affiche tout de suite le cache Signal (pas d’écran vide 20 s).
+  func toggleSidebarCompact() {
+    isSidebarCompact.toggle()
+  }
+
+  /// Affiche tout de suite les caches iMessage + Signal (démarrage type Messages).
   private func hydrateFromDiskCache() {
+    var list: [Conversation] = []
+
+    var iMessage = IMessageConversationCache.load()
+    if !iMessage.isEmpty {
+      // Noms depuis cache Contacts — immédiat, sans permission.
+      ContactDirectoryDisk.enrichIMessageTitles(&iMessage)
+      list.append(contentsOf: iMessage)
+      iMessageStatusFR = "Cache · \(iMessage.count) iMessage — sync…"
+    } else {
+      iMessageStatusFR = "iMessage : première sync…"
+    }
+
     let (stored, msgs) = SignalConversationCache.load()
-    guard !stored.isEmpty else {
-      signalStatusFR = "Signal : première sync…"
-      return
-    }
-    var list = stored
-    for i in list.indices {
-      if let last = msgs[list[i].id]?.last {
-        list[i].preview = last.text
-        list[i].lastMessageAt = max(list[i].lastMessageAt, last.sentAt)
+    if stored.isEmpty {
+      signalStatusFR = list.isEmpty ? "Signal : première sync…" : "Signal : sync…"
+    } else {
+      var signalList = stored
+      for i in signalList.indices {
+        if let last = msgs[signalList[i].id]?.last {
+          signalList[i].preview = last.text
+          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
+        }
       }
+      list.append(contentsOf: signalList)
+      let groups = signalList.filter(\.isGroup).count
+      let live = signalList.filter { $0.hasLivePreview }.count
+      signalStatusFR = "Cache · \(signalList.count) fils · \(groups) groupes · \(live) avec messages — sync…"
     }
-    conversations = list.sorted(by: Self.sortForInbox)
+
+    guard !list.isEmpty else { return }
+
+    conversations = list.sorted(by: { sortForInbox($0, $1) })
     selectedConversationID = inboxRecents.first?.id
       ?? inboxGroups.first?.id
       ?? activeQueue.first?.id
-    let groups = list.filter(\.isGroup).count
-    let live = list.filter { $0.hasLivePreview }.count
-    signalStatusFR = "Cache · \(list.count) fils · \(groups) groupes · \(live) avec messages — sync…"
     if let id = selectedConversationID, let cached = msgs[id], !cached.isEmpty {
       messages = cached
     }
@@ -116,8 +182,58 @@ final class InboxStore {
 
   /// Point d’entrée app : hydrate (déjà fait) + plein load + boucle receive.
   func start() async {
+    // Demande Contacts tout de suite (sinon l’app n’apparaît pas dans Confidentialité).
+    await requestContactsPermission()
     await load()
     startLiveSync()
+  }
+
+  /// Déclenche la boîte système Contacts. À rappeler depuis Réglages / bannière.
+  func requestContactsPermission() async {
+    NSApp.activate(ignoringOtherApps: true)
+    try? await Task.sleep(for: .milliseconds(250))
+
+    // Reset TCC local de l’ancienne signature / état coincé (aide au debug).
+    let statusBefore = ContactDirectory.shared.authorizationStatus
+    contactsStatusFR = "Demande Contacts en cours… (statut \(statusBefore.rawValue))"
+
+    // Si déjà refusé, macOS ne réaffiche plus la boîte — ouvrir Réglages.
+    if statusBefore == .denied || statusBefore == .restricted {
+      needsContactsPermission = true
+      contactsStatusFR = "Contacts déjà refusés. Coche Correspondance dans Confidentialité → Contacts."
+      openContactsPrivacySettings()
+      return
+    }
+
+    let granted = await ContactDirectory.shared.requestAccessIfNeeded(force: true)
+    let statusAfter = ContactDirectory.shared.authorizationStatus
+    needsContactsPermission = !granted
+
+    if granted {
+      contactsStatusFR = "Contacts autorisés — noms et photos iMessage."
+      Task { await enrichIMessageContactsInBackground() }
+      return
+    }
+
+    switch statusAfter {
+    case .denied, .restricted:
+      contactsStatusFR = "Contacts refusés. Coche Correspondance dans Confidentialité → Contacts."
+      openContactsPrivacySettings()
+    case .notDetermined:
+      contactsStatusFR = "Pas de boîte système — rebuild avec entitlement Address Book, puis reclique."
+    default:
+      contactsStatusFR = "Contacts non autorisés (statut \(statusAfter.rawValue))."
+    }
+  }
+
+  func openContactsPrivacySettings() {
+    let urls = [
+      "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?path=Contacts",
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts",
+    ]
+    for raw in urls {
+      if let url = URL(string: raw), NSWorkspace.shared.open(url) { return }
+    }
   }
 
   func load() async {
@@ -160,6 +276,83 @@ final class InboxStore {
 
   func setMode(_ newMode: InboxMode) {
     mode = newMode
+  }
+
+  func markUnread(conversationID: String) {
+    guard let idx = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+    var updated = conversations[idx]
+    updated.unreadCount = max(1, updated.unreadCount)
+    conversations[idx] = updated
+  }
+
+  func togglePinned(conversationID: String) {
+    if pinnedIDs.contains(conversationID) {
+      pinnedIDs.remove(conversationID)
+    } else {
+      pinnedIDs.insert(conversationID)
+    }
+    persistFlags()
+    conversations.sort(by: { sortForInbox($0, $1) })
+  }
+
+  func toggleMuted(conversationID: String) {
+    if mutedIDs.contains(conversationID) {
+      mutedIDs.remove(conversationID)
+    } else {
+      mutedIDs.insert(conversationID)
+    }
+    persistFlags()
+  }
+
+  func clearChatHistory(conversationID: String) async {
+    await signal.clearLocalHistory(conversationID: conversationID)
+    if selectedConversationID == conversationID {
+      messages = []
+    }
+    if let idx = conversations.firstIndex(where: { $0.id == conversationID }) {
+      var updated = conversations[idx]
+      updated.preview = updated.isGroup ? "Groupe Signal" : "Écrire sur Signal…"
+      conversations[idx] = updated
+    }
+  }
+
+  func leaveGroup(conversationID: String) async {
+    guard let conversation = conversations.first(where: { $0.id == conversationID }),
+          conversation.network == .signal,
+          conversation.isGroup
+    else { return }
+
+    do {
+      try await signal.quitGroup(conversation: conversation, deleteLocal: true)
+      conversations.removeAll { $0.id == conversationID }
+      pinnedIDs.remove(conversationID)
+      mutedIDs.remove(conversationID)
+      disappearingSecondsByID.removeValue(forKey: conversationID)
+      persistFlags()
+      if selectedConversationID == conversationID {
+        await select(activeQueue.first?.id)
+      }
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  func setDisappearingMessages(conversationID: String, seconds: Int) async {
+    guard let conversation = conversations.first(where: { $0.id == conversationID }),
+          conversation.network == .signal
+    else { return }
+
+    do {
+      try await signal.setDisappearingMessages(conversation: conversation, expirationSeconds: seconds)
+      if seconds <= 0 {
+        disappearingSecondsByID.removeValue(forKey: conversationID)
+      } else {
+        disappearingSecondsByID[conversationID] = seconds
+      }
+      persistFlags()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
   }
 
   func archiveSelected() async {
@@ -312,8 +505,9 @@ final class InboxStore {
         if incoming.hasLivePreview {
           existing.preview = incoming.preview
           existing.lastMessageAt = max(existing.lastMessageAt, incoming.lastMessageAt)
-          existing.title = incoming.title
         }
+        // Ne jamais écraser un bon nom de groupe/contact par un id technique.
+        existing.preferTitle(incoming.title)
         existing.isGroup = incoming.isGroup || existing.isGroup
         byID[incoming.id] = existing
       } else {
@@ -336,7 +530,7 @@ final class InboxStore {
       byID[id] = c
     }
 
-    conversations = Array(byID.values).sorted(by: Self.sortForInbox)
+    conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
   }
 
   private func clearUnread(for id: String) {
@@ -361,75 +555,66 @@ final class InboxStore {
       signalStatusFR = "Signal : sync en arrière-plan…"
     }
 
-    async let iMessagePart: IMessageLoad = loadIMessageOffMain()
-
-    let status = await signal.statusMessageFR()
-    if Task.isCancelled { return }
-    signalStatusFR = status
-
-    let signalResult: Result<[Conversation], Error>
-    do {
-      signalResult = .success(try await signal.fetchConversations())
-    } catch {
-      signalResult = .failure(error)
-    }
-
-    let im = await iMessagePart
+    // 1) iMessage d’abord (rapide) — ne pas bloquer derrière signal-cli.
+    let im = await loadIMessageOffMain()
     if Task.isCancelled { return }
 
     var merged: [Conversation] = []
     usingDemoData = false
+    var shouldEnrichIMessage = false
 
     switch im {
     case .success(let list):
-      merged.append(contentsOf: list)
-      iMessageStatusFR = list.isEmpty
-        ? "Messages accessible — aucune conversation texte récente."
-        : "\(list.count) conversations iMessage."
-    case .denied(let message):
-      iMessageStatusFR = message
-      merged.append(contentsOf: Self.demoConversations())
-      usingDemoData = true
-    case .failure(let message):
-      iMessageStatusFR = message
-      merged.append(contentsOf: Self.demoConversations())
-      usingDemoData = true
-    }
-
-    switch signalResult {
-    case .success(let list):
-      if usingDemoData {
-        merged.removeAll { $0.network == .signal && $0.transportKey == "demo" }
-      }
-      var signalList = list
-      let previews = await signal.previewMap()
-      for i in signalList.indices {
-        if let p = previews[signalList[i].id] {
-          signalList[i].preview = p.text
-          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, p.date)
+      // Fusionne avec le cache : garde les titres Contacts déjà résolus.
+      let cachedTitles = Dictionary(
+        uniqueKeysWithValues: conversations
+          .filter { $0.network == .iMessage }
+          .map { ($0.id, $0.title) }
+      )
+      var fresh = list
+      for i in fresh.indices {
+        if let cached = cachedTitles[fresh[i].id], !cached.isEmpty {
+          fresh[i].preferTitle(cached)
         }
       }
-      merged.append(contentsOf: signalList)
-      let groups = signalList.filter(\.isGroup).count
-      let dms = signalList.count - groups
-      if signalList.isEmpty {
-        signalStatusFR += " Aucune conversation — réessaie Actualiser."
+      ContactDirectoryDisk.enrichIMessageTitles(&fresh)
+      merged.append(contentsOf: fresh)
+      IMessageConversationCache.save(fresh)
+      shouldEnrichIMessage = !fresh.isEmpty
+      iMessageStatusFR = fresh.isEmpty
+        ? "Messages accessible — aucune conversation texte récente."
+        : "\(fresh.count) conversations iMessage."
+    case .denied(let message):
+      // Garde le cache si on l’a — mieux que la démo vide.
+      let cached = conversations.filter { $0.network == .iMessage }
+      if !cached.isEmpty {
+        merged.append(contentsOf: cached)
+        iMessageStatusFR = "Cache iMessage · \(cached.count) (accès disque refusé)"
       } else {
-        let liveGroups = signalList.filter { $0.isGroup && $0.hasLivePreview }.count
-        signalStatusFR += " \(dms) DM · \(groups) groupes (\(liveGroups) avec messages)."
+        iMessageStatusFR = message
+        merged.append(contentsOf: Self.demoConversations())
+        usingDemoData = true
       }
-    case .failure(let error):
-      let previousSignal = conversations.filter { $0.network == .signal }
+    case .failure(let message):
+      let cached = conversations.filter { $0.network == .iMessage }
+      if !cached.isEmpty {
+        merged.append(contentsOf: cached)
+        iMessageStatusFR = "Cache iMessage · \(cached.count) (\(message))"
+      } else {
+        iMessageStatusFR = message
+        merged.append(contentsOf: Self.demoConversations())
+        usingDemoData = true
+      }
+    }
+
+    // Garder le Signal déjà en mémoire pendant que signal-cli tourne.
+    let previousSignal = conversations.filter { $0.network == .signal }
+    if !previousSignal.isEmpty {
       merged.append(contentsOf: previousSignal)
-      lastErrorMessage = "Signal : \(error.localizedDescription)"
-      if !previousSignal.isEmpty {
-        signalStatusFR += " (cache local · \(previousSignal.filter(\.isGroup).count) groupes)"
-      }
     }
 
     let keepSelection = selectedConversationID
-    conversations = merged.sorted(by: Self.sortForInbox)
-
+    conversations = merged.sorted(by: { sortForInbox($0, $1) })
     if keepSelection == nil
       || !conversations.contains(where: { $0.id == keepSelection })
     {
@@ -440,6 +625,90 @@ final class InboxStore {
       selectedConversationID = keepSelection
     }
     await loadMessagesForSelection()
+
+    if shouldEnrichIMessage {
+      Task { await self.enrichIMessageContactsInBackground() }
+    }
+
+    // 2) Signal ensuite (peut être long — listGroups / receive / contacts).
+    let status = await signal.statusMessageFR()
+    if Task.isCancelled { return }
+    signalStatusFR = status
+
+    let signalResult: Result<[Conversation], Error>
+    do {
+      signalResult = .success(try await signal.fetchConversations())
+    } catch {
+      signalResult = .failure(error)
+    }
+    if Task.isCancelled { return }
+
+    var next = conversations.filter { $0.network != .signal }
+
+    switch signalResult {
+    case .success(let list):
+      if usingDemoData {
+        next.removeAll { $0.network == .signal && $0.transportKey == "demo" }
+      }
+      var signalList = list
+      let previews = await signal.previewMap()
+      for i in signalList.indices {
+        if let p = previews[signalList[i].id] {
+          signalList[i].preview = p.text
+          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, p.date)
+        }
+      }
+      next.append(contentsOf: signalList)
+      let groups = signalList.filter(\.isGroup).count
+      let dms = signalList.count - groups
+      if signalList.isEmpty {
+        signalStatusFR += " Aucune conversation — réessaie Actualiser."
+      } else {
+        let liveGroups = signalList.filter { $0.isGroup && $0.hasLivePreview }.count
+        signalStatusFR += " \(dms) DM · \(groups) groupes (\(liveGroups) avec messages)."
+      }
+    case .failure(let error):
+      next.append(contentsOf: previousSignal)
+      lastErrorMessage = "Signal : \(error.localizedDescription)"
+      if !previousSignal.isEmpty {
+        signalStatusFR += " (cache local · \(previousSignal.filter(\.isGroup).count) groupes)"
+      }
+    }
+
+    let selection = selectedConversationID
+    conversations = next.sorted(by: { sortForInbox($0, $1) })
+    if selection == nil || !conversations.contains(where: { $0.id == selection }) {
+      selectedConversationID = inboxRecents.first?.id
+        ?? inboxGroups.first?.id
+        ?? activeQueue.first?.id
+    }
+    await loadMessagesForSelection()
+  }
+
+  /// Noms (+ index photos) Contacts — ne bloque jamais le chargement inbox.
+  private func enrichIMessageContactsInBackground() async {
+    var list = conversations.filter { $0.network == .iMessage }
+    guard !list.isEmpty else { return }
+    await ContactDirectory.shared.enrichIMessageTitles(&list)
+
+    var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
+    var changed = 0
+    for updated in list {
+      guard var existing = byID[updated.id] else { continue }
+      let before = existing.title
+      existing.preferTitle(updated.title)
+      if existing.title != before {
+        byID[updated.id] = existing
+        changed += 1
+        await ConversationAvatarStore.shared.invalidate(conversationID: updated.id)
+      }
+    }
+    if changed > 0 {
+      conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+      IMessageConversationCache.save(conversations.filter { $0.network == .iMessage })
+    }
+    let named = list.filter { !$0.hasPlaceholderTitle }.count
+    iMessageStatusFR = "\(list.count) conversations iMessage · \(named) noms Contacts."
   }
 
   private enum IMessageLoad: Sendable {
@@ -450,7 +719,7 @@ final class InboxStore {
 
   private func loadIMessageOffMain() async -> IMessageLoad {
     let db = iMessageDB
-    return await Task.detached(priority: .userInitiated) {
+    let work = Task.detached(priority: .userInitiated) { () -> IMessageLoad in
       do {
         let list = try db.fetchConversations()
         return .success(list)
@@ -459,10 +728,24 @@ final class InboxStore {
           return .denied(error.localizedDescription)
         }
         return .failure(error.localizedDescription)
+      } catch is CancellationError {
+        return .failure("Lecture Messages trop longue — vérifie l’accès disque.")
       } catch {
         return .failure(error.localizedDescription)
       }
-    }.value
+    }
+    let timeout = Task {
+      try? await Task.sleep(for: .seconds(45))
+      work.cancel()
+    }
+    let result = await work.result
+    timeout.cancel()
+    switch result {
+    case .success(let value):
+      return value
+    case .failure:
+      return .failure("Lecture Messages trop longue — vérifie l’accès disque.")
+    }
   }
 
   private func loadMessagesForSelection() async {
@@ -507,6 +790,7 @@ final class InboxStore {
       }
       if cached.isEmpty {
         cached = await signal.pullLatestMessages(for: conversation.id)
+        cached = await signal.ensureLocalAttachments(cached, conversationID: conversation.id)
       }
       if !cached.isEmpty {
         messages = cached
@@ -539,8 +823,20 @@ final class InboxStore {
     conversations[idx] = updated
   }
 
+  private func persistFlags() {
+    UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
+    UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
+    if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
+      UserDefaults.standard.set(data, forKey: Keys.disappearing)
+    }
+  }
+
   private enum Keys {
     static let mode = "correspondance.inboxMode"
+    static let sidebarCompact = "correspondance.sidebarCompact"
+    static let pinnedIDs = "correspondance.pinnedConversationIDs"
+    static let mutedIDs = "correspondance.mutedConversationIDs"
+    static let disappearing = "correspondance.disappearingSeconds"
   }
 
   private static func demoConversations() -> [Conversation] {

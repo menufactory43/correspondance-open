@@ -48,6 +48,7 @@ private struct WindowChromeApplicator: NSViewRepresentable {
       window.title = ""
       window.titleVisibility = .hidden
       window.titlebarAppearsTransparent = true
+      window.titlebarSeparatorStyle = .none
       window.isMovableByWindowBackground = true
       window.backgroundColor = NSColor(showSidebar ? sidebar : fill)
       window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)

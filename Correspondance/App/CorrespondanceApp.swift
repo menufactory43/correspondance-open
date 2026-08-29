@@ -10,7 +10,11 @@ struct CorrespondanceApp: App {
       ContentView()
         .environment(store)
         .environment(themes)
-        .task { await store.start() }
+        .task {
+          // Fenêtre visible → puis demande Contacts (sinon pas dans Confidentialité).
+          try? await Task.sleep(for: .milliseconds(500))
+          await store.start()
+        }
     }
     .defaultSize(width: 1100, height: 760)
     .windowStyle(.hiddenTitleBar)

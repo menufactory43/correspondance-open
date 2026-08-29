@@ -8,7 +8,20 @@ struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
   var localPath: String?
 
   var isImage: Bool {
-    contentType.hasPrefix("image/")
+    if contentType.hasPrefix("image/") { return true }
+    let ext = (filename.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? localPath.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? id.split(separator: ".").last.map(String.init)
+      ?? "").lowercased()
+    return ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp", "tif", "tiff", "bmp"].contains(ext)
+  }
+
+  var isVideo: Bool {
+    if contentType.hasPrefix("video/") { return true }
+    let ext = (filename.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? localPath.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? "").lowercased()
+    return ["mp4", "mov", "m4v"].contains(ext)
   }
 
   var resolvedFileURL: URL? {
