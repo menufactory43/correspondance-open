@@ -13,7 +13,9 @@ Règle : chaque fonction est implémentée par la voie la plus robuste qui la co
 avec **repli explicite** (message d'erreur clair, jamais d'échec silencieux) et un **test de santé** au démarrage
 (« Automatisation Messages : OK / Accessibilité manquante / arbre AX inconnu — macOS 26.6 supporté »).
 
-## État actuel (`Services/IMessageDatabase.swift`, `IMessageSender.swift`)
+## État au 2026-08-30 (`Services/IMessageDatabase.swift`, `IMessageSender.swift`, `IMessageAutomation*.swift`)
+
+Mécanique retenue pour la voie C, observée chez Beeper : Messages.app est lancée **cachée** (`activates = false` + `hide()`) et ne prend jamais le premier plan ; arbre AX dans `docs/IMESSAGE-AX.md`.
 
 | Fonction | État | Voie |
 |---|---|---|
@@ -23,13 +25,13 @@ avec **repli explicite** (message d'erreur clair, jamais d'échec silencieux) et
 | Tapbacks reçus (agrégés sous la bulle) | Fait | A |
 | Réponses citées reçues (`thread_originator_guid`) | Fait | A |
 | Livré / lu sur mes envois | Fait (affiché) | A |
-| Envoyer un tapback, une réponse citée | **Absent** | C |
-| Marquer lu / non lu | **Absent** | C (lu) — le « lu » côté expéditeur n'est envoyé que si Messages.app affiche le fil |
-| Envoyer une pièce jointe | **Absent** | B (`send POSIX file`) |
-| Modifier / annuler l'envoi (15 min / 2 min) | **Absent** | A (lecture) + C (action) |
-| Messages audio | **Absent** | A (lecture, `.caf`) ; envoi C |
-| Effets (bulle/écran), stickers, Memoji | Lecture partielle | A ; envoi hors cible |
-| Groupes : créer, nommer, ajouter/retirer, quitter | **Absent** | C |
+| Envoyer un tapback, une réponse citée | Fait (M2) — à valider en live une fois l'autorisation Accessibilité refaite | C |
+| Marquer lu / non lu | Fait (M2) — lu par lien profond `imessage://`, non lu par menu | C (lu) — le « lu » côté expéditeur n'est envoyé que si Messages.app affiche le fil |
+| Envoyer une pièce jointe | Fait (M1) — `send POSIX file`, vers `chat id` pour un groupe | B |
+| Modifier / annuler l'envoi (15 min / 2 min) | Fait — lecture (M1, `message_summary_info` typedstream) et action (M2) | A + C |
+| Messages audio | Lecture faite (M1, lecteur inline) ; envoi absent | A ; envoi C |
+| Effets (bulle/écran), stickers, Memoji | Effets reçus étiquetés (M1) ; stickers/Memoji lecture partielle | A ; envoi hors cible |
+| Groupes : créer, nommer, ajouter/retirer, quitter | Lecture faite (M1 : nom, participants, photo, événements) ; actions absentes | C |
 | Indicateur de frappe | **Absent** | impossible sans API privée ; Beeper ne l'a pas non plus sur Mac |
 | SMS/RCS via iPhone (Text Message Forwarding) | Fonctionne déjà si activé (même `chat.db`) | A/B |
 | FaceTime, SharePlay, Apple Cash, localisation | hors cible | — |
