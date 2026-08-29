@@ -38,6 +38,13 @@ struct CorrespondanceCommands: Commands {
 
       Divider()
 
+      Button("Rechercher dans le fil") {
+        store.toggleThreadSearch()
+      }
+      .keyboardShortcut("f", modifiers: [.command])
+
+      Divider()
+
       Button("Conversation suivante") {
         Task { @MainActor in await store.focusNext() }
       }

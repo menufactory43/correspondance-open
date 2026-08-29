@@ -14,6 +14,9 @@ struct ThreadView: View {
     Group {
       if let conversation = store.selectedConversation {
         VStack(spacing: 0) {
+          if store.isThreadSearchActive {
+            ThreadSearchBar(theme: theme, typeface: themes.typeface)
+          }
           messages
           ComposerBar(
             text: Bindable(store).draftText,
@@ -48,8 +51,14 @@ struct ThreadView: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: Spacing.sm) {
           ForEach(store.messages) { message in
-            MessageBubbleView(message: message, theme: theme, typeface: themes.typeface)
-              .id(message.id)
+            MessageBubbleView(
+              message: message,
+              theme: theme,
+              typeface: themes.typeface,
+              highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
+              isCurrentMatch: store.threadSearchCurrentID == message.id
+            )
+            .id(message.id)
           }
         }
         .padding(.horizontal, Spacing.md)
@@ -69,6 +78,12 @@ struct ThreadView: View {
       .onChange(of: store.selectedConversationID) { _, _ in
         isShowingThread = false
         pinToBottom(proxy)
+      }
+      .onChange(of: store.threadSearchCurrentID) { _, target in
+        guard let target else { return }
+        withAnimation(.easeOut(duration: 0.18)) {
+          proxy.scrollTo(target, anchor: .center)
+        }
       }
     }
   }
@@ -181,5 +196,78 @@ private struct ConversationInfoCard: View {
     }
     .padding(Spacing.md)
     .frame(width: 280, alignment: .leading)
+  }
+}
+
+/// Barre ⌘F du fil : champ, compteur, précédent / suivant, Échap pour fermer.
+private struct ThreadSearchBar: View {
+  @Environment(InboxStore.self) private var store
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+  @FocusState private var isFocused: Bool
+
+  private var countLabel: String {
+    let total = store.threadSearchMatchIDs.count
+    guard total > 0 else {
+      return store.threadSearchQuery.isEmpty ? "" : "Aucun résultat"
+    }
+    return "\(store.threadSearchCursor + 1) sur \(total)"
+  }
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: 11))
+        .foregroundStyle(theme.inkTertiary)
+
+      TextField("Rechercher dans le fil", text: Bindable(store).threadSearchQuery)
+        .textFieldStyle(.plain)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.ink)
+        .focused($isFocused)
+        .onKeyPress(.escape) {
+          store.closeThreadSearch()
+          return .handled
+        }
+        .onKeyPress(.return) {
+          if NSEvent.modifierFlags.contains(.shift) {
+            store.threadSearchPrevious()
+          } else {
+            store.threadSearchNext()
+          }
+          return .handled
+        }
+
+      Text(countLabel)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.inkTertiary)
+        .monospacedDigit()
+
+      Button { store.threadSearchPrevious() } label: {
+        Image(systemName: "chevron.up")
+      }
+      .disabled(store.threadSearchMatchIDs.isEmpty)
+      .accessibilityLabel("Résultat précédent")
+
+      Button { store.threadSearchNext() } label: {
+        Image(systemName: "chevron.down")
+      }
+      .disabled(store.threadSearchMatchIDs.isEmpty)
+      .accessibilityLabel("Résultat suivant")
+
+      Button { store.closeThreadSearch() } label: {
+        Image(systemName: "xmark")
+      }
+      .accessibilityLabel("Fermer la recherche")
+    }
+    .buttonStyle(.borderless)
+    .font(.system(size: 11, weight: .semibold))
+    .padding(.horizontal, Spacing.md)
+    .padding(.vertical, 7)
+    .background(theme.paperSecondary)
+    .overlay(alignment: .bottom) {
+      Rectangle().fill(theme.edge).frame(height: 1)
+    }
+    .onAppear { isFocused = true }
   }
 }

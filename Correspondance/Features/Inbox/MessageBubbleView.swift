@@ -5,6 +5,10 @@ struct MessageBubbleView: View {
   let message: ChatMessage
   let theme: WritingTheme
   var typeface: WritingTypeface = .quattro
+  /// Requête ⌘F à surligner dans le corps du message. Vide = aucun surlignage.
+  var highlightQuery: String = ""
+  /// Ce message est celui que la navigation ⌘F vise en ce moment.
+  var isCurrentMatch: Bool = false
 
   var body: some View {
     HStack {
@@ -15,7 +19,7 @@ struct MessageBubbleView: View {
         }
 
         if showsTextBubble {
-          Text(displayText)
+          Text(highlighted)
             .font(Typography.bubble(typeface))
             .foregroundStyle(message.isFromMe ? theme.paper : theme.ink)
             .padding(.horizontal, 12)
@@ -53,6 +57,20 @@ struct MessageBubbleView: View {
 
   private var showsTextBubble: Bool {
     !displayText.isEmpty
+  }
+
+  /// Corps du message avec les occurrences de la requête ⌘F surlignées.
+  /// Le message visé par la navigation est marqué plus franchement que les autres.
+  private var highlighted: AttributedString {
+    var attributed = AttributedString(displayText)
+    let ranges = ConversationSearch.highlightRanges(in: displayText, query: highlightQuery)
+    guard !ranges.isEmpty else { return attributed }
+    let tint = isCurrentMatch ? theme.accent.opacity(0.55) : theme.accent.opacity(0.22)
+    for range in ranges {
+      guard let bounds = Range(range, in: attributed) else { continue }
+      attributed[bounds].backgroundColor = message.isFromMe ? theme.paper.opacity(0.35) : tint
+    }
+    return attributed
   }
 
   @ViewBuilder

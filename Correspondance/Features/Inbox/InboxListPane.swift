@@ -53,6 +53,11 @@ struct InboxListPane: View {
 
       archiveToggle
     }
+    .searchable(
+      text: Bindable(store).searchQuery,
+      placement: .sidebar,
+      prompt: "Rechercher un fil, un contact, un message"
+    )
     .confirmationDialog(
       "Effacer l’historique ?",
       isPresented: Binding(

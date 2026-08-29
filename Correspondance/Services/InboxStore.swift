@@ -25,6 +25,17 @@ final class InboxStore {
   }
   /// Vue « Archivés » de la liste (⌘⇧E). Ne change rien au stockage.
   var isShowingArchived = false
+  /// Champ `.searchable` de la liste. Vide = pas de filtrage.
+  var searchQuery = ""
+  /// Recherche dans le fil ouvert (⌘F).
+  var isThreadSearchActive = false
+  var threadSearchQuery = "" {
+    didSet { refreshThreadSearchMatches() }
+  }
+  /// Identifiants des messages qui contiennent la requête, dans l'ordre du fil.
+  private(set) var threadSearchMatchIDs: [String] = []
+  /// Index du match courant dans `threadSearchMatchIDs`.
+  private(set) var threadSearchCursor = 0
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
   var draftText: String = ""
@@ -81,6 +92,9 @@ final class InboxStore {
   /// État de référence pour la comparaison : `oldValue` du `didSet` ne convient pas,
   /// la normalisation de l'archivage produit une passe intermédiaire.
   private var notificationBaseline: [String: Conversation] = [:]
+  /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
+  /// Alimenté par les trois caches disque puis par chaque fil ouvert.
+  private var searchIndex: [String: String] = [:]
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
   private var isNotificationPrimed = false
 
@@ -126,12 +140,23 @@ final class InboxStore {
     networkFilter = network
   }
 
+  /// Applique la recherche de la liste. Sans requête, renvoie la file telle quelle.
+  private func searched(_ list: [Conversation]) -> [Conversation] {
+    ConversationSearch.filter(list, query: searchQuery, index: searchIndex)
+  }
+
+  var isSearching: Bool { !ConversationSearch.fold(searchQuery).isEmpty }
+
   var inboxRecents: [Conversation] {
-    activeQueue.filter(\.hasLivePreview)
+    // En recherche, la partition Récents / Groupes / Contacts n'a plus de sens :
+    // tout ce qui correspond remonte dans une seule liste.
+    if isSearching { return searched(activeQueue) }
+    return activeQueue.filter(\.hasLivePreview)
   }
 
   var inboxGroups: [Conversation] {
-    activeQueue.filter { $0.isGroup && !$0.hasLivePreview }
+    if isSearching { return [] }
+    return activeQueue.filter { $0.isGroup && !$0.hasLivePreview }
       .sorted { lhs, rhs in
         if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -139,7 +164,8 @@ final class InboxStore {
   }
 
   var inboxContacts: [Conversation] {
-    activeQueue.filter { !$0.isGroup && !$0.hasLivePreview }
+    if isSearching { return [] }
+    return activeQueue.filter { !$0.isGroup && !$0.hasLivePreview }
       .sorted { lhs, rhs in
         if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -229,6 +255,7 @@ final class InboxStore {
 
     // Le cache Matrix est un simple fichier : lisible sans passer par l'actor.
     let (_, matrixConversations, matrixMessages) = MatrixConversationCache.load()
+    seedSearchIndex(signal: msgs, matrix: matrixMessages)
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
       matrixStatusFR = "Cache · \(matrixConversations.count) fils WhatsApp — sync…"
@@ -270,6 +297,68 @@ final class InboxStore {
     primeNotifications()
     startLiveSync()
     startMatrixSync()
+  }
+
+  // MARK: - Recherche
+
+  /// ⌘F : ouvre (ou referme) la barre de recherche du fil.
+  func toggleThreadSearch() {
+    isThreadSearchActive.toggle()
+    if !isThreadSearchActive {
+      threadSearchQuery = ""
+    }
+  }
+
+  func closeThreadSearch() {
+    isThreadSearchActive = false
+    threadSearchQuery = ""
+  }
+
+  /// Message actuellement visé par la navigation ⌘F.
+  var threadSearchCurrentID: String? {
+    guard threadSearchMatchIDs.indices.contains(threadSearchCursor) else { return nil }
+    return threadSearchMatchIDs[threadSearchCursor]
+  }
+
+  func threadSearchNext() {
+    guard !threadSearchMatchIDs.isEmpty else { return }
+    threadSearchCursor = (threadSearchCursor + 1) % threadSearchMatchIDs.count
+  }
+
+  func threadSearchPrevious() {
+    guard !threadSearchMatchIDs.isEmpty else { return }
+    threadSearchCursor = (threadSearchCursor - 1 + threadSearchMatchIDs.count) % threadSearchMatchIDs.count
+  }
+
+  private func refreshThreadSearchMatches() {
+    threadSearchMatchIDs = ConversationSearch.matchingMessageIDs(in: messages, query: threadSearchQuery)
+    // On repart du dernier match : c'est le plus récent, donc le plus probable.
+    threadSearchCursor = max(0, threadSearchMatchIDs.count - 1)
+  }
+
+  /// Range le fil ouvert dans l'index de recherche de la liste.
+  private func indexMessages(_ list: [ChatMessage], conversationID: String) {
+    guard !list.isEmpty else { return }
+    searchIndex[conversationID] = ConversationSearch.blob(for: list)
+  }
+
+  /// Index initial : ce que les caches disque contiennent déjà, sans une requête réseau.
+  private func seedSearchIndex(
+    signal: [String: [ChatMessage]],
+    matrix: [String: [ChatMessage]]
+  ) {
+    for (id, list) in signal { searchIndex[id] = ConversationSearch.blob(for: list) }
+    for (id, list) in matrix { searchIndex[id] = ConversationSearch.blob(for: list) }
+  }
+
+  /// Index iMessage : une passe SQL bornée, hors du fil principal.
+  private func refreshIMessageSearchIndex() async {
+    let db = iMessageDB
+    let index = await Task.detached(priority: .utility) { () -> [String: String] in
+      (try? db.fetchSearchIndex()) ?? [:]
+    }.value
+    guard !index.isEmpty else { return }
+    searchIndex.merge(index) { _, fresh in fresh }
   }
 
   // MARK: - Notifications système
@@ -634,6 +723,8 @@ final class InboxStore {
     pendingAttachmentPaths = []
     if let id { clearUnread(for: id) }
     await loadMessagesForSelection()
+    if let id { indexMessages(messages, conversationID: id) }
+    refreshThreadSearchMatches()
   }
 
   func setMode(_ newMode: InboxMode) {
@@ -723,9 +814,11 @@ final class InboxStore {
 
   /// File des fils archivés — la vue « Archivés » de la liste.
   var archivedQueue: [Conversation] {
-    conversations
-      .filter { $0.isArchived && matchesNetworkFilter($0) }
-      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+    searched(
+      conversations
+        .filter { $0.isArchived && matchesNetworkFilter($0) }
+        .sorted { $0.lastMessageAt > $1.lastMessageAt }
+    )
   }
 
   func archiveSelected() async {
@@ -1109,6 +1202,7 @@ final class InboxStore {
 
     if shouldEnrichIMessage {
       Task { await self.enrichIMessageContactsInBackground() }
+      Task { await self.refreshIMessageSearchIndex() }
     }
 
     // 2) Signal ensuite (peut être long — listGroups / receive / contacts).
@@ -1325,6 +1419,7 @@ final class InboxStore {
     else { return }
     if last.id.hasPrefix("signal-empty-") || last.id.hasPrefix("signal-sync-") { return }
     if last.id.hasPrefix("matrix-empty-") { return }
+    indexMessages(messages, conversationID: conversationID)
     var updated = conversations[idx]
     updated.preview = last.sidebarPreviewText
     updated.lastMessageAt = last.sentAt

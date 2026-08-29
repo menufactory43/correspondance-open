@@ -132,6 +132,44 @@ struct IMessageDatabase: Sendable {
     return results
   }
 
+  /// Index de recherche : le corps des messages récents, par conversation.
+  ///
+  /// Une seule passe SQL sur la copie de `chat.db`, bornée : la recherche de l'inbox
+  /// doit rester instantanée et tenir en mémoire. Au-delà de `limit` messages, les
+  /// plus anciens ne sont pas indexés — comme Beeper, qui ne cherche que ce qu'il a chargé.
+  func fetchSearchIndex(limit: Int = 6_000) throws -> [String: String] {
+    let snapshot = try makeSnapshot()
+    defer { try? FileManager.default.removeItem(at: snapshot) }
+
+    let db = try openReadOnly(at: snapshot)
+    defer { sqlite3_close(db) }
+
+    let sql = """
+    SELECT c.guid, m.text
+    FROM message m
+    JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+    JOIN chat c ON c.ROWID = cmj.chat_id
+    WHERE m.text IS NOT NULL AND m.text != ''
+    ORDER BY m.date DESC
+    LIMIT ?;
+    """
+
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+      throw IMessageAccessError.queryFailed(String(cString: sqlite3_errmsg(db)))
+    }
+    defer { sqlite3_finalize(statement) }
+    sqlite3_bind_int(statement, 1, Int32(limit))
+
+    var parts: [String: [String]] = [:]
+    while sqlite3_step(statement) == SQLITE_ROW {
+      let guid = stringColumn(statement, 0)
+      guard !guid.isEmpty else { continue }
+      parts["imessage:\(guid)", default: []].append(stringColumn(statement, 1))
+    }
+    return parts.mapValues { ConversationSearch.fold($0.joined(separator: "\n")) }
+  }
+
   /// Coche « livré / vu » du dernier message : seulement s'il est sortant.
   private static func delivery(fromMe: Bool, delivered: Bool, read: Bool) -> MessageDelivery? {
     guard fromMe else { return nil }

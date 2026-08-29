@@ -43,6 +43,7 @@
 		8F731A81F8D37773A8A5BD7E /* MatrixTransactionLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F7A73102F13A76EF33CAD9 /* MatrixTransactionLedger.swift */; };
 		92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE06AF0526360BC841BE21 /* InboxStore.swift */; };
 		93FC9A7390A493C419E1A7BF /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = C62337EDC213EAEAD5361C6E /* matrix-sync-whatsapp.json */; };
+		98AD60CDAECCA050179A31E6 /* ConversationSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9E8ECA240D5B5AECEFF32E /* ConversationSearchTests.swift */; };
 		9F58D1FAA96AD73CCB6B1E00 /* MatrixCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3023A9F526F195791DE5AF5 /* MatrixCredentials.swift */; };
 		A115DEED0F22CA051301CA3D /* ConversationTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E28BD58F9681C394ECC6E76 /* ConversationTitleTests.swift */; };
 		A1623A6B1884B563A84216CC /* MatrixRoomModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6D8CF46418259CE1F7458E /* MatrixRoomModel.swift */; };
@@ -59,6 +60,7 @@
 		CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */; };
 		D1BF5BAF7DA02418BC58DDFF /* GlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
+		D9CE34EE5628C0B48A0190CC /* ConversationSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F6FDEDFB8A03D8C7EBD58B /* ConversationSearch.swift */; };
 		DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */; };
 		DCF0104A7F5C0B8B7C4B310C /* MatrixSyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138212902ED48F144DFA0511 /* MatrixSyncModels.swift */; };
 		E43F7F490F35FB679E964BB2 /* MatrixError.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4E2089D4CA3878C9CAC6892 /* MatrixError.swift */; };
@@ -143,8 +145,10 @@
 		C7E4B7561B8ADEA64F9D25BD /* MatrixClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixClient.swift; sourceTree = "<group>"; };
 		CC91D9CDB44F433194BD0458 /* SignalConversationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalConversationCache.swift; sourceTree = "<group>"; };
 		CF291CB888D9703104F47AB1 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
+		D1F6FDEDFB8A03D8C7EBD58B /* ConversationSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSearch.swift; sourceTree = "<group>"; };
 		D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectory.swift; sourceTree = "<group>"; };
+		DC9E8ECA240D5B5AECEFF32E /* ConversationSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSearchTests.swift; sourceTree = "<group>"; };
 		DCF0FB534C12237850268E15 /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		DD11D73A4B8A9CCA1A978CA4 /* ArchiveStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveStateTests.swift; sourceTree = "<group>"; };
 		EAD00CD1C7485D79E4CB665C /* SignalBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalBridge.swift; sourceTree = "<group>"; };
@@ -160,6 +164,7 @@
 				089E557DD9A6FFA336C499CE /* ArchiveState.swift */,
 				5443743FD598E735E0F5F364 /* ChatMessage.swift */,
 				DCF0FB534C12237850268E15 /* Conversation.swift */,
+				D1F6FDEDFB8A03D8C7EBD58B /* ConversationSearch.swift */,
 				445D3B44D6F503508070D241 /* InboxMode.swift */,
 				803BDF7075D9E2ACC5BE3155 /* MessageDelivery.swift */,
 				BF503338243AC9298D7EF4B4 /* MessageNetwork.swift */,
@@ -216,6 +221,7 @@
 			children = (
 				1B9AA16D44F45044FBAFD516 /* Fixtures */,
 				DD11D73A4B8A9CCA1A978CA4 /* ArchiveStateTests.swift */,
+				DC9E8ECA240D5B5AECEFF32E /* ConversationSearchTests.swift */,
 				6E28BD58F9681C394ECC6E76 /* ConversationTitleTests.swift */,
 				3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */,
 				3725D6114DB7A83300EF89D5 /* MatrixSyncParserTests.swift */,
@@ -465,6 +471,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				40013AB522A26DC3DC959F30 /* ArchiveStateTests.swift in Sources */,
+				98AD60CDAECCA050179A31E6 /* ConversationSearchTests.swift in Sources */,
 				A115DEED0F22CA051301CA3D /* ConversationTitleTests.swift in Sources */,
 				B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */,
 				197A14DC76960829F24066DE /* MatrixSyncParserTests.swift in Sources */,
@@ -491,6 +498,7 @@
 				7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */,
 				F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */,
 				C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */,
+				D9CE34EE5628C0B48A0190CC /* ConversationSearch.swift in Sources */,
 				663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */,
 				D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */,
 				72844F5AEC9B03F135C9BECA /* FocusConversationView.swift in Sources */,

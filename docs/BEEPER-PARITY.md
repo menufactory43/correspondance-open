@@ -52,7 +52,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Auto-archivage par règle | `Auto-archive chats based on a rule`, `Archive __TYPE__ chats older than __DURATION__` | **Absent** | M | P2 |
 | Sync de l'archivage avec la plateforme native | Réglage `Sync chat archive state with native platform` (clé `NATIVE_ARCHIVE`) | **Absent** | M | P2 |
 | Action après archivage | Réglages `AFTER_ARCHIVE` / `AFTER_TOGGLE_READ` → `SELECT_NEXT_THREAD` par défaut | **Fait de fait** : le mode Focus enchaîne déjà (`focusNext()` après `archiveSelected()`) — c'est notre cœur | — | — |
-| Recherche | ⌘K global (`SEARCH`), ⌘F dans le fil (`SEARCH_ROOM`) ; API `GET /v1/search`, `GET /v1/messages/search` (filtres `sender`, `mediaTypes`, `dateAfter`, `chatType`) ; « Only messages loaded in Beeper can be searched. » | **Absent** : aucun `.searchable`. Seule recherche = carnet d'adresses (`ContactDirectory.searchPeople`) | M | **P0** |
+| Recherche | ⌘K global (`SEARCH`), ⌘F dans le fil (`SEARCH_ROOM`) ; API `GET /v1/search`, `GET /v1/messages/search` (filtres `sender`, `mediaTypes`, `dateAfter`, `chatType`) ; « Only messages loaded in Beeper can be searched. » | **Fait** : `.searchable` sur la liste (titre, adresse, aperçu, corps des messages) via `Domain/ConversationSearch.swift` — index en mémoire, insensible à la casse et aux accents, plusieurs mots = ET. ⌘F dans le fil : barre dédiée, surlignage, ⏎ / ⇧⏎ pour naviguer. Index iMessage par une passe SQL bornée (`fetchSearchIndex`), Signal et WhatsApp depuis leurs caches disque | — | — |
 | Épingles | `TOGGLE_THREAD_PIN` ⌘P, `Pinned chats can't be archived` | **Fait + persisté** : `togglePinned`, `UserDefaults correspondance.pinnedConversationIDs` | — | — |
 | Muet | `TOGGLE_THREAD_MUTE` ⌘⇧M | **Fait** : `mutedIDs` persistés, respectés par les notifications *et* par la pastille du Dock | — | — |
 | Non-lus / marquer lu-non lu | `TOGGLE_THREAD_READ` ⌘⇧U, `SELECT_NEXT_UNREAD_THREAD` ⌘U, `Mark All as Read` | **Fait localement** : `clearUnread`, `markUnread`. iMessage renvoie toujours 0 non-lu | S | P1 |
@@ -158,7 +158,7 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 
 | Beeper | Correspondance | Prio |
 |---|---|---|
-| ⌘K `SEARCH` · ⌘F `SEARCH_ROOM` | absent | **P0** |
+| ⌘K `SEARCH` · ⌘F `SEARCH_ROOM` | champ `.searchable` de la liste · **⌘F** ✅ | — |
 | ⌘J `TOGGLE_COMMAND_BAR` (barre de commandes) | absent | ✗ (une palette de commandes est un aveu de complexité) |
 | ⌘E / `e` `TOGGLE_THREAD_ARCHIVE` | **⌘E Archiver** ✅ | — |
 | ⌘⇧E `ARCHIVE_ALL_READ_THREADS` | absent (⌘⇧E sert à ouvrir la vue « Archivés ») | P1 |
