@@ -1981,9 +1981,29 @@ final class InboxStore {
 
   private func refreshSelectedMatrixMessages() async {
     guard let id = selectedConversationID,
-          let conversation = conversations.first(where: { $0.id == id }),
-          conversation.network.isMatrixBridged
+          let conversation = conversations.first(where: { $0.id == id })
     else { return }
+    // Un fil réuni n'est pas un salon : c'est son membre bridgé qu'on recharge,
+    // et on le recoud au reste. Repasser par le chargement complet du fil
+    // recopierait `chat.db` à chaque `/sync` — la boucle live s'en garde.
+    if isMerged(id) {
+      let bridged = memberConversations(of: id).filter { $0.network.isMatrixBridged }
+      guard !bridged.isEmpty else { return }
+      let bridgedIDs = Set(bridged.map(\.id))
+      var refreshed: [ChatMessage] = []
+      for member in bridged {
+        let fetched = await matrix.messages(conversationID: member.id)
+        guard !fetched.isEmpty else { continue }
+        refreshed.append(contentsOf: await matrix.ensureLocalAttachments(fetched))
+      }
+      guard !refreshed.isEmpty else { return }
+      let others = messages.filter { !bridgedIDs.contains($0.conversationID) }
+      messages = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      applySidebarPreview(conversationID: bridged[0].id, from: refreshed)
+      clearUnread(for: id)
+      return
+    }
+    guard conversation.network.isMatrixBridged else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
     messages = await matrix.ensureLocalAttachments(fetched)
