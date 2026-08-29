@@ -260,6 +260,17 @@ actor MatrixBridgeService {
     persist()
   }
 
+  /// Marque le fil lu côté réseau, à l'ouverture. Silencieux en cas d'échec :
+  /// un accusé perdu ne doit pas faire échouer l'ouverture d'une conversation.
+  func markRead(conversationID: String) async {
+    guard let roomID = roomID(forConversation: conversationID),
+          let last = rooms[roomID]?.sortedMessages.last,
+          // Marquer nos propres messages n'apprend rien à personne.
+          !last.isFromMe
+    else { return }
+    try? await client.sendReadReceipt(roomID: roomID, eventID: last.id)
+  }
+
   // MARK: - Connexion WhatsApp
 
   enum WhatsAppLoginStep: Sendable, Equatable {

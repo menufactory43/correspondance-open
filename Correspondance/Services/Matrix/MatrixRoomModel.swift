@@ -21,6 +21,9 @@ struct MatrixRoomModel: Sendable {
   /// Réactions indexées par **event de réaction**, pas par cible : c'est ce qui permet
   /// à une `m.room.redaction` d'en retirer une seule, précisément.
   var reactionsByEventID: [String: ReactionEvent] = [:]
+  /// Dernier event lu par chaque correspondant (`m.receipt` / `m.read` du `/sync`).
+  /// mautrix-whatsapp pose un seul marqueur « jusqu'ici » par personne.
+  var readMarkerByUser: [String: String] = [:]
   var lastEventAt: Date = .distantPast
   /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
   /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.
@@ -98,6 +101,27 @@ struct MatrixRoomModel: Sendable {
   }
 
   /// Messages du salon, réactions déjà rattachées et agrégées.
+  /// Mon dernier message sortant — celui qui porte la coche.
+  var lastOutgoingMessage: ChatMessage? {
+    messagesByID.values.filter(\.isFromMe).max { $0.sentAt < $1.sentAt }
+  }
+
+  /// Acheminement de mon dernier message, d'après les accusés reçus.
+  ///
+  /// WhatsApp ne bridge que la **lecture** : mautrix mappe bien `ReceiptTypeDelivered`,
+  /// mais rien n'en ressort côté Matrix pour un client tiers. On n'affiche donc jamais
+  /// « Livré » ici — seulement « Envoyé » ou « Vu ».
+  func delivery(selfUserID: String) -> MessageDelivery? {
+    guard let mine = lastOutgoingMessage else { return nil }
+    for (userID, eventID) in readMarkerByUser where userID != selfUserID {
+      guard !MatrixIdentity.isBridgeBot(userID) else { continue }
+      // Le marqueur vaut « lu jusqu'ici » : il suffit qu'il ait atteint mon message.
+      guard let marker = messagesByID[eventID] else { continue }
+      if marker.sentAt >= mine.sentAt { return .read }
+    }
+    return .sent
+  }
+
   var sortedMessages: [ChatMessage] {
     var byTarget: [String: [(emoji: String, sender: String, isMine: Bool)]] = [:]
     for reaction in reactionsByEventID.values {
@@ -135,6 +159,7 @@ struct MatrixRoomModel: Sendable {
       isGroup: group
     )
     conversation.lastMessageIsFromMe = last?.isFromMe ?? false
+    conversation.lastDelivery = (last?.isFromMe == true) ? delivery(selfUserID: selfUserID) : nil
     if conversation.lastMessageAt == .distantPast {
       conversation.lastMessageAt = Date(timeIntervalSince1970: 0)
     }

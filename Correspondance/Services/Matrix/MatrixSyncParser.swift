@@ -23,6 +23,7 @@ struct MatrixSyncParser: Sendable {
         applyReaction(event, to: &model)
         applyRedaction(event, to: &model)
       }
+      for event in (room.ephemeral?.events ?? []) { applyReceipt(event, to: &model) }
       if let heroes = room.summary?.heroes { model.heroes = heroes }
       if let count = room.unreadNotifications?.notificationCount { model.unreadCount = count }
       rooms[roomID] = model
@@ -207,6 +208,20 @@ struct MatrixSyncParser: Sendable {
       senderName: displayName(of: sender, in: model),
       isMine: sender == selfUserID
     )
+  }
+
+  /// `m.receipt` : `{ "$event": { "m.read": { "@user": { "ts": … } } } }`.
+  /// C'est ce que mautrix-whatsapp pose quand le correspondant lit sur son téléphone.
+  private func applyReceipt(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == "m.receipt",
+          let events = event.content?.objectValue
+    else { return }
+    for (eventID, receipts) in events {
+      guard let readers = receipts["m.read"]?.objectValue else { continue }
+      for userID in readers.keys {
+        model.readMarkerByUser[userID] = eventID
+      }
+    }
   }
 
   /// `m.room.redaction` : retire la réaction (ou le message) supprimé.

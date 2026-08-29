@@ -215,6 +215,19 @@ actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// `POST /rooms/{id}/receipt/m.read/{eventId}` — marque le fil lu jusqu'à cet event.
+  ///
+  /// mautrix-whatsapp l'écoute par les transactions applicatives (MSC2409,
+  /// `ephemeral_events: true` par défaut) : **aucun double puppeting n'est requis**,
+  /// et il marque tout l'intervalle, pas seulement le dernier message.
+  func sendReadReceipt(roomID: String, eventID: String) async throws {
+    _ = try await request(
+      method: "POST",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/receipt/m.read/\(Self.escape(eventID))",
+      body: .object([:])
+    )
+  }
+
   /// Retire un event — c'est ainsi qu'on retire une réaction.
   @discardableResult
   func redact(

@@ -618,6 +618,26 @@ actor SignalBridge {
     }
   }
 
+  /// Accusé de lecture Signal (`signal-cli sendReceipt --type read`).
+  ///
+  /// Ne vaut que pour les DM : `sendReceipt` prend un destinataire, pas un groupe.
+  /// Silencieux en cas d'échec — un accusé perdu ne bloque pas l'ouverture d'un fil.
+  func sendReadReceipt(conversation: Conversation) async {
+    guard !conversation.isGroup, !conversation.id.hasPrefix("signal-group:") else { return }
+    guard let cli = resolvedCLI() else { return }
+    ensureMemoryCacheLoaded()
+    // Le dernier message *reçu* : marquer les nôtres n'apprend rien à personne.
+    guard let last = cachedMessages[conversation.id]?.last(where: { !$0.isFromMe }),
+          let timestamp = Self.timestamp(inMessageID: last.id)
+    else { return }
+
+    _ = try? await ProcessRunner.run(
+      executable: cli,
+      arguments: ["sendReceipt", "--type", "read", "-t", "\(timestamp)", conversation.address],
+      timeoutSeconds: 60
+    )
+  }
+
   /// Pose ou retire une réaction (`signal-cli sendReaction`).
   /// Signal identifie sa cible par (auteur, timestamp d'envoi) : les deux se lisent
   /// dans notre identifiant de message, `signal-<timestamp>-…`.

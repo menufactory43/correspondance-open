@@ -21,11 +21,17 @@ struct MatrixSyncResponse: Decodable, Sendable {
     var state: State?
     var summary: Summary?
     var unreadNotifications: UnreadNotifications?
+    /// EDU du salon : `m.receipt` (accusés de lecture) et `m.typing`.
+    var ephemeral: Ephemeral?
 
     enum CodingKeys: String, CodingKey {
-      case timeline, state, summary
+      case timeline, state, summary, ephemeral
       case unreadNotifications = "unread_notifications"
     }
+  }
+
+  struct Ephemeral: Decodable, Sendable {
+    var events: [MatrixEvent]?
   }
 
   struct Timeline: Decodable, Sendable {

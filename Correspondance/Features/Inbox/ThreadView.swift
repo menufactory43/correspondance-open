@@ -74,6 +74,12 @@ struct ThreadView: View {
             )
             .id(message.id)
           }
+
+          if let delivery = store.selectedConversation?.lastDelivery,
+             store.messages.last?.isFromMe == true
+          {
+            DeliveryReceiptLabel(delivery: delivery, theme: theme, typeface: themes.typeface)
+          }
         }
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.md)
@@ -318,5 +324,29 @@ private struct ReplyBanner: View {
     .padding(.horizontal, Spacing.md)
     .padding(.vertical, 6)
     .background(theme.paperSecondary)
+  }
+}
+
+/// Coche d'acheminement sous le dernier message sortant.
+///
+/// iMessage la donne complète (`is_delivered` / `is_read`). WhatsApp ne bridge que la
+/// **lecture** : on y montre « Envoyé » ou « Vu », jamais « Livré ». Signal ne bridge
+/// aucun accusé de livraison — rien ne s'affiche.
+private struct DeliveryReceiptLabel: View {
+  let delivery: MessageDelivery
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+
+  var body: some View {
+    HStack(spacing: 3) {
+      Image(systemName: delivery.systemImage)
+        .font(.system(size: 9))
+      Text(delivery.labelFR)
+        .font(Typography.meta(typeface))
+    }
+    .foregroundStyle(delivery == .read ? theme.accent : theme.inkTertiary)
+    .frame(maxWidth: .infinity, alignment: .trailing)
+    .padding(.trailing, 4)
+    .accessibilityLabel("Dernier message : \(delivery.labelFR)")
   }
 }

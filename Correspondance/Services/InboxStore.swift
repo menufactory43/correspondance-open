@@ -828,6 +828,26 @@ final class InboxStore {
     await loadMessagesForSelection()
     if let id { indexMessages(messages, conversationID: id) }
     refreshThreadSearchMatches()
+    await markConversationRead()
+  }
+
+  /// Ouvrir un fil, c'est le lire : on le dit au réseau quand il sait l'entendre.
+  /// En tâche détachée — l'ouverture ne doit jamais attendre le réseau.
+  private func markConversationRead() async {
+    guard let conversation = selectedConversation else { return }
+    switch conversation.network {
+    case .iMessage:
+      // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
+      break
+    case .signal:
+      let bridge = signal
+      Task.detached { await bridge.sendReadReceipt(conversation: conversation) }
+    case .whatsapp:
+      guard isMatrixConnected else { return }
+      let bridge = matrix
+      let id = conversation.id
+      Task.detached { await bridge.markRead(conversationID: id) }
+    }
   }
 
   func setMode(_ newMode: InboxMode) {
@@ -1215,6 +1235,9 @@ final class InboxStore {
         }
         existing.preferTitle(incoming.title)
         existing.isGroup = incoming.isGroup
+        // Les accusés viennent du `/sync` : ils font autorité sur l'état local.
+        existing.lastDelivery = incoming.lastDelivery
+        existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
         // Le fil ouvert est lu : ne pas y réinstaller un badge.
         existing.unreadCount = incoming.id == selectedConversationID ? 0 : incoming.unreadCount
         byID[incoming.id] = existing
