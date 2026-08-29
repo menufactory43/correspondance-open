@@ -80,25 +80,8 @@ struct ThreadView: View {
                   .padding(.leading, ThreadMetrics.senderLabelLeading)
               }
               ForEach(group.messages) { message in
-                MessageBubbleView(
-                  message: message,
-                  theme: theme,
-                  typeface: themes.typeface,
-                  highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
-                  isCurrentMatch: store.threadSearchCurrentID == message.id,
-                  isSelected: store.selectedMessageID == message.id,
-                  onReact: { emoji in
-                    Task { await store.react(messageID: message.id, emoji: emoji) }
-                  },
-                  onSelect: {
-                    store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
-                  },
-                  onReply: {
-                    store.selectMessage(message.id)
-                    store.replyToSelectedMessage()
-                  }
-                )
-                .id(message.id)
+                bubble(for: message)
+                  .id(message.id)
               }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -142,6 +125,44 @@ struct ThreadView: View {
         }
       }
     }
+  }
+
+  /// Une bulle et tout ce qu'on peut lui faire. Extraite de la boucle : le
+  /// vérificateur de types s'y perdait.
+  private func bubble(for message: ChatMessage) -> some View {
+    let automatable = automationAvailable(for: message)
+    let onEdit: ((String) -> Void)? = automatable
+      ? { newText in Task { await store.editMessageViaAutomation(messageID: message.id, newText: newText) } }
+      : nil
+    let onUndoSend: (() -> Void)? = automatable
+      ? { Task { await store.undoSendViaAutomation(messageID: message.id) } }
+      : nil
+    return MessageBubbleView(
+      message: message,
+      theme: theme,
+      typeface: themes.typeface,
+      highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
+      isCurrentMatch: store.threadSearchCurrentID == message.id,
+      isSelected: store.selectedMessageID == message.id,
+      onReact: { emoji in
+        Task { await store.react(messageID: message.id, emoji: emoji) }
+      },
+      onSelect: {
+        store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
+      },
+      onReply: {
+        store.selectMessage(message.id)
+        store.replyToSelectedMessage()
+      },
+      onEdit: onEdit,
+      onUndoSend: onUndoSend
+    )
+  }
+
+  /// « Modifier » et « Annuler l'envoi » n'ont de sens que sur mes iMessages,
+  /// et seulement quand l'automatisation Messages est active et saine.
+  private func automationAvailable(for message: ChatMessage) -> Bool {
+    message.network == .iMessage && message.isFromMe && store.canAutomateMessages
   }
 
   private func pinToBottom(_ proxy: ScrollViewProxy) {

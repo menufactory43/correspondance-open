@@ -95,6 +95,8 @@ struct SettingsView: View {
         }
       }
 
+      messagesAutomationSection
+
       matrixSection
 
       Section("Affichage") {
@@ -158,6 +160,46 @@ struct SettingsView: View {
       WhatsAppLoginSheet()
     }
     .task { await store.refreshMatrixStatus() }
+  }
+
+  /// Lot M2 — pilotage de Messages.app par l'Accessibilité, app cachée.
+  /// Éteint, Correspondance se comporte exactement comme avant.
+  @ViewBuilder
+  private var messagesAutomationSection: some View {
+    Section("Automatisation Messages") {
+      Toggle("Piloter Messages en arrière-plan", isOn: Binding(
+        get: { store.isMessagesAutomationEnabled },
+        set: { store.isMessagesAutomationEnabled = $0 }
+      ))
+      Text("Tapback, réponse citée, modifier, annuler l’envoi et « non lu » sur iMessage. "
+        + "Messages est lancée cachée et n’apparaît jamais au premier plan.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      LabeledContent("État") {
+        Text(store.messagesAutomationHealthFR)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: 320, alignment: .trailing)
+      }
+
+      Toggle("Fenêtre Messages hors écran", isOn: Binding(
+        get: { store.messagesAutomationOffscreenWindow },
+        set: { store.messagesAutomationOffscreenWindow = $0 }
+      ))
+      Text("Repli : certaines actions exigent une fenêtre réellement dessinée. "
+        + "Elle est alors poussée au-delà du bord de l’écran plutôt que masquée.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      Button("Ouvrir Confidentialité → Accessibilité") {
+        store.openAccessibilityPrivacySettings()
+      }
+
+      Button("Re-sonder Messages") {
+        Task { await store.refreshAutomationHealthOnly() }
+      }
+    }
   }
 
   /// Homeserver Matrix (NUC via Tailscale) + connexion WhatsApp par le bot mautrix.

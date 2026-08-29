@@ -80,6 +80,24 @@ final class InboxStore {
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
   var messagesAutomationStatusFR = "…"
+  /// Lot M2 — réglage « Automatisation Messages » (pilotage AX de Messages.app,
+  /// app cachée). Éteint, l'app se comporte exactement comme avant.
+  var isMessagesAutomationEnabled = UserDefaults.standard.bool(forKey: Keys.messagesAutomation) {
+    didSet {
+      UserDefaults.standard.set(isMessagesAutomationEnabled, forKey: Keys.messagesAutomation)
+      refreshMessagesAutomation()
+    }
+  }
+  /// Option « fenêtre Messages hors écran » : repli pour les actions qui exigent
+  /// une fenêtre réellement dessinée.
+  var messagesAutomationOffscreenWindow = UserDefaults.standard.bool(forKey: Keys.messagesAutomationOffscreen) {
+    didSet {
+      UserDefaults.standard.set(messagesAutomationOffscreenWindow, forKey: Keys.messagesAutomationOffscreen)
+      refreshMessagesAutomation()
+    }
+  }
+  /// État de santé de la sonde AX, tel qu'affiché dans Réglages.
+  private(set) var messagesAutomationHealth: IMessageAutomationHealth = .unknown
   var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
   /// Matrix joignable et session valide — conditionne WhatsApp dans l'UI.
@@ -321,6 +339,8 @@ final class InboxStore {
     // Demande Contacts tout de suite (sinon l’app n’apparaît pas dans Confidentialité).
     await requestContactsPermission()
     requestMessagesAutomation()
+    // Lot M2 : sonde l'arbre AX de Messages au lancement (résultat dans Réglages).
+    refreshMessagesAutomation()
     NotificationService.shared.onOpenConversation = { [weak self] id in
       guard let self else { return }
       Task { @MainActor in
@@ -503,10 +523,9 @@ final class InboxStore {
 
     switch conversation.network {
     case .iMessage:
-      // Les tapbacks se *lisent* dans chat.db mais ne s'*écrivent* pas : le
-      // dictionnaire AppleScript de Messages n'expose aucune commande de tapback.
-      lastErrorMessage = "Les tapbacks iMessage se lisent mais ne s’envoient pas : "
-        + "Messages n’expose aucune commande d’automatisation pour les poser."
+      // AppleScript n'a pas de commande de tapback : c'est l'automatisation
+      // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
+      await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
     case .signal:
       // Signal désigne sa cible par (auteur, timestamp) : l'auteur d'un message reçu
@@ -993,7 +1012,8 @@ final class InboxStore {
     switch conversation.network {
     case .iMessage:
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
-      break
+      // L'automatisation se contente de lui faire sélectionner le fil, cachée.
+      markReadViaAutomation(conversation: conversation)
     case .signal:
       let bridge = signal
       Task.detached { await bridge.sendReadReceipt(conversation: conversation) }
@@ -1003,6 +1023,17 @@ final class InboxStore {
       let id = conversation.id
       Task.detached { await bridge.markRead(conversationID: id) }
     }
+  }
+
+  /// Point d'entrée interne : `InboxStore+IMessageAutomation.swift` recharge le
+  /// fil après une action AX confirmée (`loadMessagesForSelection` est privée).
+  func reloadMessagesAfterAutomation() async {
+    await loadMessagesForSelection()
+  }
+
+  /// `messagesAutomationHealth` est `private(set)` : l'extension passe par ici.
+  func setMessagesAutomationHealth(_ health: IMessageAutomationHealth) {
+    messagesAutomationHealth = health
   }
 
   func setMode(_ newMode: InboxMode) {
@@ -1053,6 +1084,10 @@ final class InboxStore {
     var updated = conversations[idx]
     updated.unreadCount = max(1, updated.unreadCount)
     conversations[idx] = updated
+    // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
+    if updated.network == .iMessage {
+      markUnreadViaAutomation(conversation: updated)
+    }
   }
 
   func togglePinned(conversationID: String) {
@@ -1236,11 +1271,23 @@ final class InboxStore {
       return
     }
 
-    if conversation.network == .iMessage, replyingToMessageID != nil {
-      // `thread_originator_guid` se *lit* dans chat.db, mais AppleScript ne sait
-      // envoyer qu'un message nu : pas de commande « répondre à ».
+    if conversation.network == .iMessage, let quotedID = replyingToMessageID {
+      // AppleScript ne sait envoyer qu'un message nu. Avec l'automatisation
+      // Messages, la citation passe par l'AX ; sans elle, on prévient et on
+      // envoie nu — exactement comme avant le Lot M2.
+      if canAutomateMessages {
+        if await sendQuotedReplyViaAutomation(conversation: conversation, quotedID: quotedID, text: text) {
+          draftText = ""
+          replyingToMessageID = nil
+          drafts.removeValue(forKey: conversation.id)
+          persistDraftsNow()
+          await reloadMessagesAfterAutomation()
+        }
+        return
+      }
       lastErrorMessage = "Répondre en citant n’existe pas sur iMessage depuis "
-        + "l’automatisation : le message part sans citation."
+        + "l’automatisation AppleScript : le message part sans citation. "
+        + "Active « Automatisation Messages » dans Réglages pour citer."
       replyingToMessageID = nil
     }
 
@@ -2060,6 +2107,8 @@ final class InboxStore {
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
+    static let messagesAutomation = "correspondance.messagesAutomation.enabled"
+    static let messagesAutomationOffscreen = "correspondance.messagesAutomation.offscreenWindow"
   }
 
   private static func demoConversations() -> [Conversation] {

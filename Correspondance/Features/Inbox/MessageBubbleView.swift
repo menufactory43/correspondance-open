@@ -15,6 +15,14 @@ struct MessageBubbleView: View {
   var onReact: ((String) -> Void)?
   var onSelect: (() -> Void)?
   var onReply: (() -> Void)?
+  /// Lot M2 — modifier / annuler l'envoi d'un iMessage, via l'automatisation
+  /// Accessibilité. `nil` = le réseau (ou le réglage) ne le permet pas.
+  var onEdit: ((String) -> Void)?
+  var onUndoSend: (() -> Void)?
+
+  /// Feuille « Modifier le message ».
+  @State private var isEditing = false
+  @State private var editedText = ""
 
   var body: some View {
     HStack {
@@ -60,6 +68,13 @@ struct MessageBubbleView: View {
       .accessibilityValue(message.sentAt.formatted(date: .omitted, time: .shortened))
       .contextMenu { bubbleMenu }
       if !message.isFromMe { Spacer(minLength: 48) }
+    }
+    .alert("Modifier le message", isPresented: $isEditing) {
+      TextField("Nouveau texte", text: $editedText)
+      Button("Annuler", role: .cancel) {}
+      Button("Modifier") { onEdit?(editedText) }
+    } message: {
+      Text("Messages n’autorise la modification que 15 minutes après l’envoi.")
     }
   }
 
@@ -132,6 +147,18 @@ struct MessageBubbleView: View {
           // Le même emoji déjà posé : le menu propose alors de le retirer.
           Text(message.myReactionEmoji == emoji ? "\(emoji)  Retirer" : emoji)
         }
+      }
+    }
+    if onEdit != nil || onUndoSend != nil {
+      Divider()
+      if onEdit != nil {
+        Button("Modifier…") {
+          editedText = message.text
+          isEditing = true
+        }
+      }
+      if let onUndoSend {
+        Button("Annuler l’envoi") { onUndoSend() }
       }
     }
     if !message.text.isEmpty {
