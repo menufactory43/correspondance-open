@@ -31,20 +31,20 @@ Tailscale tourne sur le NUC en **userspace-networking** : il n'y a aucune interf
 donc l'IP `100.64.0.7` n'est pas assignable en `bind`. `tailscaled` relaie lui-même le trafic
 entrant du tailnet vers le `127.0.0.1` de l'hôte. Synapse écoute donc en loopback
 (`ports: 127.0.0.1:8008->8008`) et reste joignable depuis n'importe quelle machine du tailnet en
-`http://100.64.0.7:8008`, sans jamais être exposé sur le LAN 192.168. C'est voulu : ne pas
+`http://relais.exemple.ts.net:8008`, sans jamais être exposé sur le LAN 192.168. C'est voulu : ne pas
 « corriger » ce bind en `0.0.0.0`.
 
 Vérification depuis le Mac :
 
 ```sh
-curl -s http://100.64.0.7:8008/_matrix/client/versions | head -c 120
+curl -s http://relais.exemple.ts.net:8008/_matrix/client/versions | head -c 120
 ```
 
 ## 1. Connexion dans l'app
 
 **Correspondance › Réglages › Matrix** :
 
-1. **Homeserver** : `http://100.64.0.7:8008` (pré-rempli).
+1. **Homeserver** : `http://relais.exemple.ts.net:8008` (pré-rempli).
 2. **Identifiant** : `meffysto` (pré-rempli). Le MXID complet est `@meffysto:correspondance.local`.
 3. **Mot de passe** : celui de `~/correspondance-matrix/CREDENTIALS.txt` sur le NUC.
 4. **Connexion**. L'app ping d'abord le homeserver — un mot de passe n'est jamais envoyé à une
@@ -88,7 +88,7 @@ login phone +33612345678
 
 Le bot répond un code à 8 caractères, à saisir dans **WhatsApp › Appareils liés › Lier avec un
 numéro de téléphone**. La feuille de l'app affiche ce code si elle est ouverte ; sinon, Element Web
-pointé sur `http://100.64.0.7:8008` fait très bien l'affaire pour dialoguer avec le bot.
+pointé sur `http://relais.exemple.ts.net:8008` fait très bien l'affaire pour dialoguer avec le bot.
 
 ### Ouvrir un fil vers un numéro
 

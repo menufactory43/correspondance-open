@@ -87,6 +87,13 @@ targets:
         NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages.
         NSSpeechRecognitionUsageDescription: Correspondance convertit votre dictée en texte dans le composer.
+        # Homeserver Matrix privé en HTTP clair sur le tailnet (Synapse sur le NUC). Pas d'IP : ATS n'accepte que des hôtes.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
   CorrespondanceTests:
     type: bundle.unit-test
     platform: macOS

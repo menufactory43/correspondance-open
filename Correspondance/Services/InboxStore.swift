@@ -247,7 +247,7 @@ final class InboxStore {
   // MARK: - Matrix / WhatsApp
 
   /// Adresse par défaut du homeserver (NUC via Tailscale).
-  static let defaultHomeserver = "http://100.64.0.7:8008"
+  static let defaultHomeserver = "http://relais.exemple.ts.net:8008"
 
   func connectMatrix(homeserver: String, user: String, password: String) async {
     let trimmed = homeserver.trimmingCharacters(in: .whitespacesAndNewlines)

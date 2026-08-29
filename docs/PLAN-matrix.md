@@ -40,10 +40,10 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
 - Script `infra/matrix/bootstrap.sh` (idempotent, exécuté via `ssh nuc`) : crée `~/correspondance-matrix/`, génère
   les configs à partir des templates, `generate` les registrations, `docker-compose up -d`, crée l'utilisateur
   `meffysto` via `register_new_matrix_user` avec mot de passe généré et affiché **une seule fois**.
-- Vérification : `curl http://100.64.0.7:8008/_matrix/client/versions` répond ; `docker-compose ps` → 3 services up.
+- Vérification : `curl http://relais.exemple.ts.net:8008/_matrix/client/versions` répond ; `docker-compose ps` → 3 services up.
 - **Bind réel** : Tailscale tourne sur le NUC en `userspace-networking` (aucune interface `tailscale0`), donc
   `100.64.0.7` n'est pas assignable en bind. `tailscaled` relaie le trafic entrant du tailnet vers `127.0.0.1`
-  de l'hôte : Synapse écoute sur `127.0.0.1:8008` et reste joignable en `http://100.64.0.7:8008` depuis le
+  de l'hôte : Synapse écoute sur `127.0.0.1:8008` et reste joignable en `http://relais.exemple.ts.net:8008` depuis le
   tailnet, sans jamais être exposé sur le LAN 192.168.
 
 ### 2. Domaine
@@ -77,7 +77,7 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
 - Nouveau `matrixStatusFR` affiché dans Réglages.
 
 ### 5. UI
-- Réglages : section « Matrix » (URL homeserver pré-remplie `http://100.64.0.7:8008`, identifiant, mot de passe,
+- Réglages : section « Matrix » (URL homeserver pré-remplie `http://relais.exemple.ts.net:8008`, identifiant, mot de passe,
   bouton Connexion / Déconnexion, statut).
 - Réglages : bouton « Connecter WhatsApp » → envoie `login qr` au bot `@whatsappbot:correspondance.local` dans le DM
   de gestion, affiche l'image QR reçue (m.image du bot) dans une feuille, rafraîchit jusqu'au message de succès.

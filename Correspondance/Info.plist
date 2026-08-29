@@ -28,12 +28,27 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>ts.net</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Correspondance envoie tes iMessages via l’app Messages (automatisation).</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Correspondance utilise le micro pour dicter vos messages.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
