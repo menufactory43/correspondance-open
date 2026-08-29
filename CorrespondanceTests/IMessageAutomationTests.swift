@@ -43,14 +43,27 @@ final class IMessageAutomationHealthTests: XCTestCase {
     XCTAssertTrue(health.allowsActions)
   }
 
-  /// Le cas réellement rencontré sur cette machine : `AXIsProcessTrusted()` dit
-  /// oui, mais l'arbre de la fenêtre reste opaque (autorisation périmée).
-  func testAutorisationPerimeeSeVoitCommeArbreIllisible() {
+  /// Le cas réellement rencontré sur cette machine : TCC accorde l'accès, les
+  /// menus de Messages se lisent, mais `AXWindows` ne rend que des pseudo-éléments
+  /// « application » — à toutes les apps. Ce n'est pas notre autorisation, c'est
+  /// la session : on le dit, sans envoyer l'utilisateur toucher aux Réglages.
+  func testPseudoFenetresSeVoientCommeServeurAXIndisponible() {
+    var p = probe(window: false, sidebar: false, transcript: false)
+    p.pseudoWindows = true
+    let health = IMessageAutomationHealth.evaluate(p, enabled: true)
+    XCTAssertEqual(health, .axServerUnavailable)
+    XCTAssertFalse(health.allowsActions)
+    XCTAssertFalse(health.suggestsAccessibilitySettings)
+    XCTAssertTrue(health.labelFR().contains("session"))
+  }
+
+  /// Aucune fenêtre du tout (Messages sans fenêtre ouverte, ou autorisation périmée).
+  func testSansFenetreLArbreEstIllisible() {
     let health = IMessageAutomationHealth.evaluate(probe(window: false, sidebar: false, transcript: false), enabled: true)
     XCTAssertEqual(health, .treeUnreadable)
     XCTAssertFalse(health.allowsActions)
     XCTAssertTrue(health.suggestsAccessibilitySettings)
-    XCTAssertTrue(health.labelFR().contains("périmée"))
+    XCTAssertTrue(health.labelFR().contains("⌘N"))
   }
 
   func testUneSidebarSansTranscriptNeSuffitPas() {
@@ -74,7 +87,7 @@ final class IMessageAutomationHealthTests: XCTestCase {
   func testChaqueEtatSeDitEnFrancais() {
     let states: [IMessageAutomationHealth] = [
       .unknown, .disabled, .accessibilityDenied, .messagesNotRunning,
-      .treeUnreadable, .experimental, .ok,
+      .axServerUnavailable, .treeUnreadable, .experimental, .ok,
     ]
     for state in states {
       XCTAssertFalse(state.labelFR().isEmpty, "\(state) doit avoir un libellé")

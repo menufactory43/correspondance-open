@@ -16,6 +16,12 @@ struct IMessageAXProbe: Equatable, Sendable {
   var transcriptFound: Bool
   /// La barre de menus répond (chemin de repli : « Marquer comme non lu », etc.).
   var menuBarFound: Bool
+  /// `AXWindows` a répondu, mais avec des pseudo-éléments de rôle `AXApplication`
+  /// à la place des fenêtres. Observé sur macOS 26.6.2 pour TOUTES les apps à la
+  /// fois (Finder, le terminal lui-même…) alors que TCC accorde bien l'accès :
+  /// c'est le serveur d'accessibilité de la session qui ne rend plus les fenêtres,
+  /// pas notre autorisation. Se déconnecter/reconnecter le remet d'aplomb.
+  var pseudoWindows: Bool
   /// Version du système au moment de la sonde, pour l'afficher dans Réglages.
   var osVersion: String
 
@@ -26,6 +32,7 @@ struct IMessageAXProbe: Equatable, Sendable {
     sidebarFound: Bool = false,
     transcriptFound: Bool = false,
     menuBarFound: Bool = false,
+    pseudoWindows: Bool = false,
     osVersion: String = IMessageAutomationHealth.currentOSVersion
   ) {
     self.trusted = trusted
@@ -34,6 +41,7 @@ struct IMessageAXProbe: Equatable, Sendable {
     self.sidebarFound = sidebarFound
     self.transcriptFound = transcriptFound
     self.menuBarFound = menuBarFound
+    self.pseudoWindows = pseudoWindows
     self.osVersion = osVersion
   }
 }
@@ -50,8 +58,12 @@ enum IMessageAutomationHealth: Equatable, Sendable {
   case accessibilityDenied
   /// Messages.app n'est pas lancée : on la relancera cachée à la première action.
   case messagesNotRunning
-  /// `AXIsProcessTrusted()` dit oui mais l'arbre reste opaque — autorisation
-  /// périmée (binaire resigné) : il faut retirer puis rajouter l'app dans la liste.
+  /// Autorisation en place, barre de menus lisible, mais le serveur d'accessibilité
+  /// de la session ne rend plus les fenêtres (à personne) : session à rouvrir.
+  case axServerUnavailable
+  /// `AXIsProcessTrusted()` dit oui mais fenêtre, sidebar ou transcript restent
+  /// introuvables : pas de fenêtre Messages ouverte, identifiants inconnus, ou
+  /// autorisation périmée (binaire resigné) — dans cet ordre de probabilité.
   case treeUnreadable
   /// Arbre lisible mais version de macOS jamais validée : actions proposées « expérimental ».
   case experimental
@@ -76,6 +88,9 @@ enum IMessageAutomationHealth: Equatable, Sendable {
     guard enabled else { return .disabled }
     guard probe.trusted else { return .accessibilityDenied }
     guard probe.messagesRunning else { return .messagesNotRunning }
+    // Les menus se lisent mais les fenêtres reviennent en pseudo-éléments :
+    // c'est la session, pas nous.
+    if probe.menuBarFound, probe.pseudoWindows, !probe.windowFound { return .axServerUnavailable }
     // Une fenêtre sans sidebar ni transcript, ou pas de fenêtre du tout alors
     // que Messages tourne : l'arbre ne nous est pas rendu.
     guard probe.windowFound, probe.sidebarFound, probe.transcriptFound else { return .treeUnreadable }
@@ -89,7 +104,7 @@ enum IMessageAutomationHealth: Equatable, Sendable {
   var allowsActions: Bool {
     switch self {
     case .ok, .experimental, .messagesNotRunning: true
-    case .unknown, .disabled, .accessibilityDenied, .treeUnreadable: false
+    case .unknown, .disabled, .accessibilityDenied, .axServerUnavailable, .treeUnreadable: false
     }
   }
 
@@ -109,9 +124,14 @@ enum IMessageAutomationHealth: Equatable, Sendable {
         + "Confidentialité et sécurité → Accessibilité."
     case .messagesNotRunning:
       "Messages n’est pas lancée — elle sera ouverte en arrière-plan à la première action."
+    case .axServerUnavailable:
+      "L’autorisation est en place (les menus de Messages se lisent) mais macOS ne rend "
+        + "plus les fenêtres à aucune app : ferme ta session puis rouvre-la (ou redémarre), "
+        + "et relance la sonde."
     case .treeUnreadable:
-      "Arbre AX illisible malgré l’autorisation : elle est périmée. "
-        + "Retire puis rajoute Correspondance dans Accessibilité (macOS \(osVersion))."
+      "Fenêtre de Messages introuvable malgré l’autorisation. Ouvre une fenêtre dans "
+        + "Messages (⌘N) et relance la sonde ; si ça persiste, retire puis rajoute "
+        + "Correspondance dans Accessibilité (macOS \(osVersion))."
     case .experimental:
       "Expérimental : arbre AX lisible mais macOS \(osVersion) n’a pas été validée."
     case .ok:

@@ -122,6 +122,9 @@ actor IMessageAutomation {
     if result.trusted, let pid = await Self.runningPID() {
       let app = AXUIElementCreateApplication(pid)
       result.menuBarFound = AX.attribute(app, kAXMenuBarAttribute) != nil
+      let windows = (AX.attribute(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+      result.pseudoWindows = !windows.isEmpty
+        && windows.allSatisfy { AX.string($0, kAXRoleAttribute) != kAXWindowRole as String }
       if let window = Self.mainWindow(of: app) {
         result.windowFound = true
         result.sidebarFound = AX.firstDescendant(window, identifier: AXID.sidebar) != nil
