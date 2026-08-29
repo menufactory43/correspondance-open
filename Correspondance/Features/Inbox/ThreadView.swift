@@ -8,6 +8,13 @@ struct ThreadView: View {
 
   private var theme: WritingTheme { themes.theme }
 
+  private var sendLaterPickerPresented: Binding<Bool> {
+    Binding(
+      get: { store.sendLaterPicker != nil },
+      set: { if !$0 { store.sendLaterPicker = nil } }
+    )
+  }
+
   var body: some View {
     Group {
       if store.selectedConversation != nil {
@@ -19,14 +26,22 @@ struct ThreadView: View {
           if let quoted = store.replyingToMessage {
             ReplyBanner(message: quoted, theme: theme, typeface: themes.typeface)
           }
+          if let config = store.sendLaterConfig {
+            SendLaterBanner(config: config, theme: theme, typeface: themes.typeface)
+          }
           ComposerBar(
             text: Bindable(store).draftText,
             attachmentPaths: Bindable(store).pendingAttachmentPaths,
             isSending: store.isSending,
+            isScheduling: store.sendLaterConfig != nil,
             theme: theme,
             onAttach: { store.pickAttachments() },
+            onSendLater: { store.toggleSendLaterPicker() },
             onSend: { Task { await store.sendDraft() } }
           )
+          .popover(isPresented: sendLaterPickerPresented, arrowEdge: .top) {
+            SendLaterPicker()
+          }
         }
       } else {
         Text("Aucune conversation")
@@ -93,6 +108,12 @@ struct ThreadView: View {
              store.messages.last?.isFromMe == true
           {
             DeliveryReceiptLabel(delivery: delivery, theme: theme, typeface: themes.typeface)
+          }
+
+          // Ce qui partira plus tard attend en bas du fil, en pointillé.
+          ForEach(store.scheduledForSelection) { scheduled in
+            ScheduledMessageRow(message: scheduled, theme: theme, typeface: themes.typeface)
+              .id("scheduled-\(scheduled.id)")
           }
         }
         .padding(.horizontal, Spacing.md)

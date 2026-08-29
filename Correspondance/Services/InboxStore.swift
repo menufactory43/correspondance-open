@@ -52,6 +52,16 @@ final class InboxStore {
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
   var isComposerFocused = false
+  /// Messages programmés (⌘⇧L), tous fils confondus, triés par échéance.
+  private(set) var scheduledMessages: [ScheduledMessage] = []
+  /// Réglage « plus tard » du composer : tant qu'il est posé, Entrée programme
+  /// au lieu d'envoyer (et ⌘Entrée programme puis archive).
+  var sendLaterConfig: SendLaterConfig?
+  /// Sélecteur « Quand ? » ouvert — pour le brouillon ou pour reprogrammer.
+  var sendLaterPicker: SendLaterPickerTarget?
+  /// Vue « Programmés » de la liste (bouton du rail). Ne change rien au stockage.
+  var isShowingScheduled = false
+  @ObservationIgnored private var scheduleDispatchTask: Task<Void, Never>?
   /// Chrome fantôme du Focus : la barre d'outils s'efface au repos et ne
   /// revient que si la souris monte en haut de la fenêtre, ou si l'on remonte
   /// le fil. Faux hors Focus, où la barre reste franchement visible.
@@ -240,6 +250,8 @@ final class InboxStore {
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
     drafts = DraftStore.load()
+    scheduledMessages = ScheduledMessageStore.load()
+    startScheduleDispatcher()
     if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
        let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
     {
@@ -964,6 +976,8 @@ final class InboxStore {
     selectedConversationID = id
     selectedMessageID = nil
     replyingToMessageID = nil
+    sendLaterConfig = nil
+    sendLaterPicker = nil
     restoreDraft(for: id)
     if let id { clearUnread(for: id) }
     await loadMessagesForSelection()
@@ -1159,6 +1173,12 @@ final class InboxStore {
 
   func setShowingArchived(_ showing: Bool) {
     isShowingArchived = showing
+    if showing { isShowingScheduled = false }
+  }
+
+  func setShowingScheduled(_ showing: Bool) {
+    isShowingScheduled = showing
+    if showing { isShowingArchived = false }
   }
 
   /// ⌘Entrée : envoyer, puis archiver — la boucle « je réponds, je passe au suivant ».
@@ -1205,17 +1225,15 @@ final class InboxStore {
     guard let conversation = selectedConversation else { return }
     guard !text.isEmpty || !attachments.isEmpty else { return }
 
-    if usingDemoData && conversation.network == .iMessage {
-      lastErrorMessage = "Données démo — accorde l’accès disque pour envoyer via Messages."
+    if let blocker = sendBlocker(for: conversation, attachments: attachments, interactive: true) {
+      lastErrorMessage = blocker
       return
     }
-    if conversation.network == .iMessage, !iMessageSender.automationAuthorized() {
-      let granted = requestMessagesAutomation()
-      if !granted {
-        lastErrorMessage = IMessageSendError.automationDenied.localizedDescription
-        openAutomationPrivacySettings()
-        return
-      }
+
+    // « Plus tard » posé sur le composer : le message se range au lieu de partir.
+    if let config = sendLaterConfig {
+      scheduleDraft(config, text: text, attachments: attachments, conversation: conversation)
+      return
     }
 
     if conversation.network == .iMessage, replyingToMessageID != nil {
@@ -1225,18 +1243,64 @@ final class InboxStore {
         + "l’automatisation : le message part sans citation."
       replyingToMessageID = nil
     }
-    if conversation.network == .iMessage, !attachments.isEmpty {
-      lastErrorMessage = "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
-      return
-    }
-    if conversation.network.isMatrixBridged, !isMatrixConnected {
-      lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
-      return
-    }
 
     isSending = true
     defer { isSending = false }
 
+    let quoted = replyingToMessage
+    let optimistic = Self.optimisticMessage(
+      text: text, attachments: attachments, conversation: conversation, quoted: quoted
+    )
+    messages.append(optimistic)
+    draftText = ""
+    pendingAttachmentPaths = []
+    replyingToMessageID = nil
+    drafts.removeValue(forKey: conversation.id)
+    persistDraftsNow()
+
+    do {
+      try await deliver(
+        text: text, attachments: attachments, conversation: conversation,
+        quoted: quoted, localID: optimistic.id
+      )
+      if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
+        messages[idx].isPending = false
+      }
+      applySidebarPreview(conversationID: conversation.id, from: messages)
+    } catch {
+      messages.removeAll { $0.id == optimistic.id }
+      draftText = text
+      pendingAttachmentPaths = attachments
+      replyingToMessageID = quoted?.id
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  /// Ce qui empêche d'envoyer sur ce fil, ou `nil`. Commun à l'envoi immédiat
+  /// et à l'échéance d'un message programmé ; `interactive` autorise à demander
+  /// l'automatisation Messages (jamais depuis la boucle d'échéance).
+  private func sendBlocker(for conversation: Conversation, attachments: [String], interactive: Bool) -> String? {
+    if usingDemoData && conversation.network == .iMessage {
+      return "Données démo — accorde l’accès disque pour envoyer via Messages."
+    }
+    if conversation.network == .iMessage, !iMessageSender.automationAuthorized() {
+      guard interactive, requestMessagesAutomation() else {
+        if interactive { openAutomationPrivacySettings() }
+        return IMessageSendError.automationDenied.localizedDescription
+      }
+    }
+    if conversation.network == .iMessage, !attachments.isEmpty {
+      return "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
+    }
+    if conversation.network.isMatrixBridged, !isMatrixConnected {
+      return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+    }
+    return nil
+  }
+
+  private static func optimisticMessage(
+    text: String, attachments: [String], conversation: Conversation, quoted: ChatMessage?
+  ) -> ChatMessage {
     let outgoingAttachments: [MessageAttachment] = attachments.map { path in
       let url = URL(fileURLWithPath: path)
       return MessageAttachment(
@@ -1246,9 +1310,7 @@ final class InboxStore {
         localPath: path
       )
     }
-
-    let quoted = replyingToMessage
-    let optimistic = ChatMessage(
+    return ChatMessage(
       id: "local-\(UUID().uuidString)",
       conversationID: conversation.id,
       network: conversation.network,
@@ -1265,45 +1327,214 @@ final class InboxStore {
         )
       }
     )
-    messages.append(optimistic)
+  }
+
+  /// Le transport, et rien d'autre : le fil, le brouillon et l'erreur sont
+  /// affaire de l'appelant.
+  private func deliver(
+    text: String, attachments: [String], conversation: Conversation,
+    quoted: ChatMessage?, localID: String
+  ) async throws {
+    switch conversation.network {
+    case .iMessage:
+      try await iMessageSender.send(text: text, toAddress: conversation.address)
+    case .signal:
+      try await signal.send(
+        text: text,
+        conversation: conversation,
+        attachmentPaths: attachments,
+        quote: Self.signalQuote(for: quoted, conversation: conversation)
+      )
+    case .whatsapp:
+      try await matrix.send(
+        conversationID: conversation.id,
+        text: text,
+        attachmentPaths: attachments,
+        // Le txnId dérive de l'id optimiste : un renvoi ne duplique pas le message.
+        localID: localID,
+        replyToMessageID: quoted?.id
+      )
+    }
+  }
+
+  // MARK: - Envoyer plus tard
+
+  /// Messages programmés du fil ouvert, dans l'ordre où ils partiront.
+  var scheduledForSelection: [ScheduledMessage] {
+    guard let id = selectedConversationID else { return [] }
+    return scheduledMessages.filter { $0.conversationID == id }
+  }
+
+  /// Fils qui ont au moins un message programmé, le plus proche d'abord —
+  /// la vue « Programmés » de la liste.
+  var scheduledQueue: [Conversation] {
+    var seen: Set<String> = []
+    return scheduledMessages.compactMap { message in
+      guard seen.insert(message.conversationID).inserted else { return nil }
+      return conversations.first { $0.id == message.conversationID }
+    }
+  }
+
+  func scheduledMessages(for conversationID: String) -> [ScheduledMessage] {
+    scheduledMessages.filter { $0.conversationID == conversationID }
+  }
+
+  /// ⌘⇧L : ouvre (ou ferme) le sélecteur « Quand ? » pour le brouillon.
+  func toggleSendLaterPicker() {
+    guard selectedConversation != nil else { return }
+    sendLaterPicker = sendLaterPicker == .compose ? nil : .compose
+  }
+
+  func presentReschedule(_ id: String) {
+    guard scheduledMessages.contains(where: { $0.id == id }) else { return }
+    sendLaterPicker = .reschedule(id)
+  }
+
+  /// Le sélecteur a choisi une heure : selon sa cible, on la pose sur le
+  /// composer ou on déplace un message déjà programmé.
+  func applySendLater(_ config: SendLaterConfig) {
+    defer { sendLaterPicker = nil }
+    switch sendLaterPicker {
+    case .compose, nil:
+      sendLaterConfig = config
+    case .reschedule(let id):
+      guard let idx = scheduledMessages.firstIndex(where: { $0.id == id }) else { return }
+      scheduledMessages[idx].sendAt = config.sendAt
+      scheduledMessages[idx].onlyIfNoReply = config.onlyIfNoReply
+      scheduledMessages[idx].lastError = nil
+      scheduledDidChange()
+    }
+  }
+
+  /// La croix de la bannière : le composer redevient un composer.
+  func cancelSendLater() {
+    sendLaterConfig = nil
+    sendLaterPicker = nil
+  }
+
+  private func scheduleDraft(
+    _ config: SendLaterConfig, text: String, attachments: [String], conversation: Conversation
+  ) {
+    let message = ScheduledMessage(
+      conversationID: conversation.id,
+      text: text,
+      attachmentPaths: attachments,
+      replyToMessageID: replyingToMessageID,
+      sendAt: config.sendAt,
+      onlyIfNoReply: config.onlyIfNoReply
+    )
+    scheduledMessages.append(message)
     draftText = ""
     pendingAttachmentPaths = []
     replyingToMessageID = nil
+    sendLaterConfig = nil
     drafts.removeValue(forKey: conversation.id)
     persistDraftsNow()
+    scheduledDidChange()
+  }
+
+  /// « Envoyer maintenant » : l'échéance devient tout de suite.
+  func sendScheduledNow(_ id: String) async {
+    guard let idx = scheduledMessages.firstIndex(where: { $0.id == id }) else { return }
+    scheduledMessages[idx].sendAt = Date()
+    scheduledMessages[idx].lastError = nil
+    scheduledMessages[idx].onlyIfNoReply = false
+    await fire(scheduledMessages[idx])
+  }
+
+  /// « Supprimer sans envoyer ».
+  func unschedule(_ id: String) {
+    scheduledMessages.removeAll { $0.id == id }
+    scheduledDidChange()
+  }
+
+  private func scheduledDidChange() {
+    scheduledMessages.sort { $0.sendAt < $1.sendAt }
+    ScheduledMessageStore.save(scheduledMessages)
+    if scheduledMessages.isEmpty { isShowingScheduled = false }
+    startScheduleDispatcher()
+  }
+
+  /// La boucle d'échéance : dort jusqu'au prochain départ (30 s au plus, pour
+  /// survivre à une mise en veille sans rater l'heure), envoie ce qui est dû.
+  private func startScheduleDispatcher() {
+    scheduleDispatchTask?.cancel()
+    guard scheduledMessages.contains(where: { $0.lastError == nil }) else { return }
+    scheduleDispatchTask = Task { @MainActor [weak self] in
+      while !Task.isCancelled {
+        guard let self else { return }
+        await self.fireDueScheduledMessages()
+        guard let next = self.scheduledMessages.first(where: { $0.lastError == nil })?.sendAt else { return }
+        let wait = min(max(next.timeIntervalSinceNow, 0.5), 30)
+        try? await Task.sleep(for: .seconds(wait))
+      }
+    }
+  }
+
+  private func fireDueScheduledMessages() async {
+    let now = Date()
+    for message in scheduledMessages where message.isDue(at: now) && message.lastError == nil {
+      await fire(message)
+    }
+  }
+
+  private func fire(_ message: ScheduledMessage) async {
+    guard scheduledMessages.contains(where: { $0.id == message.id }) else { return }
+    guard let conversation = conversations.first(where: { $0.id == message.conversationID }) else {
+      markScheduledFailed(message.id, "Conversation introuvable.")
+      return
+    }
+    // Relance conditionnelle : l'autre a parlé depuis → le message n'a plus lieu d'être.
+    if message.onlyIfNoReply, !conversation.lastMessageIsFromMe, conversation.lastMessageAt > message.createdAt {
+      scheduledMessages.removeAll { $0.id == message.id }
+      scheduledDidChange()
+      lastErrorMessage = "Relance pour \(conversation.title) annulée : une réponse est arrivée entre-temps."
+      return
+    }
+    if let blocker = sendBlocker(for: conversation, attachments: message.attachmentPaths, interactive: false) {
+      markScheduledFailed(message.id, blocker)
+      return
+    }
+
+    let isOpen = selectedConversationID == conversation.id
+    let quoted = isOpen ? message.replyToMessageID.flatMap { id in messages.first { $0.id == id } } : nil
+    let optimistic = Self.optimisticMessage(
+      text: message.text, attachments: message.attachmentPaths, conversation: conversation, quoted: quoted
+    )
+    if isOpen { messages.append(optimistic) }
+    // Retiré avant l'envoi : un échec le remet, une réussite ne l'a jamais réenvoyé.
+    scheduledMessages.removeAll { $0.id == message.id }
 
     do {
-      switch conversation.network {
-      case .iMessage:
-        try await iMessageSender.send(text: text, toAddress: conversation.address)
-      case .signal:
-        try await signal.send(
-          text: text,
-          conversation: conversation,
-          attachmentPaths: attachments,
-          quote: Self.signalQuote(for: quoted, conversation: conversation)
-        )
-      case .whatsapp:
-        try await matrix.send(
-          conversationID: conversation.id,
-          text: text,
-          attachmentPaths: attachments,
-          // Le txnId dérive de l'id optimiste : un renvoi ne duplique pas le message.
-          localID: optimistic.id,
-          replyToMessageID: quoted?.id
-        )
+      try await deliver(
+        text: message.text, attachments: message.attachmentPaths, conversation: conversation,
+        quoted: quoted, localID: optimistic.id
+      )
+      if isOpen {
+        if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
+          messages[idx].isPending = false
+        }
+        applySidebarPreview(conversationID: conversation.id, from: messages)
+      } else {
+        var sent = optimistic
+        sent.isPending = false
+        applySidebarPreview(conversationID: conversation.id, from: [sent])
       }
-      if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
-        messages[idx].isPending = false
-      }
-      applySidebarPreview(conversationID: conversation.id, from: messages)
+      scheduledDidChange()
     } catch {
-      messages.removeAll { $0.id == optimistic.id }
-      draftText = text
-      pendingAttachmentPaths = attachments
-      replyingToMessageID = quoted?.id
-      lastErrorMessage = error.localizedDescription
+      if isOpen { messages.removeAll { $0.id == optimistic.id } }
+      var failed = message
+      failed.lastError = error.localizedDescription
+      scheduledMessages.append(failed)
+      scheduledDidChange()
+      lastErrorMessage = "Message programmé pour \(conversation.title) non envoyé : \(error.localizedDescription)"
     }
+  }
+
+  private func markScheduledFailed(_ id: String, _ reason: String) {
+    guard let idx = scheduledMessages.firstIndex(where: { $0.id == id }) else { return }
+    scheduledMessages[idx].lastError = reason
+    scheduledDidChange()
   }
 
   /// Traduit une citation en arguments `--quote-*` de signal-cli.

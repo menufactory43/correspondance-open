@@ -116,15 +116,38 @@ private struct FocusTranscriptView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
           }
 
+          ForEach(store.scheduledForSelection) { scheduled in
+            ScheduledMessageRow(message: scheduled, theme: theme, typeface: themes.typeface, isProse: true)
+              .font(pageFont)
+              .padding(.top, Spacing.sm)
+              .opacity(isWriting ? 0.34 : 1)
+          }
+
+          if let config = store.sendLaterConfig {
+            SendLaterBanner(config: config, theme: theme, typeface: themes.typeface)
+              .padding(.top, Spacing.sm)
+          }
+
           FocusPageEditor(
             text: Bindable(store).draftText,
             attachmentPaths: Bindable(store).pendingAttachmentPaths,
             isSending: store.isSending,
+            isScheduling: store.sendLaterConfig != nil,
             theme: theme,
             onAttach: { store.pickAttachments() },
+            onSendLater: { store.toggleSendLaterPicker() },
             onSend: { Task { await store.sendDraft() } }
           )
           .id("draft")
+          .popover(
+            isPresented: Binding(
+              get: { store.sendLaterPicker != nil },
+              set: { if !$0 { store.sendLaterPicker = nil } }
+            ),
+            arrowEdge: .top
+          ) {
+            SendLaterPicker()
+          }
         }
         .padding(.bottom, LayoutMetrics.pageBottomInset)
       }
@@ -189,8 +212,10 @@ private struct FocusPageEditor: View {
   @Binding var text: String
   @Binding var attachmentPaths: [String]
   var isSending: Bool
+  var isScheduling: Bool = false
   var theme: WritingTheme
   var onAttach: () -> Void
+  var onSendLater: () -> Void = {}
   var onSend: () -> Void
 
   @Environment(InboxStore.self) private var store
@@ -199,6 +224,7 @@ private struct FocusPageEditor: View {
   @FocusState private var isFocused: Bool
   @State private var isActivelyTyping = false
   @State private var idleTask: Task<Void, Never>?
+  @State private var isTrayExpanded = false
 
   private var canSend: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
@@ -259,16 +285,14 @@ private struct FocusPageEditor: View {
             return .handled
           }
 
-        Button(action: onAttach) {
-          Image(systemName: "photo")
-            .font(.system(size: 16, weight: .regular))
-            .foregroundStyle(theme.inkSecondary)
-            .frame(width: 28, height: 28)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Joindre une image")
-        .accessibilityLabel("Joindre une image")
+        ComposerPlusTray(
+          theme: theme,
+          isScheduling: isScheduling,
+          iconSize: 18,
+          isExpanded: $isTrayExpanded,
+          onAttach: onAttach,
+          onSendLater: onSendLater
+        )
         .opacity(showsChrome ? 1 : 0)
         .allowsHitTesting(showsChrome)
 
@@ -285,6 +309,7 @@ private struct FocusPageEditor: View {
         .opacity(showsChrome ? 1 : 0)
     }
     .onChange(of: text) { _, newValue in
+      if isTrayExpanded { isTrayExpanded = false }
       guard isFocused, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return
       }
@@ -304,7 +329,7 @@ private struct FocusPageEditor: View {
       endTyping()
       onSend()
     } label: {
-      Image(systemName: "arrow.up")
+      Image(systemName: isScheduling ? "clock.badge.checkmark" : "arrow.up")
         .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(canSend ? theme.paper : theme.inkTertiary.opacity(0.45))
         .frame(width: 28, height: 28)
@@ -315,8 +340,8 @@ private struct FocusPageEditor: View {
     }
     .buttonStyle(.plain)
     .disabled(!canSend || isSending)
-    .help("Envoyer")
-    .accessibilityLabel("Envoyer")
+    .help(isScheduling ? "Programmer l’envoi" : "Envoyer")
+    .accessibilityLabel(isScheduling ? "Programmer l’envoi" : "Envoyer")
   }
 
   private func noteTyping() {

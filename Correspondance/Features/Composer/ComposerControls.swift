@@ -4,10 +4,12 @@ import SwiftUI
 enum ComposerTrailingAction: Equatable {
   case dictation
   case send
+  /// Le « plus tard » est posé : le même geste range le message au lieu de l'envoyer.
+  case schedule
 
-  static func resolve(canSend: Bool, isListening: Bool) -> Self {
+  static func resolve(canSend: Bool, isListening: Bool, isScheduling: Bool = false) -> Self {
     if isListening || !canSend { return .dictation }
-    return .send
+    return isScheduling ? .schedule : .send
   }
 }
 
@@ -103,10 +105,10 @@ struct ComposerTrailingControl: View {
 
   var body: some View {
     switch action {
-    case .send:
+    case .send, .schedule:
       ComposerCircleButton(
-        systemImage: "arrow.up",
-        helpText: "Envoyer",
+        systemImage: action == .schedule ? "clock.badge.checkmark" : "arrow.up",
+        helpText: action == .schedule ? "Programmer l’envoi" : "Envoyer",
         theme: theme,
         size: ComposerMetrics.innerControl,
         iconSize: 13,
@@ -169,5 +171,77 @@ struct ComposerAttachmentStrip: View {
       }
       .padding(.horizontal, horizontalPadding)
     }
+  }
+}
+
+/// Le « + » du composer : un seul bouton, et un tiroir d'actions qui glisse
+/// vers la droite quand on l'ouvre — la pilule de texte se resserre d'autant.
+/// Le « + » pivote en « × » pour dire qu'il referme. Les entrées futures
+/// (fichier, sondage…) viendront s'y ranger.
+struct ComposerPlusTray: View {
+  var theme: WritingTheme
+  var isScheduling: Bool = false
+  var iconSize: CGFloat = 28
+  @Binding var isExpanded: Bool
+  var onAttach: () -> Void
+  var onSendLater: () -> Void
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  private static let itemSpacing: CGFloat = 2
+  private var trayWidth: CGFloat { ComposerMetrics.control * 2 + Self.itemSpacing }
+  private var spring: Animation? {
+    reduceMotion ? nil : .spring(duration: 0.38, bounce: 0.22)
+  }
+
+  var body: some View {
+    HStack(spacing: 4) {
+      ComposerCircleButton(
+        systemImage: isScheduling && !isExpanded ? "clock.circle.fill" : "plus.circle",
+        helpText: isExpanded ? "Fermer" : "Options",
+        theme: theme,
+        iconSize: iconSize,
+        isActive: isScheduling,
+        symbolFillsControl: true,
+        action: toggle
+      )
+      .rotationEffect(.degrees(isExpanded ? 45 : 0))
+      .accessibilityAddTraits(isExpanded ? [.isSelected] : [])
+
+      // Ancré à droite : en s'élargissant, le tiroir pousse ses boutons vers
+      // la droite, comme s'ils sortaient de derrière le « + ».
+      HStack(spacing: Self.itemSpacing) {
+        ComposerCircleButton(
+          systemImage: "photo",
+          helpText: "Joindre une image",
+          theme: theme,
+          iconSize: 15,
+          action: { choose(onAttach) }
+        )
+        ComposerCircleButton(
+          systemImage: "clock",
+          helpText: isScheduling ? "Changer l’heure d’envoi (⌘⇧L)" : "Envoyer plus tard (⌘⇧L)",
+          theme: theme,
+          iconSize: 15,
+          isActive: isScheduling,
+          action: { choose(onSendLater) }
+        )
+      }
+      .frame(width: isExpanded ? trayWidth : 0, alignment: .trailing)
+      .clipped()
+      .opacity(isExpanded ? 1 : 0)
+      .allowsHitTesting(isExpanded)
+      .accessibilityHidden(!isExpanded)
+    }
+    .animation(spring, value: isExpanded)
+  }
+
+  private func toggle() {
+    isExpanded.toggle()
+  }
+
+  private func choose(_ action: @escaping () -> Void) {
+    isExpanded = false
+    action()
   }
 }

@@ -34,7 +34,9 @@ struct InboxListPane: View {
       }
 
       List(selection: selection) {
-        if store.isShowingArchived {
+        if store.isShowingScheduled {
+          scheduledSection
+        } else if store.isShowingArchived {
           section(title: "Archivés", items: store.archivedQueue)
         } else {
           section(title: "Récents", items: store.inboxRecents)
@@ -46,7 +48,7 @@ struct InboxListPane: View {
       .scrollContentBackground(.hidden)
       .environment(\.defaultMinListRowHeight, 52)
       .overlay {
-        if (store.isShowingArchived ? store.archivedQueue : store.activeQueue).isEmpty {
+        if currentQueue.isEmpty {
           emptyState
         }
       }
@@ -94,6 +96,46 @@ struct InboxListPane: View {
     }
   }
 
+  private var currentQueue: [Conversation] {
+    if store.isShowingScheduled { return store.scheduledQueue }
+    return store.isShowingArchived ? store.archivedQueue : store.activeQueue
+  }
+
+  /// Vue « Programmés » (bouton du rail) : un fil par ligne, son prochain départ.
+  @ViewBuilder
+  private var scheduledSection: some View {
+    if !store.scheduledQueue.isEmpty {
+      Section("Programmés") {
+        ForEach(store.scheduledQueue) { conversation in
+          let scheduled = store.scheduledMessages(for: conversation.id)
+          ScheduledConversationRow(
+            conversation: conversation,
+            scheduled: scheduled,
+            theme: theme,
+            typeface: themes.typeface
+          )
+          .tag(conversation.id)
+          .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+          .contextMenu {
+            Button("Ouvrir la discussion") {
+              Task { await store.select(conversation.id) }
+            }
+            Divider()
+            ForEach(scheduled) { message in
+              if scheduled.count > 1 {
+                Menu(SendLaterTime.label(for: message.sendAt)) {
+                  ScheduledMessageMenu(message: message)
+                }
+              } else {
+                ScheduledMessageMenu(message: message)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   /// Bascule permanente en pied de liste : l'archive est une vue, pas un dossier caché.
   private var archiveToggle: some View {
     Button {
@@ -135,6 +177,7 @@ struct InboxListPane: View {
   }
 
   private var emptyStateTitle: String {
+    if store.isShowingScheduled { return "Rien de programmé." }
     if store.isShowingArchived { return "Rien d’archivé." }
     return store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter."
   }

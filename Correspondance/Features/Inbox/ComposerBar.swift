@@ -4,21 +4,26 @@ struct ComposerBar: View {
   @Binding var text: String
   @Binding var attachmentPaths: [String]
   var isSending: Bool
+  /// « Plus tard » posé : le bouton d'envoi devient une horloge.
+  var isScheduling: Bool = false
   var theme: WritingTheme
   var onAttach: () -> Void
+  var onSendLater: () -> Void = {}
   var onSend: () -> Void
 
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var isFocused: Bool
   @State private var dictation = ComposerDictationController()
+  /// Tiroir du « + » ouvert. Se referme dès qu'on choisit, ou qu'on reprend l'écriture.
+  @State private var isTrayExpanded = false
 
   private var canSend: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
   }
 
   private var trailingAction: ComposerTrailingAction {
-    .resolve(canSend: canSend, isListening: dictation.isListening)
+    .resolve(canSend: canSend, isListening: dictation.isListening, isScheduling: isScheduling)
   }
 
   var body: some View {
@@ -33,13 +38,12 @@ struct ComposerBar: View {
       }
 
       HStack(alignment: .bottom, spacing: 8) {
-        ComposerCircleButton(
-          systemImage: "plus.circle",
-          helpText: "Joindre une image",
+        ComposerPlusTray(
           theme: theme,
-          iconSize: 28,
-          symbolFillsControl: true,
-          action: onAttach
+          isScheduling: isScheduling,
+          isExpanded: $isTrayExpanded,
+          onAttach: onAttach,
+          onSendLater: onSendLater
         )
         .padding(.bottom, 2)
 
@@ -50,6 +54,9 @@ struct ComposerBar: View {
       .padding(.bottom, 10)
     }
     .onDisappear { dictation.stop() }
+    .onChange(of: text) { _, _ in
+      if isTrayExpanded { isTrayExpanded = false }
+    }
   }
 
   private var bubble: some View {

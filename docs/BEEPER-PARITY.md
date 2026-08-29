@@ -101,7 +101,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Annuler l'envoi | `Allow undo send (%s) for`, `UNDO_SEND_DELAY_MS`, `Click pending messages to undo send` | **Absent** | S | P1 |
 | Échec d'envoi / renvoi | `Message failed to send`, `Retry`, `Resend`, `Queued` | **Partiel** : `sendDraft()` retire le message optimiste, restaure texte et pièces jointes, alerte globale. Pas de badge d'échec persistant, pas de renvoi, pas de file hors-ligne | M | P1 |
 | Dictée | `SHOW_TRANSCRIBE_BAR` ⌘⇧T « Talk to Type » (audio → OpenAI via serveurs Beeper) | **Fait, et mieux** : `ComposerDictation.swift`, `SFSpeechRecognizer` on-device + repli dictée système. Aucune donnée ne sort de la machine | — | — |
-| Envoi planifié | `SCHEDULE_MESSAGE` ⌘⇧L, `Reschedule message`, `Cancel schedule message` | **Absent** | M | P2 |
+| Envoi planifié | `SCHEDULE_MESSAGE` ⌘⇧L, `Reschedule message`, `Cancel schedule message`, `sendLaterConfig{sendOn, sendOnlyOnNoResponse}`, dossier `Send Later`, « can only send if app is running » | **Fait** : `Domain/SendLaterTime.swift` (« demain 9h », « lundi matin », « dans 2h », raccourcis) + `ScheduledMessage` persisté (`scheduled-messages.json`). ⌘⇧L ou l'horloge du composer pose l'heure sur le composer (bannière) ; Entrée programme, ⌘Entrée programme *et* archive. Bulle en pointillé en bas du fil (envoyer maintenant / reprogrammer / supprimer), bouton « Programmés » au bas du rail. Option « seulement s'il n'a pas répondu ». Boucle d'échéance dans `InboxStore` — même limite que Beeper : l'app doit tourner | — | — |
 | Réponses rapides / modèles | `Create New Quick Reply`, `QUICK_REPLIES` | **Absent** | S | ✗ (réponse mécanique — l'inverse du fil qu'on écrit) |
 | Texte enrichi | ⌘B / ⌘I / ⌘⇧X / \` , `SHOW_FORMATTING_MENU`, Markdown accepté par l'API | **Absent** : `TextField` brut, envoi `m.text` sans `formatted_body` | M | P2 (et **Matrix→Signal perd le formatage** — ROADMAP mautrix-signal) |
 | Emoji | `EMOJI_PICKER_OPEN_ON_HOVER`, `ENABLE_EMOJI_AUTOCOMPLETE`, `DISABLE_EMOTICON_REPLACEMENT` | **Absent** | S | P2 |
@@ -167,7 +167,7 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 | ⌘⇧U `TOGGLE_THREAD_READ` · ⌘⇧M mute · ⌘P pin | absent (actions présentes au menu contextuel) | P1 |
 | ⌘R `QUOTE_AND_REPLY` | **⌘R** ✅ (« Actualiser » déplacé en ⌘⇧R, et le quick react en ⌘⌥R) | — |
 | ⌘T `EDIT_MESSAGE` · → `OPEN_REACTION_PICKER` · ⌘⇧R quick react | **⌘⌥R** ✅ (menu contextuel pour le choix d'emoji) ; ⌘T absent | P1 |
-| ⌘L `OPEN_REMIND_LATER_MENU` · ⌘⇧L `SCHEDULE_MESSAGE` | absent | P1/P2 |
+| ⌘L `OPEN_REMIND_LATER_MENU` · ⌘⇧L `SCHEDULE_MESSAGE` | **⌘⇧L Envoyer plus tard** ✅ ; ⌘L absent | P1 |
 | ⌘Entrée `SEND_MESSAGE_AND_ARCHIVE` | **⌘Entrée** ✅ | — |
 | ⌘N `CREATE_NEW_CHAT` · ⌘, `TOGGLE_PREFS_PANE` | **⌘N / ⌘,** ✅ | — |
 | ⌘O `SEND_FILE` · ⌘D `DOWNLOAD_ATTACHMENTS` | absent | P1 |

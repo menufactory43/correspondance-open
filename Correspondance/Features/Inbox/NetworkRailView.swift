@@ -22,6 +22,8 @@ struct NetworkRailView: View {
         railButton(network, shortcutIndex: index + 1)
       }
       Spacer(minLength: 0)
+      // Ce qui attend de partir — le dossier « Send Later » de Beeper, au bas du rail.
+      scheduledButton
     }
     .padding(.vertical, Spacing.xs)
     .frame(width: RailMetrics.width)
@@ -67,6 +69,40 @@ struct NetworkRailView: View {
     .buttonStyle(ComposerPressStyle())
     .help("\(label) (⌘\(shortcutIndex))")
     .accessibilityLabel(unread > 0 ? "\(label), \(unread) non lus" : label)
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+  }
+
+  private var scheduledButton: some View {
+    let isSelected = store.isShowingScheduled
+    let count = store.scheduledMessages.count
+    let failed = store.scheduledMessages.contains { $0.lastError != nil }
+
+    return Button {
+      withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
+        store.setShowingScheduled(!isSelected)
+      }
+    } label: {
+      ZStack(alignment: .topTrailing) {
+        Image(systemName: failed ? "clock.badge.exclamationmark" : "clock")
+          .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+          .foregroundStyle(isSelected ? theme.accent : theme.inkSecondary)
+          .frame(width: RailMetrics.item, height: RailMetrics.item)
+          .background(alignment: .center) {
+            if isSelected {
+              selectionBackground
+            }
+          }
+        if count > 0 {
+          RailUnreadBadge(count: count, theme: theme)
+            .offset(x: 4, y: -2)
+        }
+      }
+      .frame(width: RailMetrics.width - 8, height: RailMetrics.item)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(ComposerPressStyle())
+    .help("Messages programmés")
+    .accessibilityLabel(count == 0 ? "Messages programmés" : "\(count) message\(count > 1 ? "s" : "") programmé\(count > 1 ? "s" : "")")
     .accessibilityAddTraits(isSelected ? [.isSelected] : [])
   }
 

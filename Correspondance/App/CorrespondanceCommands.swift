@@ -56,6 +56,12 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("f", modifiers: [.command])
 
+      // Même touche que Beeper (SCHEDULE_MESSAGE ⌘⇧L).
+      Button("Envoyer plus tard…") {
+        store.toggleSendLaterPicker()
+      }
+      .keyboardShortcut("l", modifiers: [.command, .shift])
+
       Divider()
 
       Button("Conversation suivante") {
@@ -80,6 +86,11 @@ struct CorrespondanceCommands: Commands {
         store.setShowingArchived(!store.isShowingArchived)
       }
       .keyboardShortcut("e", modifiers: [.command, .shift])
+
+      Button(store.isShowingScheduled ? "Retour à l’inbox" : "Voir les programmés") {
+        store.setShowingScheduled(!store.isShowingScheduled)
+      }
+      .disabled(!store.isShowingScheduled && store.scheduledMessages.isEmpty)
 
       // Le geste Focus : je réponds, j'archive, je passe au suivant.
       // Commande de menu plutôt que `onKeyPress` : le raccourci vaut alors dans
