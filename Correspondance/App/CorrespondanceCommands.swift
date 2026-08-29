@@ -3,6 +3,11 @@ import SwiftUI
 struct CorrespondanceCommands: Commands {
   var store: InboxStore
 
+  private var archiveTitle: String {
+    guard let id = store.selectedConversationID else { return "Archiver" }
+    return store.isArchived(id) ? "Désarchiver" : "Archiver"
+  }
+
   var body: some Commands {
     CommandGroup(replacing: .newItem) {
       Button("Nouvelle conversation") {
@@ -43,10 +48,26 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut(.upArrow, modifiers: [.command])
 
-      Button("Archiver") {
-        Task { @MainActor in await store.archiveSelected() }
+      Button(archiveTitle) {
+        Task { @MainActor in
+          guard let id = store.selectedConversationID else { return }
+          await store.toggleArchived(conversationID: id)
+        }
       }
       .keyboardShortcut("e", modifiers: [.command])
+
+      Button(store.isShowingArchived ? "Retour à l’inbox" : "Voir les archivés") {
+        store.setShowingArchived(!store.isShowingArchived)
+      }
+      .keyboardShortcut("e", modifiers: [.command, .shift])
+
+      // Le geste Focus : je réponds, j'archive, je passe au suivant.
+      // Commande de menu plutôt que `onKeyPress` : le raccourci vaut alors dans
+      // le composer de l'Inbox *et* dans l'éditeur pleine page du mode Focus.
+      Button("Envoyer et archiver") {
+        Task { @MainActor in await store.sendDraftAndArchive() }
+      }
+      .keyboardShortcut(.return, modifiers: [.command])
     }
 
     CommandGroup(replacing: .appSettings) {

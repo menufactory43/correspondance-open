@@ -16,8 +16,15 @@ final class InboxStore {
   }
 
   var conversations: [Conversation] = [] {
-    didSet { conversationsDidChange(previous: oldValue) }
+    // La normalisation ré-assigne `conversations` : la passe suivante ne trouve
+    // plus rien à corriger et laisse passer la notification.
+    didSet {
+      if normalizeArchiveState() { return }
+      conversationsDidChange()
+    }
   }
+  /// Vue « Archivés » de la liste (⌘⇧E). Ne change rien au stockage.
+  var isShowingArchived = false
   var selectedConversationID: String?
   var messages: [ChatMessage] = []
   var draftText: String = ""
@@ -54,6 +61,9 @@ final class InboxStore {
   /// Préférences locales (pin / mute / timer) — pas dans le catalogue Signal.
   private(set) var pinnedIDs: Set<String> = []
   private(set) var mutedIDs: Set<String> = []
+  /// Fils archivés — persistés, donc réappliqués à chaque fusion (le catalogue
+  /// d'un réseau ne connaît pas notre archivage et renvoie toujours `isArchived: false`).
+  private(set) var archivedIDs: Set<String> = []
   private(set) var disappearingSecondsByID: [String: Int] = [:]
 
   private let iMessageDB = IMessageDatabase()
@@ -68,6 +78,9 @@ final class InboxStore {
   /// Dernier `lastMessageAt` déjà notifié, par conversation — évite de re-sonner
   /// pour un fil qu'un simple refresh a fait remonter sans nouveau message.
   private var lastNotifiedAt: [String: Date] = [:]
+  /// État de référence pour la comparaison : `oldValue` du `didSet` ne convient pas,
+  /// la normalisation de l'archivage produit une passe intermédiaire.
+  private var notificationBaseline: [String: Conversation] = [:]
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
   private var isNotificationPrimed = false
 
@@ -174,6 +187,7 @@ final class InboxStore {
     }
     pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.pinnedIDs) ?? [])
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
+    archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
     if let data = UserDefaults.standard.data(forKey: Keys.disappearing),
        let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
     {
@@ -280,12 +294,12 @@ final class InboxStore {
   }
 
   /// Un message entrant sur un fil non muet et non sélectionné = une notification.
-  private func conversationsDidChange(previous: [Conversation]) {
+  private func conversationsDidChange() {
     updateDockBadge()
+    defer { notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
     guard isNotificationPrimed else { return }
-    let before = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     for conversation in conversations {
-      guard shouldNotify(conversation, previous: before[conversation.id]) else { continue }
+      guard shouldNotify(conversation, previous: notificationBaseline[conversation.id]) else { continue }
       lastNotifiedAt[conversation.id] = conversation.lastMessageAt
       NotificationService.shared.postIncoming(
         conversationID: conversation.id,
@@ -294,6 +308,17 @@ final class InboxStore {
         body: conversation.preview
       )
     }
+  }
+
+  /// Réinstalle `isArchived` depuis la source de vérité persistée.
+  /// Renvoie `true` si la liste a été ré-assignée (le `didSet` va repasser).
+  @discardableResult
+  private func normalizeArchiveState() -> Bool {
+    guard let normalized = ArchiveState.normalized(conversations, archivedIDs: archivedIDs) else {
+      return false
+    }
+    conversations = normalized
+    return true
   }
 
   private func shouldNotify(_ conversation: Conversation, previous: Conversation?) -> Bool {
@@ -665,6 +690,7 @@ final class InboxStore {
       conversations.removeAll { $0.id == conversationID }
       pinnedIDs.remove(conversationID)
       mutedIDs.remove(conversationID)
+      archivedIDs.remove(conversationID)
       disappearingSecondsByID.removeValue(forKey: conversationID)
       persistFlags()
       if selectedConversationID == conversationID {
@@ -693,14 +719,67 @@ final class InboxStore {
     }
   }
 
-  func archiveSelected() async {
-    guard let id = selectedConversationID,
-          let index = conversations.firstIndex(where: { $0.id == id })
-    else { return }
+  func isArchived(_ id: String) -> Bool { archivedIDs.contains(id) }
 
-    conversations[index].isArchived = true
-    let next = activeQueue.first?.id
-    await select(next)
+  /// File des fils archivés — la vue « Archivés » de la liste.
+  var archivedQueue: [Conversation] {
+    conversations
+      .filter { $0.isArchived && matchesNetworkFilter($0) }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  func archiveSelected() async {
+    guard let id = selectedConversationID else { return }
+    await setArchived(true, conversationID: id)
+  }
+
+  /// ⌘E : archive, ou désarchive si le fil l'est déjà.
+  func toggleArchived(conversationID: String) async {
+    await setArchived(!archivedIDs.contains(conversationID), conversationID: conversationID)
+  }
+
+  func unarchive(conversationID: String) async {
+    await setArchived(false, conversationID: conversationID)
+  }
+
+  private func setArchived(_ archived: Bool, conversationID: String) async {
+    guard conversations.contains(where: { $0.id == conversationID }) else { return }
+    if archived {
+      archivedIDs.insert(conversationID)
+    } else {
+      archivedIDs.remove(conversationID)
+    }
+    persistFlags()
+    normalizeArchiveState()
+    // Archiver le fil ouvert enchaîne sur le suivant : c'est le geste Focus.
+    if archived, selectedConversationID == conversationID {
+      await select(activeQueue.first?.id)
+    } else if !archived {
+      // Désarchiver ramène le fil sous les yeux.
+      isShowingArchived = false
+      await select(conversationID)
+    }
+  }
+
+  func setShowingArchived(_ showing: Bool) {
+    isShowingArchived = showing
+  }
+
+  /// ⌘Entrée : envoyer, puis archiver — la boucle « je réponds, je passe au suivant ».
+  func sendDraftAndArchive() async {
+    guard let id = selectedConversationID else { return }
+    let hadDraft = !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      || !pendingAttachmentPaths.isEmpty
+    guard hadDraft else {
+      await setArchived(true, conversationID: id)
+      return
+    }
+    await sendDraft()
+    // Un envoi qui a échoué restaure le brouillon : on n'archive pas dans ce cas.
+    guard draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          pendingAttachmentPaths.isEmpty
+    else { return }
+    await setArchived(true, conversationID: id)
   }
 
   func focusNext() async {
@@ -1296,6 +1375,7 @@ final class InboxStore {
   private func persistFlags() {
     UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
     UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
+    UserDefaults.standard.set(Array(archivedIDs), forKey: Keys.archivedIDs)
     if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
       UserDefaults.standard.set(data, forKey: Keys.disappearing)
     }
@@ -1306,6 +1386,7 @@ final class InboxStore {
     static let networkFilter = "correspondance.networkFilter"
     static let pinnedIDs = "correspondance.pinnedConversationIDs"
     static let mutedIDs = "correspondance.mutedConversationIDs"
+    static let archivedIDs = "correspondance.archivedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
   }
 

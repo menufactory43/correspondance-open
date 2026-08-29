@@ -34,18 +34,24 @@ struct InboxListPane: View {
       }
 
       List(selection: selection) {
+        if store.isShowingArchived {
+          section(title: "Archivés", items: store.archivedQueue)
+        } else {
           section(title: "Récents", items: store.inboxRecents)
           section(title: "Groupes", items: store.inboxGroups)
           section(title: "Contacts", items: store.inboxContacts)
+        }
       }
       .listStyle(.sidebar)
       .scrollContentBackground(.hidden)
       .environment(\.defaultMinListRowHeight, 52)
       .overlay {
-        if store.activeQueue.isEmpty {
+        if (store.isShowingArchived ? store.archivedQueue : store.activeQueue).isEmpty {
           emptyState
         }
       }
+
+      archiveToggle
     }
     .confirmationDialog(
       "Effacer l’historique ?",
@@ -83,9 +89,35 @@ struct InboxListPane: View {
     }
   }
 
+  /// Bascule permanente en pied de liste : l'archive est une vue, pas un dossier caché.
+  private var archiveToggle: some View {
+    Button {
+      store.setShowingArchived(!store.isShowingArchived)
+    } label: {
+      HStack(spacing: 6) {
+        Image(systemName: store.isShowingArchived ? "tray.full" : "archivebox")
+          .font(.system(size: 11))
+        Text(store.isShowingArchived ? "Retour à l’inbox" : "Archivés")
+          .font(Typography.meta(themes.typeface))
+        Spacer()
+        if !store.isShowingArchived, !store.archivedQueue.isEmpty {
+          Text("\(store.archivedQueue.count)")
+            .font(Typography.meta(themes.typeface))
+            .foregroundStyle(theme.inkTertiary)
+        }
+      }
+      .foregroundStyle(theme.inkSecondary)
+      .padding(.horizontal, Spacing.sm)
+      .padding(.vertical, 7)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(store.isShowingArchived ? "Revenir à l’inbox" : "Voir les fils archivés")
+  }
+
   private var emptyState: some View {
     VStack(spacing: Spacing.xs) {
-      Text(store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter.")
+      Text(emptyStateTitle)
         .font(Typography.emptyState(themes.typeface))
         .foregroundStyle(theme.inkSecondary)
       if store.networkFilter != nil {
@@ -95,6 +127,11 @@ struct InboxListPane: View {
     }
     .padding(Spacing.md)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var emptyStateTitle: String {
+    if store.isShowingArchived { return "Rien d’archivé." }
+    return store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter."
   }
 
   @ViewBuilder
@@ -129,6 +166,12 @@ struct InboxListPane: View {
     Button("Ouvrir la discussion") {
       Task { await store.select(conversation.id) }
     }
+
+    Button(store.isArchived(conversation.id) ? "Désarchiver" : "Archiver") {
+      Task { await store.toggleArchived(conversationID: conversation.id) }
+    }
+
+    Divider()
 
     if conversation.network == .signal {
       Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {

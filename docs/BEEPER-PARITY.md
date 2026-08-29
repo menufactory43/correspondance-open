@@ -47,7 +47,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Archivage | `TOGGLE_THREAD_ARCHIVE` = ⌘E ou `e` ; API `POST /v1/chats/{id}/archive` + champ `isArchived` ; « Anything you've handled is in your __ARCHIVE__. » | **Partiel — en mémoire seulement** : `InboxStore.archiveSelected()` met `isArchived = true`, jamais réappliqué au rechargement (`MatrixConversationCache.load()` force `isArchived: false`). Pas de vue Archivés, pas de désarchivage | M | **P0** |
+| Archivage | `TOGGLE_THREAD_ARCHIVE` = ⌘E ou `e` ; API `POST /v1/chats/{id}/archive` + champ `isArchived` ; « Anything you've handled is in your __ARCHIVE__. » | **Fait + persisté** : `archivedIDs` (UserDefaults), réappliqué après chaque fusion par `Domain/ArchiveState.swift` — aucun catalogue réseau ne peut plus l'écraser. ⌘E bascule, ⌘⇧E ouvre la vue « Archivés » (bouton en pied de liste + menu contextuel « Désarchiver ») | — | — |
 | Archiver tout ce qui est lu | `ARCHIVE_ALL_READ_THREADS` ⌘⇧E, `Archive all read chats` | **Absent** | S | P1 |
 | Auto-archivage par règle | `Auto-archive chats based on a rule`, `Archive __TYPE__ chats older than __DURATION__` | **Absent** | M | P2 |
 | Sync de l'archivage avec la plateforme native | Réglage `Sync chat archive state with native platform` (clé `NATIVE_ARCHIVE`) | **Absent** | M | P2 |
@@ -97,7 +97,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 |---|---|---|---|---|
 | Brouillons par conversation | `Filter: Drafts`, `No drafts…`, champ `draft{text, attachments}` sur l'objet Chat (API), `PATCH /v1/chats/{id}` avec `draft` | **Partiel** : `InboxStore.draftText` est **un seul brouillon global**, remis à `""` à chaque `select(_:)`. Aucune persistance disque | M | **P0** |
 | Envoi et nouvelle ligne | `SEND_MESSAGE` Entrée, `NEW_LINE` ⇧/⌥/⌃+Entrée | **Fait** : `onKeyPress(.return)`, `.shift` → `.ignored`, `TextField(axis: .vertical)` | — | — |
-| Envoyer et archiver | `SEND_MESSAGE_AND_ARCHIVE` ⌘Entrée | **Absent** — pourtant c'est *exactement* le geste Focus | S | **P0** |
+| Envoyer et archiver | `SEND_MESSAGE_AND_ARCHIVE` ⌘Entrée | **Fait** : `InboxStore.sendDraftAndArchive()`, commande de menu ⌘Entrée (vaut donc en Inbox *et* en Focus). Un envoi échoué restaure le brouillon et n'archive pas | — | — |
 | Annuler l'envoi | `Allow undo send (%s) for`, `UNDO_SEND_DELAY_MS`, `Click pending messages to undo send` | **Absent** | S | P1 |
 | Échec d'envoi / renvoi | `Message failed to send`, `Retry`, `Resend`, `Queued` | **Partiel** : `sendDraft()` retire le message optimiste, restaure texte et pièces jointes, alerte globale. Pas de badge d'échec persistant, pas de renvoi, pas de file hors-ligne | M | P1 |
 | Dictée | `SHOW_TRANSCRIBE_BAR` ⌘⇧T « Talk to Type » (audio → OpenAI via serveurs Beeper) | **Fait, et mieux** : `ComposerDictation.swift`, `SFSpeechRecognizer` on-device + repli dictée système. Aucune donnée ne sort de la machine | — | — |
@@ -161,14 +161,14 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 | ⌘K `SEARCH` · ⌘F `SEARCH_ROOM` | absent | **P0** |
 | ⌘J `TOGGLE_COMMAND_BAR` (barre de commandes) | absent | ✗ (une palette de commandes est un aveu de complexité) |
 | ⌘E / `e` `TOGGLE_THREAD_ARCHIVE` | **⌘E Archiver** ✅ | — |
-| ⌘⇧E `ARCHIVE_ALL_READ_THREADS` | absent | P1 |
+| ⌘⇧E `ARCHIVE_ALL_READ_THREADS` | absent (⌘⇧E sert à ouvrir la vue « Archivés ») | P1 |
 | ⌘[ / ⌥↑ `SELECT_PREV_THREAD` · `SELECT_NEXT_THREAD` | **⌘↑ / ⌘↓** ✅ (touches différentes) | — |
 | ⌘U `SELECT_NEXT_UNREAD_THREAD` | absent | P1 |
 | ⌘⇧U `TOGGLE_THREAD_READ` · ⌘⇧M mute · ⌘P pin | absent (actions présentes au menu contextuel) | P1 |
 | ⌘R `QUOTE_AND_REPLY` | **⌘R = Actualiser** ⚠️ collision à arbitrer | **P0** |
 | ⌘T `EDIT_MESSAGE` · → `OPEN_REACTION_PICKER` · ⌘⇧R quick react | absent | P0/P1 |
 | ⌘L `OPEN_REMIND_LATER_MENU` · ⌘⇧L `SCHEDULE_MESSAGE` | absent | P1/P2 |
-| ⌘Entrée `SEND_MESSAGE_AND_ARCHIVE` | absent | **P0** |
+| ⌘Entrée `SEND_MESSAGE_AND_ARCHIVE` | **⌘Entrée** ✅ | — |
 | ⌘N `CREATE_NEW_CHAT` · ⌘, `TOGGLE_PREFS_PANE` | **⌘N / ⌘,** ✅ | — |
 | ⌘O `SEND_FILE` · ⌘D `DOWNLOAD_ATTACHMENTS` | absent | P1 |
 | ⌘⇧Y filtre non-lus · ⌥⇥ `CYCLE_TABS` · ⌘⌥A filtre compte | absent | P1 |
