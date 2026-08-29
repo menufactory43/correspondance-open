@@ -6,7 +6,7 @@ actor MatrixClient {
   private var credentials: MatrixCredentials?
   private let session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
-  private var usedTransactionIDs: Set<String> = []
+  private var ledger = MatrixTransactionLedger()
 
   init(credentials: MatrixCredentials? = nil) {
     self.credentials = credentials
@@ -155,13 +155,13 @@ actor MatrixClient {
   /// `txnId` idempotent : deux appels avec le même identifiant n'envoient qu'un message.
   @discardableResult
   func sendText(roomID: String, body text: String, transactionID: String = UUID().uuidString) async throws -> String? {
-    guard !usedTransactionIDs.contains(transactionID) else { return nil }
+    guard !ledger.isUsed(transactionID) else { return nil }
     let json = try await request(
       method: "PUT",
       path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.room.message/\(Self.escape(transactionID))",
       body: .object(["msgtype": .string("m.text"), "body": .string(text)])
     )
-    usedTransactionIDs.insert(transactionID)
+    ledger.markUsed(transactionID)
     return json.string(at: "event_id")
   }
 
@@ -172,7 +172,7 @@ actor MatrixClient {
     fileURL: URL,
     transactionID: String = UUID().uuidString
   ) async throws -> String? {
-    guard !usedTransactionIDs.contains(transactionID) else { return nil }
+    guard !ledger.isUsed(transactionID) else { return nil }
     let data: Data
     do {
       data = try Data(contentsOf: fileURL)
@@ -196,7 +196,7 @@ actor MatrixClient {
         ]),
       ])
     )
-    usedTransactionIDs.insert(transactionID)
+    ledger.markUsed(transactionID)
     return json.string(at: "event_id")
   }
 

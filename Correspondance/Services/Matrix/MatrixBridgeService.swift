@@ -11,7 +11,7 @@ actor MatrixBridgeService {
   /// Salon de gestion du bot WhatsApp (commandes `login`, `pm`…).
   private var managementRoomID: String?
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
-  private var transactionIDs: [String: String] = [:]
+  private var ledger = MatrixTransactionLedger()
 
   init(credentials: MatrixCredentials? = MatrixCredentialStore.load()) {
     client = MatrixClient(credentials: credentials)
@@ -159,14 +159,13 @@ actor MatrixBridgeService {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
     // Un identifiant stable par message optimiste : rejouer l'envoi ne duplique rien.
-    let txnID = transactionIDs[localID] ?? "corr-\(localID)"
-    transactionIDs[localID] = txnID
+    let txnID = ledger.transactionID(forLocalID: localID)
 
     for (index, path) in attachmentPaths.enumerated() {
       try await client.sendAttachment(
         roomID: roomID,
         fileURL: URL(fileURLWithPath: path),
-        transactionID: "\(txnID)-att\(index)"
+        transactionID: ledger.attachmentTransactionID(base: txnID, index: index)
       )
     }
     if !text.isEmpty {
