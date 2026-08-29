@@ -189,15 +189,10 @@ actor MatrixBridgeService {
 
   /// Ouvre (ou retrouve) le salon de gestion et envoie la commande de connexion.
   func startWhatsAppLogin(usingPhoneNumber phoneNumber: String? = nil) async throws {
-    let roomID = try await ensureManagementRoom()
     let command = phoneNumber.map { "login phone \($0)" } ?? "login qr"
     // On retient l'event de la commande : tout ce qui la précède appartient à une
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
-    loginCommandEventID = try await client.sendText(
-      roomID: roomID,
-      body: command,
-      transactionID: UUID().uuidString
-    )
+    loginCommandEventID = try await sendBotCommand(command)
   }
 
   /// Dernier état publié par le bot **depuis** notre commande de connexion.
@@ -234,12 +229,11 @@ actor MatrixBridgeService {
 
   /// Ouvre un fil WhatsApp vers un numéro via la commande bot `pm`.
   func startWhatsAppConversation(phoneNumber: String) async throws {
-    let roomID = try await ensureManagementRoom()
     let digits = phoneNumber.filter { $0.isNumber }
     guard digits.count >= 8 else {
       throw MatrixError.decoding("numéro WhatsApp invalide")
     }
-    try await client.sendText(roomID: roomID, body: "pm +\(digits)", transactionID: UUID().uuidString)
+    _ = try await sendBotCommand("pm +\(digits)")
   }
 
   /// Salon de gestion : celui où le bot est présent et qui n'est pas un portail.
@@ -247,12 +241,37 @@ actor MatrixBridgeService {
   private func ensureManagementRoom() async throws -> String {
     if let managementRoomID { return managementRoomID }
     detectManagementRoom()
-    if let managementRoomID { return managementRoomID }
+    // Le sync peut encore porter un salon de gestion qu'on a quitté (ou où l'on n'est
+    // qu'invité) : envoyer dedans donne « User not in room ». On vérifie, on rejoint,
+    // sinon on repart sur un DM neuf avec le bot.
+    if let candidate = managementRoomID {
+      if try await client.joinedRooms().contains(candidate) { return candidate }
+      if let joined = try? await client.join(roomID: candidate) {
+        managementRoomID = joined
+        return joined
+      }
+      rooms.removeValue(forKey: candidate)
+      managementRoomID = nil
+    }
     guard !selfUserID.isEmpty else { throw MatrixError.notConfigured }
     let serverName = String(selfUserID.split(separator: ":").last ?? "")
     let roomID = try await client.createDM(with: "@whatsappbot:\(serverName)")
     managementRoomID = roomID
     return roomID
+  }
+
+  /// Envoie une commande au bot ; si le salon retenu n'est plus valide (403), on le
+  /// jette et on réessaie une fois avec un salon de gestion neuf.
+  private func sendBotCommand(_ command: String) async throws -> String? {
+    let roomID = try await ensureManagementRoom()
+    do {
+      return try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
+    } catch MatrixError.http(let status, _, _) where status == 403 {
+      rooms.removeValue(forKey: roomID)
+      managementRoomID = nil
+      let fresh = try await ensureManagementRoom()
+      return try await client.sendText(roomID: fresh, body: command, transactionID: UUID().uuidString)
+    }
   }
 
   private func detectManagementRoom() {

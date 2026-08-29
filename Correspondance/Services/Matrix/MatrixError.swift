@@ -28,6 +28,9 @@ enum MatrixError: LocalizedError, Sendable, Equatable {
   private static func humanHTTP(status: Int, errcode: String?, message: String?) -> String {
     switch errcode {
     case "M_FORBIDDEN":
+      // Le même code couvre « mauvais mot de passe » et « pas membre du salon » :
+      // on relaie la raison du serveur plutôt qu'un diagnostic inventé.
+      if let message, !message.isEmpty { return "Refusé par le homeserver : \(message)" }
       return "Identifiants Matrix refusés."
     case "M_UNKNOWN_TOKEN":
       return "Session Matrix expirée — reconnecte-toi dans Réglages."

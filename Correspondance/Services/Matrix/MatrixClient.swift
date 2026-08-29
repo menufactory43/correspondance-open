@@ -136,6 +136,13 @@ actor MatrixClient {
     return json["joined_rooms"]?.arrayValue?.compactMap(\.stringValue) ?? []
   }
 
+  /// Rejoint un salon (invitation en attente, ou salon quitté encore joignable).
+  @discardableResult
+  func join(roomID: String) async throws -> String {
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/join/\(Self.escape(roomID))", body: .object([:]))
+    return json.string(at: "room_id") ?? roomID
+  }
+
   /// Crée un DM (invitation + `is_direct`). Utilisé pour le salon de gestion du bot.
   func createDM(with userID: String) async throws -> String {
     let body: MatrixJSON = .object([
