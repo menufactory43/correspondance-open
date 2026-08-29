@@ -28,7 +28,9 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
 ## Itération 1 (cette passe) — Infra + WhatsApp
 
 ### 1. Infra sur le NUC — `infra/matrix/` (versionné, secrets exclus)
-- `docker-compose.yml` (v3.8) : `synapse` (matrixdotorg/synapse), `postgres:16`, `mautrix-whatsapp` (dock.mau.dev/mautrix/whatsappv:latest).
+- `docker-compose.yml` (v3.8) : `synapse` (matrixdotorg/synapse), `postgres:16-alpine`, `mautrix-whatsapp`
+  (`dock.mau.dev/mautrix/whatsapp:v26.08` — tag épinglé, jamais `latest` : le passage aux ghosts LID en v26.08
+  change le format des MXID que le client parse).
 - `homeserver.yaml` : `server_name: correspondance.local`, `enable_registration: false`,
   `app_service_config_files: [/data/whatsapp-registration.yaml]`, rate-limits relevés pour l'appservice,
   `presence.enabled: false`, listener HTTP 8008 sans TLS.
@@ -39,6 +41,10 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
   les configs à partir des templates, `generate` les registrations, `docker-compose up -d`, crée l'utilisateur
   `meffysto` via `register_new_matrix_user` avec mot de passe généré et affiché **une seule fois**.
 - Vérification : `curl http://100.64.0.7:8008/_matrix/client/versions` répond ; `docker-compose ps` → 3 services up.
+- **Bind réel** : Tailscale tourne sur le NUC en `userspace-networking` (aucune interface `tailscale0`), donc
+  `100.64.0.7` n'est pas assignable en bind. `tailscaled` relaie le trafic entrant du tailnet vers `127.0.0.1`
+  de l'hôte : Synapse écoute sur `127.0.0.1:8008` et reste joignable en `http://100.64.0.7:8008` depuis le
+  tailnet, sans jamais être exposé sur le LAN 192.168.
 
 ### 2. Domaine
 - `MessageNetwork` : ajouter `.whatsapp` (labelFR "WhatsApp", `systemImage` adapté). Prévoir `.instagram`, `.messenger`
@@ -51,7 +57,13 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
   `roomState(roomID:type:)`, `createDM(with:)`. Erreurs typées `MatrixError` (LocalizedError, FR).
 - `MatrixCredentialStore` : Keychain (homeserver URL, user ID, access token, device ID).
 - `MatrixBridgeService` (actor) : maintient le `next_batch`, construit `[Conversation]` + `[ChatMessage]` par salon à partir
-  du sync, résout le réseau par `m.bridge`, mappe les ghosts (`@whatsapp_<num>:…`) vers un numéro pour `ContactDirectory`.
+  du sync, résout le réseau par `m.bridge`.
+  **Ghosts LID** : depuis mautrix-whatsapp v26.08 tous les ghosts (DM compris) sont des LID — les MXID valent
+  `@whatsapp_lid-<id>:correspondance.local`, plus `@whatsapp_<numéro>`. Ne jamais extraire un numéro du MXID.
+  Résolution du contact, dans l'ordre : `displayname` du `m.room.member`, nom du salon, puis les champs numéro
+  éventuellement exposés par l'état de bridge (`m.bridge` / `fi.mau.bridge`, extras `fi.mau.whatsapp.*` /
+  `com.beeper.*`). Un numéro trouvé améliore le titre et permet le rapprochement `ContactDirectory` ; son absence
+  ne doit rien casser (on retombe sur le displayname).
   Cache disque (`MatrixConversationCache`) sur le modèle de `SignalConversationCache`.
 - Attachements : `m.image`/`m.file` → téléchargement `/_matrix/client/v1/media/download` (avec token) dans
   `~/Library/Caches/Correspondance/matrix/`, réutilise `MessageAttachment`.
@@ -69,7 +81,8 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
   bouton Connexion / Déconnexion, statut).
 - Réglages : bouton « Connecter WhatsApp » → envoie `login qr` au bot `@whatsappbot:correspondance.local` dans le DM
   de gestion, affiche l'image QR reçue (m.image du bot) dans une feuille, rafraîchit jusqu'au message de succès.
-  Repli documenté : Element Web pointé sur le homeserver.
+  Replis documentés : `login phone <numéro>` (code d'appairage, supporté depuis v26.08 en plus du QR) et
+  Element Web pointé sur le homeserver.
 - Inbox + Focus : `ConversationRowView`/`MessageBubbleView` affichent WhatsApp avec l'icône réseau — **aucune** régression
   visuelle du mode Focus (`FocusConversationView`). Respecter `Design/` (Theme, WritingTheme, Typography, Spacing).
 - `NewConversationSheet` : WhatsApp sélectionnable seulement si Matrix est connecté ; création via commande bot
@@ -88,6 +101,9 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
 4. Commits atomiques (infra / domaine / services / store / UI / tests), aucun secret.
 
 ### Hors périmètre (itérations suivantes)
-- It. 2 : mautrix-meta (Instagram + Messenger) — même `MatrixBridgeService`, seul le bridge change.
+- It. 2 : Messenger via `mautrix-meta` **et** Instagram via `mautrix-instagram` (image `dock.mau.dev/mautrix/meta:ig-v26.07`,
+  préfixe `ig-`) — Meta ayant coupé l'ancienne API, ce sont deux instances distinctes. Aucun impact sur l'architecture :
+  `MatrixBridgeService` résout déjà le réseau **par salon** via `m.bridge.content.protocol.id`, donc `instagram` et
+  `facebook` peuvent parfaitement venir de deux bridges différents.
 - It. 3 : mautrix-signal, suppression de `SignalBridge.swift`/signal-cli après parité (groupes, pièces jointes, timers).
 - It. 4 : cible iOS (SwiftUI partagé, `MatrixClient` réutilisé tel quel, accès homeserver via Tailscale sur iPhone).
