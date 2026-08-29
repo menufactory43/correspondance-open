@@ -19,6 +19,9 @@ struct MatrixRoomModel: Sendable {
   var unreadCount: Int = 0
   var messagesByID: [String: ChatMessage] = [:]
   var lastEventAt: Date = .distantPast
+  /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
+  /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.
+  var bridgeChannelID: String?
 
   struct Member: Sendable, Hashable {
     var displayName: String?
@@ -35,16 +38,26 @@ struct MatrixRoomModel: Sendable {
     "\(network?.rawValue ?? "matrix"):\(roomID)"
   }
 
-  /// Membres humains distants : ni moi, ni le bot de bridge.
+  /// Membres humains distants : ni moi, ni le bot de bridge, ni mon propre ghost.
+  /// mautrix ajoute notre ghost dans chaque DM : on ne garde alors que le correspondant,
+  /// reconnu par `channel.id` (`<id>@lid` ↔ `@whatsapp_lid-<id>`, `<num>@s.whatsapp.net` ↔ `@whatsapp_<num>`).
   func remoteMembers(selfUserID: String) -> [(userID: String, member: Member)] {
-    members
+    let humans: [(userID: String, member: Member)] = members
       .filter { key, value in
         value.isActive
           && key != selfUserID
           && !MatrixIdentity.isBridgeBot(key)
       }
-      .map { ($0.key, $0.value) }
+      .map { (userID: $0.key, member: $0.value) }
       .sorted { $0.userID < $1.userID }
+    if bridgeRoomType == "dm",
+       let channelLocal = bridgeChannelID?.split(separator: "@").first.map(String.init),
+       !channelLocal.isEmpty,
+       let peer = humans.first(where: { MatrixIdentity.localpart($0.userID).hasSuffix(channelLocal) })
+    {
+      return [peer]
+    }
+    return humans
   }
 
   func isGroup(selfUserID: String) -> Bool {

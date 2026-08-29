@@ -93,6 +93,7 @@ struct MatrixSyncParser: Sendable {
     if let roomType = content.string(at: "com.beeper.room_type.v2") ?? content.string(at: "com.beeper.room_type") {
       model.bridgeRoomType = roomType
     }
+    if let channelID = content.string(at: "channel.id") { model.bridgeChannelID = channelID }
     // Le bridge peut exposer le numéro (`channel.id` en JID, ou un extra explicite).
     // On ne prend que ce qui ressemble vraiment à un numéro ; sinon on s'en passe.
     if model.bridgePhoneNumber == nil {
@@ -104,6 +105,8 @@ struct MatrixSyncParser: Sendable {
       ]
       for candidate in candidates {
         // `33612345678@s.whatsapp.net` → on ne garde que la partie avant l'arobase.
+        // Un JID `@lid` ou `@g.us` n'est PAS un numéro, même s'il n'a que des chiffres.
+        if let candidate, candidate.contains("@"), !candidate.hasSuffix("@s.whatsapp.net") { continue }
         let head = candidate?.split(separator: "@").first.map(String.init)
         if let phone = MatrixIdentity.phoneNumber(in: head) {
           model.bridgePhoneNumber = phone
