@@ -92,6 +92,12 @@ targets:
     platform: macOS
     sources:
       - path: CorrespondanceTests
+        excludes:
+          - Fixtures/**
+      # `resources:` n'existe pas chez xcodegen : une ressource est une source
+      # avec `buildPhase: resources` (fixtures chargées via `Bundle(for:)`).
+      - path: CorrespondanceTests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: Correspondance
     settings:
