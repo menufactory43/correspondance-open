@@ -102,7 +102,6 @@
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
 		F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */; };
-		F53476CF874BDBEE84CB1E91 /* ContactDirectoryDisk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873ABAD6A5B9F61135B01377 /* ContactDirectoryDisk.swift */; };
 		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
@@ -172,7 +171,6 @@
 		7C72EC2976B9D7432A734100 /* NetworkRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRailView.swift; sourceTree = "<group>"; };
 		7FC472EC8CA01BA228483427 /* HoverZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverZone.swift; sourceTree = "<group>"; };
 		830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSessionTests.swift; sourceTree = "<group>"; };
-		873ABAD6A5B9F61135B01377 /* ContactDirectoryDisk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectoryDisk.swift; sourceTree = "<group>"; };
 		8E4CD7F73F5A025D62EA5D61 /* AttachmentThumbnailStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentThumbnailStore.swift; sourceTree = "<group>"; };
 		8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Detached.swift"; sourceTree = "<group>"; };
 		9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Deletion.swift"; sourceTree = "<group>"; };
@@ -413,7 +411,6 @@
 			children = (
 				8E4CD7F73F5A025D62EA5D61 /* AttachmentThumbnailStore.swift */,
 				D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */,
-				873ABAD6A5B9F61135B01377 /* ContactDirectoryDisk.swift */,
 				73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */,
 				F05230BF81C295B4DEAB342E /* ConversationSession.swift */,
 				1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */,
@@ -610,7 +607,6 @@
 				FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */,
 				F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */,
 				716B7107C8A9273931B2FB62 /* ContactDirectory.swift in Sources */,
-				F53476CF874BDBEE84CB1E91 /* ContactDirectoryDisk.swift in Sources */,
 				2084E9571D670203C4BC5118 /* ContactsPermissionBanner.swift in Sources */,
 				5ACE090A9482584EB9F3C4A9 /* ContentView.swift in Sources */,
 				7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */,

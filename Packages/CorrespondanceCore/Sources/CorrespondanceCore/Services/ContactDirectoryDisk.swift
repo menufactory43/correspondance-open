@@ -1,8 +1,7 @@
 import Foundation
-import CorrespondanceCore
 
 /// Lecture sync du cache Contacts sur disque — pour hydrater l’inbox au lancement (0 latence).
-enum ContactDirectoryDisk {
+public enum ContactDirectoryDisk {
   private static var indexURL: URL {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
       ?? FileManager.default.temporaryDirectory
@@ -17,7 +16,7 @@ enum ContactDirectoryDisk {
     var savedAt: Date
   }
 
-  static func enrichIMessageTitles(_ conversations: inout [Conversation]) {
+  public static func enrichIMessageTitles(_ conversations: inout [Conversation]) {
     guard let data = try? Data(contentsOf: indexURL),
           let disk = try? JSONDecoder().decode(DiskIndex.self, from: data),
           !disk.names.isEmpty
@@ -48,7 +47,7 @@ enum ContactDirectoryDisk {
 
   /// Nomme les auteurs d'un fil iMessage depuis le même cache : sans ça, un
   /// groupe n'annonce ses interlocuteurs que par leur numéro brut.
-  static func enrichSenderNames(_ messages: inout [ChatMessage]) {
+  public static func enrichSenderNames(_ messages: inout [ChatMessage]) {
     guard let data = try? Data(contentsOf: indexURL),
           let disk = try? JSONDecoder().decode(DiskIndex.self, from: data),
           !disk.names.isEmpty
