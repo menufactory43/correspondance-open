@@ -1,5 +1,8 @@
+import CoreGraphics
 import Foundation
+import ImageIO
 import SwiftUI
+import UniformTypeIdentifiers
 
 #if canImport(AppKit)
   import AppKit
@@ -55,6 +58,62 @@ extension PlatformFont {
     }
   }
 #endif
+
+extension PlatformColor {
+  /// `NSColor` sait changer d'espace colorimétrique, `UIColor` non — et n'en a pas besoin.
+  public var deviceRGBCGColor: CGColor {
+    #if canImport(AppKit)
+      return usingColorSpace(.deviceRGB)?.cgColor ?? cgColor
+    #else
+      return cgColor
+    #endif
+  }
+
+  /// Le fond de fenêtre du système : ce qui sépare deux visages d'une mosaïque.
+  public static var platformWindowBackground: PlatformColor {
+    #if canImport(AppKit)
+      return .windowBackgroundColor
+    #else
+      return .systemBackground
+    #endif
+  }
+}
+
+extension PlatformImage {
+  /// Emballe un bitmap CoreGraphics dans l'image de la plateforme.
+  public static func from(cgImage: CGImage) -> PlatformImage {
+    #if canImport(AppKit)
+      return NSImage(
+        cgImage: cgImage, size: CGSize(width: cgImage.width, height: cgImage.height))
+    #else
+      return UIImage(cgImage: cgImage)
+    #endif
+  }
+
+  /// `NSImage` choisit sa représentation selon le cadre visé ; `UIImage` en a une seule.
+  public func cgImage(fitting rect: CGRect) -> CGImage? {
+    #if canImport(AppKit)
+      var proposed = rect
+      return cgImage(forProposedRect: &proposed, context: nil, hints: nil)
+    #else
+      return cgImage
+    #endif
+  }
+}
+
+extension CGImage {
+  /// Encodage PNG sans passer par `NSBitmapImageRep` : ImageIO existe des deux côtés.
+  public func pngData() -> Data? {
+    let buffer = NSMutableData()
+    guard
+      let destination = CGImageDestinationCreateWithData(
+        buffer, UTType.png.identifier as CFString, 1, nil)
+    else { return nil }
+    CGImageDestinationAddImage(destination, self, nil)
+    guard CGImageDestinationFinalize(destination) else { return nil }
+    return buffer as Data
+  }
+}
 
 public enum Platform {
   /// Ouvre une URL dans l'app qui la revendique.

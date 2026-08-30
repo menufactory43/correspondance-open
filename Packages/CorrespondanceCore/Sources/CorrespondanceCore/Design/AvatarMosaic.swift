@@ -1,5 +1,5 @@
-import AppKit
 import CoreGraphics
+import Foundation
 
 /// Compose une mosaïque de visages, comme Messages, WhatsApp ou Instagram le font
 /// pour un groupe sans photo à lui.
@@ -7,14 +7,14 @@ import CoreGraphics
 /// Le résultat est un PNG : le store d'avatars ne manipule que des `Data`, et une
 /// vignette composée doit pouvoir passer par les mêmes caches qu'une photo reçue.
 /// Struct pure, sans réseau ni disque — c'est ce qui la rend testable telle quelle.
-struct AvatarMosaic {
+public struct AvatarMosaic {
   /// Rendu à 2× : une liste affiche ces disques en 34–44 pt sur un écran Retina,
   /// et une mosaïque rendue à 1× y baverait.
   private static let scale: CGFloat = 2
 
   /// `nil` quand il n'y a rien à montrer — l'appelant retombe alors sur les initiales.
   /// Une seule image donne le disque seul : c'est déjà la bonne réponse.
-  static func compose(_ images: [NSImage], size: CGFloat, separator: NSColor) -> Data? {
+  public static func compose(_ images: [PlatformImage], size: CGFloat, separator: PlatformColor) -> Data? {
     guard !images.isEmpty, size > 0 else { return nil }
     let tiles = Array(images.prefix(4))
     let side = Int((size * Self.scale).rounded())
@@ -47,14 +47,14 @@ struct AvatarMosaic {
       // Les disques qui viennent par-dessus portent un liseré couleur papier :
       // sans lui deux photos sombres se fondent l'une dans l'autre.
       if index > 0 {
-        context.setFillColor(separator.usingColorSpace(.deviceRGB)?.cgColor ?? separator.cgColor)
+        context.setFillColor(separator.deviceRGBCGColor)
         context.fillEllipse(in: frame.insetBy(dx: -strokeWidth, dy: -strokeWidth))
       }
       draw(tiles[index], in: frame, context: context)
     }
 
     guard let output = context.makeImage() else { return nil }
-    return NSBitmapImageRep(cgImage: output).representation(using: .png, properties: [:])
+    return output.pngData()
   }
 
   /// Gabarits en carré unité, repère écran. Les tailles suivent Messages :
@@ -90,9 +90,8 @@ struct AvatarMosaic {
   }
 
   /// Une tuile : disque plein, image recadrée au centre sans jamais l'étirer.
-  private static func draw(_ image: NSImage, in frame: CGRect, context: CGContext) {
-    var proposed = frame
-    guard let cgImage = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil) else { return }
+  private static func draw(_ image: PlatformImage, in frame: CGRect, context: CGContext) {
+    guard let cgImage = image.cgImage(fitting: frame) else { return }
     let width = CGFloat(cgImage.width)
     let height = CGFloat(cgImage.height)
     guard width > 0, height > 0 else { return }
