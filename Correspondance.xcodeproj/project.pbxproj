@@ -84,7 +84,6 @@
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
-		C84F93D60A8E008D1AA97734 /* ScheduledMessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */; };
 		D15D7A95318463E9AB25D6BD /* ConversationPillHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */; };
 		D1BF5BAF7DA02418BC58DDFF /* GlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */; };
 		D3D0F6B5327C5274A1266544 /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 477EDB00DAA50EB213CBD466 /* LinkPreviewCard.swift */; };
@@ -221,7 +220,6 @@
 		F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyPreferences.swift; sourceTree = "<group>"; };
 		F9D67D1D6D0EDC608A2A7B4F /* AvatarMosaicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarMosaicTests.swift; sourceTree = "<group>"; };
 		F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentVideoView.swift; sourceTree = "<group>"; };
-		FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessageStore.swift; sourceTree = "<group>"; };
 		FCA69D19E658DA849410EE74 /* IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomation.swift; sourceTree = "<group>"; };
 		FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSurface.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -442,7 +440,6 @@
 				24200371D508DA6447F58B59 /* QuickReplyPanel.swift */,
 				F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */,
 				6748DC1C57D97BE188A16CFE /* QuickReplyStatusItem.swift */,
-				FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */,
 				A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */,
 			);
 			path = Services;
@@ -667,7 +664,6 @@
 				36D13C2FDED6EA357EE9A806 /* QuickReplyPreferences.swift in Sources */,
 				2D29C0D4AFAF6044FEB74ABD /* QuickReplyStatusItem.swift in Sources */,
 				87C73BA02A60E838C154E1EE /* QuickReplyView.swift in Sources */,
-				C84F93D60A8E008D1AA97734 /* ScheduledMessageStore.swift in Sources */,
 				F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */,
 				AACF21AE1C0A6B7B3AE16915 /* SenderAvatarStore.swift in Sources */,
 				D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */,
