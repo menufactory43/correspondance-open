@@ -320,11 +320,16 @@ actor MatrixBridgeService {
 
   /// Envoie la session au bot, en réponse à son invite : soit le JSON fabriqué à partir
   /// de la fenêtre de connexion intégrée, soit un collage manuel (le repli).
-  /// Le corps part **tel quel** : le bot accepte un objet JSON ou une commande cURL,
-  /// et l'entourer d'un préfixe de commande casserait son analyse.
+  ///
+  /// Notre DM n'est pas le « salon de gestion » aux yeux du bot (c'est nous qui l'avons
+  /// créé) : il exige alors le préfixe de commande même pour une entrée de login —
+  /// « Entering login info must be prefixed with `!ig` like other commands ». Sans lui,
+  /// le JSON est ignoré en silence. Le bot retire le préfixe avant de lire la suite.
   func submitLoginCookies(_ raw: String, network: MessageNetwork) async throws {
-    let payload = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !payload.isEmpty else { throw MatrixError.decoding("cookies vides") }
+    guard let bridge = network.bridge else { throw MatrixError.notConfigured }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw MatrixError.decoding("cookies vides") }
+    let payload = trimmed.hasPrefix(bridge.commandPrefix) ? trimmed : "\(bridge.commandPrefix) \(trimmed)"
     let roomID = try await ensureManagementRoom(for: network)
     let eventID = try await client.sendText(roomID: roomID, body: payload, transactionID: UUID().uuidString)
     // Le pont reçoit l'event par la transaction d'appservice, au moment même où Synapse
