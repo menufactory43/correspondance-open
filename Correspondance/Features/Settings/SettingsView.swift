@@ -1,158 +1,24 @@
-import AppKit
 import SwiftUI
 
+/// Les Réglages tels qu'on les attend d'une app Mac : une barre latérale de
+/// rubriques à gauche, un volet à droite. Pas un formulaire fleuve où l'on
+/// scrolle pour trouver la case « Contacts ».
 struct SettingsView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
-  @State private var homeserver = InboxStore.defaultHomeserver
-  @State private var matrixUser = "meffysto"
-  @State private var matrixPassword = ""
-  @State private var isConnectingMatrix = false
+  @State private var section: SettingsSection = .comptes
 
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
-    Form {
-      Section("Comptes") {
-        LabeledContent("iMessage") {
-          Text(store.iMessageStatusFR)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 320, alignment: .trailing)
-        }
-
-        LabeledContent("Signal") {
-          Text(store.signalStatusFR)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 320, alignment: .trailing)
-        }
-
-        LabeledContent("Contacts") {
-          Text(store.contactsStatusFR)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 320, alignment: .trailing)
-        }
-
-        LabeledContent("Messages") {
-          Text(store.messagesAutomationStatusFR)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 320, alignment: .trailing)
-        }
-
-        LabeledContent("Notifications") {
-          Text(store.notificationStatusFR)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: 320, alignment: .trailing)
-        }
-
-        Text("Lier Signal (terminal) :\nsignal-cli link -n Correspondance\nPuis scanne le QR avec Signal → Appareils liés.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .textSelection(.enabled)
-
-        Button("Autoriser Contacts…") {
-          Task { await store.requestContactsPermission() }
-        }
-
-        Button("Autoriser les notifications…") {
-          Task {
-            await store.requestNotificationPermission()
-            // Déjà refusé : macOS ne réaffiche plus la boîte, on ouvre les Réglages.
-            if store.notificationStatusFR.contains("refus") {
-              store.openNotificationSettings()
-            }
-          }
-        }
-
-        Button("Autoriser Messages (Automatisation)…") {
-          let ok = store.requestMessagesAutomation()
-          if !ok { store.openAutomationPrivacySettings() }
-        }
-
-        Button("Ouvrir Confidentialité → Accès disque") {
-          if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-            NSWorkspace.shared.open(url)
-          }
-        }
-
-        Button("Ouvrir Confidentialité → Contacts") {
-          if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts") {
-            NSWorkspace.shared.open(url)
-          }
-        }
-
-        Button("Ouvrir Confidentialité → Automatisation") {
-          store.openAutomationPrivacySettings()
-        }
-
-        Button("Actualiser les comptes") {
-          Task { await store.refresh() }
-        }
-      }
-
-      messagesAutomationSection
-
-      matrixSection
-
-      Section("Affichage") {
-        Picker("Mode au démarrage", selection: Binding(
-          get: { store.mode },
-          set: { store.setMode($0) }
-        )) {
-          ForEach(InboxMode.allCases) { mode in
-            Text(mode.labelFR).tag(mode)
-          }
-        }
-        Text("Focus = une conversation. Inbox = liste + fil (Beeper). ⌘1 / ⌘2.")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-
-      Section("Police") {
-        Picker("Famille", selection: Binding(
-          get: { themes.typeface },
-          set: { themes.typeface = $0 }
-        )) {
-          ForEach(WritingTypeface.allCases) { face in
-            Text("\(face.labelFR) — \(face.subtitleFR)").tag(face)
-          }
-        }
-
-        LabeledContent("Taille") {
-          Slider(
-            value: Binding(
-              get: { themes.typeScale },
-              set: { themes.typeScale = $0 }
-            ),
-            in: 0.9...1.25,
-            step: 0.05
-          )
-          .frame(minWidth: 160)
-        }
-
-        Text("Aperçu — Correspondance lit comme iA Writer.")
-          .font(Typography.body(themes.typeface, size: 16 * themes.typeScale))
-          .foregroundStyle(theme.ink)
-          .padding(.vertical, 4)
-      }
-
-      Section("Ambiance") {
-        ThemePickerView(selection: Binding(
-          get: { themes.themeID },
-          set: { themes.themeID = $0 }
-        ))
-        .padding(.vertical, Spacing.xs)
-      }
+    HStack(spacing: 0) {
+      sidebar
+      Divider().overlay(theme.separator)
+      detail
     }
-    .formStyle(.grouped)
-    .padding()
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    .background(theme.paper.ignoresSafeArea())
+    .frame(minWidth: 780, idealWidth: 860, minHeight: 520, idealHeight: 620)
+    .background(theme.paper)
     .sheet(item: Binding(
       get: { store.bridgeLoginNetwork },
       set: { store.bridgeLoginNetwork = $0 }
@@ -162,98 +28,123 @@ struct SettingsView: View {
     .task { await store.refreshMatrixStatus() }
   }
 
-  /// Lot M2 — pilotage de Messages.app par l'Accessibilité, app cachée.
-  /// Éteint, Correspondance se comporte exactement comme avant.
-  @ViewBuilder
-  private var messagesAutomationSection: some View {
-    Section("Automatisation Messages") {
-      Toggle("Piloter Messages en arrière-plan", isOn: Binding(
-        get: { store.isMessagesAutomationEnabled },
-        set: { store.isMessagesAutomationEnabled = $0 }
-      ))
-      Text("Tapback, réponse citée, modifier, annuler l’envoi et « non lu » sur iMessage. "
-        + "Messages est lancée cachée et n’apparaît jamais au premier plan.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+  // MARK: - Barre latérale
 
-      LabeledContent("État") {
-        Text(store.messagesAutomationHealthFR)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: 320, alignment: .trailing)
+  private var sidebar: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text("Réglages")
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(theme.inkTertiary)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.top, Spacing.md)
+        .padding(.bottom, Spacing.xs)
+
+      ForEach(SettingsSection.allCases) { item in
+        sidebarButton(item)
       }
 
-      Toggle("Fenêtre Messages hors écran", isOn: Binding(
-        get: { store.messagesAutomationOffscreenWindow },
-        set: { store.messagesAutomationOffscreenWindow = $0 }
-      ))
-      Text("Repli : certaines actions exigent une fenêtre réellement dessinée. "
-        + "Elle est alors poussée au-delà du bord de l’écran plutôt que masquée.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, Spacing.xs)
+    .padding(.bottom, Spacing.sm)
+    .frame(width: 208)
+    .frame(maxHeight: .infinity)
+    .background(theme.sidebar.ignoresSafeArea())
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Rubriques des réglages")
+  }
 
-      Button("Ouvrir Confidentialité → Accessibilité") {
-        store.openAccessibilityPrivacySettings()
-      }
+  private func sidebarButton(_ item: SettingsSection) -> some View {
+    let isSelected = section == item
 
-      Button("Re-sonder Messages") {
-        Task { await store.refreshAutomationHealthOnly() }
+    return Button {
+      section = item
+    } label: {
+      HStack(spacing: Spacing.xs) {
+        Image(systemName: item.systemImage)
+          .font(.system(size: 13))
+          .frame(width: 20, alignment: .center)
+          .foregroundStyle(isSelected ? theme.accent : theme.inkSecondary)
+        Text(item.labelFR)
+          .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+          .foregroundStyle(isSelected ? theme.ink : theme.inkSecondary)
+        Spacer(minLength: 0)
       }
+      .padding(.horizontal, Spacing.xs)
+      .padding(.vertical, 7)
+      .background {
+        if isSelected {
+          RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(theme.selection)
+        }
+      }
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+  }
+
+  // MARK: - Volet
+
+  private var detail: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: Spacing.lg) {
+        SettingsPaneHeader(title: section.labelFR, subtitle: section.subtitleFR)
+
+        switch section {
+        case .comptes: SettingsAccountsPane()
+        case .matrix: SettingsMatrixPane()
+        case .automatisation: SettingsAutomationPane()
+        case .autorisations: SettingsPermissionsPane()
+        case .apparence: SettingsAppearancePane()
+        }
+      }
+      .padding(.horizontal, Spacing.lg)
+      .padding(.bottom, Spacing.xl)
+      .frame(maxWidth: 640, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .background(theme.paper.ignoresSafeArea())
+  }
+}
+
+/// Les rubriques de la fenêtre — l'ordre ici est l'ordre de la barre latérale.
+enum SettingsSection: String, CaseIterable, Identifiable {
+  case comptes
+  case matrix
+  case automatisation
+  case autorisations
+  case apparence
+
+  var id: String { rawValue }
+
+  var labelFR: String {
+    switch self {
+    case .comptes: "Comptes"
+    case .matrix: "Serveur Matrix"
+    case .automatisation: "Automatisation"
+    case .autorisations: "Autorisations"
+    case .apparence: "Apparence"
     }
   }
 
-  /// Homeserver Matrix (NUC via Tailscale) + connexion de chaque pont par son bot mautrix.
-  @ViewBuilder
-  private var matrixSection: some View {
-    Section("Matrix") {
-      LabeledContent("État") {
-        Text(store.matrixStatusFR)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: 320, alignment: .trailing)
-      }
+  var subtitleFR: String {
+    switch self {
+    case .comptes: "Les réseaux branchés sur Correspondance et l’état de chaque lien."
+    case .matrix: "Le homeserver qui porte les ponts WhatsApp et Instagram."
+    case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
+    case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."
+    case .apparence: "Le mode d’ouverture, la police et l’ambiance d’écriture."
+    }
+  }
 
-      if store.isMatrixConnected {
-        // Un bouton par pont : la liste vient de l'enum, pas d'une énumération à la main.
-        ForEach(MessageNetwork.matrixBridged) { network in
-          Button("Connecter \(network.labelFR)…") {
-            store.presentBridgeLogin(network: network)
-          }
-        }
-        Text("""
-          WhatsApp : feuille avec le QR renvoyé par @whatsappbot ; si le QR est refusé, \
-          « login phone +33… » au bot depuis Element donne un code d’appairage.
-          Instagram : @instagrambot demande les cookies d’une session instagram.com — \
-          la feuille explique où les prendre.
-          """)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .textSelection(.enabled)
-
-        Button("Déconnecter Matrix") {
-          Task { await store.disconnectMatrix() }
-        }
-      } else {
-        TextField("Homeserver", text: $homeserver)
-          .textFieldStyle(.roundedBorder)
-        TextField("Identifiant", text: $matrixUser)
-          .textFieldStyle(.roundedBorder)
-        SecureField("Mot de passe", text: $matrixPassword)
-          .textFieldStyle(.roundedBorder)
-        Button(isConnectingMatrix ? "Connexion…" : "Connexion") {
-          isConnectingMatrix = true
-          Task {
-            await store.connectMatrix(
-              homeserver: homeserver,
-              user: matrixUser,
-              password: matrixPassword
-            )
-            matrixPassword = ""
-            isConnectingMatrix = false
-          }
-        }
-        .disabled(isConnectingMatrix || matrixUser.isEmpty || matrixPassword.isEmpty)
-      }
+  var systemImage: String {
+    switch self {
+    case .comptes: "person.2.fill"
+    case .matrix: "server.rack"
+    case .automatisation: "wand.and.stars"
+    case .autorisations: "lock.shield"
+    case .apparence: "paintbrush"
     }
   }
 }

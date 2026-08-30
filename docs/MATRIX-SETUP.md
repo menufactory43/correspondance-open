@@ -110,37 +110,54 @@ pointé sur `http://relais.exemple.ts.net:8008` fait très bien l'affaire pour d
 `NewConversationSheet` (WhatsApp sélectionnable seulement si Matrix est connecté) envoie au bot la
 commande `pm +33612345678`. Le bot crée le portail et le salon arrive au `/sync` suivant.
 
-## 2 bis. Connecter Instagram — les cookies
+## 2 bis. Connecter Instagram — la fenêtre de connexion
 
 Meta n'offre aucun appairage par QR pour les DM Instagram : `mautrix-instagram` se connecte avec
 les cookies d'une session de navigateur déjà ouverte. C'est le seul flow que le bridge expose
-(`login` → étape `fi.mau.meta.cookies`).
+(`login` → étape `fi.mau.meta.cookies`). Côté app, personne n'a à voir un cookie pour autant.
 
 **Réglages › Matrix › Connecter Instagram…** ouvre la feuille : l'app envoie `login` à
-`@instagrambot:correspondance.local`, le bot répond « Enter a JSON object with your cookies, or a
-cURL command copied from browser devtools. » puis l'URL de connexion, et la feuille attend le
-collage.
+`@instagrambot:correspondance.local`, et affiche **le vrai formulaire instagram.com** dans une
+`WKWebView` intégrée. On s'y connecte normalement — identifiant, mot de passe, 2FA, captcha
+éventuel. Dès que la session existe, l'app lit les cookies du navigateur intégré, en fabrique
+l'objet JSON attendu et l'envoie au bot. Le statut passe par « Connecte-toi à Instagram dans la
+fenêtre. » puis « Session récupérée, envoi au pont… ».
 
-Récupérer les cookies, dans un navigateur **connecté à instagram.com** :
+Ce que la fenêtre garantit :
+
+- **Magasin de données non persistant et dédié** (`WKWebsiteDataStore.nonPersistent()`) : la
+  session Safari de l'utilisateur n'est ni lue ni polluée, et rien ne reste sur le disque à la
+  fermeture de la feuille. La session vit désormais côté pont, c'est son travail.
+- **User-Agent Safari macOS** : Instagram sert une page dégradée à un WebKit nu.
+- Les cookies ne sont **ni journalisés ni stockés** par l'app ; le message envoyé au salon de
+  gestion est **rédigé** par le bot juste après lecture.
+
+Les cinq clés que le bot réclame — `sessionid`, `csrftoken`, `ds_user_id`, `mid`, `ig_did` — sont
+toutes posées par instagram.com au cours d'une connexion normale ; `rur`, `shbid` et `shbts`
+partent en plus quand elles existent. La détection attend `sessionid` + `ds_user_id` +
+`csrftoken` : avant ce trio, on est encore dans le formulaire ou la 2FA.
+
+Au succès, le bot répond « Logged in as <nom> (<id>) » et le backfill démarre. Les échecs sont
+explicites : `Missing some keys: [...]`, `Failed to parse input as JSON`,
+`Login failed: Challenge/Checkpoint/Consent required` (Instagram demande une vérification — la
+faire sur le site officiel, puis **Relancer**).
+
+### Repli : coller les cookies à la main
+
+Si Meta finit par bloquer le navigateur intégré (page blanche, refus persistant), la feuille
+garde un volet replié **« Coller des cookies… »**. Dans un navigateur connecté à instagram.com :
 
 1. Outils de développement (⌥⌘I) → onglet **Application** (Chrome) / **Stockage** (Firefox).
 2. **Cookies** → `https://www.instagram.com`.
-3. Relever `sessionid`, `csrftoken`, `ds_user_id`, `mid`, `ig_did` — les cinq **obligatoires**.
-   `rur`, `shbid`, `shbts` sont optionnels et n'empêchent rien s'ils manquent.
-4. Coller dans la feuille un objet JSON :
+3. Relever `sessionid`, `csrftoken`, `ds_user_id`, `mid`, `ig_did`.
+4. Coller un objet JSON, puis **Envoyer** :
 
 ```json
 {"sessionid":"…","csrftoken":"…","ds_user_id":"…","mid":"…","ig_did":"…"}
 ```
 
 Une commande **cURL** copiée depuis l'onglet Réseau (« Copy as cURL ») fait aussi l'affaire : le
-bot en extrait l'entête `Cookie` tout seul. Dans les deux cas, le message est **rédigé** par le
-bot juste après lecture — les cookies ne restent pas dans l'historique du salon.
-
-Au succès, le bot répond « Logged in as <nom> (<id>) » et le backfill démarre. Les échecs sont
-explicites : `Missing some keys: [...]` (un cookie oublié), `Failed to parse input as JSON`
-(collage abîmé), `Login failed: Challenge/Checkpoint/Consent required` (Instagram demande une
-vérification — la faire sur le site officiel, puis recommencer).
+bot en extrait l'entête `Cookie` tout seul.
 
 ### Ouvrir un fil Instagram
 
