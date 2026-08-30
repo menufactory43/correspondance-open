@@ -146,7 +146,7 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(instagram.botLocalpart, "instagrambot")
     XCTAssertEqual(instagram.commandPrefix, "!ig")
     XCTAssertEqual(instagram.ghostPrefix, "instagram_")
-    XCTAssertEqual(instagram.loginFlow, .cookies)
+    XCTAssertEqual(instagram.loginFlow, .webSession)
     XCTAssertEqual(instagram.botUserID(serverName: "correspondance.local"), "@instagrambot:correspondance.local")
     XCTAssertEqual(instagram.startChatCommand(identifier: "17841400000000001"), "pm 17841400000000001")
 

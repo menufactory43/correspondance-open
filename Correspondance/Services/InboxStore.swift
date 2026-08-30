@@ -140,6 +140,11 @@ final class InboxStore {
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
   @ObservationIgnored private var bridgeLoginTask: Task<Void, Never>?
+  /// La commande `login` est-elle partie ? Le bot n'attend une session qu'après elle.
+  @ObservationIgnored private var bridgeLoginCommandSent = false
+  /// Session récoltée par la fenêtre avant que `login` ne parte — cas rare (réseau lent,
+  /// session déjà ouverte), mais l'envoyer trop tôt la perdrait.
+  @ObservationIgnored private var pendingWebSessionPayload: String?
   /// Temps réel iMessage : `chat.db-wal` surveillé plutôt qu'interrogé.
   @ObservationIgnored private let iMessageWatcher = IMessageWatcher()
   /// Un rafraîchissement iMessage copie `chat.db` en entier : jamais deux à la fois.
@@ -1041,19 +1046,22 @@ final class InboxStore {
   }
 
   /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.
-  /// Le flux dépend du pont : QR à scanner pour WhatsApp, cookies à coller pour Instagram.
+  /// Le flux dépend du pont : QR à scanner pour WhatsApp, fenêtre de connexion intégrée
+  /// pour Instagram (dont la session part ensuite au bot).
   func presentBridgeLogin(network: MessageNetwork, phoneNumber: String? = nil) {
     guard let bridge = network.bridge else { return }
     bridgeLoginQRData = nil
     bridgeLoginPairingCode = nil
     bridgeLoginNetwork = network
+    bridgeLoginCommandSent = false
+    pendingWebSessionPayload = nil
     let input: MatrixBridgeService.BridgeLoginInput
     switch bridge.loginFlow {
     case .qrCode:
       input = phoneNumber.map { .whatsAppPairing(phoneNumber: $0) } ?? .whatsAppQRCode
       bridgeLoginStatusFR = "Demande du QR au bot \(network.labelFR)…"
-    case .cookies:
-      input = .cookies
+    case .webSession:
+      input = .webSession
       bridgeLoginStatusFR = "Demande de connexion au bot \(network.labelFR)…"
     }
     bridgeLoginTask?.cancel()
@@ -1065,14 +1073,39 @@ final class InboxStore {
         self.bridgeLoginStatusFR = error.localizedDescription
         return
       }
+      self.bridgeLoginCommandSent = true
+      // La fenêtre a pu livrer la session pendant l'aller-retour : elle part maintenant.
+      if let pending = self.pendingWebSessionPayload {
+        self.pendingWebSessionPayload = nil
+        self.submitBridgeLoginCookies(pending)
+        return
+      }
       await self.pollBridgeLogin(network: network)
     }
   }
 
-  /// Envoie au bot les cookies collés dans la feuille, puis reprend la lecture de ses réponses.
+  /// Session livrée par la fenêtre de connexion intégrée : on la met en JSON pour le bot.
+  ///
+  /// L'utilisateur ne voit ni cookie ni JSON, et rien n'est journalisé — la charge utile
+  /// ne fait que passer. Si `login` n'est pas encore parti, on attend : le bot n'accepte
+  /// une entrée qu'une fois la commande reçue.
+  func handleInstagramSessionCookies(_ cookies: [String: String]) {
+    guard let session = InstagramSessionCookies(rawCookies: cookies) else { return }
+    let payload = session.jsonPayload
+    guard bridgeLoginCommandSent else {
+      pendingWebSessionPayload = payload
+      bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
+      return
+    }
+    bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
+    submitBridgeLoginCookies(payload)
+  }
+
+  /// Envoie au bot la session (JSON de la fenêtre, ou collage manuel du repli),
+  /// puis reprend la lecture de ses réponses.
   func submitBridgeLoginCookies(_ raw: String) {
     guard let network = bridgeLoginNetwork else { return }
-    bridgeLoginStatusFR = "Envoi des cookies au bot \(network.labelFR)…"
+    bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -1114,7 +1147,7 @@ final class InboxStore {
           bridgeLoginPairingCode = code
           bridgeLoginStatusFR = "Saisis ce code dans WhatsApp → Appareils liés."
         case .awaitingCookies:
-          bridgeLoginStatusFR = "Colle tes cookies \(network.labelFR) ci-dessous, puis Envoyer."
+          bridgeLoginStatusFR = "Connecte-toi à \(network.labelFR) dans la fenêtre."
         case .success(let detail):
           bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
           startMatrixSync()

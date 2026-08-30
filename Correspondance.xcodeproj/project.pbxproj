@@ -11,6 +11,7 @@
 		008F0335DF322F07E1AAC636 /* IMessageConversationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */; };
 		04796917C093653EA2BEC5AC /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29785E397E832EDCE2150AC /* Theme.swift */; };
 		05CA4EB313BD72270FA81E71 /* InboxMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 445D3B44D6F503508070D241 /* InboxMode.swift */; };
+		07AD3A10DCB5D4F8F2B9A9E3 /* InstagramSessionCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DCBD1AB391B2D91D9BFB4B /* InstagramSessionCookies.swift */; };
 		0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */; };
 		0EDDB25026F2DA608734D607 /* IMessageAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C54E287CA9F90747F2C0AE /* IMessageAnnouncement.swift */; };
 		11893C938A693EA57AA61D52 /* MessageDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803BDF7075D9E2ACC5BE3155 /* MessageDelivery.swift */; };
@@ -59,8 +60,10 @@
 		716B7107C8A9273931B2FB62 /* ContactDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */; };
 		72844F5AEC9B03F135C9BECA /* FocusConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3796849D6D70116DE246282E /* FocusConversationView.swift */; };
 		73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9204E0947294308F58D53C /* MessageBubbleView.swift */; };
+		74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */; };
 		753B3E1E8BD1FEFA627BD282 /* SignalBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAD00CD1C7485D79E4CB665C /* SignalBridge.swift */; };
 		7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */; };
+		77CEA32444389E9AEF289985 /* SettingsChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192CF26CAA43E2A421A52262 /* SettingsChrome.swift */; };
 		78BFBD5B379BEE287754BD07 /* WritingTypeface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */; };
 		7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */; };
 		8520F818A51D69AE23716712 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */; };
@@ -85,6 +88,7 @@
 		B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B762FB62E00183DD0A339B2C /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF0FB534C12237850268E15 /* Conversation.swift */; };
+		C3F7DC02CD157C00E7884FA9 /* InstagramSessionCookiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45EB00C9E4BC37EF5865A52C /* InstagramSessionCookiesTests.swift */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C57C42F7B623ACE2AF159F2E /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5443743FD598E735E0F5F364 /* ChatMessage.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
@@ -138,6 +142,7 @@
 		148D4B9CB4C2B45ACB2D5F29 /* MergedContact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergedContact.swift; sourceTree = "<group>"; };
 		14C444A549BA3C7D7093F38E /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
 		16EE06AF0526360BC841BE21 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
+		192CF26CAA43E2A421A52262 /* SettingsChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChrome.swift; sourceTree = "<group>"; };
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
 		1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeService.swift; sourceTree = "<group>"; };
 		1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginSheet.swift; sourceTree = "<group>"; };
@@ -158,17 +163,20 @@
 		3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceSmokeTests.swift; sourceTree = "<group>"; };
 		3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAttachmentSendTests.swift; sourceTree = "<group>"; };
 		445D3B44D6F503508070D241 /* InboxMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxMode.swift; sourceTree = "<group>"; };
+		45EB00C9E4BC37EF5865A52C /* InstagramSessionCookiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramSessionCookiesTests.swift; sourceTree = "<group>"; };
 		4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageConversationCache.swift; sourceTree = "<group>"; };
 		493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageGroupDetectionTests.swift; sourceTree = "<group>"; };
 		4E6D8CF46418259CE1F7458E /* MatrixRoomModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixRoomModel.swift; sourceTree = "<group>"; };
 		4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLaterViews.swift; sourceTree = "<group>"; };
 		4EFA4AF1A4E3D6A41883DA4F /* SenderPrefixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenderPrefixTests.swift; sourceTree = "<group>"; };
 		506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageChatDatabaseTests.swift; sourceTree = "<group>"; };
+		524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramWebLoginView.swift; sourceTree = "<group>"; };
 		53171D7D92759527790B24B9 /* SignalAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignalAttachmentStore.swift; sourceTree = "<group>"; };
 		5443743FD598E735E0F5F364 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		580011B6BDA6ED59734CD255 /* WritingTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingTheme.swift; sourceTree = "<group>"; };
 		5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarView.swift; sourceTree = "<group>"; };
 		5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceApp.swift; sourceTree = "<group>"; };
+		61DCBD1AB391B2D91D9BFB4B /* InstagramSessionCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramSessionCookies.swift; sourceTree = "<group>"; };
 		625768DBC8A0E14E8A2D098D /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingTypeface.swift; sourceTree = "<group>"; };
 		67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerDictation.swift; sourceTree = "<group>"; };
@@ -281,6 +289,7 @@
 		41BC4EABE0CEAAFB097B7AAE /* Matrix */ = {
 			isa = PBXGroup;
 			children = (
+				61DCBD1AB391B2D91D9BFB4B /* InstagramSessionCookies.swift */,
 				074B532C3E48CEFDE44A6B3A /* MatrixAttachmentStore.swift */,
 				22E3ADFD7C40E5847933C479 /* MatrixBridgeDescriptor.swift */,
 				1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */,
@@ -320,6 +329,7 @@
 				506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */,
 				493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */,
 				23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */,
+				45EB00C9E4BC37EF5865A52C /* InstagramSessionCookiesTests.swift */,
 				2B4A0D50D682E5E7F9A67744 /* MatrixBridgeInstagramTests.swift */,
 				3725D6114DB7A83300EF89D5 /* MatrixSyncParserTests.swift */,
 				3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */,
@@ -400,6 +410,8 @@
 			isa = PBXGroup;
 			children = (
 				1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */,
+				524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */,
+				192CF26CAA43E2A421A52262 /* SettingsChrome.swift */,
 				B758EF0696E62CAE3AD887FF /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -602,6 +614,7 @@
 				9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */,
 				FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */,
 				A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */,
+				C3F7DC02CD157C00E7884FA9 /* InstagramSessionCookiesTests.swift in Sources */,
 				17D7C2FAE325F45F3C09E98E /* MatrixBridgeInstagramTests.swift in Sources */,
 				197A14DC76960829F24066DE /* MatrixSyncParserTests.swift in Sources */,
 				A3EB2437D379451E47247B37 /* MatrixTransactionLedgerTests.swift in Sources */,
@@ -658,6 +671,8 @@
 				05CA4EB313BD72270FA81E71 /* InboxMode.swift in Sources */,
 				6E566A2430EFFF7E54B7B929 /* InboxStore+IMessageAutomation.swift in Sources */,
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,
+				07AD3A10DCB5D4F8F2B9A9E3 /* InstagramSessionCookies.swift in Sources */,
+				74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */,
 				32111300AB95D4EF6DD03304 /* MatrixAttachmentStore.swift in Sources */,
 				2B142639F1899B5CD3EBBDFE /* MatrixBridgeDescriptor.swift in Sources */,
 				2B9D0F7EB5261C7E60B50F34 /* MatrixBridgeService.swift in Sources */,
@@ -689,6 +704,7 @@
 				331E12A814F788D2A1614A97 /* SendLaterTime.swift in Sources */,
 				F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */,
 				172E7CEBB785C1D7D5B5A778 /* SenderPrefix.swift in Sources */,
+				77CEA32444389E9AEF289985 /* SettingsChrome.swift in Sources */,
 				EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */,
 				691461685065A0072D19B637 /* SignalAttachmentStore.swift in Sources */,
 				753B3E1E8BD1FEFA627BD282 /* SignalBridge.swift in Sources */,

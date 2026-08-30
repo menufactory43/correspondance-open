@@ -294,8 +294,8 @@ actor MatrixBridgeService {
     /// WhatsApp : QR par défaut, ou code d'appairage si un numéro est fourni.
     case whatsAppQRCode
     case whatsAppPairing(phoneNumber: String)
-    /// Instagram : la commande `login` seule, les cookies suivront.
-    case cookies
+    /// Instagram : la commande `login` seule, la session récoltée dans la fenêtre suivra.
+    case webSession
   }
 
   /// Ouvre (ou retrouve) le salon de gestion du pont et envoie la commande de connexion.
@@ -306,14 +306,15 @@ actor MatrixBridgeService {
     case .whatsAppPairing(let phoneNumber): command = "login phone \(phoneNumber)"
     // Un seul flow côté mautrix-instagram (`instagram`, par cookies) : `login` suffit,
     // et le bot enchaîne tout seul sur l'étape « colle ton JSON ».
-    case .cookies: command = "login"
+    case .webSession: command = "login"
     }
     // On retient l'event de la commande : tout ce qui la précède appartient à une
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
     loginCommandEventIDs[network] = try await sendBotCommand(command, to: network)
   }
 
-  /// Envoie les cookies collés par l'utilisateur au bot, en réponse à son invite.
+  /// Envoie la session au bot, en réponse à son invite : soit le JSON fabriqué à partir
+  /// de la fenêtre de connexion intégrée, soit un collage manuel (le repli).
   /// Le corps part **tel quel** : le bot accepte un objet JSON ou une commande cURL,
   /// et l'entourer d'un préfixe de commande casserait son analyse.
   func submitLoginCookies(_ raw: String, network: MessageNetwork) async throws {

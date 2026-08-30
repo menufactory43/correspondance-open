@@ -10,8 +10,9 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
   enum LoginFlow: Sendable, Hashable {
     /// Le bot poste un QR à scanner depuis le téléphone (WhatsApp).
     case qrCode
-    /// Le bot attend un JSON de cookies collé depuis un navigateur connecté (Instagram).
-    case cookies
+    /// L'utilisateur se connecte dans une fenêtre de navigation intégrée, et l'app
+    /// transmet la session récoltée au bot (Instagram — Meta n'offre rien d'autre).
+    case webSession
   }
 
   let network: MessageNetwork
@@ -50,7 +51,7 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     commandPrefix: "!ig",
     ghostPrefix: "instagram_",
     protocolIDs: ["instagram", "instagramgo"],
-    loginFlow: .cookies,
+    loginFlow: .webSession,
     identifiersArePhoneNumbers: false,
     // mautrix-instagram ne suffixe rien par défaut ; on nettoie quand même les
     // formes qu'on croise chez les instances qui l'ont configuré autrement.

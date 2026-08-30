@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Feuille « Connecter <réseau> » : ce que le pont demande, et rien d'autre.
-/// WhatsApp fait scanner un QR ; Instagram fait coller les cookies d'une session
-/// de navigateur déjà connectée — Meta n'expose pas d'autre porte d'entrée.
+/// WhatsApp fait scanner un QR ; Instagram ouvre une vraie fenêtre de connexion
+/// instagram.com dans l'app — Meta ne connaît que la session d'un navigateur, mais
+/// l'utilisateur n'a rien à savoir des cookies pour autant.
 struct BridgeLoginSheet: View {
   let network: MessageNetwork
 
@@ -11,6 +12,9 @@ struct BridgeLoginSheet: View {
   @Environment(\.dismiss) private var dismiss
 
   @State private var cookies = ""
+  /// Repli pour le jour où Meta bloquera la fenêtre intégrée : replié par défaut,
+  /// parce que personne ne devrait avoir à ouvrir les outils de développement.
+  @State private var showsManualCookies = false
 
   private var theme: WritingTheme { themes.theme }
   private var flow: MatrixBridgeDescriptor.LoginFlow { network.bridge?.loginFlow ?? .qrCode }
@@ -23,7 +27,7 @@ struct BridgeLoginSheet: View {
 
       switch flow {
       case .qrCode: qrCodePanel
-      case .cookies: cookiesPanel
+      case .webSession: webSessionPanel
       }
 
       Text(store.bridgeLoginStatusFR)
@@ -35,11 +39,6 @@ struct BridgeLoginSheet: View {
       HStack {
         Button("Relancer") { store.presentBridgeLogin(network: network) }
         Spacer()
-        if flow == .cookies {
-          Button("Envoyer") { store.submitBridgeLoginCookies(cookies) }
-            .keyboardShortcut(.defaultAction)
-            .disabled(cookies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
         Button("Fermer") {
           store.stopBridgeLoginPolling()
           dismiss()
@@ -48,7 +47,7 @@ struct BridgeLoginSheet: View {
       }
     }
     .padding(Spacing.lg)
-    .frame(minWidth: flow == .cookies ? 460 : 380)
+    .frame(minWidth: flow == .webSession ? 460 : 380)
     .background(theme.paper)
     .onDisappear { store.stopBridgeLoginPolling() }
   }
@@ -84,20 +83,39 @@ struct BridgeLoginSheet: View {
     }
   }
 
-  // MARK: - Cookies (Instagram)
+  // MARK: - Fenêtre de connexion (Instagram)
 
   @ViewBuilder
-  private var cookiesPanel: some View {
+  private var webSessionPanel: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
-      Text("Colle ici tes cookies \(network.labelFR)")
-        .font(Typography.meta(themes.typeface))
-        .foregroundStyle(theme.ink)
+      InstagramWebLoginView { cookies in
+        store.handleInstagramSessionCookies(cookies)
+      }
+      .frame(width: 420, height: 640)
+      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .strokeBorder(theme.edge.opacity(0.4), lineWidth: 0.5)
+      )
 
+      DisclosureGroup("Coller des cookies…", isExpanded: $showsManualCookies) {
+        manualCookiesPanel
+      }
+      .font(Typography.meta(themes.typeface))
+      .foregroundStyle(theme.inkSecondary)
+    }
+  }
+
+  /// L'ancienne saisie, gardée en secours : si la fenêtre reste blanche ou qu'Instagram
+  /// refuse le navigateur intégré, on peut encore coller la session à la main.
+  @ViewBuilder
+  private var manualCookiesPanel: some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
       TextEditor(text: $cookies)
         .font(.system(size: 12, design: .monospaced))
         .scrollContentBackground(.hidden)
         .padding(Spacing.xs)
-        .frame(height: 160)
+        .frame(height: 90)
         .background(
           RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(theme.sidebar)
@@ -107,17 +125,15 @@ struct BridgeLoginSheet: View {
             )
         )
 
-      Text("""
-        Dans un navigateur connecté à instagram.com : Outils de développement → Application \
-        (Storage) → Cookies → https://www.instagram.com. Le bot attend un objet JSON avec \
-        sessionid, csrftoken, ds_user_id, mid et ig_did — une commande cURL copiée depuis \
-        l'onglet Réseau fait aussi l'affaire.
-        """)
-        .font(Typography.meta(themes.typeface))
-        .foregroundStyle(theme.inkSecondary)
-        .textSelection(.enabled)
-        .fixedSize(horizontal: false, vertical: true)
+      HStack {
+        Text("Un objet JSON, ou un « Copy as cURL » de l'onglet Réseau.")
+          .font(Typography.meta(themes.typeface))
+          .foregroundStyle(theme.inkSecondary)
+        Spacer()
+        Button("Envoyer") { store.submitBridgeLoginCookies(cookies) }
+          .disabled(cookies.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
     }
-    .frame(maxWidth: 400)
+    .padding(.top, Spacing.xs)
   }
 }
