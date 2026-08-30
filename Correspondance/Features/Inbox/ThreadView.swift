@@ -4,7 +4,14 @@ import SwiftUI
 struct ThreadView: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isShowingThread = false
+  /// Faux tant que le fil se met en place : à l'ouverture d'une conversation,
+  /// les vingt dernières bulles ne doivent pas prendre l'encre une par une.
+  @State private var animatesArrivals = false
+  /// Ce que le fil considère comme déjà posé. Tout ce qui arrive après se
+  /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
+  @State private var settledMessageID: String?
 
   private var theme: WritingTheme { themes.theme }
 
@@ -104,6 +111,11 @@ struct ThreadView: View {
                 } else {
                   bubble(for: message)
                     .id(message.id)
+                    .messageArrival(
+                      .encre,
+                      isFresh: isFresh(message),
+                      isEnabled: !reduceMotion
+                    )
                 }
               }
             }
@@ -121,6 +133,7 @@ struct ThreadView: View {
             ScheduledMessageRow(message: scheduled, theme: theme, typeface: themes.typeface)
               .id("scheduled-\(scheduled.id)")
           }
+
         }
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.md)
@@ -137,11 +150,14 @@ struct ThreadView: View {
       // voler à la sélection de texte ni aux liens des bulles.
       .simultaneousGesture(TapGesture().onEnded { store.confirmSelectionAsRead() })
       .onAppear { pinToBottom(proxy) }
-      .onChange(of: store.messages.count) { _, _ in
+      .onChange(of: store.messages.count) { oldCount, newCount in
+        noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         isShowingThread = false
+        animatesArrivals = false
+        settledMessageID = store.messages.last?.id
         pinToBottom(proxy)
       }
       .onChange(of: store.threadSearchCurrentID) { _, target in
@@ -191,6 +207,28 @@ struct ThreadView: View {
     message.network == .iMessage && message.isFromMe && store.canAutomateMessages
   }
 
+  /// L'encre ne prend que sur un vrai message, jamais sur une bascule de
+  /// conversation. Et elle ne dure que le temps du geste : passé ce délai la
+  /// bulle est une bulle comme les autres, et elle ne se retracera pas si le
+  /// défilement la fait renaître.
+  /// Vrai pour le dernier message tant qu'il n'a pas fini de se poser. Calculé
+  /// dans le corps de la vue : la ligne connaît donc son sort dès sa naissance,
+  /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
+  private func isFresh(_ message: ChatMessage) -> Bool {
+    animatesArrivals
+      && message.id == store.messages.last?.id
+      && message.id != settledMessageID
+  }
+
+  private func noteArrival(increased: Bool) {
+    guard increased, animatesArrivals else { return }
+    let id = store.messages.last?.id
+    Task {
+      try? await Task.sleep(for: .seconds(1.2))
+      if store.messages.last?.id == id { settledMessageID = id }
+    }
+  }
+
   private func pinToBottom(_ proxy: ScrollViewProxy) {
     let target = store.messages.last?.id
     if let target {
@@ -201,6 +239,9 @@ struct ThreadView: View {
         proxy.scrollTo(id, anchor: .bottom)
       }
       isShowingThread = true
+      // Ce qui est à l'écran à l'ouverture est déjà posé.
+      settledMessageID = store.messages.last?.id
+      animatesArrivals = true
     }
   }
 }

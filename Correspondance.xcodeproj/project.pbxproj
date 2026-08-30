@@ -39,6 +39,7 @@
 		31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C41963F5AA875508D844FF1 /* IMessageSender.swift */; };
 		32111300AB95D4EF6DD03304 /* MatrixAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074B532C3E48CEFDE44A6B3A /* MatrixAttachmentStore.swift */; };
 		32A646B5D7E12EC285FB4506 /* WritingTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580011B6BDA6ED59734CD255 /* WritingTheme.swift */; };
+		4A1C0E11B7D34A0F9C2E5502 /* MessageArrival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1C0E11B7D34A0F9C2E5501 /* MessageArrival.swift */; };
 		331E12A814F788D2A1614A97 /* SendLaterTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D68156B727E42018DA921F /* SendLaterTime.swift */; };
 		3460B4B440278E418038A06E /* SettingsWindowSizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1517D91065CD3D975BAE16E /* SettingsWindowSizer.swift */; };
 		375829E6CF2BBC585E4D3807 /* NotificationPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109ADEF4B669502B537627AE /* NotificationPolicyTests.swift */; };
@@ -196,6 +197,7 @@
 		524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramWebLoginView.swift; sourceTree = "<group>"; };
 		5443743FD598E735E0F5F364 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		580011B6BDA6ED59734CD255 /* WritingTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingTheme.swift; sourceTree = "<group>"; };
+		4A1C0E11B7D34A0F9C2E5501 /* MessageArrival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageArrival.swift; sourceTree = "<group>"; };
 		5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarView.swift; sourceTree = "<group>"; };
 		5DDFA61AE66989EBCAF652C5 /* LinkedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedText.swift; sourceTree = "<group>"; };
 		5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceApp.swift; sourceTree = "<group>"; };
@@ -424,6 +426,7 @@
 				AB68DB666AD5741B836D9D65 /* Typography.swift */,
 				CF291CB888D9703104F47AB1 /* WindowChrome.swift */,
 				580011B6BDA6ED59734CD255 /* WritingTheme.swift */,
+				4A1C0E11B7D34A0F9C2E5501 /* MessageArrival.swift */,
 				665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */,
 			);
 			path = Design;
@@ -785,6 +788,7 @@
 				ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */,
 				F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */,
 				32A646B5D7E12EC285FB4506 /* WritingTheme.swift in Sources */,
+				4A1C0E11B7D34A0F9C2E5502 /* MessageArrival.swift in Sources */,
 				78BFBD5B379BEE287754BD07 /* WritingTypeface.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

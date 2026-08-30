@@ -342,6 +342,11 @@ final class ThemePreferences {
     didSet { UserDefaults.standard.set(focusScope.rawValue, forKey: Keys.focusScope) }
   }
 
+  /// Le geste d'arrivée d'un message, en Focus. L'Inbox garde l'encre.
+  var messageArrival: MessageArrival {
+    didSet { UserDefaults.standard.set(messageArrival.rawValue, forKey: Keys.messageArrival) }
+  }
+
   var typewriterMode: Bool {
     didSet { UserDefaults.standard.set(typewriterMode, forKey: Keys.typewriter) }
   }
@@ -372,6 +377,9 @@ final class ThemePreferences {
     let scope = UserDefaults.standard.string(forKey: Keys.focusScope) ?? FocusScope.paragraph.rawValue
     self.focusScope = FocusScope(rawValue: scope) ?? .paragraph
 
+    let arrival = UserDefaults.standard.string(forKey: Keys.messageArrival) ?? MessageArrival.encre.rawValue
+    self.messageArrival = MessageArrival(rawValue: arrival) ?? .encre
+
     if UserDefaults.standard.object(forKey: Keys.typewriter) == nil {
       self.typewriterMode = true
     } else {
@@ -393,6 +401,7 @@ final class ThemePreferences {
     static let typeScale = "correspondance.typeScale"
     static let lineLength = "correspondance.lineLength"
     static let focusScope = "correspondance.focusScope"
+    static let messageArrival = "correspondance.messageArrival"
     static let typewriter = "correspondance.typewriter"
     static let wordCount = "correspondance.showWordCount"
     static let warm = "correspondance.warmHours"

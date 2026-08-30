@@ -64,6 +64,23 @@ struct SettingsAppearancePane: View {
           .padding(.vertical, Spacing.sm)
       }
 
+      SettingsCard(
+        title: "Arrivée d'un message",
+        footnote: "En Focus. L'Inbox garde l'encre — la plume est faite pour la prose."
+      ) {
+        SettingsRow(label: "Geste", systemImage: "wand.and.sparkles") {
+          Picker("", selection: Binding(
+            get: { themes.messageArrival },
+            set: { themes.messageArrival = $0 }
+          )) {
+            ForEach(MessageArrival.allCases) { arrival in
+              Text("\(arrival.labelFR) — \(arrival.subtitleFR)").tag(arrival)
+            }
+          }
+          .frame(width: 260)
+        }
+      }
+
       SettingsCard(title: "Ambiance") {
         ThemePickerView(selection: Binding(
           get: { themes.themeID },

@@ -68,9 +68,40 @@ private struct FocusTranscriptView: View {
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isShowingThread = false
+  /// Faux tant que la page se met en place : à l'ouverture d'une conversation,
+  /// les vingt derniers paragraphes ne doivent pas se tracer un par un.
+  @State private var animatesArrivals = false
+  /// Ce que la page considère comme déjà posé. Tout ce qui arrive après se
+  /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
+  @State private var settledMessageID: String?
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
+
+  /// Le geste choisi dans les réglages — encre ou plume.
+  private var arrival: MessageArrival { themes.messageArrival }
+
+  /// Le geste ne joue que sur un vrai message, jamais sur une bascule de
+  /// conversation. Et il ne dure que son temps : passé ce délai le paragraphe
+  /// est un paragraphe comme les autres, et il ne se retracera pas si le
+  /// défilement le fait renaître.
+  /// Vrai pour le dernier message tant qu'il n'a pas fini de se poser. Calculé
+  /// dans le corps de la vue : la ligne connaît donc son sort dès sa naissance,
+  /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
+  private func isFresh(_ message: ChatMessage) -> Bool {
+    animatesArrivals
+      && message.id == store.messages.last?.id
+      && message.id != settledMessageID
+  }
+
+  private func noteArrival(increased: Bool) {
+    guard increased, animatesArrivals else { return }
+    let id = store.messages.last?.id
+    Task {
+      try? await Task.sleep(for: .seconds(1.2))
+      if store.messages.last?.id == id { settledMessageID = id }
+    }
+  }
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -126,6 +157,11 @@ private struct FocusTranscriptView: View {
                 .opacity(message.isPending ? 0.5 : 1)
                 .id(message.id)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .messageArrival(
+                  arrival,
+                  isFresh: isFresh(message),
+                  isEnabled: !reduceMotion
+                )
               }
             }
             .opacity(isWriting ? 0.34 : 1)
@@ -188,11 +224,16 @@ private struct FocusTranscriptView: View {
           .allowsHitTesting(false)
       }
       .onAppear { pinToBottom(proxy) }
-      .onChange(of: store.messages.count) { _, _ in
+      .onChange(of: store.messages.count) { oldCount, newCount in
+        // « Répondre… » est l'ancre : on la recale sans animer, le geste se
+        // joue dans le paragraphe. Animer ici ferait glisser le bas de la page.
+        noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         isShowingThread = false
+        animatesArrivals = false
+        settledMessageID = store.messages.last?.id
         pinToBottom(proxy)
       }
     }
@@ -203,6 +244,9 @@ private struct FocusTranscriptView: View {
     DispatchQueue.main.async {
       proxy.scrollTo("draft", anchor: .bottom)
       isShowingThread = true
+      // Ce qui est à l'écran à l'ouverture est déjà posé.
+      settledMessageID = store.messages.last?.id
+      animatesArrivals = true
     }
   }
 

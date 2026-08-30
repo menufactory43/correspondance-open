@@ -8,22 +8,18 @@ struct InboxListPane: View {
 
   private var theme: WritingTheme { themes.theme }
 
-  /// Sélection native de la `List` — la sélection réelle reste pilotée par le store.
-  private var selection: Binding<String?> {
-    Binding(
-      get: { store.selectedConversationID },
-      set: { newValue in
-        guard let newValue else { return }
-        // Recliquer la ligne déjà sélectionnée n'est pas un non-événement quand
-        // c'est l'app qui l'avait choisie au lancement : c'est le geste par
-        // lequel l'utilisateur dit qu'il lit enfin ce fil.
-        guard newValue != store.selectedConversationID else {
-          store.confirmSelectionAsRead()
-          return
-        }
-        Task { await store.select(newValue) }
-      }
-    )
+  /// La `List` n'a plus de sélection native : son surlignage se peint avec
+  /// l'accent du système — un bleu franc qui écrase la ligne une demi-seconde
+  /// avant de céder la place à la nôtre. C'est donc le clic qui choisit.
+  private func choose(_ id: String) {
+    // Recliquer la ligne déjà sélectionnée n'est pas un non-événement quand
+    // c'est l'app qui l'avait choisie au lancement : c'est le geste par
+    // lequel l'utilisateur dit qu'il lit enfin ce fil.
+    guard id != store.selectedConversationID else {
+      store.confirmSelectionAsRead()
+      return
+    }
+    Task { await store.select(id) }
   }
 
   var body: some View {
@@ -39,7 +35,7 @@ struct InboxListPane: View {
           .padding(.bottom, Spacing.xs)
       }
 
-      List(selection: selection) {
+      List {
         if store.isShowingScheduled {
           scheduledSection
         } else if store.isShowingArchived {
@@ -103,8 +99,10 @@ struct InboxListPane: View {
             theme: theme,
             typeface: themes.typeface
           )
-          .tag(conversation.id)
+          .contentShape(Rectangle())
+          .onTapGesture { choose(conversation.id) }
           .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+          .listRowBackground(rowBackground(for: conversation.id))
           .contextMenu {
             Button("Ouvrir la discussion") {
               Task { await store.select(conversation.id) }
@@ -191,10 +189,25 @@ struct InboxListPane: View {
       isPinned: store.isPinned(conversation.id),
       isMuted: store.isMuted(conversation.id)
     )
-    .tag(conversation.id)
+    .contentShape(Rectangle())
+    .onTapGesture { choose(conversation.id) }
     .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+    .listRowBackground(rowBackground(for: conversation.id))
     .contextMenu {
       conversationContextMenu(conversation)
+    }
+  }
+
+  /// Le fond de la ligne choisie : le papier mêlé d'un peu d'accent, posé
+  /// nous-mêmes pour que la couleur ne dépende d'aucune humeur d'AppKit.
+  @ViewBuilder
+  private func rowBackground(for id: String) -> some View {
+    if id == store.selectedConversationID {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(theme.selection)
+        .padding(.horizontal, 6)
+    } else {
+      Color.clear
     }
   }
 
