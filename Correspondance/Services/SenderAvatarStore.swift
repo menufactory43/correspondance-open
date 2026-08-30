@@ -21,6 +21,17 @@ actor SenderAvatarStore {
     matrixMemberLoader = loader
   }
 
+  /// Même précaution que `ConversationAvatarStore` : le chargeur est posé après coup
+  /// par un `Task`, et un fil ouvert dès le lancement demande ses visages avant lui.
+  /// Ici l'enjeu est pire — un `nil` entre dans `known` et n'en ressort qu'à la
+  /// prochaine invalidation. Attente bornée, pour ne pas suspendre un store sans pont.
+  private func memberLoaderWhenReady() async -> (@Sendable (String, String) async -> Data?)? {
+    for _ in 0..<50 where matrixMemberLoader == nil {
+      try? await Task.sleep(for: .milliseconds(100))
+    }
+    return matrixMemberLoader
+  }
+
   /// - Parameter conversationID: le fil **réel** de la bulle (un fil fusionné en
   ///   compte deux : c'est celui du réseau qui a parlé qui répond).
   /// - Parameter senderID: l'auteur côté réseau — un handle iMessage, un MXID.
@@ -48,8 +59,8 @@ actor SenderAvatarStore {
         : nil
       if let contact {
         resolved = contact
-      } else if let matrixMemberLoader {
-        resolved = await matrixMemberLoader(conversationID, senderID)
+      } else if let loader = await memberLoaderWhenReady() {
+        resolved = await loader(conversationID, senderID)
       } else {
         resolved = nil
       }

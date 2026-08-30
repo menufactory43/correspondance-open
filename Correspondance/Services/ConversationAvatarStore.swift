@@ -15,6 +15,20 @@ actor ConversationAvatarStore {
     matrixAvatarLoader = loader
   }
 
+  /// Le chargeur arrive par un `Task` lancé à l'init d'`InboxStore`, quelques sauts
+  /// d'acteur après que les premières lignes de l'inbox — dessinées depuis le cache
+  /// disque, de façon synchrone — ont déjà demandé leur photo. Répondre `nil` à ce
+  /// moment-là, c'est condamner la ligne aux initiales : son `mxc` ne changeant plus,
+  /// sa tâche ne repart jamais. On attend donc que le chargeur soit posé, le temps
+  /// de quelques tours de boucle ; borné, pour qu'un store sans pont (tests, aperçus)
+  /// ne reste pas suspendu.
+  private func matrixLoaderWhenReady() async -> (@Sendable (String) async -> Data?)? {
+    for _ in 0..<50 where matrixAvatarLoader == nil {
+      try? await Task.sleep(for: .milliseconds(100))
+    }
+    return matrixAvatarLoader
+  }
+
   func imageData(for conversation: Conversation) async -> Data? {
     if let cached = memory[conversation.id] { return cached }
 
@@ -37,10 +51,10 @@ actor ConversationAvatarStore {
         : nil
       if let contact {
         resolved = contact
-      } else if let mxc = conversation.remoteAvatarID, let matrixAvatarLoader {
-        resolved = await matrixAvatarLoader(mxc)
-      } else if !conversation.memberAvatarIDs.isEmpty, let matrixAvatarLoader {
-        resolved = await mosaicData(forMembers: conversation.memberAvatarIDs, loader: matrixAvatarLoader)
+      } else if let mxc = conversation.remoteAvatarID, let loader = await matrixLoaderWhenReady() {
+        resolved = await loader(mxc)
+      } else if !conversation.memberAvatarIDs.isEmpty, let loader = await matrixLoaderWhenReady() {
+        resolved = await mosaicData(forMembers: conversation.memberAvatarIDs, loader: loader)
       } else {
         resolved = nil
       }
