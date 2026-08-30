@@ -14,6 +14,9 @@ struct FocusPageMetrics: Equatable {
   var bottom: CGFloat
   /// Fenêtre serrée : l'entête tient sur une ligne, les bannières s'effacent.
   var isCompact: Bool
+  /// Une photo ne fait jamais déborder la colonne : au plus 360 points, et
+  /// jamais plus que la page n'en laisse entre ses marges.
+  var attachmentMaxWidth: CGFloat = 360
 
   /// La largeur de colonne du texte. Ce n'est qu'un plafond : sous cette
   /// largeur, la page prend ce qu'on lui laisse.
@@ -36,12 +39,14 @@ struct FocusPageMetrics: Equatable {
     case ..<900: leading = 40 + (w - 640) * (LayoutMetrics.pageLeading - 40) / (900 - 640)
     default: leading = LayoutMetrics.pageLeading
     }
+    let trailing: CGFloat = w < 380 ? 12 : (w < 640 ? 16 : Spacing.xl)
     return FocusPageMetrics(
       leading: leading,
-      trailing: w < 380 ? 12 : (w < 640 ? 16 : Spacing.xl),
+      trailing: trailing,
       top: w < 380 ? 4 : (w < 640 ? 10 : LayoutMetrics.pageTopInset * 0.4),
       bottom: w < 380 ? Spacing.sm : (w < 640 ? Spacing.lg : LayoutMetrics.pageBottomInset),
-      isCompact: w < 420
+      isCompact: w < 420,
+      attachmentMaxWidth: max(80, min(360, w - leading - trailing))
     )
   }
 }
@@ -217,7 +222,7 @@ struct FocusTranscriptView: View {
                     if let url = attachment.resolvedFileURL, attachment.isImage {
                       AttachmentImageView(
                         url: url,
-                        maxWidth: 360,
+                        maxWidth: metrics.attachmentMaxWidth,
                         maxHeight: 400,
                         cornerRadius: 8,
                         placeholder: theme.paperSecondary,
@@ -229,7 +234,7 @@ struct FocusTranscriptView: View {
                     } else if let url = attachment.resolvedFileURL, attachment.isVideo {
                       AttachmentVideoView(
                         url: url,
-                        maxWidth: 360,
+                        maxWidth: metrics.attachmentMaxWidth,
                         maxHeight: 400,
                         cornerRadius: 8,
                         placeholder: theme.paperSecondary,

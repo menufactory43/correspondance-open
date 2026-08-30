@@ -54,9 +54,11 @@ struct DetachedConversationWindow: View {
     GeometryReader { geometry in
       let metrics = FocusPageMetrics.resolve(width: geometry.size.width)
       VStack(alignment: .leading, spacing: 0) {
-        header(conversationID: conversationID, metrics: metrics)
+        header(conversationID: conversationID, metrics: metrics, showsNetwork: geometry.size.width >= 520)
         FocusTranscriptView(session: session, metrics: metrics, includesEditor: false)
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          // Le fil s'arrête à la ligne de l'entête : il ne remonte pas dessous.
+          .clipped()
         FocusPageEditor(session: session, theme: theme)
           .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.sm)
       }
@@ -71,10 +73,13 @@ struct DetachedConversationWindow: View {
         HoverZone { hovering in
           withAnimation(chromeAnimation) { revealChrome(hovering) }
         }
-        .frame(maxWidth: .infinity, maxHeight: metrics.isCompact ? 20 : 28)
+        .frame(maxWidth: .infinity, maxHeight: Self.titleBarHeight)
         .accessibilityHidden(true)
       }
     }
+    // Le contenu monte sous la barre : c'est là que l'entête prend place,
+    // à la hauteur des feux.
+    .ignoresSafeArea(edges: .top)
     .background {
       DetachedWindowConfigurator(
         conversationID: conversationID,
@@ -103,7 +108,7 @@ struct DetachedConversationWindow: View {
 
   /// Nom + réseau, sur une ligne, cliquable. En fenêtre serrée le réseau
   /// s'efface : le nom vaut mieux qu'un libellé tronqué à deux lettres.
-  private func header(conversationID: String, metrics: FocusPageMetrics) -> some View {
+  private func header(conversationID: String, metrics: FocusPageMetrics, showsNetwork: Bool) -> some View {
     HStack(spacing: 6) {
       if let conversation {
         Button {
@@ -117,7 +122,9 @@ struct DetachedConversationWindow: View {
               .lineLimit(1)
               .truncationMode(.tail)
               .minimumScaleFactor(0.85)
-            if !metrics.isCompact {
+            // Le réseau n'a sa place qu'en fenêtre large : tronqué à une
+            // lettre, il n'apprend rien.
+            if showsNetwork {
               Text(conversation.network.labelFR)
                 .font(.system(size: 11))
                 .foregroundStyle(theme.inkTertiary)
@@ -146,9 +153,22 @@ struct DetachedConversationWindow: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.top, metrics.isCompact ? Spacing.xs : Spacing.md)
-    .padding(.bottom, metrics.isCompact ? Spacing.xxs : Spacing.xs)
+    // Dans le creux de la barre, à droite des feux : le titre est du chrome,
+    // pas du contenu — et la page gagne sa première ligne, précieuse en post-it.
+    .padding(.leading, max(0, Self.trafficLightsClearance - metrics.leading))
+    // À droite, la place des trois boutons fantômes ; en fenêtre serrée le
+    // titre leur cède la ligne le temps du survol.
+    .padding(.trailing, metrics.isCompact ? 0 : Self.ghostToolbarWidth)
+    .frame(height: Self.titleBarHeight)
+    .opacity(metrics.isCompact && isChromeRevealed ? 0 : 1)
   }
+
+  /// La hauteur du creux de la barre, feux compris.
+  static let titleBarHeight: CGFloat = 28
+  /// Ce que les trois feux occupent depuis le bord gauche.
+  static let trafficLightsClearance: CGFloat = 78
+  /// Trois boutons fantômes et leurs entre-deux.
+  static let ghostToolbarWidth: CGFloat = 96
 
   // MARK: - Barre d'outils fantôme
 
@@ -179,7 +199,7 @@ struct DetachedConversationWindow: View {
       }
     }
     .padding(.horizontal, metrics.isCompact ? Spacing.xxs : Spacing.xs)
-    .padding(.top, Spacing.xxs)
+    .frame(height: Self.titleBarHeight)
     .opacity(isChromeRevealed ? 1 : 0)
     .allowsHitTesting(isChromeRevealed)
     .animation(chromeAnimation, value: isChromeRevealed)
