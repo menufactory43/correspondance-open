@@ -29,6 +29,18 @@ enum TextLinks {
     }
   }
 
+  /// LA PREMIÈRE ADRESSE WEB du message — celle dont on ira chercher l'aperçu.
+  ///
+  /// Une seule carte par bulle : un message qui aligne cinq liens en ferait un
+  /// mur. Et seulement `http`/`https` — un `tel:` ou un `mailto:` n'a pas de
+  /// page à montrer.
+  static func firstWebURL(in text: String) -> URL? {
+    detect(in: text).first { link in
+      let scheme = link.url.scheme?.lowercased()
+      return scheme == "http" || scheme == "https"
+    }?.url
+  }
+
   /// `AttributedString` du texte, attribut `.link` posé sur les plages détectées.
   /// Le reste des attributs (police, encre) vient de la vue qui l'affiche.
   static func linkified(_ text: String) -> AttributedString {

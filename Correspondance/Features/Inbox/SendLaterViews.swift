@@ -181,6 +181,9 @@ struct ScheduledMessageRow: View {
   let message: ScheduledMessage
   let theme: WritingTheme
   let typeface: WritingTypeface
+  /// L'échelle de lecture (⌘+ / ⌘−) : la bulle en pointillé vit dans le fil,
+  /// elle grandit avec lui. La prose du Focus, elle, hérite de `pageFont`.
+  var textScale: CGFloat = 1
   /// Prose du Focus : pas de bulle, un paragraphe atténué.
   var isProse = false
 
@@ -204,7 +207,8 @@ struct ScheduledMessageRow: View {
           Spacer(minLength: 48)
           VStack(alignment: .trailing, spacing: 3) {
             Text(message.displayText)
-              .font(Typography.bubble(typeface))
+              .font(Typography.bubble(typeface, scale: textScale))
+              .lineSpacing(theme.bubbleLineSpacing(forBodySize: Typography.bubbleSize(textScale)))
               .foregroundStyle(theme.ink.opacity(0.75))
               .padding(.horizontal, 12)
               .padding(.vertical, 7)

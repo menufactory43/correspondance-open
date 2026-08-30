@@ -104,7 +104,10 @@ struct SettingsAppearancePane: View {
         }
       }
 
-      SettingsCard(title: "Police") {
+      SettingsCard(
+        title: "Police",
+        footnote: "⌘+ et ⌘− changent la taille sans quitter la lecture, ⌘0 revient à 100 %."
+      ) {
         SettingsRow(label: "Famille", systemImage: "textformat") {
           Picker("", selection: Binding(
             get: { themes.typeface },
@@ -119,22 +122,35 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Taille", systemImage: "textformat.size") {
-          Slider(
-            value: Binding(
-              get: { themes.typeScale },
-              set: { themes.typeScale = $0 }
-            ),
-            in: 0.9...1.25,
-            step: 0.05
-          )
-          .frame(width: 200)
+        SettingsRow(label: "Taille du texte", systemImage: "textformat.size") {
+          HStack(spacing: Spacing.xs) {
+            Slider(
+              value: Binding(
+                get: { themes.typeScale },
+                set: { themes.typeScale = $0 }
+              ),
+              in: ThemePreferences.typeScaleRange,
+              step: ThemePreferences.typeScaleStep
+            )
+            .frame(width: 160)
+
+            Text(themes.typeScaleLabelFR)
+              .font(Typography.meta(themes.typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .monospacedDigit()
+              .frame(width: 44, alignment: .trailing)
+
+            Button("100 %") { themes.resetTypeScale() }
+              .disabled(themes.isTypeScaleDefault)
+              .accessibilityLabel("Revenir à la taille normale")
+          }
         }
 
         SettingsDivider()
 
         Text("Aperçu — Correspondance lit comme iA Writer.")
-          .font(Typography.body(themes.typeface, size: 16 * themes.typeScale))
+          .font(Typography.body(themes.typeface, size: Typography.Size.body * themes.textScale))
+          .lineSpacing(theme.lineSpacing(forBodySize: Typography.Size.body * themes.textScale))
           .foregroundStyle(theme.ink)
           .padding(.horizontal, Spacing.sm)
           .padding(.vertical, Spacing.sm)
@@ -142,12 +158,23 @@ struct SettingsAppearancePane: View {
 
       SettingsCard(
         title: "Fil",
-        footnote: "En Inbox. La page Focus se lit comme une lettre — elle n'a pas de visages."
+        footnote: "En Inbox. La page Focus se lit comme une lettre — elle n'a pas de visages. "
+          + "Un aperçu de lien s'affiche sous la bulle quand la page a bien voulu se présenter."
       ) {
         SettingsRow(label: "Photo de l'expéditeur", systemImage: "person.crop.circle") {
           Toggle("", isOn: Binding(
             get: { themes.showsMessageAvatars },
             set: { themes.showsMessageAvatars = $0 }
+          ))
+          .toggleStyle(.switch)
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Aperçu des liens", systemImage: "link") {
+          Toggle("", isOn: Binding(
+            get: { themes.showsLinkPreviews },
+            set: { themes.showsLinkPreviews = $0 }
           ))
           .toggleStyle(.switch)
         }

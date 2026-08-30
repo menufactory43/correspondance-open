@@ -79,6 +79,11 @@ struct ComposerBar: View {
     return "Écrire à \(contact.title) sur \(member.network.labelFR)"
   }
 
+  /// Le composer suit l'échelle de lecture (⌘+ / ⌘−), comme les bulles.
+  private var composerFont: Font {
+    Typography.composer(themes.typeface, scale: themes.textScale)
+  }
+
   private var bubble: some View {
     HStack(alignment: .bottom, spacing: 6) {
       if let mergedID, let member = activeMember {
@@ -92,7 +97,10 @@ struct ComposerBar: View {
         axis: .vertical
       )
       .textFieldStyle(.plain)
-      .font(Typography.composer(themes.typeface))
+      .font(composerFont)
+      // On écrit à l'interligne où l'on lira : relire son brouillon ne doit pas
+      // demander un autre œil que relire le fil.
+      .lineSpacing(theme.bubbleLineSpacing(forBodySize: Typography.composerSize(themes.textScale)))
       .foregroundStyle(theme.ink)
       .lineLimit(1...6)
       .focused($isFocused)
@@ -115,7 +123,7 @@ struct ComposerBar: View {
         text: $text,
         session: store.primarySession,
         theme: theme,
-        font: Typography.composer(themes.typeface)
+        font: composerFont
       )
       .onKeyPress(.return) {
         if NSEvent.modifierFlags.contains(.shift) { return .ignored }

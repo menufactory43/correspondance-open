@@ -247,7 +247,10 @@ struct FocusTranscriptView: View {
                     LinkedText(text: message.text, tint: theme.accent)
                       .font(pageFont)
                       .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
-                      .lineSpacing(theme.lineSpacing * 0.65)
+                      // L'interligne DE LETTRE du thème, entier : la page Focus
+                      // est de la prose, et la prose se lit aérée. Il suit
+                      // l'échelle comme le corps — les deux vont ensemble.
+                      .lineSpacing(theme.lineSpacing(forBodySize: pageBodySize))
                   }
                 }
                 .opacity(message.isPending ? 0.5 : 1)
@@ -397,8 +400,11 @@ struct FocusTranscriptView: View {
     }
   }
 
+  /// Le corps effectif de la page — échelle comprise. L'interligne s'y accroche.
+  private var pageBodySize: CGFloat { theme.bodySize * themes.textScale }
+
   private var pageFont: Font {
-    Typography.letterBody(themes.typeface, size: theme.bodySize * themes.typeScale)
+    Typography.letterBody(themes.typeface, size: pageBodySize)
   }
 
   private var isGroup: Bool { row?.isGroup == true }
@@ -470,8 +476,10 @@ struct FocusPageEditor: View {
 
   private var showsChrome: Bool { !isActivelyTyping }
 
+  private var pageBodySize: CGFloat { theme.bodySize * themes.textScale }
+
   private var pageFont: Font {
-    Typography.letterBody(themes.typeface, size: theme.bodySize * themes.typeScale)
+    Typography.letterBody(themes.typeface, size: pageBodySize)
   }
 
   var body: some View {
@@ -506,6 +514,8 @@ struct FocusPageEditor: View {
         TextField(showsChrome ? "Répondre…" : "", text: text, axis: .vertical)
           .textFieldStyle(.plain)
           .font(pageFont)
+          // Même interligne que la prose qu'on relit juste au-dessus.
+          .lineSpacing(theme.lineSpacing(forBodySize: pageBodySize))
           .foregroundStyle(theme.ink)
           .lineLimit(1...20)
           .focused($isFocused)

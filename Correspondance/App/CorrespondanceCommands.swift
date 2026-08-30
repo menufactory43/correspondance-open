@@ -2,6 +2,10 @@ import SwiftUI
 
 struct CorrespondanceCommands: Commands {
   var store: InboxStore
+  /// Les préférences d'ambiance : le menu Présentation y règle l'échelle de
+  /// lecture. Passées comme le store — un `Commands` n'est pas une vue, il ne
+  /// lit pas l'environnement.
+  var themes: ThemePreferences
 
   /// Le fil qu'un ⌘⇧D vise : celui de la fenêtre détachée au premier plan,
   /// sinon celui que lit l'inbox.
@@ -118,6 +122,33 @@ struct CorrespondanceCommands: Commands {
         Task { @MainActor in await store.sendDraftAndArchive() }
       }
       .keyboardShortcut(.return, modifiers: [.command])
+    }
+
+    // Le menu Présentation : la taille du texte. ⌘1…⌘9 appartiennent déjà au
+    // rail des réseaux, ⌘0 était libre — il revient donc au « 100 % », comme
+    // partout ailleurs sur le système.
+    CommandGroup(after: .toolbar) {
+      Divider()
+
+      Button("Agrandir le texte") {
+        themes.nudgeTypeScale(+1)
+      }
+      .keyboardShortcut("+", modifiers: [.command])
+      .disabled(themes.typeScale >= ThemePreferences.typeScaleRange.upperBound - 0.001)
+
+      Button("Réduire le texte") {
+        themes.nudgeTypeScale(-1)
+      }
+      .keyboardShortcut("-", modifiers: [.command])
+      .disabled(themes.typeScale <= ThemePreferences.typeScaleRange.lowerBound + 0.001)
+
+      Button("Taille normale (\(themes.typeScaleLabelFR))") {
+        themes.resetTypeScale()
+      }
+      .keyboardShortcut("0", modifiers: [.command])
+      .disabled(themes.isTypeScaleDefault)
+
+      Divider()
     }
 
     CommandGroup(after: .windowArrangement) {

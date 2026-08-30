@@ -204,6 +204,31 @@ struct ChatMessage: Identifiable, Hashable, Sendable {
     !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent
   }
 
+  /// Ce message n'est qu'un geste : 1 à 3 emoji, rien d'autre.
+  ///
+  /// Ni pièce jointe (une photo légendée « 🎉 » reste une photo), ni citation
+  /// (une réponse a un contexte à porter), ni annulation, ni événement de
+  /// conversation. La bulle le montre alors nu et grand — cf. `MessageBubbleView`.
+  var isEmojiOnly: Bool {
+    guard attachments.isEmpty else { return false }
+    guard replyTo?.isEmpty != false else { return false }
+    guard !isRetracted, !isSystemEvent else { return false }
+    return EmojiText.isEmojiOnly(text)
+  }
+
+  /// Le nom d'expéditeur BON À MONTRER, ou rien.
+  ///
+  /// `senderName` peut manquer, ou n'être que du blanc ; `senderID` existe
+  /// presque toujours mais c'est un identifiant de réseau, pas un nom. Cette
+  /// propriété ne rend que ce qu'un humain reconnaîtrait — aux vues de choisir
+  /// leur repli (titre du fil, « ce message »…).
+  var displayedSenderName: String? {
+    guard let name = senderName?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !name.isEmpty
+    else { return nil }
+    return name
+  }
+
   /// L'emoji que j'ai déjà posé sur ce message, s'il y en a un.
   /// Les trois réseaux n'en autorisent qu'un par personne : le menu bascule dessus.
   var myReactionEmoji: String? {

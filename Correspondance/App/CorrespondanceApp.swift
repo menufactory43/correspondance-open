@@ -22,7 +22,7 @@ struct CorrespondanceApp: App {
         }
     }
     .defaultSize(width: 1100, height: 760)
-    .commands { CorrespondanceCommands(store: store) }
+    .commands { CorrespondanceCommands(store: store, themes: themes) }
 
     // Une conversation, sa fenêtre. Rappeler la même valeur ne crée pas une
     // seconde fenêtre : `WindowGroup(for:)` ramène celle qui existe au premier

@@ -205,6 +205,33 @@ struct WritingTheme: Equatable, Sendable {
 
   var isDark: Bool { palette.isDark }
 
+  // MARK: - Interligne
+
+  /// Ce qu'une mesure courte sur fond plein garde de l'interligne d'une page.
+  ///
+  /// Une bulle n'est pas une lettre : elle tient sur quelques mots, son fond la
+  /// délimite déjà, et l'air d'une page l'y ferait flotter. Deux tiers — c'est
+  /// ce qui pose un corps 15 autour de 4,3–4,9 pt d'interligne selon le thème,
+  /// soit l'interligne de lecture visé sans desserrer la bulle en accordéon.
+  static let bubbleTightening: CGFloat = 0.65
+
+  /// L'INTERLIGNE DE LECTURE pour un corps donné.
+  ///
+  /// Le thème déclare son interligne POUR SON CORPS DE LETTRE (`bodySize`,
+  /// 17,5–18 pt) : l'appliquer tel quel à une bulle de 15 pt déchirerait le
+  /// paragraphe en lignes flottantes. On le ramène donc au rapport des deux
+  /// corps — et comme `size` porte déjà l'échelle utilisateur (⌘+ / ⌘−),
+  /// l'interligne la suit sans qu'on ait à la repasser.
+  func lineSpacing(forBodySize size: CGFloat, tightening: CGFloat = 1) -> CGFloat {
+    guard bodySize > 0 else { return lineSpacing * tightening }
+    return lineSpacing * (size / bodySize) * tightening
+  }
+
+  /// L'interligne d'une bulle (Inbox) ou du composer, pour le corps effectif.
+  func bubbleLineSpacing(forBodySize size: CGFloat) -> CGFloat {
+    lineSpacing(forBodySize: size, tightening: Self.bubbleTightening)
+  }
+
   // MARK: - La table
 
   static func resolve(_ id: WritingThemeID) -> WritingTheme {
@@ -330,8 +357,54 @@ final class ThemePreferences {
     didSet { UserDefaults.standard.set(typeface.rawValue, forKey: Keys.typeface) }
   }
 
+  /// L'ÉCHELLE DE LECTURE (⌘+ / ⌘− / ⌘0).
+  ///
+  /// Elle ne touche que les corps qu'on lit et qu'on écrit — bulles, prose
+  /// Focus, composer, aperçus. Le chrome (métas, sidebar, pastilles) garde sa
+  /// taille : c'est ce qui laisse la place au texte de grandir. Toujours
+  /// rangée dans les bornes, d'où le `didSet` qui se corrige lui-même.
   var typeScale: Double {
-    didSet { UserDefaults.standard.set(typeScale, forKey: Keys.typeScale) }
+    didSet {
+      // Se réassigner dans son propre `didSet` ne le rejoue pas : la valeur
+      // rangée est la bonne, et c'est elle qu'on persiste.
+      let clamped = Self.clampTypeScale(typeScale)
+      if clamped != typeScale { typeScale = clamped }
+      UserDefaults.standard.set(typeScale, forKey: Keys.typeScale)
+    }
+  }
+
+  /// Le facteur tel que les vues le consomment : un `CGFloat`, déjà borné.
+  var textScale: CGFloat { CGFloat(Self.clampTypeScale(typeScale)) }
+
+  /// Les bornes du réglage. En deçà la bulle devient illisible, au-delà une
+  /// phrase ne tient plus dans une fenêtre détachée réduite au post-it.
+  static let typeScaleRange: ClosedRange<Double> = 0.8...1.4
+  static let typeScaleStep: Double = 0.1
+
+  static func clampTypeScale(_ value: Double) -> Double {
+    // Arrondi au cran : les raccourcis et le curseur des Réglages doivent
+    // tomber sur les mêmes valeurs, sinon « 100 % » n'est jamais tout à fait 1.
+    let snapped = (value / typeScaleStep).rounded() * typeScaleStep
+    return min(max(snapped, typeScaleRange.lowerBound), typeScaleRange.upperBound)
+  }
+
+  /// ⌘+ / ⌘− : un cran dans un sens ou dans l'autre.
+  func nudgeTypeScale(_ steps: Int) {
+    typeScale = Self.clampTypeScale(typeScale + Double(steps) * Self.typeScaleStep)
+  }
+
+  /// ⌘0 : revenir à 100 %.
+  func resetTypeScale() { typeScale = 1.0 }
+
+  var isTypeScaleDefault: Bool { abs(typeScale - 1.0) < 0.001 }
+
+  /// « 110 % » — pour le menu et les Réglages.
+  var typeScaleLabelFR: String { "\(Int((typeScale * 100).rounded())) %" }
+
+  /// Les aperçus de liens sous les bulles. Allumés d'usine : un lien nu ne dit
+  /// pas où il mène.
+  var showsLinkPreviews: Bool {
+    didSet { UserDefaults.standard.set(showsLinkPreviews, forKey: Keys.linkPreviews) }
   }
 
   var lineLength: LineLengthPreset {
@@ -375,7 +448,13 @@ final class ThemePreferences {
     self.typeface = WritingTypeface(rawValue: face) ?? .quattro
 
     let scale = UserDefaults.standard.object(forKey: Keys.typeScale) as? Double
-    self.typeScale = scale ?? 1.0
+    self.typeScale = Self.clampTypeScale(scale ?? 1.0)
+
+    if UserDefaults.standard.object(forKey: Keys.linkPreviews) == nil {
+      self.showsLinkPreviews = true
+    } else {
+      self.showsLinkPreviews = UserDefaults.standard.bool(forKey: Keys.linkPreviews)
+    }
 
     let cpl = UserDefaults.standard.object(forKey: Keys.lineLength) as? Int
     self.lineLength = LineLengthPreset(rawValue: cpl ?? 72) ?? .classic
@@ -417,6 +496,7 @@ final class ThemePreferences {
     static let typewriter = "correspondance.typewriter"
     static let wordCount = "correspondance.showWordCount"
     static let messageAvatars = "correspondance.showMessageAvatars"
+    static let linkPreviews = "correspondance.showLinkPreviews"
     static let warm = "correspondance.warmHours"
   }
 }

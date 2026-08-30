@@ -35,6 +35,21 @@ final class TextLinksTests: XCTestCase {
     XCTAssertEqual(urls(in: "Mon numéro : +33 6 12 34 56 78"), ["tel:+33612345678"])
   }
 
+  /// L'aperçu ne vise qu'une adresse par message — la première du web. Un
+  /// numéro ou un e-mail n'ont pas de page à présenter.
+  func testFirstWebURL() {
+    XCTAssertEqual(
+      TextLinks.firstWebURL(in: "Regarde https://exemple.fr et https://autre.fr")?.absoluteString,
+      "https://exemple.fr"
+    )
+    XCTAssertEqual(
+      TextLinks.firstWebURL(in: "Écris à malo@exemple.fr ou va sur www.exemple.fr")?.absoluteString,
+      "https://www.exemple.fr"
+    )
+    XCTAssertNil(TextLinks.firstWebURL(in: "Appelle-moi au 06 12 34 56 78"))
+    XCTAssertNil(TextLinks.firstWebURL(in: "On se voit demain à midi."))
+  }
+
   func testPlainTextHasNoLink() {
     let text = "On se voit demain à midi, place de la mairie."
     XCTAssertTrue(TextLinks.detect(in: text).isEmpty)
