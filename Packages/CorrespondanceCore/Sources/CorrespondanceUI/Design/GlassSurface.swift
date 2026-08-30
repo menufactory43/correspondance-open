@@ -24,7 +24,7 @@ public struct GlassSurface: ViewModifier {
 
   @ViewBuilder
   public func body(content: Content) -> some View {
-    if #available(macOS 26.0, *), !prefersOpaque {
+    if #available(macOS 26.0, iOS 26.0, *), !prefersOpaque {
       content
         .glassEffect(glass, in: shape)
     } else {
@@ -39,7 +39,7 @@ public struct GlassSurface: ViewModifier {
     }
   }
 
-  @available(macOS 26.0, *)
+  @available(macOS 26.0, iOS 26.0, *)
   private var glass: Glass {
     var value = Glass.regular
     if let tint { value = value.tint(tint) }
@@ -72,15 +72,5 @@ public extension View {
       border: border,
       isInteractive: isInteractive
     ))
-  }
-
-  /// Fond de fenêtre natif (macOS 15+) — remplace le bricolage `NSWindow.backgroundColor`.
-  @ViewBuilder
-  public func correspondanceWindowBackground(_ color: Color) -> some View {
-    if #available(macOS 15.0, *) {
-      containerBackground(color, for: .window)
-    } else {
-      background(color.ignoresSafeArea())
-    }
   }
 }

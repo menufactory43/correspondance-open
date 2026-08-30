@@ -4,6 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 xcodegen generate >/dev/null
+# Les tests de CorrespondanceCore / CorrespondanceUI vivent dans le paquet : Xcode
+# ne sait pas les mettre dans le scheme de l'app, `swift test` s'en charge.
+swift test --package-path Packages/CorrespondanceCore 2>&1 | grep -E "error:|Executed .* tests, with"
 xcodebuild -project Correspondance.xcodeproj -scheme Correspondance -configuration Debug \
   -destination 'platform=macOS' build-for-testing 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
 DD=$(xcodebuild -project Correspondance.xcodeproj -scheme Correspondance -showBuildSettings 2>/dev/null \

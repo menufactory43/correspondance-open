@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: app.correspondance
   deploymentTarget:
     macOS: "14.0"
+    iOS: "18.0"
   createIntermediateGroups: true
   groupSortPosition: top
 settings:
@@ -128,6 +129,33 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
 
 
+  Correspondance iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: CorrespondanceiOS
+    dependencies:
+      - package: CorrespondanceCore
+        product: CorrespondanceCore
+      - package: CorrespondanceCore
+        product: CorrespondanceUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.correspondance.ios
+        PRODUCT_NAME: Correspondance
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: YES
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+
 schemes:
   Correspondance:
     build:
@@ -139,4 +167,9 @@ schemes:
       config: Debug
       targets:
         - CorrespondanceTests
-
+  Correspondance iOS:
+    build:
+      targets:
+        Correspondance iOS: all
+    run:
+      config: Debug

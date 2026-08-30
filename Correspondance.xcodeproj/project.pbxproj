@@ -13,6 +13,7 @@
 		0697C1C5E290F34B64FD7ADD /* SettingsAutomationPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471DBB431518CAF077924600 /* SettingsAutomationPane.swift */; };
 		0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */; };
 		14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 225E93B93CBA37AE52390551 /* NewConversationSheet.swift */; };
+		1739909CA62E893F0198D40E /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD59EB717FCB32F6BFD374EB /* CorrespondanceCore */; };
 		1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B5F5874770558B125F18B0 /* ReactionTests.swift */; };
 		2084E9571D670203C4BC5118 /* ContactsPermissionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */; };
 		21CF5807546C941279E7C524 /* HoverZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FC472EC8CA01BA228483427 /* HoverZone.swift */; };
@@ -21,11 +22,13 @@
 		272F9F6E19B8F69616CED1F3 /* InboxStore+Detached.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */; };
 		2D29C0D4AFAF6044FEB74ABD /* QuickReplyStatusItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6748DC1C57D97BE188A16CFE /* QuickReplyStatusItem.swift */; };
 		31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C41963F5AA875508D844FF1 /* IMessageSender.swift */; };
+		3372974184DEB33DB4BEA601 /* WindowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1697F0DD386E4141F1AECA23 /* WindowBackground.swift */; };
 		345624DA9E3019B77E70EF0D /* CorrespondanceUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1F9428785D41EA5A65DA201E /* CorrespondanceUI */; };
 		3460B4B440278E418038A06E /* SettingsWindowSizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1517D91065CD3D975BAE16E /* SettingsWindowSizer.swift */; };
 		36D13C2FDED6EA357EE9A806 /* QuickReplyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */; };
 		3E8E098FF4C24E0860AA776D /* IMessageAutomationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0102675D287E0FEE9A64F /* IMessageAutomationTests.swift */; };
 		40276C56251E072B800E7657 /* LaunchGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1035547A9E34370159CF87 /* LaunchGate.swift */; };
+		5848F79FD0658C772E26D602 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1784BE07E013B8C5EC92F37E /* ContentView.swift */; };
 		5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */; };
 		5ACE090A9482584EB9F3C4A9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */; };
 		5C4F159E6D6EA2EDA0E5E76F /* IMessageAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA69D19E658DA849410EE74 /* IMessageAutomation.swift */; };
@@ -41,6 +44,7 @@
 		73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9204E0947294308F58D53C /* MessageBubbleView.swift */; };
 		74879E315ECC26508E7130ED /* QuickReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159B414D35163785B3368CC9 /* QuickReplyTests.swift */; };
 		74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */; };
+		74B647882ADECDA2B9E9428A /* CorrespondanceiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0636BD73B2B9AE4F097FE58D /* CorrespondanceiOSApp.swift */; };
 		7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */; };
 		778505358D6414659E088520 /* DetachedWindowStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4151D8EBFA079B28AAEB4660 /* DetachedWindowStateTests.swift */; };
 		77CEA32444389E9AEF289985 /* SettingsChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192CF26CAA43E2A421A52262 /* SettingsChrome.swift */; };
@@ -51,6 +55,7 @@
 		87C73BA02A60E838C154E1EE /* QuickReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */; };
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
 		89B82803BEB2BD559E0DF200 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */; };
+		8EA83084ABDBE7CE01DCF535 /* CorrespondanceUI in Frameworks */ = {isa = PBXBuildFile; productRef = A1388660CF1198DE116A1477 /* CorrespondanceUI */; };
 		92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE06AF0526360BC841BE21 /* InboxStore.swift */; };
 		93FC9A7390A493C419E1A7BF /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = C62337EDC213EAEAD5361C6E /* matrix-sync-whatsapp.json */; };
 		95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */; };
@@ -103,13 +108,17 @@
 
 /* Begin PBXFileReference section */
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
+		0636BD73B2B9AE4F097FE58D /* CorrespondanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceiOSApp.swift; sourceTree = "<group>"; };
 		0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+IMessageAutomation.swift"; sourceTree = "<group>"; };
 		0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */ = {isa = PBXFileReference; path = "imessage-macos26.db"; sourceTree = "<group>"; };
+		0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Correspondance iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CorrespondanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowState.swift; sourceTree = "<group>"; };
 		14C444A549BA3C7D7093F38E /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
 		159B414D35163785B3368CC9 /* QuickReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyTests.swift; sourceTree = "<group>"; };
+		1697F0DD386E4141F1AECA23 /* WindowBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowBackground.swift; sourceTree = "<group>"; };
 		16EE06AF0526360BC841BE21 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
+		1784BE07E013B8C5EC92F37E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		192CF26CAA43E2A421A52262 /* SettingsChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChrome.swift; sourceTree = "<group>"; };
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
 		1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginSheet.swift; sourceTree = "<group>"; };
@@ -189,6 +198,15 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		6C45541F75B9BCC5A74E332A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1739909CA62E893F0198D40E /* CorrespondanceCore in Frameworks */,
+				8EA83084ABDBE7CE01DCF535 /* CorrespondanceUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F1CBB850AC822DD73ED3DB22 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -201,6 +219,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1381A130F873C39BE71E03B0 /* CorrespondanceiOS */ = {
+			isa = PBXGroup;
+			children = (
+				1784BE07E013B8C5EC92F37E /* ContentView.swift */,
+				0636BD73B2B9AE4F097FE58D /* CorrespondanceiOSApp.swift */,
+			);
+			path = CorrespondanceiOS;
+			sourceTree = "<group>";
+		};
 		1B9AA16D44F45044FBAFD516 /* Fixtures */ = {
 			isa = PBXGroup;
 			children = (
@@ -284,6 +311,7 @@
 				F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */,
 				7FC472EC8CA01BA228483427 /* HoverZone.swift */,
 				F69827D334B0A62C8E003293 /* TopScrollFade.swift */,
+				1697F0DD386E4141F1AECA23 /* WindowBackground.swift */,
 				CF291CB888D9703104F47AB1 /* WindowChrome.swift */,
 			);
 			path = Design;
@@ -292,6 +320,7 @@
 		78B34A81A135B013856381ED /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */,
 				BC47469B7E80A1746977143F /* Correspondance.app */,
 				0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */,
 			);
@@ -332,6 +361,7 @@
 			isa = PBXGroup;
 			children = (
 				79E0E47B6D8C4974896F461C /* Correspondance */,
+				1381A130F873C39BE71E03B0 /* CorrespondanceiOS */,
 				6CFDFAF0F6D7A5D0B208EA53 /* CorrespondanceTests */,
 				4C3A735EBB27CF32D0CE129B /* Packages */,
 				78B34A81A135B013856381ED /* Products */,
@@ -446,6 +476,26 @@
 			productReference = 0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		9F5299C2F5F8873F7C1C7467 /* Correspondance iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DBA6FE981B9866A58E14926C /* Build configuration list for PBXNativeTarget "Correspondance iOS" */;
+			buildPhases = (
+				6A5401FBE00A8A8EEC2AB7A4 /* Sources */,
+				6C45541F75B9BCC5A74E332A /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Correspondance iOS";
+			packageProductDependencies = (
+				AD59EB717FCB32F6BFD374EB /* CorrespondanceCore */,
+				A1388660CF1198DE116A1477 /* CorrespondanceUI */,
+			);
+			productName = "Correspondance iOS";
+			productReference = 0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -460,6 +510,10 @@
 						ProvisioningStyle = Automatic;
 					};
 					5DFB0104C4B4A70DC25D5126 = {
+						DevelopmentTeam = AKMNXGVVGX;
+						ProvisioningStyle = Automatic;
+					};
+					9F5299C2F5F8873F7C1C7467 = {
 						DevelopmentTeam = AKMNXGVVGX;
 						ProvisioningStyle = Automatic;
 					};
@@ -483,6 +537,7 @@
 			projectRoot = "";
 			targets = (
 				35DB61E2F937BA38195B4EEE /* Correspondance */,
+				9F5299C2F5F8873F7C1C7467 /* Correspondance iOS */,
 				5DFB0104C4B4A70DC25D5126 /* CorrespondanceTests */,
 			);
 		};
@@ -540,6 +595,15 @@
 				62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */,
 				1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */,
 				5F30B472631DCD434DC11D5F /* ReadReceiptTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6A5401FBE00A8A8EEC2AB7A4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5848F79FD0658C772E26D602 /* ContentView.swift in Sources */,
+				74B647882ADECDA2B9E9428A /* CorrespondanceiOSApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -611,6 +675,7 @@
 				FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */,
 				8520F818A51D69AE23716712 /* ThreadView.swift in Sources */,
 				8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */,
+				3372974184DEB33DB4BEA601 /* WindowBackground.swift in Sources */,
 				F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -706,6 +771,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Correspondance;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © Correspondance";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -713,7 +779,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.correspondance.Correspondance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6;
@@ -776,13 +841,13 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Correspondance;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © Correspondance";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = app.correspondance.Correspondance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6;
@@ -807,6 +872,31 @@
 			};
 			name = Debug;
 		};
+		A738AD13FBDFB848230FF31F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
+				PRODUCT_NAME = Correspondance;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		D0D6DAFD7F922F87824EC81E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -828,6 +918,31 @@
 				SWIFT_STRICT_CONCURRENCY = complete;
 			};
 			name = Debug;
+		};
+		D599E34E12F9E193F0FA63AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
+				PRODUCT_NAME = Correspondance;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		EF6B49FE050EEB1D3EAC9FD5 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -881,6 +996,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		DBA6FE981B9866A58E14926C /* Build configuration list for PBXNativeTarget "Correspondance iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A738AD13FBDFB848230FF31F /* Debug */,
+				D599E34E12F9E193F0FA63AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -894,6 +1018,14 @@
 		1F9428785D41EA5A65DA201E /* CorrespondanceUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CorrespondanceUI;
+		};
+		A1388660CF1198DE116A1477 /* CorrespondanceUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CorrespondanceUI;
+		};
+		AD59EB717FCB32F6BFD374EB /* CorrespondanceCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CorrespondanceCore;
 		};
 		D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */ = {
 			isa = XCSwiftPackageProductDependency;
