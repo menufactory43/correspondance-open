@@ -115,8 +115,8 @@ ensure_database mautrix_meta
 #
 #    setup_bridge <service> <image> <tag> <template-overrides> <registration> <binaire>
 #
-#    Le binaire est passé explicitement : l'image `ig-` n'embarque que `mautrix-instagram`,
-#    alors que son `/docker-run.sh` appelle un `mautrix-meta` qui n'y est plus.
+#    Le binaire est passé explicitement parce que l'image `ig-` livre mautrix-instagram
+#    sous le nom /usr/bin/mautrix-meta (vérifié : `--version` → « mautrix-instagram v26.08 »).
 setup_bridge() {
   local name="$1" image="$2" tag="$3" tmpl="$4" registration="$5" binary="$6"
   local dir="$HOME/$REMOTE_DIR/data/${name}"
@@ -153,7 +153,7 @@ setup_bridge() {
 setup_bridge mautrix-whatsapp dock.mau.dev/mautrix/whatsapp "$WHATSAPP_IMAGE_TAG" \
   mautrix-whatsapp-overrides.yaml.tmpl whatsapp-registration.yaml mautrix-whatsapp
 setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
-  mautrix-meta-overrides.yaml.tmpl meta-registration.yaml mautrix-instagram
+  mautrix-meta-overrides.yaml.tmpl meta-registration.yaml mautrix-meta
 
 # 6) La pile complète.
 echo "→ docker-compose up -d"

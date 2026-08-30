@@ -69,12 +69,12 @@ services:
     depends_on:
       - synapse
       - postgres
-    # Le `/docker-run.sh` de l'image `ig-` lance `/usr/bin/mautrix-meta`, absent de cette
-    # variante (elle n'embarque que `mautrix-instagram`) : on court-circuite l'entrypoint.
-    # Du coup pas de chown au démarrage — d'où le `user:` explicite, le même UID que `meff`.
-    user: "1000:1000"
-    working_dir: /data
-    entrypoint: ["/usr/bin/mautrix-instagram", "-c", "/data/config.yaml", "-r", "/data/registration.yaml"]
+    environment:
+      # Même entrypoint que WhatsApp : chown /data puis su-exec vers l'UID de `meff`.
+      # (Le binaire s'appelle encore /usr/bin/mautrix-meta dans l'image `ig-`, mais c'est
+      # bien mautrix-instagram : `--version` le dit.)
+      UID: "1000"
+      GID: "1000"
     volumes:
       - ./data/mautrix-meta:/data
     networks:

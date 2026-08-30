@@ -25,9 +25,9 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
 
 Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
-`mautrix-instagram`, publié sur **la même image Docker** avec un tag préfixé `ig-`. Le
-`/docker-run.sh` de cette variante appelle encore `/usr/bin/mautrix-meta`, qui n'y est plus — le
-compose court-circuite donc l'entrypoint et lance `/usr/bin/mautrix-instagram` directement.
+`mautrix-instagram`, publié sur **la même image Docker** avec un tag préfixé `ig-`. Dans cette
+variante le binaire s'appelle toujours `/usr/bin/mautrix-meta`, mais `--version` répond bien
+« mautrix-instagram v26.08 » : l'entrypoint standard `/docker-run.sh` fonctionne tel quel.
 
 Tout vit dans `~/correspondance-matrix/` : configs générées, données, et `CREDENTIALS.txt`
 (chmod 600) qui contient le mot de passe du compte `@meffysto:correspondance.local`. Ce fichier ne
@@ -224,7 +224,7 @@ reprend son état depuis Postgres, rien n'est perdu.
 | Instagram : « Challenge/Checkpoint required » | Meta veut une vérification : la faire sur instagram.com, puis relancer `login` |
 | Instagram : « Got logged out immediately » | cookies périmés (déconnexion côté navigateur) — se reconnecter sur instagram.com et recopier |
 | Instagram : aucun avatar dans l'inbox | attendu : Instagram n'expose pas de numéro, donc rien à rapprocher du carnet d'adresses. Les initiales font office |
-| `mautrix-meta` redémarre en boucle | l'entrypoint de l'image `ig-` est court-circuité par le compose ; vérifier que le service garde bien `entrypoint: [/usr/bin/mautrix-instagram, …]` |
+| `mautrix-meta` redémarre en boucle (`as_token was not accepted`) | Synapse n'a pas rechargé `meta-registration.yaml` : `docker-compose restart synapse` puis `docker-compose restart mautrix-meta` |
 
 **Ne jamais** passer une image mautrix en `latest` sans relire le code : le passage aux ghosts LID
 en v26.08 a changé le format des MXID que le client analyse, et la même version a sorti Instagram
