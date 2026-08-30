@@ -5,6 +5,7 @@ struct ContentView: View {
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.controlActiveState) private var controlActiveState
+  @Environment(\.openWindow) private var openWindow
 
   @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
@@ -49,7 +50,12 @@ struct ContentView: View {
     .correspondanceWindowBackground(theme.paper)
     .tint(theme.accent)
     .correspondanceWindowChrome(theme)
-    .onAppear { syncColumns(animated: false) }
+    .onAppear {
+      syncColumns(animated: false)
+      // Le délégué d'application n'a pas d'environnement : on lui laisse
+      // l'action d'ouverture pendant qu'une fenêtre existe encore.
+      WindowOpener.shared.openWindow = openWindow
+    }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }
     .sheet(isPresented: Bindable(store).isPresentingNewConversation) {

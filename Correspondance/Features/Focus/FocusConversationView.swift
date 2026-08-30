@@ -1,37 +1,97 @@
 import AppKit
 import SwiftUI
 
+/// Les marges de la page, mesurées sur la largeur qu'on lui donne.
+///
+/// La grande marge de gauche d'iA Writer est un luxe de grande fenêtre : dans
+/// une fenêtre détachée réduite à un post-it, elle mangerait la page entière.
+/// La page respire quand elle est large, et se serre quand elle est étroite —
+/// jamais l'inverse, jamais de largeur fixe qui déborde.
+struct FocusPageMetrics: Equatable {
+  var leading: CGFloat
+  var trailing: CGFloat
+  var top: CGFloat
+  var bottom: CGFloat
+  /// Fenêtre serrée : l'entête tient sur une ligne, les bannières s'effacent.
+  var isCompact: Bool
+
+  /// La largeur de colonne du texte. Ce n'est qu'un plafond : sous cette
+  /// largeur, la page prend ce qu'on lui laisse.
+  var letterWidth: CGFloat { LayoutMetrics.letterWidth }
+
+  static let page = FocusPageMetrics(
+    leading: LayoutMetrics.pageLeading,
+    trailing: Spacing.xl,
+    top: LayoutMetrics.pageTopInset * 0.4,
+    bottom: LayoutMetrics.pageBottomInset,
+    isCompact: false
+  )
+
+  static func resolve(width: CGFloat) -> FocusPageMetrics {
+    let w = max(width, 0)
+    let leading: CGFloat
+    switch w {
+    case ..<380: leading = 14
+    case ..<640: leading = 14 + (w - 380) * (40 - 14) / (640 - 380)
+    case ..<900: leading = 40 + (w - 640) * (LayoutMetrics.pageLeading - 40) / (900 - 640)
+    default: leading = LayoutMetrics.pageLeading
+    }
+    return FocusPageMetrics(
+      leading: leading,
+      trailing: w < 380 ? 12 : (w < 640 ? 16 : Spacing.xl),
+      top: w < 380 ? 4 : (w < 640 ? 10 : LayoutMetrics.pageTopInset * 0.4),
+      bottom: w < 380 ? Spacing.sm : (w < 640 ? Spacing.lg : LayoutMetrics.pageBottomInset),
+      isCompact: w < 420
+    )
+  }
+}
+
 /// Une conversation à la fois — page zen, chrome fantôme.
 struct FocusConversationView: View {
+  /// La session lue par cette page. `nil` = celle de l'inbox.
+  var session: ConversationSession?
+
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
+  private var live: ConversationSession? { session ?? store.primarySession }
+  private var conversation: Conversation? {
+    live.flatMap { store.conversationRow($0.conversationID) }
+  }
 
   var body: some View {
+    GeometryReader { geometry in
+      page(FocusPageMetrics.resolve(width: geometry.size.width))
+    }
+  }
+
+  private func page(_ metrics: FocusPageMetrics) -> some View {
     ZStack(alignment: .topLeading) {
       theme.paper.ignoresSafeArea()
 
       VStack(alignment: .leading, spacing: 0) {
-        Spacer(minLength: LayoutMetrics.pageTopInset * 0.4)
+        Spacer(minLength: metrics.top)
 
-        if store.usingDemoData {
+        if store.usingDemoData, !metrics.isCompact {
           PermissionBanner()
             .padding(.bottom, Spacing.lg)
             .opacity(isWriting ? 0 : 1)
         }
 
-        if let conversation = store.selectedConversation {
+        if let conversation {
           Text(conversation.title)
             .font(Typography.toolbarPhrase(themes.typeface))
             .foregroundStyle(theme.inkTertiary)
-            .padding(.bottom, Spacing.md)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.md)
             .opacity(isWriting ? 0 : 1)
             .accessibilityHidden(isWriting)
 
-          FocusTranscriptView()
+          FocusTranscriptView(session: live, metrics: metrics)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
           VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -48,9 +108,9 @@ struct FocusConversationView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
       }
-      .frame(maxWidth: LayoutMetrics.letterWidth, alignment: .leading)
-      .padding(.leading, LayoutMetrics.pageLeading)
-      .padding(.trailing, Spacing.xl)
+      .frame(maxWidth: metrics.letterWidth, alignment: .leading)
+      .padding(.leading, metrics.leading)
+      .padding(.trailing, metrics.trailing)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .animation(chromeAnimation, value: isWriting)
     }
@@ -63,7 +123,14 @@ struct FocusConversationView: View {
 }
 
 /// Fil en prose — le brouillon est le dernier paragraphe de la page.
-private struct FocusTranscriptView: View {
+struct FocusTranscriptView: View {
+  /// La session lue. `nil` = celle de l'inbox.
+  var session: ConversationSession?
+  var metrics: FocusPageMetrics = .page
+  /// Faux quand la page pose elle-même le composer sous le fil — c'est le cas
+  /// de la fenêtre détachée, où le composer ne doit jamais défiler hors de vue.
+  var includesEditor = true
+
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -87,6 +154,10 @@ private struct FocusTranscriptView: View {
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
+  private var live: ConversationSession? { session ?? store.primarySession }
+  private var conversationID: String? { live?.conversationID }
+  private var thread: [ChatMessage] { live?.messages ?? [] }
+  private var row: Conversation? { conversationID.flatMap { store.conversationRow($0) } }
 
   /// Le geste choisi dans les réglages — encre ou plume.
   private var arrival: MessageArrival { themes.messageArrival }
@@ -100,16 +171,16 @@ private struct FocusTranscriptView: View {
   /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
   private func isFresh(_ message: ChatMessage) -> Bool {
     animatesArrivals
-      && message.id == store.messages.last?.id
+      && message.id == thread.last?.id
       && message.id != settledMessageID
   }
 
   private func noteArrival(increased: Bool) {
     guard increased, animatesArrivals else { return }
-    let id = store.messages.last?.id
+    let id = thread.last?.id
     Task {
       try? await Task.sleep(for: .seconds(1.2))
-      if store.messages.last?.id == id { settledMessageID = id }
+      if thread.last?.id == id { settledMessageID = id }
     }
   }
 
@@ -155,6 +226,16 @@ private struct FocusTranscriptView: View {
                       ) {
                         EmptyView()
                       }
+                    } else if let url = attachment.resolvedFileURL, attachment.isVideo {
+                      AttachmentVideoView(
+                        url: url,
+                        maxWidth: 360,
+                        maxHeight: 400,
+                        cornerRadius: 8,
+                        placeholder: theme.paperSecondary,
+                        border: nil,
+                        label: attachment.filename ?? "Vidéo"
+                      )
                     }
                   }
                   if shouldShowFocusText(message) {
@@ -183,40 +264,38 @@ private struct FocusTranscriptView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
           }
 
-          ForEach(store.scheduledForSelection) { scheduled in
+          ForEach(store.scheduledMessages(for: conversationID ?? "")) { scheduled in
             ScheduledMessageRow(message: scheduled, theme: theme, typeface: themes.typeface, isProse: true)
               .font(pageFont)
               .padding(.top, Spacing.sm)
               .opacity(isWriting ? 0.34 : 1)
           }
 
-          if let config = store.sendLaterConfig {
+          if let config = store.sendLaterConfig, isPrimary {
             SendLaterBanner(config: config, theme: theme, typeface: themes.typeface)
               .padding(.top, Spacing.sm)
           }
 
-          FocusPageEditor(
-            text: Bindable(store).draftText,
-            attachmentPaths: Bindable(store).pendingAttachmentPaths,
-            isSending: store.isSending,
-            isScheduling: store.sendLaterConfig != nil,
-            theme: theme,
-            onAttach: { store.pickAttachments() },
-            onSendLater: { store.toggleSendLaterPicker() },
-            onSend: { Task { await store.sendDraft() } }
-          )
-          .id("draft")
-          .popover(
-            isPresented: Binding(
-              get: { store.sendLaterPicker != nil },
-              set: { if !$0 { store.sendLaterPicker = nil } }
-            ),
-            arrowEdge: .top
-          ) {
-            SendLaterPicker()
+          if includesEditor, let live {
+            FocusPageEditor(session: live, theme: theme)
+              .id("draft")
+              .popover(
+                isPresented: Binding(
+                  get: { store.sendLaterPicker != nil && isPrimary },
+                  set: { if !$0 { store.sendLaterPicker = nil } }
+                ),
+                arrowEdge: .top
+              ) {
+                SendLaterPicker()
+              }
+          } else {
+            // Sans composer dans le fil, il faut tout de même une ancre en bas.
+            Color.clear
+              .frame(height: 1)
+              .id("draft")
           }
         }
-        .padding(.bottom, LayoutMetrics.pageBottomInset)
+        .padding(.bottom, metrics.bottom)
       }
       .defaultScrollAnchor(.bottom)
       .scrollIndicators(.never)
@@ -238,16 +317,16 @@ private struct FocusTranscriptView: View {
           .allowsHitTesting(false)
       }
       .onAppear { pinToBottom(proxy) }
-      .onChange(of: store.messages.count) { oldCount, newCount in
+      .onChange(of: thread.count) { oldCount, newCount in
         // « Répondre… » est l'ancre : on la recale sans animer, le geste se
         // joue dans le paragraphe. Animer ici ferait glisser le bas de la page.
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
-      .onChange(of: store.selectedConversationID) { _, _ in
+      .onChange(of: conversationID) { _, _ in
         isShowingThread = false
         animatesArrivals = false
-        settledMessageID = store.messages.last?.id
+        settledMessageID = thread.last?.id
         pinToBottom(proxy)
       }
       .alert(
@@ -300,7 +379,7 @@ private struct FocusTranscriptView: View {
       proxy.scrollTo("draft", anchor: .bottom)
       isShowingThread = true
       // Ce qui est à l'écran à l'ouverture est déjà posé.
-      settledMessageID = store.messages.last?.id
+      settledMessageID = thread.last?.id
       animatesArrivals = true
     }
   }
@@ -309,18 +388,22 @@ private struct FocusTranscriptView: View {
     Typography.letterBody(themes.typeface, size: theme.bodySize * themes.typeScale)
   }
 
-  private var isGroup: Bool { store.selectedConversation?.isGroup == true }
+  private var isGroup: Bool { row?.isGroup == true }
+
+  /// Vrai quand cette page est celle de l'inbox : les états partagés (envoyer
+  /// plus tard, recherche dans le fil) ne valent que pour elle.
+  private var isPrimary: Bool { live != nil && live === store.primarySession }
 
   private var messageGroups: [MessageGroup] {
     MessageGrouping.groups(
-      for: store.messages,
+      for: thread,
       showsSenderNames: isGroup,
       showsNetworkOrigin: isMergedThread
     )
   }
 
   private var isMergedThread: Bool {
-    guard let id = store.selectedConversationID else { return false }
+    guard let id = conversationID else { return false }
     return store.isMerged(id)
   }
 
@@ -333,15 +416,11 @@ private struct FocusTranscriptView: View {
 }
 
 /// Au repos / à la pause : photo + envoyer. Pendant la frappe : une feuille.
-private struct FocusPageEditor: View {
-  @Binding var text: String
-  @Binding var attachmentPaths: [String]
-  var isSending: Bool
-  var isScheduling: Bool = false
+struct FocusPageEditor: View {
+  /// Le brouillon écrit ici est celui de CETTE session — l'inbox et une fenêtre
+  /// détachée n'écrivent jamais dans la même page.
+  var session: ConversationSession
   var theme: WritingTheme
-  var onAttach: () -> Void
-  var onSendLater: () -> Void = {}
-  var onSend: () -> Void
 
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -351,9 +430,21 @@ private struct FocusPageEditor: View {
   @State private var idleTask: Task<Void, Never>?
   @State private var isTrayExpanded = false
 
-  private var canSend: Bool {
-    !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
+  private var text: Binding<String> { Bindable(session).draftText }
+  private var isSending: Bool { session.isSending }
+  /// « Plus tard » n'est posé que sur le composer de l'inbox.
+  private var isScheduling: Bool {
+    store.sendLaterConfig != nil && session === store.primarySession
   }
+
+  private var canSend: Bool { session.canSend }
+
+  private func onAttach() { store.pickAttachments(into: session) }
+  private func onSendLater() {
+    guard session === store.primarySession else { return }
+    store.toggleSendLaterPicker()
+  }
+  private func onSend() { Task { await store.send(session: session) } }
 
   private var showsChrome: Bool { !isActivelyTyping }
 
@@ -363,10 +454,10 @@ private struct FocusPageEditor: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if !attachmentPaths.isEmpty {
+      if !session.pendingAttachmentPaths.isEmpty {
         ScrollView(.horizontal, showsIndicators: false) {
           HStack(spacing: 8) {
-            ForEach(Array(attachmentPaths.enumerated()), id: \.offset) { index, path in
+            ForEach(Array(session.pendingAttachmentPaths.enumerated()), id: \.offset) { index, path in
               ZStack(alignment: .topTrailing) {
                 if let img = NSImage(contentsOfFile: path) {
                   Image(nsImage: img)
@@ -376,7 +467,7 @@ private struct FocusPageEditor: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 Button {
-                  attachmentPaths.remove(at: index)
+                  session.pendingAttachmentPaths.remove(at: index)
                 } label: {
                   Image(systemName: "xmark.circle.fill")
                     .foregroundStyle(.white, .black.opacity(0.55))
@@ -390,7 +481,7 @@ private struct FocusPageEditor: View {
       }
 
       HStack(alignment: .top, spacing: 8) {
-        TextField(showsChrome ? "Répondre…" : "", text: $text, axis: .vertical)
+        TextField(showsChrome ? "Répondre…" : "", text: text, axis: .vertical)
           .textFieldStyle(.plain)
           .font(pageFont)
           .foregroundStyle(theme.ink)
@@ -398,7 +489,7 @@ private struct FocusPageEditor: View {
           .focused($isFocused)
           .frame(maxWidth: .infinity, alignment: .leading)
           // Avant « Entrée = envoyer » et « Échap = quitter » : le menu « @ » a la main.
-          .mentionMenu(text: $text, theme: theme, font: pageFont)
+          .mentionMenu(text: text, theme: theme, font: pageFont)
           .onKeyPress(.return) {
             if NSEvent.modifierFlags.contains(.shift) { return .ignored }
             guard canSend, !isSending else { return .handled }
@@ -435,7 +526,7 @@ private struct FocusPageEditor: View {
         .frame(height: 1)
         .opacity(showsChrome ? 1 : 0)
     }
-    .onChange(of: text) { _, newValue in
+    .onChange(of: session.draftText) { _, newValue in
       if isTrayExpanded { isTrayExpanded = false }
       guard isFocused, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return

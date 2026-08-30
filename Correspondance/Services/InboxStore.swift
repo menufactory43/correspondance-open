@@ -212,6 +212,19 @@ final class InboxStore {
   /// La fenêtre détachée au premier plan, s'il y en a une.
   private(set) var frontDetachedConversationID: String?
 
+  /// Les fils dont la fenêtre flotte au-dessus des autres apps (⌘⌥P).
+  /// Relu du disque à l'ouverture de chaque fenêtre — voir `DetachedWindowState`.
+  var pinnedDetachedIDs: Set<String> = []
+
+  /// Les fenêtres détachées vivantes, pour aller en chercher une au premier plan
+  /// (clic sur une notification). Voir `InboxStore+Detached`.
+  @ObservationIgnored var detachedWindows: [String: NSWindow] = [:]
+
+  /// Détachements demandés par un geste et pas encore honorés. La scène ne
+  /// s'ouvre QUE sur geste : une fenêtre que la restauration système ressuscite
+  /// au lancement ne trouve pas son jeton et se referme aussitôt.
+  @ObservationIgnored var pendingDetachRequests: Set<String> = []
+
   /// La session d'un fil — créée à la demande, avec son brouillon déjà en place.
   func session(for conversationID: String) -> ConversationSession {
     if let existing = sessions[conversationID] { return existing }
@@ -539,10 +552,18 @@ final class InboxStore {
     NotificationService.shared.onOpenConversation = { [weak self] id in
       guard let self else { return }
       Task { @MainActor in
-        self.mode = .inbox
         // Une notification peut viser un fil désormais replié : on ouvre la
         // ligne fusionnée, pas un membre qui n'est plus dans la liste.
-        await self.select(self.displayRowID(for: id))
+        let rowID = self.displayRowID(for: id)
+        // Ce fil a déjà sa fenêtre : c'est elle qu'on ramène devant, pas l'inbox.
+        if self.raiseDetachedWindow(for: rowID) { return }
+        if DetachedWindowState.notificationsOpenDetached() {
+          self.detach(conversationID: rowID)
+          return
+        }
+        WindowOpener.shared.openInbox()
+        self.mode = .inbox
+        await self.select(rowID)
       }
     }
     await NotificationService.shared.requestAuthorization()
@@ -1491,7 +1512,14 @@ final class InboxStore {
   /// Ouvrir un fil, c'est le lire : on le dit au réseau quand il sait l'entendre.
   /// En tâche détachée — l'ouverture ne doit jamais attendre le réseau.
   private func markConversationRead() async {
-    guard let conversation = selectedConversation else { return }
+    guard let id = selectedConversationID else { return }
+    await sendReadReceipt(conversationID: id)
+  }
+
+  /// Le même geste pour n'importe quel fil : c'est par là que passe une fenêtre
+  /// détachée quand elle arrive au premier plan.
+  func sendReadReceipt(conversationID: String) async {
+    guard let conversation = conversations.first(where: { $0.id == conversationID }) else { return }
     // Ouvrir une ligne fusionnée, c'est lire les deux fils.
     if isMerged(conversation.id) {
       for member in memberConversations(of: conversation.id) {
@@ -1500,6 +1528,11 @@ final class InboxStore {
       return
     }
     await markRead(conversation)
+  }
+
+  /// `clearUnread` est privé : `InboxStore+Detached` passe par ici.
+  func clearUnreadForDetached(_ conversationID: String) {
+    clearUnread(for: conversationID)
   }
 
   private func markRead(_ conversation: Conversation) async {
@@ -1731,6 +1764,12 @@ final class InboxStore {
   }
 
   func pickAttachments() {
+    guard let session = primarySession else { return }
+    pickAttachments(into: session)
+  }
+
+  /// Choisir des fichiers pour UNE session — l'inbox ou une fenêtre détachée.
+  func pickAttachments(into session: ConversationSession) {
     let panel = NSOpenPanel()
     panel.allowsMultipleSelection = true
     panel.canChooseDirectories = false
@@ -1739,7 +1778,7 @@ final class InboxStore {
     panel.message = "Choisir un ou plusieurs fichiers"
     guard panel.runModal() == .OK else { return }
     let paths = panel.urls.map(\.path)
-    pendingAttachmentPaths.append(contentsOf: paths)
+    session.pendingAttachmentPaths.append(contentsOf: paths)
   }
 
   /// Envoyer le brouillon de l'inbox.

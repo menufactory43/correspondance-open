@@ -74,7 +74,7 @@ struct ConversationPillHeader: View {
 }
 
 /// Fiche contact / infos groupe — ce que l'app sait déjà, sans permission de plus.
-private struct ConversationInfoCard: View {
+struct ConversationInfoCard: View {
   let conversation: Conversation
   let theme: WritingTheme
 
@@ -155,6 +155,8 @@ private struct ConversationInfoCard: View {
       }
     }
     .padding(Spacing.md)
-    .frame(width: 280, alignment: .leading)
+    // Une largeur idéale, pas une largeur imposée : la fiche doit pouvoir se
+    // serrer quand la fenêtre qui la porte est un post-it.
+    .frame(minWidth: 220, idealWidth: 280, maxWidth: 320, alignment: .leading)
   }
 }
