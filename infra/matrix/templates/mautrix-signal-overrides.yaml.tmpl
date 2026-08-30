@@ -1,0 +1,57 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-signal.
+# Fusion profonde (bootstrap.sh) : on ne fige pas le config amont, seulement nos choix.
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-signal:29328
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  port: 29328
+  id: signal
+  bot:
+    username: signalbot
+    displayname: Signal bridge bot
+  username_template: signal_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_signal?sslmode=disable
+
+bridge:
+  command_prefix: '!signal'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Pas de section `backfill` ici, contrairement à WhatsApp : Signal ne garde aucun
+# historique côté serveur. Le pont ne voit que ce qui arrive après le scan du QR —
+# il n'y a rien à rejouer, et l'annoncer éviterait de croire à un pont en panne.
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+# Réglages propres au connecteur Signal.
+network:
+  # Ce que l'iPhone affichera dans Réglages › Appareils liés.
+  device_name: Correspondance
+  # Le numéro du correspondant atterrit dans le topic du salon : c'est notre seule
+  # chance de rapprocher un fil du carnet d'adresses, les ghosts étant des UUID.
+  number_in_topic: true
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

@@ -80,6 +80,24 @@ services:
     networks:
       - matrix
 
+  mautrix-signal:
+    # Tag épinglé comme les autres ponts. libsignal est compilé dans le binaire et
+    # l'image embarque ffmpeg : ni signald, ni dépendance à installer à côté.
+    image: dock.mau.dev/mautrix/signal:v26.08
+    container_name: correspondance-mautrix-signal
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - postgres
+    environment:
+      # Même entrypoint que les autres : chown /data puis su-exec vers l'UID de `meff`.
+      UID: "1000"
+      GID: "1000"
+    volumes:
+      - ./data/mautrix-signal:/data
+    networks:
+      - matrix
+
 networks:
   matrix:
     driver: bridge

@@ -23,6 +23,7 @@ WHATSAPP_IMAGE_TAG="${WHATSAPP_IMAGE_TAG:-v26.08}"
 # Instagram : même image que Messenger, tag préfixé `ig-`. Depuis v26.08 mautrix-meta ne fait
 # plus que Messenger — Instagram est passé au binaire mautrix-instagram.
 META_IMAGE_TAG="${META_IMAGE_TAG:-ig-v26.08}"
+SIGNAL_IMAGE_TAG="${SIGNAL_IMAGE_TAG:-v26.08}"
 
 # ---------------------------------------------------------------- phase locale
 if [[ "${1:-}" != "--remote" ]]; then
@@ -37,13 +38,13 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
 # ---------------------------------------------------------------- phase distante
 cd "$HOME/$REMOTE_DIR"
-mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/postgres
+mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/mautrix-signal data/postgres
 CREDS="$HOME/$REMOTE_DIR/CREDENTIALS.txt"
 
 # 1) Secrets — générés une seule fois, relus ensuite (idempotence).
@@ -108,6 +109,7 @@ ensure_database() {
 }
 ensure_database mautrix_whatsapp
 ensure_database mautrix_meta
+ensure_database mautrix_signal
 
 # 5) Config et registration de chaque pont — même mécanique pour les deux, d'où la fonction :
 #    l'image écrit son config par défaut (`-e`), on fusionne nos overrides par-dessus, puis
@@ -159,6 +161,9 @@ setup_bridge mautrix-whatsapp dock.mau.dev/mautrix/whatsapp "$WHATSAPP_IMAGE_TAG
   mautrix-whatsapp-overrides.yaml.tmpl whatsapp-registration.yaml mautrix-whatsapp
 setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
   mautrix-meta-overrides.yaml.tmpl meta-registration.yaml mautrix-meta
+# Ici le binaire porte bien le nom du pont — pas de piège façon `ig-`/mautrix-meta.
+setup_bridge mautrix-signal dock.mau.dev/mautrix/signal "$SIGNAL_IMAGE_TAG" \
+  mautrix-signal-overrides.yaml.tmpl signal-registration.yaml mautrix-signal
 
 # 6) La pile complète.
 echo "→ docker-compose up -d"
@@ -180,7 +185,7 @@ done
 # puis les ponts derrière lui (ils s'arrêtent net quand le jeton est refusé).
 NEED_SYNAPSE_RESTART=0
 [[ "$(registrations_fingerprint)" != "$REG_BEFORE" ]] && NEED_SYNAPSE_RESTART=1
-for svc in mautrix-whatsapp mautrix-meta; do
+for svc in mautrix-whatsapp mautrix-meta mautrix-signal; do
   docker-compose logs --tail=30 "$svc" 2>/dev/null | grep -q "as_token was not accepted" && NEED_SYNAPSE_RESTART=1
 done
 if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
@@ -190,7 +195,7 @@ if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
     curl -fsS "http://127.0.0.1:8008/_matrix/client/versions" >/dev/null 2>&1 && break
     sleep 2
   done
-  docker-compose restart mautrix-whatsapp mautrix-meta >/dev/null
+  docker-compose restart mautrix-whatsapp mautrix-meta mautrix-signal >/dev/null
 fi
 
 # 8) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
@@ -221,8 +226,9 @@ add_credentials_line() {
 }
 add_credentials_line "bot_whatsapp" "@whatsappbot:${SERVER_NAME}"
 add_credentials_line "bot_instagram" "@instagrambot:${SERVER_NAME}"
+add_credentials_line "bot_signal" "@signalbot:${SERVER_NAME}"
 
 echo
 docker-compose ps
 echo
-echo "✓ Pile Matrix prête (WhatsApp + Instagram). Identifiants : ${CREDS} (chmod 600, hors repo)."
+echo "✓ Pile Matrix prête (WhatsApp + Instagram + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
