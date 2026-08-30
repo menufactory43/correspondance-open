@@ -355,6 +355,12 @@ final class ThemePreferences {
     didSet { UserDefaults.standard.set(showWordCount, forKey: Keys.wordCount) }
   }
 
+  /// La photo de l'auteur à gauche de chaque prise de parole, en Inbox — comme
+  /// Beeper. Se coupe : un tête-à-tête n'a rien à apprendre d'un visage répété.
+  var showsMessageAvatars: Bool {
+    didSet { UserDefaults.standard.set(showsMessageAvatars, forKey: Keys.messageAvatars) }
+  }
+
   var warmThresholdHours: Double {
     didSet { UserDefaults.standard.set(warmThresholdHours, forKey: Keys.warm) }
   }
@@ -391,6 +397,12 @@ final class ThemePreferences {
     } else {
       self.showWordCount = UserDefaults.standard.bool(forKey: Keys.wordCount)
     }
+
+    if UserDefaults.standard.object(forKey: Keys.messageAvatars) == nil {
+      self.showsMessageAvatars = true
+    } else {
+      self.showsMessageAvatars = UserDefaults.standard.bool(forKey: Keys.messageAvatars)
+    }
     let warm = UserDefaults.standard.object(forKey: Keys.warm) as? Double
     self.warmThresholdHours = warm ?? 12
   }
@@ -404,6 +416,7 @@ final class ThemePreferences {
     static let messageArrival = "correspondance.messageArrival"
     static let typewriter = "correspondance.typewriter"
     static let wordCount = "correspondance.showWordCount"
+    static let messageAvatars = "correspondance.showMessageAvatars"
     static let warm = "correspondance.warmHours"
   }
 }

@@ -65,6 +65,19 @@ struct SettingsAppearancePane: View {
       }
 
       SettingsCard(
+        title: "Fil",
+        footnote: "En Inbox. La page Focus se lit comme une lettre — elle n'a pas de visages."
+      ) {
+        SettingsRow(label: "Photo de l'expéditeur", systemImage: "person.crop.circle") {
+          Toggle("", isOn: Binding(
+            get: { themes.showsMessageAvatars },
+            set: { themes.showsMessageAvatars = $0 }
+          ))
+          .toggleStyle(.switch)
+        }
+      }
+
+      SettingsCard(
         title: "Arrivée d'un message",
         footnote: "En Focus. L'Inbox garde l'encre — la plume est faite pour la prose."
       ) {

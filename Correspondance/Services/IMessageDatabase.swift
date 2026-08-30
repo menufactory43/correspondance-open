@@ -33,7 +33,10 @@ struct IMessageDatabase: Sendable {
       .appendingPathComponent("Library/Messages/chat.db")
   }
 
-  func fetchConversations(limit: Int = 80) throws -> [Conversation] {
+  /// - Parameter hiddenMessageGUIDs: ce qu'on a supprimé « ici ». Un message
+  ///   masqué ne doit pas revenir résumer la ligne de l'inbox : la requête
+  ///   l'écarte, et c'est le message d'avant qui devient l'aperçu.
+  func fetchConversations(limit: Int = 80, hiddenMessageGUIDs: Set<String> = []) throws -> [Conversation] {
     let snapshot = try makeSnapshot()
     defer { try? FileManager.default.removeItem(at: snapshot) }
 
@@ -41,6 +44,10 @@ struct IMessageDatabase: Sendable {
     defer { sqlite3_close(db) }
 
     // Requête plate + dédup en Swift — texte OU pièce jointe (photos sans légende).
+    let hidden = hiddenMessageGUIDs.sorted()
+    let hiddenClause = hidden.isEmpty
+      ? ""
+      : "AND m.guid NOT IN (\(Array(repeating: "?", count: hidden.count).joined(separator: ", ")))"
     let sql = """
     SELECT
       c.ROWID,
@@ -67,6 +74,7 @@ struct IMessageDatabase: Sendable {
       -- « A ajouté un “J'adore” à … ». Ce n'est pas le dernier message du fil :
       -- il est rattaché à sa cible par `fetchTapbacks`.
       IFNULL(m.associated_message_type, 0) = 0
+      \(hiddenClause)
       AND (
         (m.text IS NOT NULL AND m.text != '')
         OR EXISTS (
@@ -83,6 +91,10 @@ struct IMessageDatabase: Sendable {
       throw IMessageAccessError.queryFailed(String(cString: sqlite3_errmsg(db)))
     }
     defer { sqlite3_finalize(statement) }
+    let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    for (index, guid) in hidden.enumerated() {
+      _ = guid.withCString { sqlite3_bind_text(statement, Int32(index + 1), $0, -1, transient) }
+    }
 
     var seen = Set<String>()
     var results: [Conversation] = []

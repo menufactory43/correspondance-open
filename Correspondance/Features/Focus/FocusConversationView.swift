@@ -74,6 +74,16 @@ private struct FocusTranscriptView: View {
   /// Ce que la page considère comme déjà posé. Tout ce qui arrive après se
   /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
   @State private var settledMessageID: String?
+  /// Suppression demandée au clic droit, en attente de confirmation.
+  @State private var pendingDeletion: PendingDeletion?
+
+  /// Le message visé et l'étendue de sa suppression — le temps de l'alerte.
+  private struct PendingDeletion: Identifiable {
+    let messageID: String
+    let scope: MessageBubbleView.Deletion
+
+    var id: String { "\(messageID)|\(scope.rawValue)" }
+  }
 
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
@@ -162,6 +172,10 @@ private struct FocusTranscriptView: View {
                   isFresh: isFresh(message),
                   isEnabled: !reduceMotion
                 )
+                // La page n'a pas de bulles à survoler : le clic droit est le
+                // seul endroit où retirer un paragraphe sans quitter le Focus.
+                .contentShape(Rectangle())
+                .contextMenu { paragraphMenu(for: message) }
               }
             }
             .opacity(isWriting ? 0.34 : 1)
@@ -236,6 +250,47 @@ private struct FocusTranscriptView: View {
         settledMessageID = store.messages.last?.id
         pinToBottom(proxy)
       }
+      .alert(
+        pendingDeletion?.scope.titleFR ?? "",
+        isPresented: Binding(
+          get: { pendingDeletion != nil },
+          set: { if !$0 { pendingDeletion = nil } }
+        ),
+        presenting: pendingDeletion
+      ) { deletion in
+        Button("Supprimer", role: .destructive) {
+          switch deletion.scope {
+          case .locally:
+            store.deleteLocally(messageID: deletion.messageID)
+          case .everywhere:
+            Task { await store.deleteEverywhere(messageID: deletion.messageID) }
+          }
+        }
+        Button("Annuler", role: .cancel) {}
+      } message: { deletion in
+        Text(deletion.scope.detailFR)
+      }
+    }
+  }
+
+  /// Clic droit sur un paragraphe : copier, et les deux suppressions — les mêmes
+  /// qu'en Inbox, avec la même confirmation.
+  @ViewBuilder
+  private func paragraphMenu(for message: ChatMessage) -> some View {
+    if !message.text.isEmpty {
+      Button("Copier le texte") {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(message.text, forType: .string)
+      }
+      Divider()
+    }
+    if store.canDeleteEverywhere(message) {
+      Button("Supprimer pour tout le monde…", role: .destructive) {
+        pendingDeletion = PendingDeletion(messageID: message.id, scope: .everywhere)
+      }
+    }
+    Button("Supprimer ici…", role: .destructive) {
+      pendingDeletion = PendingDeletion(messageID: message.id, scope: .locally)
     }
   }
 

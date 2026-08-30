@@ -121,6 +121,10 @@ final class InboxStore {
   /// d'un réseau ne connaît pas notre archivage et renvoie toujours `isArchived: false`).
   private(set) var archivedIDs: Set<String> = []
   private(set) var disappearingSecondsByID: [String: Int] = [:]
+  /// Messages supprimés « ici » (`HiddenMessageStore`) : le réseau les garde,
+  /// le fil ne les montre plus. `private(set)` — la suppression passe par
+  /// `InboxStore+Deletion`.
+  private(set) var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
@@ -324,6 +328,11 @@ final class InboxStore {
     Task {
       await ConversationAvatarStore.shared.setMatrixAvatarLoader { mxc in
         await bridge.avatarData(mxcURI: mxc)
+      }
+      // Même prêt pour les visages des bulles : le fil d'un groupe demande la
+      // photo d'un membre, pas celle du portail.
+      await SenderAvatarStore.shared.setMatrixMemberAvatarLoader { conversationID, userID in
+        await bridge.memberAvatarData(conversationID: conversationID, userID: userID)
       }
     }
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
@@ -681,7 +690,7 @@ final class InboxStore {
     threadSearchCursor = (threadSearchCursor - 1 + threadSearchMatchIDs.count) % threadSearchMatchIDs.count
   }
 
-  private func refreshThreadSearchMatches() {
+  func refreshThreadSearchMatches() {
     threadSearchMatchIDs = ConversationSearch.matchingMessageIDs(in: messages, query: threadSearchQuery)
     // On repart du dernier match : c'est le plus récent, donc le plus probable.
     threadSearchCursor = max(0, threadSearchMatchIDs.count - 1)
@@ -1426,9 +1435,15 @@ final class InboxStore {
   }
 
   /// Point d'entrée interne : `InboxStore+IMessageAutomation.swift` recharge le
-  /// fil après une action AX confirmée (`loadMessagesForSelection` est privée).
+  /// fil après une action AX confirmée.
   func reloadMessagesAfterAutomation() async {
     await loadMessagesForSelection()
+  }
+
+  /// `hiddenMessageIDs` est `private(set)` : `InboxStore+Deletion` passe par ici.
+  func setHiddenMessageIDs(_ ids: Set<String>) {
+    hiddenMessageIDs = ids
+    HiddenMessageStore.save(ids)
   }
 
   /// `messagesAutomationHealth` est `private(set)` : l'extension passe par ici.
@@ -2244,9 +2259,12 @@ final class InboxStore {
 
   private func loadIMessageOffMain() async -> IMessageLoad {
     let db = iMessageDB
+    // Un message supprimé « ici » ne doit pas revenir résumer sa ligne : le
+    // catalogue l'ignore, et c'est le message d'avant qui fait l'aperçu.
+    let hidden = hiddenMessageIDs
     let work = Task.detached(priority: .userInitiated) { () -> IMessageLoad in
       do {
-        let list = try db.fetchConversations()
+        let list = try db.fetchConversations(hiddenMessageGUIDs: hidden)
         return .success(list)
       } catch let error as IMessageAccessError {
         if case .authorizationDenied = error {
@@ -2273,7 +2291,7 @@ final class InboxStore {
     }
   }
 
-  private func loadMessagesForSelection() async {
+  func loadMessagesForSelection() async {
     guard let conversation = selectedConversation else {
       messages = []
       return
@@ -2318,7 +2336,7 @@ final class InboxStore {
           try db.fetchMessages(chatGUID: guid)
         }.value
         ContactDirectoryDisk.enrichSenderNames(&fetched)
-        return fetched
+        return HiddenMessageStore.visible(fetched, hiddenIDs: hiddenMessageIDs)
       } catch {
         lastErrorMessage = error.localizedDescription
         return []
@@ -2343,13 +2361,16 @@ final class InboxStore {
           )
         ]
       }
-      let resolved = await matrix.ensureLocalAttachments(cached)
+      let resolved = HiddenMessageStore.visible(
+        await matrix.ensureLocalAttachments(cached),
+        hiddenIDs: hiddenMessageIDs
+      )
       applySidebarPreview(conversationID: conversation.id, from: resolved)
       return resolved
     }
   }
 
-  private func applySidebarPreview(conversationID: String, from messages: [ChatMessage]) {
+  func applySidebarPreview(conversationID: String, from messages: [ChatMessage]) {
     // Un fil replié n'a plus de ligne à lui : c'est la fusionnée qu'on résume.
     let rowID = displayRowID(for: conversationID)
     guard let last = messages.last,

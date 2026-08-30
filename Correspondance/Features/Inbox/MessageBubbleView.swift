@@ -19,10 +19,41 @@ struct MessageBubbleView: View {
   /// Accessibilité. `nil` = le réseau (ou le réglage) ne le permet pas.
   var onEdit: ((String) -> Void)?
   var onUndoSend: (() -> Void)?
+  /// Supprimer la bulle — parité Beeper. « Ici » ne quitte pas la machine ;
+  /// « pour tout le monde » part sur le réseau. `nil` = ce geste n'est pas offert.
+  var onDeleteLocally: (() -> Void)?
+  var onDeleteEverywhere: (() -> Void)?
 
   /// Feuille « Modifier le message ».
   @State private var isEditing = false
   @State private var editedText = ""
+  /// Suppression demandée, en attente de confirmation. Un message effacé ne
+  /// revient pas : on le demande une fois, comme Beeper.
+  @State private var pendingDeletion: Deletion?
+
+  /// L'étendue d'une suppression, et ce qu'elle promet.
+  enum Deletion: String, Identifiable {
+    case locally
+    case everywhere
+
+    var id: String { rawValue }
+
+    var titleFR: String {
+      switch self {
+      case .locally: "Supprimer ce message ici ?"
+      case .everywhere: "Supprimer ce message pour tout le monde ?"
+      }
+    }
+
+    var detailFR: String {
+      switch self {
+      case .locally:
+        "Il disparaît de Correspondance, sur cette machine. Ton correspondant le garde."
+      case .everywhere:
+        "Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour."
+      }
+    }
+  }
 
   var body: some View {
     HStack {
@@ -85,6 +116,24 @@ struct MessageBubbleView: View {
       Button("Modifier") { onEdit?(editedText) }
     } message: {
       Text("Messages n’autorise la modification que 15 minutes après l’envoi.")
+    }
+    .alert(
+      pendingDeletion?.titleFR ?? "",
+      isPresented: Binding(
+        get: { pendingDeletion != nil },
+        set: { if !$0 { pendingDeletion = nil } }
+      ),
+      presenting: pendingDeletion
+    ) { deletion in
+      Button("Supprimer", role: .destructive) {
+        switch deletion {
+        case .locally: onDeleteLocally?()
+        case .everywhere: onDeleteEverywhere?()
+        }
+      }
+      Button("Annuler", role: .cancel) {}
+    } message: { deletion in
+      Text(deletion.detailFR)
     }
   }
 
@@ -215,6 +264,19 @@ struct MessageBubbleView: View {
       Button("Copier le texte") {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(message.text, forType: .string)
+      }
+    }
+    if onDeleteLocally != nil || onDeleteEverywhere != nil {
+      Divider()
+      if onDeleteEverywhere != nil {
+        Button("Supprimer pour tout le monde…", role: .destructive) {
+          pendingDeletion = .everywhere
+        }
+      }
+      if onDeleteLocally != nil {
+        Button("Supprimer ici…", role: .destructive) {
+          pendingDeletion = .locally
+        }
       }
     }
   }

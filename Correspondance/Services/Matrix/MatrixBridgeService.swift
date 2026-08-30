@@ -303,6 +303,35 @@ actor MatrixBridgeService {
     persist()
   }
 
+  /// Supprime un message pour tout le monde : une `m.room.redaction` sur son event.
+  ///
+  /// Les trois ponts la traduisent dans les deux sens (`revoke` WhatsApp,
+  /// `remote delete` Signal, `unsend` Meta) — c'est la même suppression que celle
+  /// du téléphone. Le `/sync` la confirmera ; on retire l'event du modèle tout de
+  /// suite pour que le fil ne le montre plus le temps du long-poll.
+  func deleteMessage(conversationID: String, messageID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.redact(roomID: roomID, eventID: messageID)
+    rooms[roomID]?.messagesByID.removeValue(forKey: messageID)
+    // Une réaction dont la cible disparaît n'a plus de sens.
+    for (id, reaction) in rooms[roomID]?.reactionsByEventID ?? [:]
+    where reaction.targetEventID == messageID {
+      rooms[roomID]?.reactionsByEventID.removeValue(forKey: id)
+    }
+    persist()
+  }
+
+  /// Photo d'un participant (`m.room.member` → `avatar_url`) : c'est elle que le
+  /// fil pose à gauche des bulles d'un groupe, où chaque bulle a un autre visage.
+  func memberAvatarData(conversationID: String, userID: String) async -> Data? {
+    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }),
+          let mxc = model.members[userID]?.avatarMXC, !mxc.isEmpty
+    else { return nil }
+    return await avatarData(mxcURI: mxc)
+  }
+
   /// Marque le fil lu côté réseau, à l'ouverture. Silencieux en cas d'échec :
   /// un accusé perdu ne doit pas faire échouer l'ouverture d'une conversation.
   func markRead(conversationID: String) async {

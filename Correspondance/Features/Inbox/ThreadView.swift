@@ -96,30 +96,7 @@ struct ThreadView: View {
                 typeface: themes.typeface
               )
             }
-            VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
-              if let label = group.senderLabel {
-                Text(label)
-                  .font(Typography.meta(themes.typeface))
-                  .foregroundStyle(theme.inkSecondary)
-                  .lineLimit(1)
-                  .padding(.leading, ThreadMetrics.senderLabelLeading)
-              }
-              ForEach(group.messages) { message in
-                if let event = message.systemEventText {
-                  ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
-                    .id(message.id)
-                } else {
-                  bubble(for: message)
-                    .id(message.id)
-                    .messageArrival(
-                      .encre,
-                      isFresh: isFresh(message),
-                      isEnabled: !reduceMotion
-                    )
-                }
-              }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            groupRow(group)
           }
 
           if let delivery = store.selectedConversation?.lastDelivery,
@@ -169,6 +146,54 @@ struct ThreadView: View {
     }
   }
 
+  /// Une prise de parole : la photo de son auteur dans la marge, puis ses bulles.
+  /// La photo se coupe dans Réglages ; les événements de conversation, eux, ne
+  /// sont de personne et gardent toute la largeur.
+  @ViewBuilder
+  private func groupRow(_ group: MessageGroup) -> some View {
+    let first = group.messages.first
+    let showsAvatar = themes.showsMessageAvatars
+      && !group.isFromMe
+      && first?.isSystemEvent != true
+    HStack(alignment: .top, spacing: ThreadMetrics.avatarSpacing) {
+      if showsAvatar, let first {
+        MessageAvatarView(
+          message: first,
+          conversation: store.conversation(ofMessage: first),
+          size: ThreadMetrics.avatarSize,
+          theme: theme
+        )
+        // La photo s'aligne sur la première bulle, pas sur le nom au-dessus.
+        .padding(.top, group.senderLabel == nil ? 2 : ThreadMetrics.avatarLabelOffset)
+      }
+      VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
+        if let label = group.senderLabel {
+          Text(label)
+            .font(Typography.meta(themes.typeface))
+            .foregroundStyle(theme.inkSecondary)
+            .lineLimit(1)
+            .padding(.leading, ThreadMetrics.senderLabelLeading)
+        }
+        ForEach(group.messages) { message in
+          if let event = message.systemEventText {
+            ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
+              .id(message.id)
+          } else {
+            bubble(for: message)
+              .id(message.id)
+              .messageArrival(
+                .encre,
+                isFresh: isFresh(message),
+                isEnabled: !reduceMotion
+              )
+          }
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
   /// Une bulle et tout ce qu'on peut lui faire. Extraite de la boucle : le
   /// vérificateur de types s'y perdait.
   private func bubble(for message: ChatMessage) -> some View {
@@ -197,7 +222,11 @@ struct ThreadView: View {
         store.replyToSelectedMessage()
       },
       onEdit: onEdit,
-      onUndoSend: onUndoSend
+      onUndoSend: onUndoSend,
+      onDeleteLocally: { store.deleteLocally(messageID: message.id) },
+      onDeleteEverywhere: store.canDeleteEverywhere(message)
+        ? { Task { await store.deleteEverywhere(messageID: message.id) } }
+        : nil
     )
   }
 
@@ -253,6 +282,12 @@ enum ThreadMetrics {
   static let interGroupSpacing: CGFloat = 12
   /// Le nom s'aligne sur le texte de la bulle, pas sur son bord.
   static let senderLabelLeading: CGFloat = 16
+  /// Le visage de l'auteur dans la marge gauche, comme Beeper.
+  static let avatarSize: CGFloat = 26
+  /// Air entre la photo et la première bulle.
+  static let avatarSpacing: CGFloat = 8
+  /// Quand un nom coiffe le groupe, la photo descend le long de la première bulle.
+  static let avatarLabelOffset: CGFloat = 18
   /// Air au-dessus du premier message, en plus de la zone sûre de la barre
   /// d'outils que le système fournit déjà.
   static let topClearance: CGFloat = 16

@@ -87,6 +87,29 @@ final class IMessageChatDatabaseTests: XCTestCase {
     XCTAssertEqual(audio.text, "🎤 Message audio")
   }
 
+  // MARK: - Suppression « ici »
+
+  /// Supprimer le dernier message d'un fil ne doit pas le laisser résumer la
+  /// ligne de l'inbox : le catalogue repart sur le message d'avant.
+  func testHiddenMessageStopsSummarisingItsRow() throws {
+    let db = try database()
+    let rowID = "imessage:\(oneToOneGUID)"
+    let before = try XCTUnwrap(db.fetchConversations().first { $0.id == rowID })
+    // Le message qui résume la ligne : le dernier que le catalogue sait montrer
+    // (un texte, ou une pièce jointe — jamais un envoi annulé).
+    let last = try XCTUnwrap(
+      db.fetchMessages(chatGUID: oneToOneGUID).last {
+        !$0.isRetracted && (!$0.text.isEmpty || !$0.attachments.isEmpty)
+      }
+    )
+
+    let after = try XCTUnwrap(
+      db.fetchConversations(hiddenMessageGUIDs: [last.id]).first { $0.id == rowID }
+    )
+    XCTAssertNotEqual(after.preview, before.preview)
+    XCTAssertLessThan(after.lastMessageAt, before.lastMessageAt)
+  }
+
   // MARK: - Groupes et événements (lot M1.4)
 
   func testGroupConversationExposesNameParticipantsAndPhoto() throws {
