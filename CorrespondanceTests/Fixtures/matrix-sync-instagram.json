@@ -1,0 +1,270 @@
+{
+  "next_batch": "s90210_1111_2222",
+  "rooms": {
+    "join": {
+      "!dm-malo:correspondance.local": {
+        "summary": {
+          "m.heroes": [
+            "@instagram_17841400000000001:correspondance.local"
+          ],
+          "m.joined_member_count": 3
+        },
+        "unread_notifications": {
+          "notification_count": 3
+        },
+        "state": {
+          "events": [
+            {
+              "type": "m.bridge",
+              "state_key": "fi.mau.instagram://instagram/17841400000000001",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-bridge-dm-ig",
+              "origin_server_ts": 1756500000000,
+              "content": {
+                "bridgebot": "@instagrambot:correspondance.local",
+                "protocol": {
+                  "id": "instagramgo",
+                  "displayname": "Instagram"
+                },
+                "channel": {
+                  "id": "17841400000000001",
+                  "displayname": "Malo"
+                },
+                "com.beeper.room_type": "dm"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-dm-ig",
+              "origin_server_ts": 1756500000001,
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000001:correspondance.local",
+              "sender": "@instagram_17841400000000001:correspondance.local",
+              "event_id": "$state-member-malo",
+              "origin_server_ts": 1756500000002,
+              "content": {
+                "membership": "join",
+                "displayname": "Malo (IG)"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841499999999999:correspondance.local",
+              "sender": "@instagram_17841499999999999:correspondance.local",
+              "event_id": "$state-member-mon-ghost",
+              "origin_server_ts": 1756500000003,
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagrambot:correspondance.local",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-member-bot-dm-ig",
+              "origin_server_ts": 1756500000004,
+              "content": {
+                "membership": "join",
+                "displayname": "Instagram bridge bot"
+              }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "prev_batch": "t11-4242_0_0",
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-malo-1",
+              "sender": "@instagram_17841400000000001:correspondance.local",
+              "origin_server_ts": 1756500100000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "Tu as vu la story ?"
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-moi-ig",
+              "sender": "@meffysto:correspondance.local",
+              "origin_server_ts": 1756500200000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "Oui, superbe lumière."
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-malo-feu",
+              "sender": "@instagram_17841400000000001:correspondance.local",
+              "origin_server_ts": 1756500300000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-moi-ig",
+                  "key": "🔥"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "!groupe-atelier:correspondance.local": {
+        "summary": {
+          "m.joined_member_count": 4
+        },
+        "unread_notifications": {
+          "notification_count": 0
+        },
+        "state": {
+          "events": [
+            {
+              "type": "m.bridge",
+              "state_key": "fi.mau.instagram://instagram/340282366841710300949128442406550000",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-bridge-groupe-ig",
+              "origin_server_ts": 1756500000010,
+              "content": {
+                "bridgebot": "@instagrambot:correspondance.local",
+                "protocol": {
+                  "id": "instagramgo",
+                  "displayname": "Instagram"
+                },
+                "channel": {
+                  "id": "340282366841710300949128442406550000",
+                  "displayname": "Atelier photo"
+                },
+                "com.beeper.room_type": "group"
+              }
+            },
+            {
+              "type": "m.room.name",
+              "state_key": "",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-name-groupe-ig",
+              "origin_server_ts": 1756500000011,
+              "content": {
+                "name": "Atelier photo"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-groupe-ig",
+              "origin_server_ts": 1756500000012,
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000002:correspondance.local",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "event_id": "$state-member-nina",
+              "origin_server_ts": 1756500000013,
+              "content": {
+                "membership": "join",
+                "displayname": "Nina Roche"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000003:correspondance.local",
+              "sender": "@instagram_17841400000000003:correspondance.local",
+              "event_id": "$state-member-yann",
+              "origin_server_ts": 1756500000014,
+              "content": {
+                "membership": "join",
+                "displayname": "Yann Ferrer"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagrambot:correspondance.local",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-member-bot-groupe-ig",
+              "origin_server_ts": 1756500000015,
+              "content": {
+                "membership": "join",
+                "displayname": "Instagram bridge bot"
+              }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-groupe-ig",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500400000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "Rendez-vous samedi au studio."
+              }
+            }
+          ]
+        }
+      },
+      "!gestion-instagram:correspondance.local": {
+        "summary": {
+          "m.joined_member_count": 2
+        },
+        "state": {
+          "events": [
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-gestion-ig",
+              "origin_server_ts": 1756500000020,
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagrambot:correspondance.local",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-member-bot-gestion-ig",
+              "origin_server_ts": 1756500000021,
+              "content": {
+                "membership": "join",
+                "displayname": "Instagram bridge bot"
+              }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-gestion-cookies",
+              "sender": "@instagrambot:correspondance.local",
+              "origin_server_ts": 1756500500000,
+              "content": {
+                "msgtype": "m.notice",
+                "body": "Enter a JSON object with your cookies, or a cURL command copied from browser devtools."
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

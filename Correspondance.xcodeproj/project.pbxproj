@@ -18,6 +18,7 @@
 		141F8F1E19D599897A15ED68 /* MergedContactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CA0A38650C862D9FA3A770 /* MergedContactTests.swift */; };
 		14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 225E93B93CBA37AE52390551 /* NewConversationSheet.swift */; };
 		172E7CEBB785C1D7D5B5A778 /* SenderPrefix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 945532F86F3B863973DE77B3 /* SenderPrefix.swift */; };
+		17D7C2FAE325F45F3C09E98E /* MatrixBridgeInstagramTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B4A0D50D682E5E7F9A67744 /* MatrixBridgeInstagramTests.swift */; };
 		197A14DC76960829F24066DE /* MatrixSyncParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3725D6114DB7A83300EF89D5 /* MatrixSyncParserTests.swift */; };
 		1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B5F5874770558B125F18B0 /* ReactionTests.swift */; };
 		1EF6D47DEDC45B31A6A6DA4A /* MergedContactStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F34E89D38D15C29FF146A24 /* MergedContactStore.swift */; };
@@ -27,6 +28,7 @@
 		234B2DB02BA3C6D309DD95A4 /* MergedContact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148D4B9CB4C2B45ACB2D5F29 /* MergedContact.swift */; };
 		24C149E00176D210AC30D511 /* MessageNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF503338243AC9298D7EF4B4 /* MessageNetwork.swift */; };
 		2975057536FB17CA5806E5D2 /* SenderPrefixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFA4AF1A4E3D6A41883DA4F /* SenderPrefixTests.swift */; };
+		2B142639F1899B5CD3EBBDFE /* MatrixBridgeDescriptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22E3ADFD7C40E5847933C479 /* MatrixBridgeDescriptor.swift */; };
 		2B9D0F7EB5261C7E60B50F34 /* MatrixBridgeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */; };
 		2F76C677EF64364D72152D23 /* NotificationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D81CAA9F751DCFCDF5FA79 /* NotificationPolicy.swift */; };
 		31FF3836F0F89E8BE2935ED6 /* IMessageSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C41963F5AA875508D844FF1 /* IMessageSender.swift */; };
@@ -62,6 +64,7 @@
 		78BFBD5B379BEE287754BD07 /* WritingTypeface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */; };
 		7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */; };
 		8520F818A51D69AE23716712 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */; };
+		87F2F7CB1CD1CDE20E9D0FEA /* matrix-sync-instagram.json in Resources */ = {isa = PBXBuildFile; fileRef = 0318A98988AEDC892FB99E41 /* matrix-sync-instagram.json */; };
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
 		8F731A81F8D37773A8A5BD7E /* MatrixTransactionLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F7A73102F13A76EF33CAD9 /* MatrixTransactionLedger.swift */; };
 		92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE06AF0526360BC841BE21 /* InboxStore.swift */; };
@@ -79,12 +82,12 @@
 		A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */; };
 		A9DACCFAB7B9CA3F0400BDBE /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 625768DBC8A0E14E8A2D098D /* Spacing.swift */; };
 		ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB68DB666AD5741B836D9D65 /* Typography.swift */; };
-		B15011E6BAE0518CF597D735 /* WhatsAppLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */; };
 		B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B762FB62E00183DD0A339B2C /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF0FB534C12237850268E15 /* Conversation.swift */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C57C42F7B623ACE2AF159F2E /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5443743FD598E735E0F5F364 /* ChatMessage.swift */; };
+		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
 		C84F93D60A8E008D1AA97734 /* ScheduledMessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */; };
 		CD52FF6F2233329686BB15C1 /* ArchiveState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 089E557DD9A6FFA336C499CE /* ArchiveState.swift */; };
 		CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */; };
@@ -123,6 +126,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0318A98988AEDC892FB99E41 /* matrix-sync-instagram.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-instagram.json"; sourceTree = "<group>"; };
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
 		074B532C3E48CEFDE44A6B3A /* MatrixAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixAttachmentStore.swift; sourceTree = "<group>"; };
 		089E557DD9A6FFA336C499CE /* ArchiveState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveState.swift; sourceTree = "<group>"; };
@@ -136,11 +140,14 @@
 		16EE06AF0526360BC841BE21 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
 		1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeService.swift; sourceTree = "<group>"; };
+		1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginSheet.swift; sourceTree = "<group>"; };
 		225E93B93CBA37AE52390551 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
+		22E3ADFD7C40E5847933C479 /* MatrixBridgeDescriptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeDescriptor.swift; sourceTree = "<group>"; };
 		23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageWatcherTests.swift; sourceTree = "<group>"; };
 		246AB8F9328F449310C7F2BC /* ScheduledMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessage.swift; sourceTree = "<group>"; };
 		24CA0A38650C862D9FA3A770 /* MergedContactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergedContactTests.swift; sourceTree = "<group>"; };
 		258F2B6AE43BCA594215DA3E /* Correspondance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Correspondance.entitlements; sourceTree = "<group>"; };
+		2B4A0D50D682E5E7F9A67744 /* MatrixBridgeInstagramTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeInstagramTests.swift; sourceTree = "<group>"; };
 		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		31F7A73102F13A76EF33CAD9 /* MatrixTransactionLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixTransactionLedger.swift; sourceTree = "<group>"; };
 		3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixTransactionLedgerTests.swift; sourceTree = "<group>"; };
@@ -225,7 +232,6 @@
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotedReplyTests.swift; sourceTree = "<group>"; };
 		F69827D334B0A62C8E003293 /* TopScrollFade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopScrollFade.swift; sourceTree = "<group>"; };
-		F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsAppLoginSheet.swift; sourceTree = "<group>"; };
 		FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessageStore.swift; sourceTree = "<group>"; };
 		FCA69D19E658DA849410EE74 /* IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomation.swift; sourceTree = "<group>"; };
 		FCF6BAC648DD91505A9A9B7F /* GlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassSurface.swift; sourceTree = "<group>"; };
@@ -258,6 +264,7 @@
 			isa = PBXGroup;
 			children = (
 				0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */,
+				0318A98988AEDC892FB99E41 /* matrix-sync-instagram.json */,
 				C62337EDC213EAEAD5361C6E /* matrix-sync-whatsapp.json */,
 			);
 			path = Fixtures;
@@ -275,6 +282,7 @@
 			isa = PBXGroup;
 			children = (
 				074B532C3E48CEFDE44A6B3A /* MatrixAttachmentStore.swift */,
+				22E3ADFD7C40E5847933C479 /* MatrixBridgeDescriptor.swift */,
 				1C219D757BA0A839204BF73A /* MatrixBridgeService.swift */,
 				C7E4B7561B8ADEA64F9D25BD /* MatrixClient.swift */,
 				C45FB63F936327C146A1BDF5 /* MatrixConversationCache.swift */,
@@ -312,6 +320,7 @@
 				506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */,
 				493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */,
 				23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */,
+				2B4A0D50D682E5E7F9A67744 /* MatrixBridgeInstagramTests.swift */,
 				3725D6114DB7A83300EF89D5 /* MatrixSyncParserTests.swift */,
 				3494263E672439FB9AF1959D /* MatrixTransactionLedgerTests.swift */,
 				6AF8ABAC144221C45F0E7088 /* MatrixURLBuildingTests.swift */,
@@ -390,8 +399,8 @@
 		82A1969C625E899DECA1D59A /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */,
 				B758EF0696E62CAE3AD887FF /* SettingsView.swift */,
-				F71F1849AD8A7DF42CDEE039 /* WhatsAppLoginSheet.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -549,6 +558,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9B74B7C1829C1880CD610B64 /* imessage-macos26.db in Resources */,
+				87F2F7CB1CD1CDE20E9D0FEA /* matrix-sync-instagram.json in Resources */,
 				93FC9A7390A493C419E1A7BF /* matrix-sync-whatsapp.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -592,6 +602,7 @@
 				9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */,
 				FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */,
 				A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */,
+				17D7C2FAE325F45F3C09E98E /* MatrixBridgeInstagramTests.swift in Sources */,
 				197A14DC76960829F24066DE /* MatrixSyncParserTests.swift in Sources */,
 				A3EB2437D379451E47247B37 /* MatrixTransactionLedgerTests.swift in Sources */,
 				CF15603D4FF9C7D844951D08 /* MatrixURLBuildingTests.swift in Sources */,
@@ -613,6 +624,7 @@
 			files = (
 				CD52FF6F2233329686BB15C1 /* ArchiveState.swift in Sources */,
 				5E53925AE2D2253492C1D507 /* AudioMessageView.swift in Sources */,
+				C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */,
 				C57C42F7B623ACE2AF159F2E /* ChatMessage.swift in Sources */,
 				B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */,
 				FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */,
@@ -647,6 +659,7 @@
 				6E566A2430EFFF7E54B7B929 /* InboxStore+IMessageAutomation.swift in Sources */,
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,
 				32111300AB95D4EF6DD03304 /* MatrixAttachmentStore.swift in Sources */,
+				2B142639F1899B5CD3EBBDFE /* MatrixBridgeDescriptor.swift in Sources */,
 				2B9D0F7EB5261C7E60B50F34 /* MatrixBridgeService.swift in Sources */,
 				4B2E24964C3FC6F31BB87BB2 /* MatrixClient.swift in Sources */,
 				FB0C350ADE4B456A753ABF07 /* MatrixConversationCache.swift in Sources */,
@@ -686,7 +699,6 @@
 				8520F818A51D69AE23716712 /* ThreadView.swift in Sources */,
 				8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */,
 				ADB6A3B1ED6C34E49FFF7271 /* Typography.swift in Sources */,
-				B15011E6BAE0518CF597D735 /* WhatsAppLoginSheet.swift in Sources */,
 				F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */,
 				32A646B5D7E12EC285FB4506 /* WritingTheme.swift in Sources */,
 				78BFBD5B379BEE287754BD07 /* WritingTypeface.swift in Sources */,
