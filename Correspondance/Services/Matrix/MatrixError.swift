@@ -6,7 +6,7 @@ enum MatrixError: LocalizedError, Sendable, Equatable {
   case http(status: Int, errcode: String?, message: String?)
   case decoding(String)
   case transport(String)
-  case whatsAppBotSilent
+  case bridgeBotSilent(MessageNetwork)
 
   var errorDescription: String? {
     switch self {
@@ -20,8 +20,8 @@ enum MatrixError: LocalizedError, Sendable, Equatable {
       "Réponse Matrix incompréhensible : \(detail)"
     case .transport(let detail):
       "Le homeserver ne répond pas : \(detail)"
-    case .whatsAppBotSilent:
-      "Le bot WhatsApp ne répond pas. Vérifie mautrix-whatsapp sur le NUC."
+    case .bridgeBotSilent(let network):
+      "Le bot \(network.labelFR) ne répond pas. Vérifie le pont sur le NUC."
     }
   }
 

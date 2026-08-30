@@ -56,7 +56,8 @@ struct MatrixRoomModel: Sendable {
 
   /// Membres humains distants : ni moi, ni le bot de bridge, ni mon propre ghost.
   /// mautrix ajoute notre ghost dans chaque DM : on ne garde alors que le correspondant,
-  /// reconnu par `channel.id` (`<id>@lid` ↔ `@whatsapp_lid-<id>`, `<num>@s.whatsapp.net` ↔ `@whatsapp_<num>`).
+  /// reconnu par `channel.id` (`<id>@lid` ↔ `@whatsapp_lid-<id>`, `<num>@s.whatsapp.net` ↔
+  /// `@whatsapp_<num>`, et côté Instagram un identifiant Meta nu ↔ `@instagram_<id>`).
   func remoteMembers(selfUserID: String) -> [(userID: String, member: Member)] {
     let humans: [(userID: String, member: Member)] = members
       .filter { key, value in
@@ -167,8 +168,9 @@ struct MatrixRoomModel: Sendable {
   }
 }
 
-/// Reconnaissance des identifiants mautrix. **Ne jamais** en extraire un numéro :
-/// depuis v26.08 les ghosts WhatsApp sont des LID (`@whatsapp_lid-1234:serveur`).
+/// Reconnaissance des identifiants mautrix, à partir des descripteurs de ponts.
+/// **Ne jamais** en extraire un numéro : depuis v26.08 les ghosts WhatsApp sont des LID
+/// (`@whatsapp_lid-1234:serveur`), et un ghost Instagram est un identifiant Meta.
 enum MatrixIdentity {
   static func localpart(_ userID: String) -> String {
     let withoutSigil = userID.hasPrefix("@") ? String(userID.dropFirst()) : userID
@@ -176,25 +178,36 @@ enum MatrixIdentity {
   }
 
   static func isBridgeBot(_ userID: String) -> Bool {
-    let local = localpart(userID)
-    return local.hasSuffix("bot") && MessageNetwork.allCases.contains { local.hasPrefix($0.rawValue.lowercased()) }
+    network(ofBot: userID) != nil
+  }
+
+  /// Réseau du bot de gestion, quand ce MXID en est un.
+  static func network(ofBot userID: String) -> MessageNetwork? {
+    MatrixBridgeDescriptor.network(ofBot: userID)
   }
 
   /// « Malo (WA) » → « Malo » : mautrix suffixe les noms de ghosts avec le réseau.
+  /// La liste vient des descripteurs, plus quelques ponts qu'on ne gère pas encore
+  /// mais dont les noms peuvent traverser un groupe.
+  static let foreignBridgeSuffixes = [" (FB)", " (Messenger)", " (Signal)"]
+
   static func stripBridgeSuffix(_ name: String) -> String {
     var trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    for suffix in [" (WA)", " (WhatsApp)", " (IG)", " (Instagram)", " (FB)", " (Messenger)", " (Signal)"] {
-      if trimmed.hasSuffix(suffix) {
-        trimmed = String(trimmed.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
-        break
-      }
+    let suffixes = MatrixBridgeDescriptor.all.flatMap(\.displayNameSuffixes) + foreignBridgeSuffixes
+    for suffix in suffixes where trimmed.hasSuffix(suffix) {
+      trimmed = String(trimmed.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+      break
     }
     return trimmed
   }
 
   static func isGhost(_ userID: String) -> Bool {
-    let local = localpart(userID)
-    return MessageNetwork.allCases.contains { local.hasPrefix("\($0.rawValue.lowercased())_") }
+    network(ofGhost: userID) != nil
+  }
+
+  /// Réseau du ghost, quand ce MXID en est un.
+  static func network(ofGhost userID: String) -> MessageNetwork? {
+    MatrixBridgeDescriptor.network(ofGhost: userID)
   }
 
   /// Un numéro exploitable pour `ContactDirectory` — sinon `nil`, sans jamais faire échouer l'appelant.

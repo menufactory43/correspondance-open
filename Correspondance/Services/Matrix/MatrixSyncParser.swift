@@ -131,7 +131,11 @@ struct MatrixSyncParser: Sendable {
     // Les éditions arrivent en double du message d'origine — on garde l'original.
     if content.string(at: "m.relates_to.rel_type") == "m.replace" { return }
 
-    let network = model.network ?? .whatsapp
+    // Le réseau du salon vient de l'état `m.bridge` ; s'il n'est pas encore arrivé
+    // (timeline lue avant l'état), on le déduit des ghosts et bots présents plutôt
+    // que de supposer WhatsApp. Un message sans réseau ne devient pas une conversation
+    // de toute façon : `MatrixRoomModel.conversation` exige `network`.
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
     let msgtype = content.string(at: "msgtype") ?? "m.text"
     var body = content.string(at: "body") ?? ""
 
@@ -271,6 +275,16 @@ struct MatrixSyncParser: Sendable {
         return trimmed.trimmingCharacters(in: .whitespaces)
       }
     return quoted.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+  }
+
+  /// Réseau déduit des habitants du salon : les ghosts et le bot portent le préfixe
+  /// de leur pont. Sert de repli quand l'état `m.bridge` n'a pas encore été appliqué.
+  static func inferredNetwork(in model: MatrixRoomModel) -> MessageNetwork? {
+    for userID in model.members.keys.sorted() {
+      if let network = MatrixIdentity.network(ofGhost: userID) { return network }
+      if let network = MatrixIdentity.network(ofBot: userID) { return network }
+    }
+    return nil
   }
 
   private static func fallbackMime(for msgtype: String) -> String {

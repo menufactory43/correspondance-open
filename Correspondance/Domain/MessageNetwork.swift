@@ -4,6 +4,7 @@ enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendable {
   case iMessage
   case signal
   case whatsapp
+  case instagram
 
   var id: String { rawValue }
 
@@ -12,6 +13,7 @@ enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendable {
     case .iMessage: "iMessage"
     case .signal: "Signal"
     case .whatsapp: "WhatsApp"
+    case .instagram: "Instagram"
     }
   }
 
@@ -20,22 +22,19 @@ enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendable {
     case .iMessage: "message.fill"
     case .signal: "antenna.radiowaves.left.and.right"
     case .whatsapp: "phone.bubble.fill"
+    case .instagram: "camera.fill"
     }
   }
 
   /// Passe par un homeserver Matrix (bridge mautrix) plutôt que par un transport natif.
-  var isMatrixBridged: Bool {
-    switch self {
-    case .iMessage, .signal: false
-    case .whatsapp: true
-    }
-  }
+  /// C'est le descripteur qui fait foi : un réseau bridgé est un réseau qui en a un.
+  var isMatrixBridged: Bool { bridge != nil }
+
+  /// Réseaux bridgés, dans l'ordre de l'enum — ce qui pilote les boutons de Réglages.
+  static var matrixBridged: [MessageNetwork] { allCases.filter(\.isMatrixBridged) }
 
   /// `protocol.id` de l'event d'état `m.bridge` côté mautrix.
   static func fromBridgeProtocol(_ protocolID: String) -> MessageNetwork? {
-    switch protocolID.lowercased() {
-    case "whatsapp", "whatsappgo": .whatsapp
-    default: nil
-    }
+    MatrixBridgeDescriptor.network(ofProtocol: protocolID)
   }
 }

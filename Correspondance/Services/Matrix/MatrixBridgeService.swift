@@ -1,19 +1,24 @@
 import Foundation
 
 /// Pont entre le homeserver et l'inbox : tient l'état des salons, la boucle `/sync`,
-/// l'envoi et le flux de connexion WhatsApp. Un seul `MatrixClient` en dessous.
+/// l'envoi et les flux de connexion des ponts. Un seul `MatrixClient` en dessous.
+///
+/// Un seul `/sync` pour tous les ponts — ils vivent sur le même homeserver — mais
+/// **un salon de gestion par pont** : le bot WhatsApp et le bot Instagram ne se
+/// parlent pas, et une commande envoyée au mauvais bot reste sans réponse.
 actor MatrixBridgeService {
   private let client: MatrixClient
   private var rooms: [String: MatrixRoomModel] = [:]
   private var nextBatch: String?
   private var selfUserID: String = ""
   private var didHydrate = false
-  /// Salon de gestion du bot WhatsApp (commandes `login`, `pm`…).
-  private var managementRoomID: String?
+  /// Salon de gestion par réseau (commandes `login`, `pm`…).
+  private var managementRoomIDs: [MessageNetwork: String] = [:]
   /// Invitations de bridge déjà traitées (évite de marteler `/join`).
   private var attemptedInviteJoins: Set<String> = []
-  /// Event de la dernière commande `login` envoyée : borne basse de lecture des réponses du bot.
-  private var loginCommandEventID: String?
+  /// Event de la dernière commande `login` envoyée, par réseau : borne basse de lecture
+  /// des réponses du bot (tout ce qui précède appartient à une tentative passée).
+  private var loginCommandEventIDs: [MessageNetwork: String] = [:]
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
   private var ledger = MatrixTransactionLedger()
 
@@ -35,8 +40,7 @@ actor MatrixBridgeService {
     do {
       let userID = try await client.whoami()
       selfUserID = userID
-      let bridged = conversations().count
-      return "Matrix connecté (\(userID)) · \(bridged) fils WhatsApp."
+      return "Matrix connecté (\(userID)) · \(Self.bridgedCountFR(conversations()))."
     } catch {
       return "Matrix (\(creds.homeserver.host ?? "?")) : \(error.localizedDescription)"
     }
@@ -52,7 +56,7 @@ actor MatrixBridgeService {
     selfUserID = creds.userID
     rooms = [:]
     nextBatch = nil
-    managementRoomID = nil
+    managementRoomIDs = [:]
     return creds
   }
 
@@ -63,8 +67,8 @@ actor MatrixBridgeService {
     rooms = [:]
     nextBatch = nil
     selfUserID = ""
-    managementRoomID = nil
-    loginCommandEventID = nil
+    managementRoomIDs = [:]
+    loginCommandEventIDs = [:]
   }
 
   // MARK: - Sync
@@ -97,13 +101,13 @@ actor MatrixBridgeService {
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     parser.apply(response, to: &rooms)
     nextBatch = response.nextBatch
-    detectManagementRoom()
+    detectManagementRooms()
     persist()
     await acceptBridgeInvites(response)
     return conversations()
   }
 
-  /// Les portails (un par chat WhatsApp) arrivent sous forme d'invitations du bridge :
+  /// Les portails (un par chat distant) arrivent sous forme d'invitations du bridge :
   /// sans double puppeting, c'est au client de les accepter. On ne rejoint que ce qui
   /// vient d'un bot ou d'un ghost de bridge — jamais une invitation humaine à l'aveugle.
   private func acceptBridgeInvites(_ response: MatrixSyncResponse) async {
@@ -223,9 +227,9 @@ actor MatrixBridgeService {
 
   /// Pose, remplace ou retire ma réaction sur un message.
   ///
-  /// WhatsApp n'accepte **qu'un emoji par personne et par message**
-  /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp) : reposer le même
-  /// emoji le retire, en poser un autre remplace le précédent.
+  /// WhatsApp comme Instagram n'acceptent **qu'un emoji par personne et par message**
+  /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp et de mautrix-instagram) :
+  /// reposer le même emoji le retire, en poser un autre remplace le précédent.
   func toggleReaction(conversationID: String, messageID: String, emoji: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
@@ -271,115 +275,222 @@ actor MatrixBridgeService {
     try? await client.sendReadReceipt(roomID: roomID, eventID: last.id)
   }
 
-  // MARK: - Connexion WhatsApp
+  // MARK: - Connexion d'un pont
 
-  enum WhatsAppLoginStep: Sendable, Equatable {
+  /// Où en est le bot dans le flux de connexion, quel que soit le pont.
+  enum BridgeLoginStep: Sendable, Equatable {
     /// QR à scanner (PNG déjà téléchargé).
     case qrCode(Data)
     case pairingCode(String)
+    /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram).
+    case awaitingCookies(String)
     case success(String)
     case failure(String)
     case waiting
   }
 
-  /// Ouvre (ou retrouve) le salon de gestion et envoie la commande de connexion.
-  func startWhatsAppLogin(usingPhoneNumber phoneNumber: String? = nil) async throws {
-    let command = phoneNumber.map { "login phone \($0)" } ?? "login qr"
+  /// Ce que l'app envoie pour démarrer une connexion, selon le pont.
+  enum BridgeLoginInput: Sendable, Equatable {
+    /// WhatsApp : QR par défaut, ou code d'appairage si un numéro est fourni.
+    case whatsAppQRCode
+    case whatsAppPairing(phoneNumber: String)
+    /// Instagram : la commande `login` seule, les cookies suivront.
+    case cookies
+  }
+
+  /// Ouvre (ou retrouve) le salon de gestion du pont et envoie la commande de connexion.
+  func startLogin(network: MessageNetwork, input: BridgeLoginInput) async throws {
+    let command: String
+    switch input {
+    case .whatsAppQRCode: command = "login qr"
+    case .whatsAppPairing(let phoneNumber): command = "login phone \(phoneNumber)"
+    // Un seul flow côté mautrix-instagram (`instagram`, par cookies) : `login` suffit,
+    // et le bot enchaîne tout seul sur l'étape « colle ton JSON ».
+    case .cookies: command = "login"
+    }
     // On retient l'event de la commande : tout ce qui la précède appartient à une
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
-    loginCommandEventID = try await sendBotCommand(command)
+    loginCommandEventIDs[network] = try await sendBotCommand(command, to: network)
+  }
+
+  /// Envoie les cookies collés par l'utilisateur au bot, en réponse à son invite.
+  /// Le corps part **tel quel** : le bot accepte un objet JSON ou une commande cURL,
+  /// et l'entourer d'un préfixe de commande casserait son analyse.
+  func submitLoginCookies(_ raw: String, network: MessageNetwork) async throws {
+    let payload = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !payload.isEmpty else { throw MatrixError.decoding("cookies vides") }
+    let roomID = try await ensureManagementRoom(for: network)
+    _ = try await client.sendText(roomID: roomID, body: payload, transactionID: UUID().uuidString)
   }
 
   /// Dernier état publié par le bot **depuis** notre commande de connexion.
-  func whatsAppLoginStep() async throws -> WhatsAppLoginStep {
-    let roomID = try await ensureManagementRoom()
+  func loginStep(network: MessageNetwork) async throws -> BridgeLoginStep {
+    let roomID = try await ensureManagementRoom(for: network)
     let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 20)
+    let bound = loginCommandEventIDs[network]
     for event in response.chunk {
       // `dir=b` : du plus récent au plus ancien. Arrivé à notre propre commande,
       // la suite est l'historique d'avant — on s'arrête là.
-      if let loginCommandEventID, event.eventID == loginCommandEventID { break }
+      if let bound, event.eventID == bound { break }
       guard event.type == "m.room.message",
             let content = event.content,
             let sender = event.sender,
-            MatrixIdentity.isBridgeBot(sender)
+            MatrixIdentity.network(ofBot: sender) == network
       else { continue }
       let body = content.string(at: "body") ?? ""
-      let lower = body.lowercased()
-      if lower.contains("successfully logged in") || lower.contains("connexion réussie") {
-        return .success(body)
-      }
-      if lower.contains("failed to log in") || lower.contains("login timed out") || lower.contains("timed out") {
-        return .failure(body)
-      }
+      if let step = Self.loginStep(inBotMessage: body) { return step }
       if content.string(at: "msgtype") == "m.image", let mxc = content.string(at: "url") {
         let data = try await client.downloadMedia(mxcURI: mxc)
         return .qrCode(data)
-      }
-      if let code = Self.pairingCode(in: body) {
-        return .pairingCode(code)
       }
     }
     return .waiting
   }
 
-  /// Ouvre un fil WhatsApp vers un numéro via la commande bot `pm`.
-  func startWhatsAppConversation(phoneNumber: String) async throws {
-    let digits = phoneNumber.filter { $0.isNumber }
-    guard digits.count >= 8 else {
-      throw MatrixError.decoding("numéro WhatsApp invalide")
+  /// Lecture d'une réponse du bot, isolée pour être testable sans homeserver.
+  /// `nil` = ce message ne dit rien du login (bavardage, état de connexion…).
+  static func loginStep(inBotMessage body: String) -> BridgeLoginStep? {
+    let lower = body.lowercased()
+    // Succès : « Successfully logged in » (mautrix-whatsapp) ou l'instruction
+    // « Logged in as <nom> (<id>) » de l'étape finale bridgev2.
+    if lower.contains("successfully logged in")
+      || lower.contains("connexion réussie")
+      || lower.hasPrefix("logged in as")
+    {
+      return .success(body)
     }
-    _ = try await sendBotCommand("pm +\(digits)")
+    // Échecs : le message d'un flow QR, et ceux que bridgev2 renvoie sur les cookies.
+    if lower.contains("failed to log in")
+      || lower.contains("login failed")
+      || lower.contains("timed out")
+      || lower.contains("failed to parse input as json")
+      || lower.contains("missing some keys")
+      || lower.contains("invalid value for")
+      || lower.contains("failed to submit input")
+    {
+      return .failure(body)
+    }
+    if let code = pairingCode(in: body) { return .pairingCode(code) }
+    // Invite de l'étape « cookies » : l'instruction du connecteur, puis l'URL de login.
+    if lower.contains("enter a json object with your cookies") || lower.hasPrefix("login url:") {
+      return .awaitingCookies(body)
+    }
+    return nil
   }
 
-  /// Salon de gestion : celui où le bot est présent et qui n'est pas un portail.
+  /// Ouvre un fil vers un correspondant via la commande bot `pm` (alias de `start-chat`).
+  ///
+  /// WhatsApp attend un numéro. Instagram attend l'identifiant **numérique** Meta :
+  /// un pseudo doit d'abord passer par `search`, dont on lit la réponse du bot.
+  func startConversation(network: MessageNetwork, identifier: String) async throws {
+    guard let bridge = network.bridge else {
+      throw MatrixError.decoding("réseau non bridgé : \(network.rawValue)")
+    }
+    switch network {
+    case .whatsapp:
+      let digits = identifier.filter { $0.isNumber }
+      guard digits.count >= 8 else {
+        throw MatrixError.decoding("numéro WhatsApp invalide")
+      }
+      _ = try await sendBotCommand(bridge.startChatCommand(identifier: "+\(digits)"), to: network)
+    default:
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+      guard !trimmed.isEmpty else {
+        throw MatrixError.decoding("identifiant \(network.labelFR) vide")
+      }
+      let metaID = trimmed.allSatisfy(\.isNumber)
+        ? trimmed
+        : try await resolveMetaID(username: trimmed, network: network)
+      _ = try await sendBotCommand(bridge.startChatCommand(identifier: metaID), to: network)
+    }
+  }
+
+  /// `search <pseudo>` puis lecture de la réponse du bot pour en tirer l'ID numérique.
+  /// Les ghosts Meta sont des identifiants numériques : `pm <pseudo>` échouerait sec.
+  private func resolveMetaID(username: String, network: MessageNetwork) async throws -> String {
+    let commandEventID = try await sendBotCommand("search \(username)", to: network)
+    let roomID = try await ensureManagementRoom(for: network)
+    // Le bot interroge Meta : quelques secondes au plus, sinon on renonce proprement.
+    for _ in 0..<10 {
+      try? await Task.sleep(for: .seconds(1))
+      let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 10)
+      for event in response.chunk {
+        if let commandEventID, event.eventID == commandEventID { break }
+        guard event.type == "m.room.message",
+              let sender = event.sender,
+              MatrixIdentity.network(ofBot: sender) == network,
+              let body = event.content?.string(at: "body")
+        else { continue }
+        if let id = Self.firstSearchResultID(in: body) { return id }
+      }
+    }
+    throw MatrixError.decoding("aucun compte \(network.labelFR) trouvé pour « \(username) »")
+  }
+
+  /// Premier identifiant d'une réponse `search` : bridgev2 formate chaque résultat
+  /// en `` `12345` / Nom ``. On ne garde que le premier, le plus pertinent.
+  static func firstSearchResultID(in body: String) -> String? {
+    let pattern = "`([0-9]{4,})`"
+    guard let range = body.range(of: pattern, options: [.regularExpression]) else { return nil }
+    return String(body[range]).trimmingCharacters(in: CharacterSet(charactersIn: "`"))
+  }
+
+  /// Salon de gestion d'un pont : celui où son bot est présent et qui n'est pas un portail.
   @discardableResult
-  private func ensureManagementRoom() async throws -> String {
-    if let managementRoomID { return managementRoomID }
-    detectManagementRoom()
+  private func ensureManagementRoom(for network: MessageNetwork) async throws -> String {
+    guard let bridge = network.bridge else { throw MatrixError.notConfigured }
+    if let known = managementRoomIDs[network] { return known }
+    detectManagementRooms()
     // Le sync peut encore porter un salon de gestion qu'on a quitté (ou où l'on n'est
     // qu'invité) : envoyer dedans donne « User not in room ». On vérifie, on rejoint,
     // sinon on repart sur un DM neuf avec le bot.
-    if let candidate = managementRoomID {
+    if let candidate = managementRoomIDs[network] {
       if try await client.joinedRooms().contains(candidate) { return candidate }
       if let joined = try? await client.join(roomID: candidate) {
-        managementRoomID = joined
+        managementRoomIDs[network] = joined
         return joined
       }
       rooms.removeValue(forKey: candidate)
-      managementRoomID = nil
+      managementRoomIDs[network] = nil
     }
     guard !selfUserID.isEmpty else { throw MatrixError.notConfigured }
     let serverName = String(selfUserID.split(separator: ":").last ?? "")
-    let roomID = try await client.createDM(with: "@whatsappbot:\(serverName)")
-    managementRoomID = roomID
+    let roomID = try await client.createDM(with: bridge.botUserID(serverName: serverName))
+    managementRoomIDs[network] = roomID
     return roomID
   }
 
-  /// Envoie une commande au bot ; si le salon retenu n'est plus valide (403), on le
-  /// jette et on réessaie une fois avec un salon de gestion neuf.
-  private func sendBotCommand(_ rawCommand: String) async throws -> String? {
-    // Préfixe `!wa` : accepté par mautrix dans tous les salons. Sans lui, un DM
+  /// Envoie une commande au bot d'un pont ; si le salon retenu n'est plus valide (403),
+  /// on le jette et on réessaie une fois avec un salon de gestion neuf.
+  private func sendBotCommand(_ rawCommand: String, to network: MessageNetwork) async throws -> String? {
+    guard let bridge = network.bridge else { throw MatrixError.notConfigured }
+    // Préfixe (`!wa`, `!ig`) : accepté par mautrix dans tous les salons. Sans lui, un DM
     // créé par nous (et non par le bot) n'est pas traité comme salon de gestion
     // et la commande est ignorée en silence.
-    let command = rawCommand.hasPrefix("!") ? rawCommand : "!wa \(rawCommand)"
-    let roomID = try await ensureManagementRoom()
+    let command = rawCommand.hasPrefix("!") ? rawCommand : "\(bridge.commandPrefix) \(rawCommand)"
+    let roomID = try await ensureManagementRoom(for: network)
     do {
       return try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
     } catch MatrixError.http(let status, _, _) where status == 403 {
       rooms.removeValue(forKey: roomID)
-      managementRoomID = nil
-      let fresh = try await ensureManagementRoom()
+      managementRoomIDs[network] = nil
+      let fresh = try await ensureManagementRoom(for: network)
       return try await client.sendText(roomID: fresh, body: command, transactionID: UUID().uuidString)
     }
   }
 
-  private func detectManagementRoom() {
-    guard managementRoomID == nil else { return }
-    managementRoomID = rooms.values
-      .first { model in
-        model.network == nil && model.members.keys.contains(where: { MatrixIdentity.isBridgeBot($0) })
-      }?
-      .roomID
+  /// Un salon sans réseau (donc pas un portail) dont un membre est le bot de X est
+  /// le salon de gestion de X. Les deux ponts en ont un, distinct.
+  private func detectManagementRooms() {
+    for model in rooms.values where model.network == nil {
+      for userID in model.members.keys {
+        guard let network = MatrixIdentity.network(ofBot: userID),
+              managementRoomIDs[network] == nil
+        else { continue }
+        managementRoomIDs[network] = model.roomID
+      }
+    }
   }
 
   static func pairingCode(in body: String) -> String? {
@@ -389,6 +500,15 @@ actor MatrixBridgeService {
     let pattern = #"\b[A-Za-z0-9]{4}-[A-Za-z0-9]{4}\b"#
     guard let range = body.range(of: pattern, options: [.regularExpression]) else { return nil }
     return String(body[range]).uppercased()
+  }
+
+  /// « 12 WhatsApp · 3 Instagram » — un décompte qui dit de quoi l'inbox est faite.
+  static func bridgedCountFR(_ conversations: [Conversation]) -> String {
+    let parts = MessageNetwork.matrixBridged.compactMap { network -> String? in
+      let count = conversations.filter { $0.network == network }.count
+      return count > 0 ? "\(count) \(network.labelFR)" : nil
+    }
+    return parts.isEmpty ? "aucun fil bridgé" : parts.joined(separator: " · ")
   }
 
   // MARK: - Privé

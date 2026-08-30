@@ -32,17 +32,17 @@ struct Conversation: Identifiable, Hashable, Sendable {
     return network.systemImage
   }
 
-  /// Preview « catalogue » sans vrai message reçu.
+  /// Preview « catalogue » sans vrai message reçu. Les libellés sont ceux que
+  /// `MatrixRoomModel.conversation` et le catalogue Signal posent faute de message :
+  /// on les dérive des réseaux plutôt que de les recopier réseau par réseau.
+  static let catalogPlaceholderPreviews: Set<String> = Set(
+    MessageNetwork.allCases.filter { $0 != .iMessage }.flatMap {
+      ["Groupe \($0.labelFR)", "Écrire sur \($0.labelFR)…", $0.labelFR]
+    }
+  )
+
   var hasLivePreview: Bool {
-    let placeholders: Set<String> = [
-      "Groupe Signal",
-      "Écrire sur Signal…",
-      "Signal",
-      "Groupe WhatsApp",
-      "Écrire sur WhatsApp…",
-      "WhatsApp",
-    ]
-    return !placeholders.contains(preview)
+    !Self.catalogPlaceholderPreviews.contains(preview)
   }
 
   /// Titre encore technique / placeholder — à remplacer dès qu’on a un vrai nom.
@@ -55,12 +55,16 @@ struct Conversation: Identifiable, Hashable, Sendable {
     if trimmed.hasPrefix("signal-group:") || trimmed.hasPrefix("signal:") || trimmed.hasPrefix("imessage:") {
       return true
     }
-    // Room ID Matrix nu (`!abc:correspondance.local`) ou ghost LID non résolu.
-    if trimmed.hasPrefix("!") || trimmed.hasPrefix("@whatsapp_") || trimmed.hasPrefix("whatsapp:") {
+    // Room ID Matrix nu (`!abc:correspondance.local`) ou ghost de pont non résolu.
+    if trimmed.hasPrefix("!") { return true }
+    if MatrixBridgeDescriptor.all.contains(where: {
+      trimmed.hasPrefix("@\($0.ghostPrefix)") || trimmed.hasPrefix("\($0.network.rawValue):")
+    }) {
       return true
     }
     if trimmed.hasPrefix("Groupe")
-      && (trimmed == "Groupe" || trimmed.hasPrefix("Groupe (") || trimmed == "Groupe Signal" || trimmed == "Groupe WhatsApp")
+      && (trimmed == "Groupe" || trimmed.hasPrefix("Groupe (")
+        || Self.catalogPlaceholderPreviews.contains(trimmed))
     {
       return true
     }

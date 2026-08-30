@@ -6,6 +6,7 @@ import Foundation
 /// ou une adresse e-mail, Signal un E.164 ou un UUID de compte, WhatsApp un
 /// ghost mautrix `@whatsapp_33612345678:serveur` (voire `whatsapp:33612345678`).
 /// Fusionner suppose de savoir que ces trois écritures désignent le même numéro.
+/// Instagram n'expose aucun numéro : ses fils ne fusionnent avec rien, et c'est juste.
 ///
 /// La règle est volontairement étroite : on ne rapproche que ce qui se compose
 /// (un numéro) ou ce qui s'écrit (une adresse e-mail). Un UUID Signal ne dit
@@ -24,14 +25,22 @@ enum PhoneNormalizer {
     }
 
     // Préfixes de transport, tels qu'on les rencontre dans nos identifiants.
-    for prefix in ["whatsapp:", "signal:", "imessage:", "tel:", "mailto:"]
-    where candidate.lowercased().hasPrefix(prefix) {
+    // Ceux des réseaux bridgés viennent des descripteurs : un réseau de plus, rien à toucher.
+    let transportPrefixes = MessageNetwork.allCases.map { "\($0.rawValue.lowercased()):" }
+      + ["tel:", "mailto:"]
+    for prefix in transportPrefixes where candidate.lowercased().hasPrefix(prefix) {
       candidate = String(candidate.dropFirst(prefix.count))
     }
 
     // Partie locale d'un ghost mautrix : `whatsapp_33612345678`.
-    if candidate.lowercased().hasPrefix("whatsapp_") {
-      candidate = String(candidate.dropFirst("whatsapp_".count))
+    for descriptor in MatrixBridgeDescriptor.all
+    where candidate.lowercased().hasPrefix(descriptor.ghostPrefix) {
+      // Un pont qui n'identifie pas par numéro ne se rapproche de rien : découvrir
+      // le `instagram_17841400000000001` fabriquerait un faux « tel: » qui fusionnerait
+      // deux inconnus. On s'arrête là plutôt que de deviner.
+      guard descriptor.identifiersArePhoneNumbers else { return nil }
+      candidate = String(candidate.dropFirst(descriptor.ghostPrefix.count))
+      break
     }
 
     candidate = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
