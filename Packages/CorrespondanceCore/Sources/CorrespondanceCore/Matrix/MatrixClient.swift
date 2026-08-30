@@ -309,6 +309,106 @@ public actor MatrixClient {
     return mxc
   }
 
+  // MARK: - État de conversation (Relais)
+
+  /// Le Relais est la source de vérité de l'état de conversation (ADR 0001) :
+  /// épingles et archives en room tags, sourdine en push rule, brouillons,
+  /// masquages et fusions en account data. Tout ce qui suit écrit ; la lecture
+  /// se fait par `/sync` (`MatrixSyncParser.conversationState`).
+
+  public static func tagPath(userID: String, roomID: String, tag: String) -> String {
+    "/_matrix/client/v3/user/\(escape(userID))/rooms/\(escape(roomID))/tags/\(escape(tag))"
+  }
+
+  public static func roomAccountDataPath(userID: String, roomID: String, type: String) -> String {
+    "/_matrix/client/v3/user/\(escape(userID))/rooms/\(escape(roomID))/account_data/\(escape(type))"
+  }
+
+  public static func accountDataPath(userID: String, type: String) -> String {
+    "/_matrix/client/v3/user/\(escape(userID))/account_data/\(escape(type))"
+  }
+
+  public static func roomPushRulePath(roomID: String) -> String {
+    "/_matrix/client/v3/pushrules/global/room/\(escape(roomID))"
+  }
+
+  /// Corps d'un `PUT` de tag. `order` absent = tag sans ordre, ce que nous
+  /// écrivons toujours : l'inbox trie elle-même.
+  public static func tagBody(order: Double?) -> MatrixJSON {
+    guard let order else { return .object([:]) }
+    return .object(["order": .number(order)])
+  }
+
+  /// Corps d'un `PUT` de push rule de salon. `actions: []` = muet.
+  /// `["dont_notify"]` est déprécié depuis Matrix 1.7 : la liste vide dit la
+  /// même chose et reste comprise des serveurs qui la traduisent encore.
+  public static func mutePushRuleBody() -> MatrixJSON {
+    .object(["actions": .array([])])
+  }
+
+  private func userID() throws -> String {
+    guard let userID = credentials?.userID else { throw MatrixError.notConfigured }
+    return userID
+  }
+
+  /// `PUT /user/{u}/rooms/{r}/tags/{tag}`.
+  public func setRoomTag(roomID: String, tag: String, order: Double? = nil) async throws {
+    let user = try userID()
+    _ = try await request(
+      method: "PUT",
+      path: Self.tagPath(userID: user, roomID: roomID, tag: tag),
+      body: Self.tagBody(order: order)
+    )
+  }
+
+  /// `DELETE /user/{u}/rooms/{r}/tags/{tag}`.
+  public func removeRoomTag(roomID: String, tag: String) async throws {
+    let user = try userID()
+    _ = try await request(
+      method: "DELETE",
+      path: Self.tagPath(userID: user, roomID: roomID, tag: tag)
+    )
+  }
+
+  /// `PUT /user/{u}/rooms/{r}/account_data/{type}`.
+  public func setRoomAccountData(roomID: String, type: String, content: MatrixJSON) async throws {
+    let user = try userID()
+    _ = try await request(
+      method: "PUT",
+      path: Self.roomAccountDataPath(userID: user, roomID: roomID, type: type),
+      body: content
+    )
+  }
+
+  /// `PUT /user/{u}/account_data/{type}`.
+  public func setAccountData(type: String, content: MatrixJSON) async throws {
+    let user = try userID()
+    _ = try await request(
+      method: "PUT",
+      path: Self.accountDataPath(userID: user, type: type),
+      body: content
+    )
+  }
+
+  /// Muet côté Relais : plus aucune notification push pour ce salon.
+  /// Démuter supprime la règle plutôt que de la réécrire — une règle « notifie »
+  /// masquerait les règles d'ordre inférieur de l'utilisateur.
+  public func setRoomPushRule(roomID: String, muted: Bool) async throws {
+    if muted {
+      _ = try await request(
+        method: "PUT",
+        path: Self.roomPushRulePath(roomID: roomID),
+        body: Self.mutePushRuleBody()
+      )
+    } else {
+      do {
+        _ = try await request(method: "DELETE", path: Self.roomPushRulePath(roomID: roomID))
+      } catch MatrixError.http(let status, _, _) where status == 404 {
+        // Pas de règle à retirer : le salon n'était pas muet côté Relais.
+      }
+    }
+  }
+
   // MARK: - Média
 
   /// Télécharge un `mxc://` via l'endpoint authentifié (obligatoire depuis Matrix 1.11).
