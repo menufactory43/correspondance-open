@@ -29,9 +29,12 @@ final class InboxStore {
   /// Champ `.searchable` de la liste. Vide = pas de filtrage.
   var searchQuery = ""
   /// Bulle visée par les actions du fil (réagir, citer). `nil` = le dernier message.
-  var selectedMessageID: String?
+  var selectedMessageID: String? {
+    get { primarySession?.selectedMessageID }
+    set { primarySession?.selectedMessageID = newValue }
+  }
   /// Message que le brouillon en cours cite (⌘R). `nil` = réponse simple.
-  private(set) var replyingToMessageID: String?
+  var replyingToMessageID: String? { primarySession?.replyingToMessageID }
   /// Recherche dans le fil ouvert (⌘F).
   var isThreadSearchActive = false
   var threadSearchQuery = "" {
@@ -42,13 +45,23 @@ final class InboxStore {
   /// Index du match courant dans `threadSearchMatchIDs`.
   private(set) var threadSearchCursor = 0
   var selectedConversationID: String?
-  var messages: [ChatMessage] = []
-  var draftText: String = "" {
-    didSet { captureDraft() }
+
+  // Le fil, le brouillon, l'envoi : rien de tout cela n'appartient au magasin,
+  // tout appartient à la SESSION du fil (cf. `ConversationSession`). Ce qui
+  // suit n'est que le raccourci de l'inbox vers la sienne — une fenêtre
+  // détachée passe, elle, par la sienne propre.
+  var messages: [ChatMessage] {
+    get { primarySession?.messages ?? [] }
+    set { primarySession?.messages = newValue }
+  }
+  var draftText: String {
+    get { primarySession?.draftText ?? "" }
+    set { primarySession?.draftText = newValue }
   }
   /// Chemins locaux d’images à envoyer avec le prochain message.
-  var pendingAttachmentPaths: [String] = [] {
-    didSet { captureDraft() }
+  var pendingAttachmentPaths: [String] {
+    get { primarySession?.pendingAttachmentPaths ?? [] }
+    set { primarySession?.pendingAttachmentPaths = newValue }
   }
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
@@ -74,7 +87,10 @@ final class InboxStore {
   var isLoading = false
   /// Sync receive en cours (poll live).
   var isLiveSyncing = false
-  var isSending = false
+  var isSending: Bool {
+    get { primarySession?.isSending ?? false }
+    set { primarySession?.isSending = newValue }
+  }
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
   var matrixStatusFR: String = "…"
@@ -173,8 +189,6 @@ final class InboxStore {
   @ObservationIgnored private var searchIndex: [String: String] = [:]
   /// Brouillons par conversation, restaurés au retour sur un fil.
   @ObservationIgnored private var drafts: [String: DraftStore.Draft] = [:]
-  /// Vrai le temps de réinstaller un brouillon : le `didSet` ne doit pas l'écraser.
-  @ObservationIgnored private var isRestoringDraft = false
   /// Écriture disque différée — on n'écrit pas un fichier à chaque frappe.
   @ObservationIgnored private var draftPersistTask: Task<Void, Never>?
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
@@ -183,6 +197,77 @@ final class InboxStore {
   var selectedConversation: Conversation? {
     guard let selectedConversationID else { return nil }
     return conversations.first { $0.id == selectedConversationID }
+  }
+
+  // MARK: - Sessions
+
+  /// Une session par fil ouvert, et une seule : l'inbox et la fenêtre détachée
+  /// d'un même fil tiennent le même objet.
+  @ObservationIgnored private var sessions: [String: ConversationSession] = [:]
+
+  /// Les fils qui ont une fenêtre à eux. Observé : le menu Fenêtre en tire le
+  /// libellé « Détacher » / « Ramener dans l'inbox ».
+  private(set) var detachedConversationIDs: Set<String> = []
+
+  /// La fenêtre détachée au premier plan, s'il y en a une.
+  private(set) var frontDetachedConversationID: String?
+
+  /// La session d'un fil — créée à la demande, avec son brouillon déjà en place.
+  func session(for conversationID: String) -> ConversationSession {
+    if let existing = sessions[conversationID] { return existing }
+    let session = ConversationSession(conversationID: conversationID, store: self)
+    session.installDraft(drafts[conversationID] ?? DraftStore.Draft())
+    sessions[conversationID] = session
+    return session
+  }
+
+  /// La session de l'inbox : celle du fil sélectionné.
+  var primarySession: ConversationSession? {
+    guard let selectedConversationID else { return nil }
+    return session(for: selectedConversationID)
+  }
+
+  /// Les sessions qu'on tient réellement à jour : celle de l'inbox et celles
+  /// des fenêtres détachées. C'est chez elles que les messages entrants vont.
+  var liveSessions: [ConversationSession] {
+    var ids: [String] = []
+    if let selectedConversationID { ids.append(selectedConversationID) }
+    for id in detachedConversationIDs where !ids.contains(id) { ids.append(id) }
+    return ids.map { session(for: $0) }
+  }
+
+  /// Un brouillon change dans une session : le magasin le range et l'écrit.
+  func captureDraft(from session: ConversationSession) {
+    let draft = session.draft
+    if draft.isEmpty {
+      drafts.removeValue(forKey: session.conversationID)
+    } else {
+      drafts[session.conversationID] = draft
+    }
+    scheduleDraftPersist()
+  }
+
+  /// Une fenêtre détachée s'ouvre.
+  func noteDetached(_ conversationID: String) {
+    detachedConversationIDs.insert(conversationID)
+    _ = session(for: conversationID)
+  }
+
+  /// Une fenêtre détachée se ferme : sa session ne survit que si l'inbox la lit.
+  func noteReattached(_ conversationID: String) {
+    detachedConversationIDs.remove(conversationID)
+    if frontDetachedConversationID == conversationID { frontDetachedConversationID = nil }
+    pruneSessions()
+  }
+
+  func noteDetachedWindowFront(_ conversationID: String?) {
+    frontDetachedConversationID = conversationID
+  }
+
+  /// Une session sans fenêtre n'a plus de raison d'occuper la mémoire.
+  private func pruneSessions() {
+    let kept = Set(liveSessions.map(\.conversationID))
+    sessions = sessions.filter { kept.contains($0.key) }
   }
 
   var activeQueue: [Conversation] {
@@ -532,13 +617,13 @@ final class InboxStore {
     conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
     IMessageConversationCache.save(realConversations(on: .iMessage))
 
-    if let id = selectedConversationID,
-       conversations.first(where: { $0.id == id })?.network == .iMessage
-    {
-      await loadMessagesForSelection()
-      indexMessages(messages, conversationID: id)
-      refreshThreadSearchMatches()
-      clearUnread(for: id)
+    for session in liveSessions {
+      let id = session.conversationID
+      guard conversations.first(where: { $0.id == id })?.network == .iMessage else { continue }
+      await loadMessages(into: session)
+      indexMessages(session.messages, conversationID: id)
+      if session === primarySession { refreshThreadSearchMatches() }
+      if isAttended(id) { clearUnread(for: id) }
     }
   }
 
@@ -547,25 +632,6 @@ final class InboxStore {
   /// Un fil porte un brouillon non envoyé — la liste peut le signaler.
   func hasDraft(_ conversationID: String) -> Bool {
     drafts[conversationID]?.isEmpty == false
-  }
-
-  private func captureDraft() {
-    guard !isRestoringDraft, let id = selectedConversationID else { return }
-    let draft = DraftStore.Draft(text: draftText, attachmentPaths: pendingAttachmentPaths)
-    if draft.isEmpty {
-      drafts.removeValue(forKey: id)
-    } else {
-      drafts[id] = draft
-    }
-    scheduleDraftPersist()
-  }
-
-  private func restoreDraft(for id: String?) {
-    isRestoringDraft = true
-    defer { isRestoringDraft = false }
-    let draft = id.flatMap { drafts[$0] } ?? DraftStore.Draft()
-    draftText = draft.text
-    pendingAttachmentPaths = draft.attachmentPaths
   }
 
   /// Écriture différée : une frappe ne doit pas déclencher une écriture disque.
@@ -587,19 +653,20 @@ final class InboxStore {
   // MARK: - Réponses citées
 
   /// La citation affichée au-dessus du composer, s'il y en a une.
-  var replyingToMessage: ChatMessage? {
-    guard let replyingToMessageID else { return nil }
-    return messages.first { $0.id == replyingToMessageID }
-  }
+  var replyingToMessage: ChatMessage? { primarySession?.replyingToMessage }
 
   /// ⌘R : cite la bulle visée. Rappuyer sur la même annule la citation.
   func replyToSelectedMessage() {
-    guard let message = actionableMessage else { return }
-    replyingToMessageID = replyingToMessageID == message.id ? nil : message.id
+    replyToSelectedMessage(in: primarySession)
+  }
+
+  func replyToSelectedMessage(in session: ConversationSession?) {
+    guard let session, let message = session.actionableMessage else { return }
+    session.replyingToMessageID = session.replyingToMessageID == message.id ? nil : message.id
   }
 
   func cancelReply() {
-    replyingToMessageID = nil
+    primarySession?.replyingToMessageID = nil
   }
 
   // MARK: - Réactions
@@ -608,12 +675,7 @@ final class InboxStore {
   static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
 
   /// Message visé par une action du fil : la bulle sélectionnée, sinon la dernière.
-  var actionableMessage: ChatMessage? {
-    if let selectedMessageID, let found = messages.first(where: { $0.id == selectedMessageID }) {
-      return found
-    }
-    return messages.last(where: \.hasVisibleBody)
-  }
+  var actionableMessage: ChatMessage? { primarySession?.actionableMessage }
 
   func selectMessage(_ id: String?) {
     selectedMessageID = id
@@ -828,25 +890,41 @@ final class InboxStore {
     return members.first { $0.id == activeID } ?? members.first
   }
 
+  /// La ligne de la liste qui porte cet identifiant.
+  func conversationRow(_ id: String) -> Conversation? {
+    conversations.first { $0.id == id }
+  }
+
   /// La conversation que vise réellement un envoi : le membre actif d'une ligne
   /// fusionnée, la conversation elle-même sinon.
   var sendingConversation: Conversation? {
     guard let selected = selectedConversation else { return nil }
-    guard isMerged(selected.id) else { return selected }
-    return activeMember(of: selected.id)
+    return sendingConversation(for: selected)
+  }
+
+  func sendingConversation(for row: Conversation) -> Conversation? {
+    guard isMerged(row.id) else { return row }
+    return activeMember(of: row.id)
   }
 
   /// La conversation d'où vient une bulle — pour réagir, citer ou accuser
   /// réception sur le bon réseau quand le fil est fusionné.
   func conversation(ofMessage message: ChatMessage) -> Conversation? {
-    if let selected = selectedConversation, selected.id == message.conversationID { return selected }
-    if let selected = selectedConversation, isMerged(selected.id) {
-      if let member = memberConversations(of: selected.id).first(where: { $0.id == message.conversationID }) {
+    guard let selected = selectedConversation else {
+      return conversations.first { $0.id == message.conversationID }
+    }
+    return conversation(ofMessage: message, in: selected)
+  }
+
+  func conversation(ofMessage message: ChatMessage, in row: Conversation) -> Conversation? {
+    if row.id == message.conversationID { return row }
+    if isMerged(row.id) {
+      if let member = memberConversations(of: row.id).first(where: { $0.id == message.conversationID }) {
         return member
       }
-      return activeMember(of: selected.id)
+      return activeMember(of: row.id)
     }
-    return conversations.first { $0.id == message.conversationID } ?? selectedConversation
+    return conversations.first { $0.id == message.conversationID } ?? row
   }
 
   /// Ce fil est-il sous les yeux de quelqu'un ? C'est-à-dire : sélectionné *et*
@@ -965,6 +1043,10 @@ final class InboxStore {
       drafts.removeValue(forKey: mergedID)
     }
     persistDraftsNow()
+    // La ligne fusionnée n'existe plus : sa session non plus, sinon elle
+    // garderait un brouillon rendu à l'un de ses membres.
+    sessions.removeValue(forKey: mergedID)
+    detachedConversationIDs.remove(mergedID)
     disappearingSecondsByID.removeValue(forKey: mergedID)
     conversations = list
     if selectedConversationID == mergedID {
@@ -1370,7 +1452,7 @@ final class InboxStore {
           await ContactDirectory.shared.enrichBridgedTitles(&updated)
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
-          await self.refreshSelectedMatrixMessages()
+          await self.refreshLiveMatrixMessages()
         } catch is CancellationError {
           return
         } catch {
@@ -1389,16 +1471,16 @@ final class InboxStore {
   /// quitter un groupe, défusionner). Ce n'est PAS le cas de la sélection que
   /// l'app pose d'office au lancement, qui laisse `selectionIsUserMade` à faux.
   func select(_ id: String?) async {
-    // Le brouillon en cours appartient au fil qu'on quitte.
-    captureDraft()
+    // Le brouillon appartient au fil, pas au curseur : il reste dans SA session
+    // et n'a rien à suivre. On l'écrit tout de même avant de changer de page.
     persistDraftsNow()
     selectedConversationID = id
     selectionIsUserMade = id != nil
-    selectedMessageID = nil
-    replyingToMessageID = nil
+    primarySession?.selectedMessageID = nil
+    primarySession?.replyingToMessageID = nil
     sendLaterConfig = nil
     sendLaterPicker = nil
-    restoreDraft(for: id)
+    pruneSessions()
     if let id { clearUnread(for: id) }
     await loadMessagesForSelection()
     if let id { indexMessages(messages, conversationID: id) }
@@ -1660,17 +1742,26 @@ final class InboxStore {
     pendingAttachmentPaths.append(contentsOf: paths)
   }
 
+  /// Envoyer le brouillon de l'inbox.
   func sendDraft() async {
-    let text = draftText.trimmingCharacters(in: .whitespacesAndNewlines)
-    let attachments = pendingAttachmentPaths
+    guard let session = primarySession else { return }
+    await send(session: session)
+  }
+
+  /// Envoyer le brouillon d'UNE session — l'inbox ou une fenêtre détachée. Rien
+  /// ici ne regarde la sélection : une fenêtre posée à côté d'un document envoie
+  /// dans son fil, même si l'inbox en lit un autre.
+  func send(session: ConversationSession) async {
+    let text = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let attachments = session.pendingAttachmentPaths
     // Le brouillon appartient à la ligne ouverte ; l'envoi, lui, part sur le
     // réseau du membre actif quand cette ligne est une fusion.
-    guard let row = selectedConversation else { return }
+    guard let row = conversationRow(session.conversationID) else { return }
     // Citer, c'est répondre là où la bulle a été dite : sur un fil fusionné, la
     // citation impose son réseau, sinon la réponse partirait sur l'autre chat
     // en désignant un message qu'il ne connaît pas.
-    let quoted = replyingToMessage
-    let routed = quoted.flatMap { self.conversation(ofMessage: $0) } ?? sendingConversation
+    let quoted = session.replyingToMessage
+    let routed = quoted.flatMap { self.conversation(ofMessage: $0, in: row) } ?? sendingConversation(for: row)
     guard let conversation = routed else { return }
     guard !text.isEmpty || !attachments.isEmpty else { return }
 
@@ -1680,7 +1771,7 @@ final class InboxStore {
     }
 
     // « Plus tard » posé sur le composer : le message se range au lieu de partir.
-    if let config = sendLaterConfig {
+    if let config = sendLaterConfig, session === primarySession {
       scheduleDraft(config, text: text, attachments: attachments, conversation: row)
       return
     }
@@ -1691,30 +1782,29 @@ final class InboxStore {
       // envoie nu — exactement comme avant le Lot M2.
       if canAutomateMessages {
         if await sendQuotedReplyViaAutomation(conversation: conversation, quotedID: quotedID, text: text) {
-          draftText = ""
-          replyingToMessageID = nil
+          session.clearDraft()
+          session.replyingToMessageID = nil
           drafts.removeValue(forKey: row.id)
           persistDraftsNow()
-          await reloadMessagesAfterAutomation()
+          await loadMessages(into: session)
         }
         return
       }
       lastErrorMessage = "Répondre en citant n’existe pas sur iMessage depuis "
         + "l’automatisation AppleScript : le message part sans citation. "
         + "Active « Automatisation Messages » dans Réglages pour citer."
-      replyingToMessageID = nil
+      session.replyingToMessageID = nil
     }
 
-    isSending = true
-    defer { isSending = false }
+    session.isSending = true
+    defer { session.isSending = false }
 
     let optimistic = Self.optimisticMessage(
       text: text, attachments: attachments, conversation: conversation, quoted: quoted
     )
-    messages.append(optimistic)
-    draftText = ""
-    pendingAttachmentPaths = []
-    replyingToMessageID = nil
+    session.messages.append(optimistic)
+    session.clearDraft()
+    session.replyingToMessageID = nil
     drafts.removeValue(forKey: row.id)
     persistDraftsNow()
 
@@ -1723,15 +1813,14 @@ final class InboxStore {
         text: text, attachments: attachments, conversation: conversation,
         quoted: quoted, localID: optimistic.id
       )
-      if let idx = messages.firstIndex(where: { $0.id == optimistic.id }) {
-        messages[idx].isPending = false
+      if let idx = session.messages.firstIndex(where: { $0.id == optimistic.id }) {
+        session.messages[idx].isPending = false
       }
-      applySidebarPreview(conversationID: conversation.id, from: messages)
+      applySidebarPreview(conversationID: conversation.id, from: session.messages)
     } catch {
-      messages.removeAll { $0.id == optimistic.id }
-      draftText = text
-      pendingAttachmentPaths = attachments
-      replyingToMessageID = quoted?.id
+      session.messages.removeAll { $0.id == optimistic.id }
+      session.installDraft(DraftStore.Draft(text: text, attachmentPaths: attachments))
+      session.replyingToMessageID = quoted?.id
       lastErrorMessage = error.localizedDescription
     }
   }
@@ -1891,9 +1980,8 @@ final class InboxStore {
       onlyIfNoReply: config.onlyIfNoReply
     )
     scheduledMessages.append(message)
-    draftText = ""
-    pendingAttachmentPaths = []
-    replyingToMessageID = nil
+    primarySession?.clearDraft()
+    primarySession?.replyingToMessageID = nil
     sendLaterConfig = nil
     drafts.removeValue(forKey: conversation.id)
     persistDraftsNow()
@@ -2080,10 +2168,17 @@ final class InboxStore {
     conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
   }
 
-  private func refreshSelectedMatrixMessages() async {
-    guard let id = selectedConversationID,
-          let conversation = conversations.first(where: { $0.id == id })
-    else { return }
+  /// Le `/sync` a rendu quelque chose : chaque fil sous les yeux de quelqu'un
+  /// se recoud — celui de l'inbox comme ceux des fenêtres détachées.
+  private func refreshLiveMatrixMessages() async {
+    for session in liveSessions {
+      await refreshMatrixMessages(into: session)
+    }
+  }
+
+  private func refreshMatrixMessages(into session: ConversationSession) async {
+    let id = session.conversationID
+    guard let conversation = conversations.first(where: { $0.id == id }) else { return }
     // Un fil réuni n'est pas un salon : c'est son membre bridgé qu'on recharge,
     // et on le recoud au reste. Repasser par le chargement complet du fil
     // recopierait `chat.db` à chaque `/sync` — la boucle live s'en garde.
@@ -2098,18 +2193,24 @@ final class InboxStore {
         refreshed.append(contentsOf: await matrix.ensureLocalAttachments(fetched))
       }
       guard !refreshed.isEmpty else { return }
-      let others = messages.filter { !bridgedIDs.contains($0.conversationID) }
-      messages = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
+      session.messages = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
       applySidebarPreview(conversationID: bridged[0].id, from: refreshed)
-      clearUnread(for: id)
+      if isAttended(id) { clearUnread(for: id) }
       return
     }
     guard conversation.network.isMatrixBridged else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
-    messages = await matrix.ensureLocalAttachments(fetched)
-    applySidebarPreview(conversationID: id, from: messages)
-    clearUnread(for: id)
+    session.messages = await matrix.ensureLocalAttachments(fetched)
+    applySidebarPreview(conversationID: id, from: session.messages)
+    if isAttended(id) { clearUnread(for: id) }
+  }
+
+  /// Ce fil est-il réellement lu par quelqu'un en ce moment ? L'inbox le lit si
+  /// l'utilisateur l'a choisi ; une fenêtre détachée le lit si elle est devant.
+  private func isAttended(_ conversationID: String) -> Bool {
+    selectedConversationID == conversationID || frontDetachedConversationID == conversationID
   }
 
   private func clearUnread(for id: String) {
@@ -2292,8 +2393,15 @@ final class InboxStore {
   }
 
   func loadMessagesForSelection() async {
-    guard let conversation = selectedConversation else {
-      messages = []
+    guard let session = primarySession else { return }
+    await loadMessages(into: session)
+  }
+
+  /// Charge le fil d'UNE session. La sélection de l'inbox n'entre pas en jeu :
+  /// une fenêtre détachée recharge le sien sans rien déranger.
+  func loadMessages(into session: ConversationSession) async {
+    guard let conversation = conversationRow(session.conversationID) else {
+      session.messages = []
       return
     }
 
@@ -2306,12 +2414,12 @@ final class InboxStore {
       // Les repères « Synchronisation… » d'un réseau vide n'ont pas de place
       // dans un fil qui, lui, a des messages ailleurs.
       let real = merged.filter { !Self.isPlaceholderMessageID($0.id) }
-      messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
-      applySidebarPreview(conversationID: conversation.id, from: messages)
+      session.messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
+      applySidebarPreview(conversationID: conversation.id, from: session.messages)
       return
     }
 
-    messages = await fetchMessages(for: conversation)
+    session.messages = await fetchMessages(for: conversation)
   }
 
   /// Un message-repère (« Synchronisation… », « Pas encore de messages ») plutôt
@@ -2343,8 +2451,9 @@ final class InboxStore {
       }
     case .signal, .whatsapp, .instagram:
       var cached = await matrix.messages(conversationID: conversation.id)
-      if cached.isEmpty {
-        // Fil jamais ouvert : on va chercher l'historique que le bridge a backfillé.
+      if cached.count < Self.matrixBackfillThreshold {
+        // Fil jamais ouvert, ou connu seulement par la fenêtre du sync initial :
+        // on va chercher l'historique que le bridge a backfillé.
         cached = await matrix.backfill(conversationID: conversation.id)
       }
       if cached.isEmpty {
@@ -2369,6 +2478,10 @@ final class InboxStore {
       return resolved
     }
   }
+
+  /// Sous ce nombre de messages, l'ouverture d'un fil bridgé demande une page
+  /// d'historique : le sync initial n'en livre qu'une dizaine par salon.
+  private static let matrixBackfillThreshold = 30
 
   func applySidebarPreview(conversationID: String, from messages: [ChatMessage]) {
     // Un fil replié n'a plus de ligne à lui : c'est la fusionnée qu'on résume.
