@@ -27,6 +27,9 @@ struct Conversation: Identifiable, Hashable, Sendable {
   /// Photo du fil telle que le réseau distant l'expose, pas encore téléchargée :
   /// un `mxc://` pour les fils bridgés. Le carnet d'adresses reste prioritaire.
   var remoteAvatarID: String? = nil
+  /// Photos des membres d'un groupe **sans** photo à lui : de quoi composer une
+  /// mosaïque, comme Messages et Instagram. Vide dès qu'il y a mieux à montrer.
+  var memberAvatarIDs: [String] = []
 
   var hasUnread: Bool { unreadCount > 0 }
 

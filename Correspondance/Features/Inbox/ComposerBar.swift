@@ -97,6 +97,17 @@ struct ComposerBar: View {
       .lineLimit(1...6)
       .focused($isFocused)
       .focusEffectDisabled()
+      // Se mettre à écrire dans un fil, c'est le lire — même si c'est l'app qui
+      // l'avait ouvert au lancement, sans qu'on l'ait jamais cliqué.
+      //
+      // On guette la frappe et non le focus : sur macOS, AppKit peut installer
+      // le premier champ texte de la fenêtre comme premier répondant quand elle
+      // devient active, sans qu'on ait rien demandé. Un focus reçu de cette
+      // façon effacerait au lancement, en silence, le non-lu qu'on vient de
+      // rendre. Taper, personne ne le fait à notre place.
+      .onChange(of: text) { _, _ in
+        if isFocused { store.confirmSelectionAsRead() }
+      }
       .padding(.leading, 2)
       .padding(.vertical, 4)
       .onKeyPress(.return) {
@@ -163,10 +174,14 @@ struct ComposerBar: View {
 
   private func send() {
     dictation.stop()
+    store.confirmSelectionAsRead()
     onSend()
   }
 
   private func startOrStopDictation() {
+    // Dicter dans un fil, c'est le lire — et la dictée n'écrit pas forcément
+    // tout de suite dans le champ.
+    store.confirmSelectionAsRead()
     isFocused = true
     Task { await dictation.toggle(currentText: text) { text = $0 } }
   }

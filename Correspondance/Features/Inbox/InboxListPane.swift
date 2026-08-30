@@ -14,7 +14,14 @@ struct InboxListPane: View {
     Binding(
       get: { store.selectedConversationID },
       set: { newValue in
-        guard let newValue, newValue != store.selectedConversationID else { return }
+        guard let newValue else { return }
+        // Recliquer la ligne déjà sélectionnée n'est pas un non-événement quand
+        // c'est l'app qui l'avait choisie au lancement : c'est le geste par
+        // lequel l'utilisateur dit qu'il lit enfin ce fil.
+        guard newValue != store.selectedConversationID else {
+          store.confirmSelectionAsRead()
+          return
+        }
         Task { await store.select(newValue) }
       }
     )

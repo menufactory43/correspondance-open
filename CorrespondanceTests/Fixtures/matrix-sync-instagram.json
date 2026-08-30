@@ -65,7 +65,8 @@
               "origin_server_ts": 1756500000002,
               "content": {
                 "membership": "join",
-                "displayname": "Malo (IG)"
+                "displayname": "Malo (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-malo-ghost-ig"
               }
             },
             {
@@ -202,7 +203,8 @@
               "origin_server_ts": 1756500000013,
               "content": {
                 "membership": "join",
-                "displayname": "Nina Roche"
+                "displayname": "Nina Roche",
+                "avatar_url": "mxc://correspondance.local/avatar-nina-ig"
               }
             },
             {
@@ -213,7 +215,8 @@
               "origin_server_ts": 1756500000014,
               "content": {
                 "membership": "join",
-                "displayname": "Yann Ferrer"
+                "displayname": "Yann Ferrer",
+                "avatar_url": "mxc://correspondance.local/avatar-yann-ig"
               }
             },
             {
@@ -240,6 +243,144 @@
               "content": {
                 "msgtype": "m.text",
                 "body": "Rendez-vous samedi au studio."
+              }
+            }
+          ]
+        }
+      },
+      "!groupe-sansphoto:correspondance.local": {
+        "summary": {
+          "m.joined_member_count": 7
+        },
+        "unread_notifications": {
+          "notification_count": 0
+        },
+        "state": {
+          "events": [
+            {
+              "type": "m.bridge",
+              "state_key": "fi.mau.instagram://instagram/340282366841710300949128442406550111",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-bridge-sansphoto-ig",
+              "origin_server_ts": 1756500000030,
+              "content": {
+                "bridgebot": "@instagrambot:correspondance.local",
+                "protocol": {
+                  "id": "instagramgo",
+                  "displayname": "Instagram"
+                },
+                "channel": {
+                  "id": "340282366841710300949128442406550111",
+                  "displayname": "Chasse aux trésors"
+                },
+                "com.beeper.room_type": "group"
+              }
+            },
+            {
+              "type": "m.room.name",
+              "state_key": "",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-name-sansphoto-ig",
+              "origin_server_ts": 1756500000031,
+              "content": {
+                "name": "Chasse aux trésors"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-sansphoto-ig",
+              "origin_server_ts": 1756500000032,
+              "content": {
+                "membership": "join",
+                "displayname": "meffysto"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000011:correspondance.local",
+              "sender": "@instagram_17841400000000011:correspondance.local",
+              "event_id": "$state-member-zoe",
+              "origin_server_ts": 1756500000033,
+              "content": {
+                "membership": "join",
+                "displayname": "Zoé Bart (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-zoe-ig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000012:correspondance.local",
+              "sender": "@instagram_17841400000000012:correspondance.local",
+              "event_id": "$state-member-ali",
+              "origin_server_ts": 1756500000034,
+              "content": {
+                "membership": "join",
+                "displayname": "Ali Rebours (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-ali-ig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000013:correspondance.local",
+              "sender": "@instagram_17841400000000013:correspondance.local",
+              "event_id": "$state-member-marc",
+              "origin_server_ts": 1756500000035,
+              "content": {
+                "membership": "join",
+                "displayname": "Marc Vidal (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-marc-ig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000014:correspondance.local",
+              "sender": "@instagram_17841400000000014:correspondance.local",
+              "event_id": "$state-member-bruno",
+              "origin_server_ts": 1756500000036,
+              "content": {
+                "membership": "join",
+                "displayname": "Bruno Cadet (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-bruno-ig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagram_17841400000000015:correspondance.local",
+              "sender": "@instagram_17841400000000015:correspondance.local",
+              "event_id": "$state-member-elsa",
+              "origin_server_ts": 1756500000037,
+              "content": {
+                "membership": "join",
+                "displayname": "Elsa Nour (IG)",
+                "avatar_url": "mxc://correspondance.local/avatar-elsa-ig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@instagrambot:correspondance.local",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-member-bot-sansphoto-ig",
+              "origin_server_ts": 1756500000038,
+              "content": {
+                "membership": "join",
+                "displayname": "Instagram bridge bot"
+              }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-sansphoto-ig",
+              "sender": "@instagram_17841400000000012:correspondance.local",
+              "origin_server_ts": 1756500600000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "On part de la place à dix heures."
               }
             }
           ]

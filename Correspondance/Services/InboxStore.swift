@@ -156,6 +156,16 @@ final class InboxStore {
   /// État de référence pour la comparaison : `oldValue` du `didSet` ne convient pas,
   /// la normalisation de l'archivage produit une passe intermédiaire.
   @ObservationIgnored private var notificationBaseline: [String: Conversation] = [:]
+  /// Date du dernier message *vu* par fil Signal — la seule chose qui survive à
+  /// la fermeture de l'app. Sans elle, un message arrivé Mac endormi revient
+  /// avec le catalogue du bridge, donc à zéro non-lu. `nil` = jamais enregistré,
+  /// c'est-à-dire première exécution après ce correctif : on amorce sans sonner.
+  @ObservationIgnored private var signalLastSeenAt: [String: Date]?
+  /// L'utilisateur a-t-il *choisi* le fil sélectionné ? Au lancement, l'app en
+  /// désigne un d'office — le plus récent, donc précisément celui qui vient de
+  /// recevoir. Le traiter comme lu effacerait le non-lu qu'on cherche à rendre.
+  /// Seul un vrai clic vaut lecture.
+  @ObservationIgnored private(set) var selectionIsUserMade = false
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   @ObservationIgnored private var searchIndex: [String: String] = [:]
@@ -330,6 +340,13 @@ final class InboxStore {
     {
       disappearingSecondsByID = decoded
     }
+    // Avant `hydrateFromDiskCache` : c'est lui qui pose le premier badge, et il
+    // lui faut le marqueur pour savoir ce qui est déjà lu.
+    if let data = UserDefaults.standard.data(forKey: Keys.signalLastSeen),
+       let decoded = try? JSONDecoder().decode([String: Date].self, from: data)
+    {
+      signalLastSeenAt = decoded
+    }
     hydrateFromDiskCache()
     adoptMergedAvatars()
   }
@@ -353,11 +370,19 @@ final class InboxStore {
       signalStatusFR = list.isEmpty ? "Signal : première sync…" : "Signal : sync…"
     } else {
       var signalList = stored
+      // Les non-lus ne sont pas dans le fichier (le bridge l'écrit toujours à
+      // zéro) : on les recompte ici, pour que le badge soit juste dès l'ouverture
+      // de la fenêtre, sans attendre que signal-cli réponde.
+      let cachedUnread = SignalCatchUp.unreadCounts(
+        messagesByConversation: msgs,
+        lastSeenAt: signalLastSeenAt
+      )
       for i in signalList.indices {
         if let last = msgs[signalList[i].id]?.last {
           signalList[i].preview = last.text
           signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
         }
+        signalList[i].unreadCount = cachedUnread[signalList[i].id] ?? 0
       }
       list.append(contentsOf: signalList)
       let groups = signalList.filter(\.isGroup).count
@@ -381,6 +406,7 @@ final class InboxStore {
     selectedConversationID = inboxRecents.first?.id
       ?? inboxGroups.first?.id
       ?? activeQueue.first?.id
+    selectionIsUserMade = false
     if let id = selectedConversationID {
       if let cached = msgs[id], !cached.isEmpty {
         messages = cached
@@ -821,6 +847,25 @@ final class InboxStore {
     return conversations.first { $0.id == message.conversationID } ?? selectedConversation
   }
 
+  /// Ce fil est-il sous les yeux de quelqu'un ? C'est-à-dire : sélectionné *et*
+  /// sélectionné par un geste. Un fil que l'app a désigné d'office au lancement
+  /// est affiché sans être lu — lui effacer ses non-lus, c'est faire disparaître
+  /// sans trace les messages arrivés pendant la nuit.
+  private func isReadOnScreen(_ conversationID: String) -> Bool {
+    selectionIsUserMade && displayRowID(for: conversationID) == selectedConversationID
+  }
+
+  /// L'utilisateur agit dans le fil affiché (il clique dedans, écrit, envoie) :
+  /// il le lit, quand bien même il ne l'a jamais choisi dans la liste. Sans ce
+  /// rattrapage, la ligne auto-sélectionnée au lancement garderait son badge
+  /// pour toujours — `List(selection:)` ne renotifie pas un clic sur la ligne
+  /// déjà sélectionnée, donc `select()` n'est jamais appelé pour elle.
+  func confirmSelectionAsRead() {
+    guard let id = selectedConversationID, !selectionIsUserMade else { return }
+    selectionIsUserMade = true
+    clearUnread(for: id)
+  }
+
   /// La ligne visible pour un identifiant : la fusionnée si le fil y est replié.
   func displayRowID(for conversationID: String) -> String {
     if let contact = mergedContacts.first(where: { $0.memberIDs.contains(conversationID) }) {
@@ -974,7 +1019,7 @@ final class InboxStore {
       current: conversation,
       previous: previous,
       isMuted: mutedIDs.contains(conversation.id),
-      isSelected: conversation.id == selectedConversationID,
+      isSelected: isReadOnScreen(conversation.id),
       alreadyNotifiedAt: lastNotifiedAt[conversation.id]
     )
   }
@@ -1339,11 +1384,17 @@ final class InboxStore {
     }
   }
 
+  /// Ouvrir un fil. La convention : passer par ici signifie « ce fil est sous
+  /// l'attention de l'utilisateur » — un clic dans la liste, une notification
+  /// cliquée, ou le fil qui s'affiche dans la foulée d'un geste (archiver,
+  /// quitter un groupe, défusionner). Ce n'est PAS le cas de la sélection que
+  /// l'app pose d'office au lancement, qui laisse `selectionIsUserMade` à faux.
   func select(_ id: String?) async {
     // Le brouillon en cours appartient au fil qu'on quitte.
     captureDraft()
     persistDraftsNow()
     selectedConversationID = id
+    selectionIsUserMade = id != nil
     selectedMessageID = nil
     replyingToMessageID = nil
     sendLaterConfig = nil
@@ -1461,6 +1512,19 @@ final class InboxStore {
     for target in targets where target.network == .iMessage {
       // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
       markUnreadViaAutomation(conversation: target)
+    }
+    // Signal : le geste ne tiendrait pas une seule passe si le marqueur restait
+    // au dernier message. On le recule juste dessous pour que le recompte
+    // retrouve le fil non lu, y compris après un redémarrage — sauf si ce
+    // dernier message est de moi : le recompte ignore mes propres messages,
+    // donc le geste ne survit alors qu'à la session en cours.
+    if signalLastSeenAt != nil {
+      var didChange = false
+      for target in targets where target.network == .signal {
+        signalLastSeenAt?[target.id] = target.lastMessageAt.addingTimeInterval(-0.001)
+        didChange = true
+      }
+      if didChange { persistSignalLastSeenAt() }
     }
   }
 
@@ -2044,12 +2108,70 @@ final class InboxStore {
           messages = cached
           applySidebarPreview(conversationID: id, from: cached)
         }
-        clearUnread(for: id)
+        // Un fil que l'app a désigné toute seule au lancement n'est pas un fil
+        // lu : le marquer tel quel effacerait, dix secondes après le rattrapage,
+        // le non-lu qu'on vient de rendre.
+        if selectionIsUserMade { clearUnread(for: id) }
       }
     } catch {
       // Silencieux en live — pas d’alerte toutes les 10 s.
       signalStatusFR = "Signal live : \(error.localizedDescription)"
     }
+  }
+
+  /// Rattrapage : rend leur compteur aux fils Signal reconstruits par `performLoad`.
+  ///
+  /// Le catalogue du bridge revient toujours à zéro non-lu, et le delta du live
+  /// (`pollSignalOnce`) ne vaut rien ici — au premier lancement le cache mémoire
+  /// est vide avant l'appel et plein après, ce qui compterait tout l'historique.
+  /// On recompte donc en absolu depuis le marqueur « dernier vu ».
+  private func applySignalCatchUp(to signalList: inout [Conversation]) async {
+    let snapshot = await signal.cachedMessagesSnapshot()
+
+    // Ce que l'app affiche à l'instant. Surtout pas un instantané pris avant
+    // `fetchConversations` : signal-cli met des dizaines de secondes, pendant
+    // lesquelles l'utilisateur a pu lire un fil — on lui réinstallerait son badge.
+    let previousUnread = Dictionary(
+      realConversations(on: .signal).map { ($0.id, $0.unreadCount) },
+      uniquingKeysWith: { a, _ in a }
+    )
+
+    // Premier passage : tout ce qui est déjà là est réputé lu. Un utilisateur
+    // qui installe la mise à jour ne se réveille pas avec des mois de badges.
+    guard signalLastSeenAt != nil else {
+      signalLastSeenAt = SignalCatchUp.seededLastSeen(messagesByConversation: snapshot)
+      persistSignalLastSeenAt()
+      // L'amorçage ne fabrique pas de non-lu, mais il n'a pas à effacer celui
+      // qui était déjà affiché (un « marquer comme non lu » de la seconde d'avant).
+      for index in signalList.indices {
+        signalList[index].unreadCount = previousUnread[signalList[index].id] ?? 0
+      }
+      return
+    }
+
+    let counts = SignalCatchUp.unreadCounts(
+      messagesByConversation: snapshot,
+      lastSeenAt: signalLastSeenAt
+    )
+
+    var markersMoved = false
+    for index in signalList.indices {
+      let id = signalList[index].id
+      // Le fil ouvert est lu — et un membre replié se lit sous sa ligne fusionnée.
+      // Encore faut-il que l'utilisateur l'ait ouvert : la sélection d'office du
+      // lancement tombe justement sur le fil le plus récent, celui qu'on rattrape.
+      if displayRowID(for: id) == selectedConversationID, selectionIsUserMade {
+        signalList[index].unreadCount = 0
+        let seen = signalLastSeenAt?[id] ?? .distantPast
+        if signalList[index].lastMessageAt > seen {
+          signalLastSeenAt?[id] = signalList[index].lastMessageAt
+          markersMoved = true
+        }
+        continue
+      }
+      signalList[index].unreadCount = max(counts[id] ?? 0, previousUnread[id] ?? 0)
+    }
+    if markersMoved { persistSignalLastSeenAt() }
   }
 
   private func mergeSignalConversations(
@@ -2089,7 +2211,9 @@ final class InboxStore {
 
     for (id, delta) in newMessageDeltas where delta > 0 {
       // Le fil ouvert est lu — et un membre replié se lit sous sa ligne fusionnée.
-      guard displayRowID(for: id) != selectedConversationID, var c = byID[id] else { continue }
+      // « Ouvert » veut dire ouvert par l'utilisateur : la sélection d'office du
+      // lancement ne doit pas avaler en silence un message arrivé pendant la session.
+      guard !isReadOnScreen(id), var c = byID[id] else { continue }
       c.unreadCount += delta
       byID[id] = c
     }
@@ -2121,6 +2245,12 @@ final class InboxStore {
         existing.unreadCount = isOpen ? 0 : incoming.unreadCount
         if existing.remoteAvatarID != incoming.remoteAvatarID {
           existing.remoteAvatarID = incoming.remoteAvatarID
+          staleAvatarIDs.append(incoming.id)
+        }
+        // Même règle pour la mosaïque d'un groupe sans photo : un visage de plus
+        // ou de moins, et la vignette déjà composée ne vaut plus rien.
+        if existing.memberAvatarIDs != incoming.memberAvatarIDs {
+          existing.memberAvatarIDs = incoming.memberAvatarIDs
           staleAvatarIDs.append(incoming.id)
         }
         byID[incoming.id] = existing
@@ -2180,6 +2310,10 @@ final class InboxStore {
   }
 
   private func clearUnread(for id: String) {
+    // Le marqueur Signal avance même si le compteur affiché est déjà à zéro :
+    // un marqueur en retard sur un fil sans badge suffirait à en refabriquer un
+    // au prochain recompte. Donc avant le `guard` qui sort sur `unreadCount == 0`.
+    advanceSignalSeenMarker(for: id)
     // Une ligne fusionnée additionne les non-lus de ses fils : les remettre à
     // zéro veut dire les remettre à zéro partout, cache compris.
     for memberID in expandedIDs(for: id) where memberID != id {
@@ -2274,6 +2408,9 @@ final class InboxStore {
       selectedConversationID = inboxRecents.first?.id
         ?? inboxGroups.first?.id
         ?? activeQueue.first?.id
+      // Sélection volée à l'utilisateur (son fil a disparu le temps de la passe) :
+      // le fil de tête qui hérite du curseur n'est pas un fil qu'il a ouvert.
+      selectionIsUserMade = false
     } else {
       selectedConversationID = keepSelection
     }
@@ -2312,6 +2449,7 @@ final class InboxStore {
           signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
         }
       }
+      await applySignalCatchUp(to: &signalList)
       next.append(contentsOf: signalList)
       let groups = signalList.filter(\.isGroup).count
       let dms = signalList.count - groups
@@ -2337,6 +2475,7 @@ final class InboxStore {
       selectedConversationID = inboxRecents.first?.id
         ?? inboxGroups.first?.id
         ?? activeQueue.first?.id
+      selectionIsUserMade = false
     }
     await loadMessagesForSelection()
   }
@@ -2584,6 +2723,36 @@ final class InboxStore {
     }
   }
 
+  /// Le marqueur a ses propres déclencheurs (ouvrir un fil, rattraper au
+  /// lancement) : il ne passe pas par `persistFlags`, qui répond aux gestes.
+  private func persistSignalLastSeenAt() {
+    guard let signalLastSeenAt,
+          let data = try? JSONEncoder().encode(signalLastSeenAt)
+    else { return }
+    UserDefaults.standard.set(data, forKey: Keys.signalLastSeen)
+  }
+
+  /// Un fil Signal qu'on vient de lire : son marqueur avance jusqu'à son dernier
+  /// message, sinon le recompte du prochain Actualiser ferait renaître le badge.
+  private func advanceSignalSeenMarker(for conversationID: String) {
+    // Marqueur pas encore amorcé : c'est le rattrapage qui s'en charge, poser
+    // une seule entrée ici ferait passer tous les *autres* fils pour non-lus.
+    guard var markers = signalLastSeenAt else { return }
+    let candidates = expandedIDs(for: conversationID).compactMap { id in
+      conversations.first(where: { $0.id == id }) ?? mergedMemberCache[id]
+    }
+    var didChange = false
+    for conversation in candidates where conversation.network == .signal {
+      let seen = markers[conversation.id] ?? .distantPast
+      guard conversation.lastMessageAt > seen else { continue }
+      markers[conversation.id] = conversation.lastMessageAt
+      didChange = true
+    }
+    guard didChange else { return }
+    signalLastSeenAt = markers
+    persistSignalLastSeenAt()
+  }
+
   private enum Keys {
     static let mode = "correspondance.inboxMode"
     static let networkFilter = "correspondance.networkFilter"
@@ -2591,6 +2760,7 @@ final class InboxStore {
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
+    static let signalLastSeen = "correspondance.signalLastSeenAt"
     static let messagesAutomation = "correspondance.messagesAutomation.enabled"
     static let messagesAutomationOffscreen = "correspondance.messagesAutomation.offscreenWindow"
   }

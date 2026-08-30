@@ -46,6 +46,8 @@ actor ConversationAvatarStore {
         resolved = contact
       } else if let mxc = conversation.remoteAvatarID, let matrixAvatarLoader {
         resolved = await matrixAvatarLoader(mxc)
+      } else if !conversation.memberAvatarIDs.isEmpty, let matrixAvatarLoader {
+        resolved = await mosaicData(forMembers: conversation.memberAvatarIDs, loader: matrixAvatarLoader)
       } else {
         resolved = nil
       }
@@ -55,6 +57,25 @@ actor ConversationAvatarStore {
       memory[conversation.id] = resolved
     }
     return resolved
+  }
+
+  /// Groupe sans photo à lui : on montre les visages, comme Messages et Instagram.
+  /// Chaque photo passe par le même chargeur (donc le même cache disque) qu'un
+  /// avatar de portail ; seule la composition est nouvelle, et elle sort en PNG
+  /// pour rester dans le contrat `Data?` du store.
+  ///
+  /// Le liseré prend la couleur de fenêtre : la vignette est un bitmap figé, il ne
+  /// se reteindra pas si l'apparence système change en cours de route.
+  private func mosaicData(
+    forMembers ids: [String],
+    loader: @Sendable (String) async -> Data?
+  ) async -> Data? {
+    var images: [NSImage] = []
+    for id in ids {
+      guard let data = await loader(id), let image = NSImage(data: data) else { continue }
+      images.append(image)
+    }
+    return AvatarMosaic.compose(images, size: 44, separator: .windowBackgroundColor)
   }
 
   func invalidate(conversationID: String) {

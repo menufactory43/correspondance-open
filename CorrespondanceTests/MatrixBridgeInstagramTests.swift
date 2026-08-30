@@ -9,6 +9,7 @@ final class MatrixBridgeInstagramTests: XCTestCase {
   private let dmRoomID = "!dm-malo:correspondance.local"
   private let groupRoomID = "!groupe-atelier:correspondance.local"
   private let managementRoomID = "!gestion-instagram:correspondance.local"
+  private let photolessGroupRoomID = "!groupe-sansphoto:correspondance.local"
 
   private func parsedRooms() throws -> [String: MatrixRoomModel] {
     let bundle = Bundle(for: Self.self)
@@ -101,6 +102,46 @@ final class MatrixBridgeInstagramTests: XCTestCase {
 
     // Le salon de gestion n'a pas de photo : rien à afficher, rien à télécharger.
     XCTAssertNil(rooms[managementRoomID]?.avatarMXC)
+  }
+
+  /// Un groupe sans photo de groupe : le pont ne pose aucun `m.room.avatar`, mais
+  /// chaque ghost a son portrait. C'est de quoi composer la mosaïque — au plus quatre,
+  /// dans un ordre qui ne bouge pas d'un `/sync` à l'autre.
+  func testGroupWithoutPortalPhotoExposesItsMembersPortraits() throws {
+    let room = try XCTUnwrap(try parsedRooms()[photolessGroupRoomID])
+    XCTAssertNil(room.avatarMXC)
+    let conversation = try XCTUnwrap(room.conversation(selfUserID: selfUserID))
+    XCTAssertTrue(conversation.isGroup)
+    XCTAssertNil(conversation.remoteAvatarID)
+    // Cinq membres portent une photo : on n'en garde que quatre, triés par nom.
+    XCTAssertEqual(room.remoteMembers(selfUserID: selfUserID).count, 5)
+    XCTAssertEqual(
+      conversation.memberAvatarIDs,
+      [
+        "mxc://correspondance.local/avatar-ali-ig",
+        "mxc://correspondance.local/avatar-bruno-ig",
+        "mxc://correspondance.local/avatar-elsa-ig",
+        "mxc://correspondance.local/avatar-marc-ig",
+      ]
+    )
+  }
+
+  /// Une photo de groupe l'emporte toujours : inutile d'assembler des visages
+  /// quand le réseau a déjà donné l'image du fil. Idem pour un tête-à-tête.
+  func testPortalPhotoAndDirectChatsHaveNoMosaic() throws {
+    let rooms = try parsedRooms()
+    let group = try XCTUnwrap(rooms[groupRoomID])
+    XCTAssertEqual(
+      group.memberAvatarMXCs(selfUserID: selfUserID),
+      [
+        "mxc://correspondance.local/avatar-nina-ig",
+        "mxc://correspondance.local/avatar-yann-ig",
+      ]
+    )
+    XCTAssertEqual(group.conversation(selfUserID: selfUserID)?.memberAvatarIDs, [])
+
+    let dm = try XCTUnwrap(rooms[dmRoomID])
+    XCTAssertEqual(dm.conversation(selfUserID: selfUserID)?.memberAvatarIDs, [])
   }
 
   /// Un `m.room.avatar` vide, c'est le pont qui retire la photo : elle doit disparaître.

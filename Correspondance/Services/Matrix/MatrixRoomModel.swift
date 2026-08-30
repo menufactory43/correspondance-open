@@ -46,6 +46,9 @@ struct MatrixRoomModel: Sendable {
   struct Member: Sendable, Hashable {
     var displayName: String?
     var membership: String
+    /// `content.avatar_url` du `m.room.member` : la photo du ghost. C'est la seule
+    /// image qu'on ait des participants d'un groupe sans photo de groupe.
+    var avatarMXC: String?
 
     var isActive: Bool { membership == "join" || membership == "invite" }
   }
@@ -79,6 +82,20 @@ struct MatrixRoomModel: Sendable {
       return [peer]
     }
     return humans
+  }
+
+  /// Photos des membres distants, pour la mosaïque d'un groupe sans photo à lui.
+  /// Ordre stable — nom puis MXID — pour que la vignette ne se recompose pas
+  /// différemment d'une passe de `/sync` à l'autre. Quatre au plus, comme Messages.
+  func memberAvatarMXCs(selfUserID: String) -> [String] {
+    remoteMembers(selfUserID: selfUserID)
+      .compactMap { entry -> (name: String, userID: String, mxc: String)? in
+        guard let mxc = entry.member.avatarMXC, !mxc.isEmpty else { return nil }
+        return (entry.member.displayName ?? "", entry.userID, mxc)
+      }
+      .sorted { ($0.name, $0.userID) < ($1.name, $1.userID) }
+      .prefix(4)
+      .map(\.mxc)
   }
 
   func isGroup(selfUserID: String) -> Bool {
@@ -164,6 +181,10 @@ struct MatrixRoomModel: Sendable {
       isGroup: group
     )
     conversation.remoteAvatarID = avatarMXC
+    // Un groupe sans photo se raconte par ses visages ; un DM, lui, a déjà le sien.
+    conversation.memberAvatarIDs = (group && avatarMXC == nil)
+      ? memberAvatarMXCs(selfUserID: selfUserID)
+      : []
     conversation.lastMessageIsFromMe = last?.isFromMe ?? false
     conversation.lastDelivery = (last?.isFromMe == true) ? delivery(selfUserID: selfUserID) : nil
     if conversation.lastMessageAt == .distantPast {

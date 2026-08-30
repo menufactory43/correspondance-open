@@ -219,6 +219,11 @@ actor SignalBridge {
     Dictionary(uniqueKeysWithValues: cachedMessages.map { ($0.key, $0.value.count) })
   }
 
+  /// Instantané brut du cache mémoire, pour recompter les non-lus au rattrapage.
+  /// Contrairement à `fetchMessages`, ne déclenche aucun `getAttachment` : on ne
+  /// veut que des dates et des auteurs, pas des fichiers.
+  func cachedMessagesSnapshot() -> [String: [ChatMessage]] { cachedMessages }
+
   /// Dernier message connu par conversation (pour resync sidebar). On rend le
   /// message et non son aperçu : seul l'appelant sait si le fil est un groupe,
   /// donc s'il faut annoncer qui parle.

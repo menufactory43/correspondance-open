@@ -68,10 +68,13 @@ struct MatrixSyncParser: Sendable {
       guard let userID = event.stateKey else { return }
       let membership = content.string(at: "membership") ?? "leave"
       let displayName = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
-      // Un `leave` ne doit pas effacer le nom déjà connu (on garde l'historique lisible).
+      let avatarMXC = content.string(at: "avatar_url")
+      // Un `leave` ne doit pas effacer le nom déjà connu (on garde l'historique lisible),
+      // ni la photo : elle sert encore à la mosaïque d'un groupe sans photo à lui.
       var member = model.members[userID] ?? MatrixRoomModel.Member(displayName: nil, membership: membership)
       member.membership = membership
       if let displayName { member.displayName = displayName }
+      if let avatarMXC, !avatarMXC.isEmpty { member.avatarMXC = avatarMXC }
       model.members[userID] = member
       if model.bridgePhoneNumber == nil,
          !MatrixIdentity.isBridgeBot(userID),

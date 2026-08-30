@@ -69,7 +69,11 @@ struct ConversationAvatarView: View {
     }
     // Une nouvelle photo côté réseau change le `mxc` : la tâche doit repartir,
     // sinon l'ancienne image resterait affichée jusqu'au prochain lancement.
-    .task(id: "\(conversation.id)|\(conversation.remoteAvatarID ?? "")") {
+    // Les photos des membres comptent autant : sans elles, une mosaïque figerait
+    // le jour où quelqu'un rejoint le groupe ou change de portrait.
+    .task(
+      id: "\(conversation.id)|\(conversation.remoteAvatarID ?? "")|\(conversation.memberAvatarIDs.joined(separator: ","))"
+    ) {
       image = nil
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
          let loaded = NSImage(data: data)

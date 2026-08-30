@@ -127,6 +127,9 @@ struct ThreadView: View {
       // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
       // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
       .opacity(isShowingThread ? 1 : 0)
+      // Cliquer dans le fil vaut lecture. `simultaneousGesture` pour ne rien
+      // voler à la sélection de texte ni aux liens des bulles.
+      .simultaneousGesture(TapGesture().onEnded { store.confirmSelectionAsRead() })
       .onAppear { pinToBottom(proxy) }
       .onChange(of: store.messages.count) { _, _ in
         pinToBottom(proxy)
