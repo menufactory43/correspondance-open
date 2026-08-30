@@ -48,6 +48,10 @@ struct QuickReplyView: View {
       }
     }
     .frame(minWidth: 240, minHeight: 180)
+    // Le panneau porte encore une barre de titre (c'est elle qui autorise le
+    // redimensionnement) : sans cela, `NSHostingView` en garderait la hauteur
+    // en marge de sécurité, et une bande vide coifferait le papier.
+    .ignoresSafeArea()
     // Le thème d'écriture vaut ici comme partout, et suit ses changements.
     .preferredColorScheme(theme.id.prefersDarkChrome ? .dark : .light)
     .tint(theme.accent)

@@ -151,8 +151,12 @@ final class QuickReplyPanelController {
     panel.isRestorable = false
     panel.animationBehavior = .utilityWindow
     panel.minSize = NSSize(width: 240, height: 180)
-    panel.standardWindowButton(.zoomButton)?.isHidden = true
-    panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+    // Aucun des trois feux : le panneau n'est pas une fenêtre de travail. Il se
+    // ferme d'un Échap, d'un ⌘W, ou parce que le message est parti. Les laisser
+    // poserait un point rouge flottant au-dessus du papier, hors de la carte.
+    for button in [NSWindow.ButtonType.closeButton, .zoomButton, .miniaturizeButton] {
+      panel.standardWindowButton(button)?.isHidden = true
+    }
 
     let host = NSHostingView(
       rootView: QuickReplyView(model: model)
@@ -160,6 +164,9 @@ final class QuickReplyPanelController {
         .environment(themes)
     )
     panel.contentView = host
+    // Après le contenu : le papier doit monter jusqu'au bord haut du cadre,
+    // sinon une bande transparente reste à la place de la barre de titre.
+    panel.styleMask.insert(.fullSizeContentView)
     return panel
   }
 
