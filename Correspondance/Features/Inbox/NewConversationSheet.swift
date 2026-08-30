@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Nouvelle conversation iMessage / Signal — contact ou numéro / e-mail.
+/// Nouvelle conversation : contact, numéro, e-mail — ou pseudo pour un pont qui
+/// ne connaît pas les numéros (Instagram).
 struct NewConversationSheet: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -17,24 +18,46 @@ struct NewConversationSheet: View {
     query.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  /// WhatsApp n'apparaît que si le homeserver répond : sinon le bouton ne mènerait nulle part.
+  /// Un réseau bridgé n'apparaît que si le homeserver répond : sinon le bouton ne mènerait nulle part.
   private var availableNetworks: [MessageNetwork] {
     MessageNetwork.allCases.filter { !$0.isMatrixBridged || store.isMatrixConnected }
+  }
+
+  /// Ce que le réseau attend dans le champ. WhatsApp se compose, Instagram se nomme.
+  private var placeholderFR: String {
+    switch network {
+    case .whatsapp: "Numéro WhatsApp"
+    case .instagram: "Nom d’utilisateur Instagram"
+    default: "Nom, numéro ou e-mail"
+    }
   }
 
   private var canWriteFreeform: Bool {
     let value = trimmedQuery
     guard !value.isEmpty else { return false }
-    // Le bridge WhatsApp ne prend qu'un numéro (commande bot `pm`).
-    if network.isMatrixBridged { return value.filter(\.isNumber).count >= 8 }
-    if value.contains("@") { return value.contains(".") }
-    return value.filter(\.isNumber).count >= 8
+    return isValidHandle(value)
   }
 
-  /// Une adresse e-mail n'a aucun sens sur WhatsApp.
+  /// Un numéro ne se réduit pas à un pseudo, ni l'inverse : chaque réseau a sa règle.
+  private func isValidHandle(_ handle: String) -> Bool {
+    switch network {
+    // Le bridge WhatsApp ne prend qu'un numéro (commande bot `pm +33…`).
+    case .whatsapp:
+      return handle.filter(\.isNumber).count >= 8 && !handle.contains("@")
+    // Instagram : un pseudo ou un identifiant Meta. Pas d'arobase à l'intérieur —
+    // celle de tête, l'usage la met, on la retire à l'envoi.
+    case .instagram:
+      let bare = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
+      return !bare.isEmpty && !bare.contains("@") && !bare.contains(" ")
+    default:
+      if handle.contains("@") { return handle.contains(".") }
+      return handle.filter(\.isNumber).count >= 8
+    }
+  }
+
+  /// Les contacts du carnet d'adresses n'ont rien à proposer à un réseau sans numéros.
   private func canCompose(_ handle: String) -> Bool {
-    guard network.isMatrixBridged else { return true }
-    return handle.filter(\.isNumber).count >= 8 && !handle.contains("@")
+    isValidHandle(handle)
   }
 
   var body: some View {
@@ -53,7 +76,7 @@ struct NewConversationSheet: View {
       .padding(.horizontal, Spacing.md)
       .padding(.vertical, Spacing.sm)
 
-      TextField(network.isMatrixBridged ? "Numéro WhatsApp" : "Nom, numéro ou e-mail", text: $query)
+      TextField(placeholderFR, text: $query)
         .textFieldStyle(.roundedBorder)
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.sm)

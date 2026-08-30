@@ -83,6 +83,8 @@ struct ConversationAvatarView: View {
     case .iMessage: Color(red: 0.25, green: 0.75, blue: 0.45)
     case .signal: theme.accent
     case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)
+    // Le magenta d'Instagram, sans dégradé : une pastille de 8 points n'a pas la place.
+    case .instagram: Color(red: 0.78, green: 0.23, blue: 0.55)
     }
   }
 

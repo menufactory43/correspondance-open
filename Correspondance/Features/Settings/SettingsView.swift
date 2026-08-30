@@ -153,11 +153,11 @@ struct SettingsView: View {
     .padding()
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .background(theme.paper.ignoresSafeArea())
-    .sheet(isPresented: Binding(
-      get: { store.isPresentingWhatsAppLogin },
-      set: { store.isPresentingWhatsAppLogin = $0 }
-    )) {
-      WhatsAppLoginSheet()
+    .sheet(item: Binding(
+      get: { store.bridgeLoginNetwork },
+      set: { store.bridgeLoginNetwork = $0 }
+    )) { network in
+      BridgeLoginSheet(network: network)
     }
     .task { await store.refreshMatrixStatus() }
   }
@@ -202,7 +202,7 @@ struct SettingsView: View {
     }
   }
 
-  /// Homeserver Matrix (NUC via Tailscale) + connexion WhatsApp par le bot mautrix.
+  /// Homeserver Matrix (NUC via Tailscale) + connexion de chaque pont par son bot mautrix.
   @ViewBuilder
   private var matrixSection: some View {
     Section("Matrix") {
@@ -214,10 +214,18 @@ struct SettingsView: View {
       }
 
       if store.isMatrixConnected {
-        Button("Connecter WhatsApp…") {
-          store.presentWhatsAppLogin()
+        // Un bouton par pont : la liste vient de l'enum, pas d'une énumération à la main.
+        ForEach(MessageNetwork.matrixBridged) { network in
+          Button("Connecter \(network.labelFR)…") {
+            store.presentBridgeLogin(network: network)
+          }
         }
-        Text("Ouvre une feuille avec le QR renvoyé par @whatsappbot. Repli si le QR est refusé :\nenvoie « login phone +33… » au bot depuis Element (code d’appairage).")
+        Text("""
+          WhatsApp : feuille avec le QR renvoyé par @whatsappbot ; si le QR est refusé, \
+          « login phone +33… » au bot depuis Element donne un code d’appairage.
+          Instagram : @instagrambot demande les cookies d’une session instagram.com — \
+          la feuille explique où les prendre.
+          """)
           .font(.caption)
           .foregroundStyle(.secondary)
           .textSelection(.enabled)

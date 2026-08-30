@@ -101,13 +101,14 @@ final class InboxStore {
   private(set) var messagesAutomationHealth: IMessageAutomationHealth = .unknown
   var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
-  /// Matrix joignable et session valide — conditionne WhatsApp dans l'UI.
+  /// Matrix joignable et session valide — conditionne les réseaux bridgés dans l'UI.
   var isMatrixConnected = false
-  /// Feuille « Connecter WhatsApp ».
-  var isPresentingWhatsAppLogin = false
-  var whatsAppLoginQRData: Data?
-  var whatsAppLoginPairingCode: String?
-  var whatsAppLoginStatusFR = "…"
+  /// Réseau dont la feuille de connexion est ouverte — `nil` = aucune feuille.
+  /// Un seul état pour les deux ponts : c'est le réseau qui choisit ce qui s'affiche.
+  var bridgeLoginNetwork: MessageNetwork?
+  var bridgeLoginQRData: Data?
+  var bridgeLoginPairingCode: String?
+  var bridgeLoginStatusFR = "…"
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
@@ -138,7 +139,7 @@ final class InboxStore {
   @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
-  @ObservationIgnored private var whatsAppLoginTask: Task<Void, Never>?
+  @ObservationIgnored private var bridgeLoginTask: Task<Void, Never>?
   /// Temps réel iMessage : `chat.db-wal` surveillé plutôt qu'interrogé.
   @ObservationIgnored private let iMessageWatcher = IMessageWatcher()
   /// Un rafraîchissement iMessage copie `chat.db` en entier : jamais deux à la fois.
@@ -353,7 +354,7 @@ final class InboxStore {
     seedSearchIndex(signal: msgs, matrix: matrixMessages)
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
-      matrixStatusFR = "Cache · \(matrixConversations.count) fils WhatsApp — sync…"
+      matrixStatusFR = "Cache · \(MatrixBridgeService.bridgedCountFR(matrixConversations)) — sync…"
     } else {
       matrixStatusFR = "Matrix : non connecté."
     }
@@ -595,7 +596,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
       }
 
-    case .whatsapp:
+    case .whatsapp, .instagram:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -998,7 +999,7 @@ final class InboxStore {
     isPresentingNewConversation = true
   }
 
-  // MARK: - Matrix / WhatsApp
+  // MARK: - Matrix / réseaux bridgés
 
   /// Adresse par défaut du homeserver (NUC via Tailscale).
   static let defaultHomeserver = "http://relais.exemple.ts.net:8008"
@@ -1024,7 +1025,7 @@ final class InboxStore {
   func disconnectMatrix() async {
     matrixSyncTask?.cancel()
     matrixSyncTask = nil
-    stopWhatsAppLoginPolling()
+    stopBridgeLoginPolling()
     await matrix.disconnect()
     isMatrixConnected = false
     conversations.removeAll { $0.network.isMatrixBridged }
@@ -1039,74 +1040,108 @@ final class InboxStore {
     isMatrixConnected = await matrix.isConnected
   }
 
-  /// Ouvre la feuille QR et lance la commande `login qr` auprès du bot.
-  func presentWhatsAppLogin(phoneNumber: String? = nil) {
-    whatsAppLoginQRData = nil
-    whatsAppLoginPairingCode = nil
-    whatsAppLoginStatusFR = "Demande du QR au bot WhatsApp…"
-    isPresentingWhatsAppLogin = true
-    whatsAppLoginTask?.cancel()
-    whatsAppLoginTask = Task { @MainActor [weak self] in
+  /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.
+  /// Le flux dépend du pont : QR à scanner pour WhatsApp, cookies à coller pour Instagram.
+  func presentBridgeLogin(network: MessageNetwork, phoneNumber: String? = nil) {
+    guard let bridge = network.bridge else { return }
+    bridgeLoginQRData = nil
+    bridgeLoginPairingCode = nil
+    bridgeLoginNetwork = network
+    let input: MatrixBridgeService.BridgeLoginInput
+    switch bridge.loginFlow {
+    case .qrCode:
+      input = phoneNumber.map { .whatsAppPairing(phoneNumber: $0) } ?? .whatsAppQRCode
+      bridgeLoginStatusFR = "Demande du QR au bot \(network.labelFR)…"
+    case .cookies:
+      input = .cookies
+      bridgeLoginStatusFR = "Demande de connexion au bot \(network.labelFR)…"
+    }
+    bridgeLoginTask?.cancel()
+    bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
       do {
-        try await self.matrix.startWhatsAppLogin(usingPhoneNumber: phoneNumber)
+        try await self.matrix.startLogin(network: network, input: input)
       } catch {
-        self.whatsAppLoginStatusFR = error.localizedDescription
+        self.bridgeLoginStatusFR = error.localizedDescription
         return
       }
-      // Le bot répond en quelques secondes ; le QR tourne toutes les ~20 s.
-      // Sans la moindre réponse en 90 s, on arrête : pas de boucle silencieuse.
-      var silentRounds = 0
-      while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(3))
-        guard !Task.isCancelled else { return }
-        do {
-          let step = try await self.matrix.whatsAppLoginStep()
-          if case .waiting = step {
-            silentRounds += 1
-            if silentRounds >= 30 {
-              self.whatsAppLoginStatusFR = MatrixError.whatsAppBotSilent.localizedDescription
-              return
-            }
-          } else {
-            silentRounds = 0
-          }
-          switch step {
-          case .qrCode(let data):
-            self.whatsAppLoginQRData = data
-            self.whatsAppLoginPairingCode = nil
-            self.whatsAppLoginStatusFR = "Scanne ce QR : WhatsApp → Réglages → Appareils liés."
-          case .pairingCode(let code):
-            self.whatsAppLoginPairingCode = code
-            self.whatsAppLoginStatusFR = "Saisis ce code dans WhatsApp → Appareils liés."
-          case .success(let detail):
-            self.whatsAppLoginStatusFR = "WhatsApp connecté. \(detail)"
-            self.startMatrixSync()
+      await self.pollBridgeLogin(network: network)
+    }
+  }
+
+  /// Envoie au bot les cookies collés dans la feuille, puis reprend la lecture de ses réponses.
+  func submitBridgeLoginCookies(_ raw: String) {
+    guard let network = bridgeLoginNetwork else { return }
+    bridgeLoginStatusFR = "Envoi des cookies au bot \(network.labelFR)…"
+    bridgeLoginTask?.cancel()
+    bridgeLoginTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      do {
+        try await self.matrix.submitLoginCookies(raw, network: network)
+      } catch {
+        self.bridgeLoginStatusFR = error.localizedDescription
+        return
+      }
+      await self.pollBridgeLogin(network: network)
+    }
+  }
+
+  /// Lecture des réponses du bot jusqu'au succès, à l'échec, ou au silence.
+  /// Le bot répond en quelques secondes ; un QR WhatsApp tourne toutes les ~20 s.
+  /// Sans la moindre réponse en 90 s, on arrête : pas de boucle silencieuse.
+  private func pollBridgeLogin(network: MessageNetwork) async {
+    var silentRounds = 0
+    while !Task.isCancelled {
+      try? await Task.sleep(for: .seconds(3))
+      guard !Task.isCancelled else { return }
+      do {
+        let step = try await matrix.loginStep(network: network)
+        if case .waiting = step {
+          silentRounds += 1
+          if silentRounds >= 30 {
+            bridgeLoginStatusFR = MatrixError.bridgeBotSilent(network).localizedDescription
             return
-          case .failure(let detail):
-            self.whatsAppLoginStatusFR = "Échec : \(detail)"
-            return
-          case .waiting:
-            break
           }
-        } catch {
-          self.whatsAppLoginStatusFR = error.localizedDescription
-          return
+        } else {
+          silentRounds = 0
         }
+        switch step {
+        case .qrCode(let data):
+          bridgeLoginQRData = data
+          bridgeLoginPairingCode = nil
+          bridgeLoginStatusFR = "Scanne ce QR : WhatsApp → Réglages → Appareils liés."
+        case .pairingCode(let code):
+          bridgeLoginPairingCode = code
+          bridgeLoginStatusFR = "Saisis ce code dans WhatsApp → Appareils liés."
+        case .awaitingCookies:
+          bridgeLoginStatusFR = "Colle tes cookies \(network.labelFR) ci-dessous, puis Envoyer."
+        case .success(let detail):
+          bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
+          startMatrixSync()
+          return
+        case .failure(let detail):
+          bridgeLoginStatusFR = "Échec : \(detail)"
+          return
+        case .waiting:
+          break
+        }
+      } catch {
+        bridgeLoginStatusFR = error.localizedDescription
+        return
       }
     }
   }
 
-  func stopWhatsAppLoginPolling() {
-    whatsAppLoginTask?.cancel()
-    whatsAppLoginTask = nil
+  func stopBridgeLoginPolling() {
+    bridgeLoginTask?.cancel()
+    bridgeLoginTask = nil
   }
 
-  /// Nouvelle conversation WhatsApp : commande bot `pm <numéro>`, le salon arrive par /sync.
-  func startWhatsAppConversation(phoneNumber: String) async {
+  /// Nouveau fil bridgé : commande bot `pm <identifiant>`, le salon arrive par /sync.
+  func startBridgeConversation(network: MessageNetwork, identifier: String) async {
     do {
-      try await matrix.startWhatsAppConversation(phoneNumber: phoneNumber)
-      matrixStatusFR = "WhatsApp : ouverture du fil vers \(phoneNumber)…"
+      try await matrix.startConversation(network: network, identifier: identifier)
+      matrixStatusFR = "\(network.labelFR) : ouverture du fil vers \(identifier)…"
       mode = .inbox
     } catch {
       lastErrorMessage = error.localizedDescription
@@ -1123,9 +1158,9 @@ final class InboxStore {
       return
     }
 
-    // WhatsApp n'a pas de brouillon local : c'est le bridge qui crée le salon.
+    // Un réseau bridgé n'a pas de brouillon local : c'est le pont qui crée le salon.
     if network.isMatrixBridged {
-      await startWhatsAppConversation(phoneNumber: trimmed)
+      await startBridgeConversation(network: network, identifier: trimmed)
       return
     }
 
@@ -1246,7 +1281,7 @@ final class InboxStore {
           backoffSeconds = 2
           await ContactDirectory.shared.enrichBridgedTitles(&updated)
           self.mergeMatrixConversations(updated)
-          self.matrixStatusFR = "Matrix live · \(updated.count) fils WhatsApp"
+          self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshSelectedMatrixMessages()
         } catch is CancellationError {
           return
@@ -1300,7 +1335,7 @@ final class InboxStore {
     case .signal:
       let bridge = signal
       Task.detached { await bridge.sendReadReceipt(conversation: conversation) }
-    case .whatsapp:
+    case .whatsapp, .instagram:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -1713,7 +1748,7 @@ final class InboxStore {
         attachmentPaths: attachments,
         quote: Self.signalQuote(for: quoted, conversation: conversation)
       )
-    case .whatsapp:
+    case .whatsapp, .instagram:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -2046,7 +2081,7 @@ final class InboxStore {
       }
     }
 
-    // Un salon quitté côté WhatsApp disparaît de l'inbox.
+    // Un salon quitté côté réseau distant disparaît de l'inbox.
     let live = Set(incomingList.map(\.id))
     for (id, conversation) in byID
     where conversation.network.isMatrixBridged && !live.contains(id)
@@ -2402,7 +2437,7 @@ final class InboxStore {
         ]
       }
 
-    case .whatsapp:
+    case .whatsapp, .instagram:
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.isEmpty {
         // Fil jamais ouvert : on va chercher l'historique que le bridge a backfillé.
@@ -2413,7 +2448,7 @@ final class InboxStore {
           ChatMessage(
             id: "matrix-empty-\(conversation.id)",
             conversationID: conversation.id,
-            network: .whatsapp,
+            network: conversation.network,
             text: isMatrixConnected
               ? "Pas encore de messages ici. Écris ci-dessous."
               : "Matrix n’est pas connecté — ouvre Réglages → Matrix.",

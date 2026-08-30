@@ -27,8 +27,10 @@ actor ConversationAvatarStore {
       } else {
         resolved = await ContactDirectory.shared.imageData(for: conversation)
       }
-    case .whatsapp:
-      // Fil bridgé : photo du carnet d'adresses si le bridge a exposé le numéro.
+    case .whatsapp, .instagram:
+      // Fil bridgé : photo du carnet d'adresses si le pont a exposé un numéro.
+      // Instagram n'en expose aucun — `address` y est le salon, jamais un handle
+      // que Contacts saurait reconnaître : on renvoie `nil` et les initiales suffisent.
       resolved = conversation.address.hasPrefix("+")
         ? await ContactDirectory.shared.imageData(forHandle: conversation.address)
         : nil
