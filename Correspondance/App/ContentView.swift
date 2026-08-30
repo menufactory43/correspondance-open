@@ -6,7 +6,6 @@ struct ContentView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.controlActiveState) private var controlActiveState
 
-  @State private var showSettingsSheet = false
   @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
   private var theme: WritingTheme { themes.theme }
@@ -53,15 +52,6 @@ struct ContentView: View {
     .onAppear { syncColumns(animated: false) }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }
-    .onReceive(NotificationCenter.default.publisher(for: .correspondanceOpenSettings)) { _ in
-      showSettingsSheet = true
-    }
-    .sheet(isPresented: $showSettingsSheet) {
-      SettingsView()
-        .environment(store)
-        .environment(themes)
-        .frame(minWidth: 540, minHeight: 460)
-    }
     .sheet(isPresented: Bindable(store).isPresentingNewConversation) {
       NewConversationSheet()
         .environment(store)
@@ -192,8 +182,4 @@ struct ContentView: View {
       .help(isFocus ? "Revenir à l’inbox (⌘⇧F)" : "Mode Focus (⌘⇧F)")
     }
   }
-}
-
-extension Notification.Name {
-  static let correspondanceOpenSettings = Notification.Name("correspondanceOpenSettings")
 }

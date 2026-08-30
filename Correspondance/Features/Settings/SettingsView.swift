@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Les Réglages tels qu'on les attend d'une app Mac : une barre latérale de
@@ -17,8 +18,22 @@ struct SettingsView: View {
       Divider().overlay(theme.separator)
       detail
     }
-    .frame(minWidth: 780, idealWidth: 860, minHeight: 520, idealHeight: 620)
+    .frame(
+      minWidth: 840, idealWidth: 900, maxWidth: .infinity,
+      minHeight: 620, idealHeight: 680, maxHeight: .infinity
+    )
     .background(theme.paper)
+    .background {
+      SettingsWindowSizer(
+        minSize: NSSize(width: 840, height: 620),
+        idealSize: NSSize(width: 900, height: 680),
+        title: "Réglages",
+        isDark: theme.id.prefersDarkChrome
+      )
+      .frame(width: 0, height: 0)
+    }
+    .preferredColorScheme(theme.id.prefersDarkChrome ? .dark : .light)
+    .tint(theme.accent)
     .sheet(item: Binding(
       get: { store.bridgeLoginNetwork },
       set: { store.bridgeLoginNetwork = $0 }
@@ -48,6 +63,7 @@ struct SettingsView: View {
     .padding(.horizontal, Spacing.xs)
     .padding(.bottom, Spacing.sm)
     .frame(width: 208)
+    .fixedSize(horizontal: true, vertical: false)
     .frame(maxHeight: .infinity)
     .background(theme.sidebar.ignoresSafeArea())
     .accessibilityElement(children: .contain)

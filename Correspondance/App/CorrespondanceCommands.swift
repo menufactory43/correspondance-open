@@ -101,12 +101,9 @@ struct CorrespondanceCommands: Commands {
       .keyboardShortcut(.return, modifiers: [.command])
     }
 
-    CommandGroup(replacing: .appSettings) {
-      Button("Réglages…") {
-        NotificationCenter.default.post(name: .correspondanceOpenSettings, object: nil)
-      }
-      .keyboardShortcut(",", modifiers: [.command])
-    }
+    // Rien ici pour les Réglages : la scène `Settings` pose elle-même son
+    // « Settings… » (⌘,) qui ouvre la VRAIE fenêtre. Un `CommandGroup` de plus
+    // ne la remplacerait pas, il doublerait l'entrée du menu.
   }
 }
 
