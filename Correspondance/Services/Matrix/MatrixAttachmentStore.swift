@@ -2,7 +2,9 @@ import Foundation
 
 /// Pièces jointes Matrix téléchargées dans `~/Library/Caches/Correspondance/matrix/`.
 enum MatrixAttachmentStore {
-  static var directory: URL {
+  /// Calculé une fois : le chemin ne bouge pas, et l'ancienne version créait le
+  /// dossier à chaque lecture — un appel système par photo affichée.
+  static let directory: URL = {
     let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
       ?? FileManager.default.temporaryDirectory
     let dir = base
@@ -10,7 +12,7 @@ enum MatrixAttachmentStore {
       .appendingPathComponent("matrix", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir
-  }
+  }()
 
   /// Nom de fichier stable dérivé du `mxc://` — un média ne se télécharge qu'une fois.
   static func fileName(forMXC mxc: String, contentType: String?) -> String {
@@ -26,16 +28,39 @@ enum MatrixAttachmentStore {
     // Le type MIME peut avoir changé entre deux passes : on retombe sur le préfixe.
     guard let (server, mediaID) = MatrixClient.parseMXC(mxc) else { return nil }
     let prefix = "\(server)_\(mediaID)."
-    guard let items = try? FileManager.default.contentsOfDirectory(atPath: directory.path),
-          let match = items.first(where: { $0.hasPrefix(prefix) })
+    guard let match = listing.names(in: directory).first(where: { $0.hasPrefix(prefix) })
     else { return nil }
     return directory.appendingPathComponent(match).path
+  }
+
+  /// Le repli par préfixe listait tout le dossier des médias à chaque appel — et
+  /// il est appelé depuis le corps des vues, une fois par photo et à chaque
+  /// recomposition. La liste est gardée, et relue seulement quand le dossier
+  /// change de date, c'est-à-dire quand un média y est déposé.
+  private static let listing = DirectoryListing()
+
+  private final class DirectoryListing: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stamp: Date?
+    private var names: [String] = []
+
+    func names(in directory: URL) -> [String] {
+      let current = (try? FileManager.default.attributesOfItem(atPath: directory.path))?[.modificationDate] as? Date
+      lock.lock()
+      defer { lock.unlock() }
+      if let stamp, let current, stamp == current { return names }
+      names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+      stamp = current
+      return names
+    }
   }
 
   @discardableResult
   static func store(data: Data, forMXC mxc: String, contentType: String?) -> String? {
     let url = directory.appendingPathComponent(fileName(forMXC: mxc, contentType: contentType))
     do {
+      // Le dossier peut avoir été vidé depuis le lancement (nettoyage des caches).
+      try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       try data.write(to: url, options: [.atomic])
       return url.path
     } catch {

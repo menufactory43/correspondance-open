@@ -276,19 +276,17 @@ struct MessageBubbleView: View {
         typeface: typeface,
         isFromMe: message.isFromMe
       )
-    } else if let url = repaired.resolvedFileURL, repaired.isImage,
-       let nsImage = NSImage(contentsOf: url)
-    {
-      Image(nsImage: nsImage)
-        .resizable()
-        .aspectRatio(contentMode: .fit)
-        .frame(maxWidth: 280, maxHeight: 320)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-          RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(theme.edge.opacity(0.5), lineWidth: 1)
-        )
-        .accessibilityLabel(repaired.filename ?? "Image")
+    } else if let url = repaired.resolvedFileURL, repaired.isImage {
+      AttachmentImageView(
+        url: url,
+        maxWidth: 280,
+        maxHeight: 320,
+        placeholder: theme.bubbleIn,
+        border: theme.edge.opacity(0.5),
+        label: repaired.filename ?? "Image"
+      ) {
+        unavailableImageLabel(repaired)
+      }
     } else if let url = repaired.resolvedFileURL, repaired.isVideo {
       Label(repaired.filename ?? "Vidéo", systemImage: "video.fill")
         .font(Typography.meta)
@@ -298,11 +296,7 @@ struct MessageBubbleView: View {
         .onTapGesture { NSWorkspace.shared.open(url) }
         .help("Ouvrir la vidéo")
     } else if repaired.isImage {
-      Label(repaired.filename ?? "Image indisponible", systemImage: "photo")
-        .font(Typography.meta)
-        .foregroundStyle(theme.inkSecondary)
-        .padding(10)
-        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      unavailableImageLabel(repaired)
     } else {
       Label(repaired.filename ?? "Pièce jointe", systemImage: "paperclip")
         .font(Typography.meta)
@@ -310,6 +304,17 @@ struct MessageBubbleView: View {
         .padding(10)
         .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
+  }
+
+  /// Photo qu'on ne sait pas montrer : fichier absent, ou format que le système
+  /// ne décode pas. La bulle dit lequel plutôt que de laisser un trou.
+  @ViewBuilder
+  private func unavailableImageLabel(_ attachment: MessageAttachment) -> some View {
+    Label(attachment.filename ?? "Image indisponible", systemImage: "photo")
+      .font(Typography.meta)
+      .foregroundStyle(theme.inkSecondary)
+      .padding(10)
+      .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
   }
 
   /// Ré-attache le fichier si le chemin en cache est périmé. L'identifiant d'une

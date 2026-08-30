@@ -96,14 +96,18 @@ private struct FocusTranscriptView: View {
                 VStack(alignment: .leading, spacing: 6) {
                   ForEach(message.attachments) { raw in
                     let attachment = FocusAttachment.repaired(raw)
-                    if let url = attachment.resolvedFileURL, attachment.isImage,
-                       let nsImage = NSImage(contentsOf: url)
-                    {
-                      Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 360, maxHeight: 400)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    if let url = attachment.resolvedFileURL, attachment.isImage {
+                      AttachmentImageView(
+                        url: url,
+                        maxWidth: 360,
+                        maxHeight: 400,
+                        cornerRadius: 8,
+                        placeholder: theme.paperSecondary,
+                        border: nil,
+                        label: attachment.filename ?? "Image"
+                      ) {
+                        EmptyView()
+                      }
                     }
                   }
                   if shouldShowFocusText(message) {
