@@ -215,7 +215,7 @@ enum MatrixIdentity {
   /// « Malo (WA) » → « Malo » : mautrix suffixe les noms de ghosts avec le réseau.
   /// La liste vient des descripteurs, plus quelques ponts qu'on ne gère pas encore
   /// mais dont les noms peuvent traverser un groupe.
-  static let foreignBridgeSuffixes = [" (FB)", " (Messenger)", " (Signal)"]
+  static let foreignBridgeSuffixes = [" (FB)", " (Messenger)"]
 
   static func stripBridgeSuffix(_ name: String) -> String {
     var trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

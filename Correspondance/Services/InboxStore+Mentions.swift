@@ -42,9 +42,8 @@ extension InboxStore {
     var known: Set<String> = []
 
     switch conversation.network {
-    case .iMessage, .signal:
-      let me = conversation.network == .signal ? await signal.accountNumber() : nil
-      for handle in conversation.participantHandles where handle != me {
+    case .iMessage:
+      for handle in conversation.participantHandles {
         let name = await ContactDirectory.shared.displayName(forHandle: handle)
           ?? spokenName(of: handle, in: conversation)
           ?? handle
@@ -55,7 +54,7 @@ extension InboxStore {
           avatar: .avatarStub(network: conversation.network, address: handle, title: name)
         ))
       }
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       for member in await matrix.members(conversationID: conversation.id) {
         let name = member.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = (name?.isEmpty == false) ? name! : MatrixIdentity.localpart(member.userID)

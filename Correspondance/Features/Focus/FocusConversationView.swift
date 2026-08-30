@@ -38,7 +38,7 @@ struct FocusConversationView: View {
             Text(store.isLoading ? "Chargement…" : "Rien à lire pour l’instant.")
               .font(Typography.emptyState(themes.typeface))
               .foregroundStyle(theme.inkSecondary)
-            Text(store.signalStatusFR)
+            Text(store.matrixStatusFR)
               .font(Typography.meta(themes.typeface))
               .foregroundStyle(theme.inkTertiary)
             Text(store.iMessageStatusFR)
@@ -382,10 +382,16 @@ private struct FocusPageEditor: View {
 }
 
 private enum FocusAttachment {
+  /// Ré-attache le fichier si le chemin en cache est périmé. L'identifiant d'une
+  /// pièce jointe bridgée est son MXC : le média déjà téléchargé se retrouve sous
+  /// ce nom, sans redemander quoi que ce soit au serveur.
   static func repaired(_ attachment: MessageAttachment) -> MessageAttachment {
     if attachment.resolvedFileURL != nil { return attachment }
     var copy = attachment
-    if let path = SignalAttachmentStore.localPath(forAttachmentID: attachment.id) {
+    if let path = MatrixAttachmentStore.existingLocalPath(
+      forMXC: attachment.id,
+      contentType: attachment.contentType
+    ) {
       copy.localPath = path
     }
     return copy

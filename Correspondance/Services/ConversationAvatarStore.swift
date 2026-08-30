@@ -25,8 +25,6 @@ actor ConversationAvatarStore {
 
     let resolved: Data?
     switch conversation.network {
-    case .signal:
-      resolved = loadSignalAvatarData(for: conversation)
     case .iMessage:
       // Un groupe iMessage porte sa propre photo (chat.properties → pièce jointe) ;
       // le carnet d'adresses ne sait répondre que pour un tête-à-tête.
@@ -35,7 +33,7 @@ actor ConversationAvatarStore {
       } else {
         resolved = await ContactDirectory.shared.imageData(for: conversation)
       }
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       // Fil bridgé : d'abord le carnet d'adresses si le pont a exposé un numéro —
       // la photo qu'on a choisie soi-même vaut mieux que celle du réseau. Sinon la
       // photo du portail (`m.room.avatar`), seule image dont dispose un fil Instagram.

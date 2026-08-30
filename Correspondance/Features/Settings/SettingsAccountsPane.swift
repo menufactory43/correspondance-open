@@ -13,21 +13,13 @@ struct SettingsAccountsPane: View {
       SettingsCard(
         title: "Transports natifs",
         footnote: """
-          Lier Signal se fait au terminal :
-          signal-cli link -n Correspondance
-          Puis scanne le QR dans Signal → Appareils liés.
+          iMessage se lit dans la base de Messages, et s’envoie en pilotant           l’app — rien à connecter.
           """
       ) {
         SettingsRow(
           label: MessageNetwork.iMessage.labelFR,
           detail: store.iMessageStatusFR,
           systemImage: MessageNetwork.iMessage.systemImage
-        )
-        SettingsDivider()
-        SettingsRow(
-          label: MessageNetwork.signal.labelFR,
-          detail: store.signalStatusFR,
-          systemImage: MessageNetwork.signal.systemImage
         )
       }
 
@@ -38,6 +30,8 @@ struct SettingsAccountsPane: View {
           donne un code d’appairage.
           Instagram : @instagrambot demande les cookies d’une session instagram.com — \
           la feuille explique où les prendre.
+          Signal : @signalbot renvoie un QR à scanner depuis Réglages → Appareils liés. \
+          Le pont ne verra que les messages postérieurs à la liaison.
           """
       ) {
         ForEach(Array(MessageNetwork.matrixBridged.enumerated()), id: \.element.id) { index, network in

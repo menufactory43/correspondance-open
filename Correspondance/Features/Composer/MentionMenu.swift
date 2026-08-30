@@ -51,7 +51,8 @@ struct MentionField: ViewModifier {
             onHover: { selectedIndex = $0 },
             onPick: choose
           )
-          .alignmentGuide(.top) { $0[.bottom] + 8 }
+          // Au-dessus du champ, jamais dessous : en bas de fenêtre, il n'y a pas de place.
+          .offset(y: -(MentionMenuView.height(for: matches.count) + 8))
           .accessibilityAddTraits(.isModal)
         }
       }
@@ -94,6 +95,11 @@ struct MentionMenuView: View {
   private static let rowHeight: CGFloat = 40
   private static let visibleRows = 7
 
+  /// Hauteur du menu : ses lignes, sept au plus, plus les marges.
+  static func height(for count: Int) -> CGFloat {
+    min(CGFloat(count), CGFloat(visibleRows)) * (rowHeight + 2) + 10
+  }
+
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView(showsIndicators: false) {
@@ -107,9 +113,7 @@ struct MentionMenuView: View {
         }
         .padding(6)
       }
-      .frame(
-        height: min(CGFloat(candidates.count), CGFloat(Self.visibleRows)) * (Self.rowHeight + 2) + 10
-      )
+      .frame(height: Self.height(for: candidates.count))
       .onChange(of: selectedIndex) { _, index in
         guard candidates.indices.contains(index) else { return }
         proxy.scrollTo(candidates[index].id, anchor: nil)

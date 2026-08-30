@@ -77,7 +77,6 @@ final class InboxStore {
   var isSending = false
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
-  var signalStatusFR: String = "…"
   var matrixStatusFR: String = "…"
   var contactsStatusFR: String = "…"
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
@@ -135,7 +134,6 @@ final class InboxStore {
 
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
-  let signal = SignalBridge()
   let matrix = MatrixBridgeService()
   @ObservationIgnored private var loadTask: Task<Void, Never>?
   @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
@@ -158,11 +156,6 @@ final class InboxStore {
   /// État de référence pour la comparaison : `oldValue` du `didSet` ne convient pas,
   /// la normalisation de l'archivage produit une passe intermédiaire.
   @ObservationIgnored private var notificationBaseline: [String: Conversation] = [:]
-  /// Date du dernier message *vu* par fil Signal — la seule chose qui survive à
-  /// la fermeture de l'app. Sans elle, un message arrivé Mac endormi revient
-  /// avec le catalogue du bridge, donc à zéro non-lu. `nil` = jamais enregistré,
-  /// c'est-à-dire première exécution après ce correctif : on amorce sans sonner.
-  @ObservationIgnored private var signalLastSeenAt: [String: Date]?
   /// L'utilisateur a-t-il *choisi* le fil sélectionné ? Au lancement, l'app en
   /// désigne un d'office — le plus récent, donc précisément celui qui vient de
   /// recevoir. Le traiter comme lu effacerait le non-lu qu'on cherche à rendre.
@@ -342,15 +335,59 @@ final class InboxStore {
     {
       disappearingSecondsByID = decoded
     }
-    // Avant `hydrateFromDiskCache` : c'est lui qui pose le premier badge, et il
-    // lui faut le marqueur pour savoir ce qui est déjà lu.
-    if let data = UserDefaults.standard.data(forKey: Keys.signalLastSeen),
-       let decoded = try? JSONDecoder().decode([String: Date].self, from: data)
-    {
-      signalLastSeenAt = decoded
-    }
+    migrateAwayFromSignalCLI()
     hydrateFromDiskCache()
     adoptMergedAvatars()
+  }
+
+  /// Bascule de `signal-cli` vers mautrix-signal, jouée une seule fois.
+  ///
+  /// Les fils Signal changent d'identité : `signal:+336…` et `signal-group:<base64>`
+  /// laissent la place aux salons Matrix. Tout ce qui indexait les anciens
+  /// identifiants — épingles, sourdines, archives, timers, fusions de contacts —
+  /// désignerait donc des fils qui n'existent plus. On purge plutôt que de laisser
+  /// traîner des orphelins que rien ne viendra jamais nettoyer.
+  ///
+  /// Le cache disque de signal-cli, lui, n'est PAS supprimé : c'est la seule copie
+  /// de l'historique d'avant la liaison, que le pont ne rejouera jamais. Il ne sert
+  /// plus à rien dans l'app, mais l'effacer serait irréversible.
+  private func migrateAwayFromSignalCLI() {
+    guard !UserDefaults.standard.bool(forKey: Keys.signalCLIMigration) else { return }
+
+    let isLegacySignalID: (String) -> Bool = {
+      $0.hasPrefix("signal:") || $0.hasPrefix("signal-group:")
+    }
+
+    pinnedIDs = pinnedIDs.filter { !isLegacySignalID($0) }
+    mutedIDs = mutedIDs.filter { !isLegacySignalID($0) }
+    archivedIDs = archivedIDs.filter { !isLegacySignalID($0) }
+    disappearingSecondsByID = disappearingSecondsByID.filter { !isLegacySignalID($0.key) }
+    persistFlags()
+
+    // Une fusion privée d'un de ses membres se réduit ; à moins de deux fils, elle
+    // n'a plus d'objet et se dissout. Le repérage de doublons la reproposera de
+    // lui-même quand le salon Signal correspondant sera arrivé.
+    for index in mergedContacts.indices.reversed() {
+      mergedContacts[index].memberIDs.removeAll(where: isLegacySignalID)
+      if let last = mergedContacts[index].lastUsedConversationID, isLegacySignalID(last) {
+        mergedContacts[index].lastUsedConversationID = nil
+      }
+      if mergedContacts[index].memberIDs.count < 2 {
+        mergedContacts.remove(at: index)
+      }
+    }
+    persistMergedContacts()
+
+    // Le marqueur de non-lus de signal-cli n'a plus de fils à désigner : les
+    // compteurs viennent désormais du `/sync`, comme pour les autres ponts.
+    UserDefaults.standard.removeObject(forKey: "correspondance.signalLastSeenAt")
+
+    // Les salons Signal ont pu apparaître côté serveur avant que l'app sache les
+    // lire : en sync incrémental leur état ne repasserait jamais. On repart d'une
+    // sync initiale complète, une fois.
+    MatrixConversationCache.resetSyncCursor()
+
+    UserDefaults.standard.set(true, forKey: Keys.signalCLIMigration)
   }
 
   /// Affiche tout de suite les caches iMessage + Signal (démarrage type Messages).
@@ -367,34 +404,9 @@ final class InboxStore {
       iMessageStatusFR = "iMessage : première sync…"
     }
 
-    let (stored, msgs) = SignalConversationCache.load()
-    if stored.isEmpty {
-      signalStatusFR = list.isEmpty ? "Signal : première sync…" : "Signal : sync…"
-    } else {
-      var signalList = stored
-      // Les non-lus ne sont pas dans le fichier (le bridge l'écrit toujours à
-      // zéro) : on les recompte ici, pour que le badge soit juste dès l'ouverture
-      // de la fenêtre, sans attendre que signal-cli réponde.
-      let cachedUnread = SignalCatchUp.unreadCounts(
-        messagesByConversation: msgs,
-        lastSeenAt: signalLastSeenAt
-      )
-      for i in signalList.indices {
-        if let last = msgs[signalList[i].id]?.last {
-          signalList[i].preview = last.text
-          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
-        }
-        signalList[i].unreadCount = cachedUnread[signalList[i].id] ?? 0
-      }
-      list.append(contentsOf: signalList)
-      let groups = signalList.filter(\.isGroup).count
-      let live = signalList.filter { $0.hasLivePreview }.count
-      signalStatusFR = "Cache · \(signalList.count) fils · \(groups) groupes · \(live) avec messages — sync…"
-    }
-
     // Le cache Matrix est un simple fichier : lisible sans passer par l'actor.
     let (_, matrixConversations, matrixMessages) = MatrixConversationCache.load()
-    seedSearchIndex(signal: msgs, matrix: matrixMessages)
+    seedSearchIndex(signal: [:], matrix: matrixMessages)
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
       matrixStatusFR = "Cache · \(MatrixBridgeService.bridgedCountFR(matrixConversations)) — sync…"
@@ -410,9 +422,7 @@ final class InboxStore {
       ?? activeQueue.first?.id
     selectionIsUserMade = false
     if let id = selectedConversationID {
-      if let cached = msgs[id], !cached.isEmpty {
-        messages = cached
-      } else if let cached = matrixMessages[id], !cached.isEmpty {
+      if let cached = matrixMessages[id], !cached.isEmpty {
         messages = cached
       }
     }
@@ -439,7 +449,6 @@ final class InboxStore {
     // Ce qui est déjà là au démarrage n'est pas « nouveau » : on prend l'état pour
     // référence, puis seuls les messages suivants déclenchent une notification.
     primeNotifications()
-    startLiveSync()
     startMatrixSync()
     startIMessageWatch()
   }
@@ -615,32 +624,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal:
-      // Signal désigne sa cible par (auteur, timestamp) : l'auteur d'un message reçu
-      // est celui du fil, celui d'un message sortant est notre propre numéro.
-      var author = message.senderID
-      if author == nil {
-        author = message.isFromMe ? await signal.accountNumber() : conversation.address
-      }
-      guard let author, !author.isEmpty else {
-        lastErrorMessage = "Auteur du message Signal inconnu — réaction impossible."
-        return
-      }
-      do {
-        try await signal.sendReaction(
-          conversation: conversation,
-          messageID: messageID,
-          emoji: emoji,
-          targetAuthor: author,
-          remove: message.myReactionEmoji == emoji
-        )
-        // Recharge par le fil, pas par le réseau : une fusion en a deux.
-        await loadMessagesForSelection()
-      } catch {
-        lastErrorMessage = error.localizedDescription
-      }
-
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -1339,18 +1323,6 @@ final class InboxStore {
     await load()
   }
 
-  func startLiveSync() {
-    liveSyncTask?.cancel()
-    liveSyncTask = Task { @MainActor [weak self] in
-      // Petite pause après le load initial pour ne pas empiler 2 signal-cli.
-      try? await Task.sleep(for: .seconds(2))
-      while let self, !Task.isCancelled {
-        await self.pollSignalOnce()
-        try? await Task.sleep(for: .seconds(10))
-      }
-    }
-  }
-
   func stopLiveSync() {
     liveSyncTask?.cancel()
     liveSyncTask = nil
@@ -1435,10 +1407,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal:
-      let bridge = signal
-      Task.detached { await bridge.sendReadReceipt(conversation: conversation) }
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -1521,19 +1490,6 @@ final class InboxStore {
       // iMessage : le « non lu » n'existe que dans Messages — on le lui demande.
       markUnreadViaAutomation(conversation: target)
     }
-    // Signal : le geste ne tiendrait pas une seule passe si le marqueur restait
-    // au dernier message. On le recule juste dessous pour que le recompte
-    // retrouve le fil non lu, y compris après un redémarrage — sauf si ce
-    // dernier message est de moi : le recompte ignore mes propres messages,
-    // donc le geste ne survit alors qu'à la session en cours.
-    if signalLastSeenAt != nil {
-      var didChange = false
-      for target in targets where target.network == .signal {
-        signalLastSeenAt?[target.id] = target.lastMessageAt.addingTimeInterval(-0.001)
-        didChange = true
-      }
-      if didChange { persistSignalLastSeenAt() }
-    }
   }
 
   func togglePinned(conversationID: String) {
@@ -1558,26 +1514,16 @@ final class InboxStore {
     updateDockBadge()
   }
 
-  func clearChatHistory(conversationID: String) async {
-    await signal.clearLocalHistory(conversationID: conversationID)
-    if selectedConversationID == conversationID {
-      messages = []
-    }
-    if let idx = conversations.firstIndex(where: { $0.id == conversationID }) {
-      var updated = conversations[idx]
-      updated.preview = updated.isGroup ? "Groupe Signal" : "Écrire sur Signal…"
-      conversations[idx] = updated
-    }
-  }
-
   func leaveGroup(conversationID: String) async {
     guard let conversation = conversations.first(where: { $0.id == conversationID }),
-          conversation.network == .signal,
+          conversation.network.isMatrixBridged,
           conversation.isGroup
     else { return }
 
     do {
-      try await signal.quitGroup(conversation: conversation, deleteLocal: true)
+      // Quitter le portail, c'est quitter le groupe côté réseau : le pont
+      // relaie le départ. Le salon disparaîtra du prochain `/sync`.
+      try await matrix.leaveRoom(conversationID: conversationID)
       conversations.removeAll { $0.id == conversationID }
       pinnedIDs.remove(conversationID)
       mutedIDs.remove(conversationID)
@@ -1587,24 +1533,6 @@ final class InboxStore {
       if selectedConversationID == conversationID {
         await select(activeQueue.first?.id)
       }
-    } catch {
-      lastErrorMessage = error.localizedDescription
-    }
-  }
-
-  func setDisappearingMessages(conversationID: String, seconds: Int) async {
-    guard let conversation = conversations.first(where: { $0.id == conversationID }),
-          conversation.network == .signal
-    else { return }
-
-    do {
-      try await signal.setDisappearingMessages(conversation: conversation, expirationSeconds: seconds)
-      if seconds <= 0 {
-        disappearingSecondsByID.removeValue(forKey: conversationID)
-      } else {
-        disappearingSecondsByID[conversationID] = seconds
-      }
-      persistFlags()
     } catch {
       lastErrorMessage = error.localizedDescription
     }
@@ -1857,14 +1785,7 @@ final class InboxStore {
           try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
         }
       }
-    case .signal:
-      try await signal.send(
-        text: text,
-        conversation: conversation,
-        attachmentPaths: attachments,
-        quote: Self.signalQuote(for: quoted, conversation: conversation)
-      )
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -2070,164 +1991,7 @@ final class InboxStore {
     return "application/octet-stream"
   }
 
-  /// Traduit une citation en arguments `--quote-*` de signal-cli.
-  /// Sans timestamp lisible dans l'identifiant, la citation est abandonnée
-  /// plutôt que d'envoyer une citation fausse.
-  private static func signalQuote(
-    for message: ChatMessage?,
-    conversation: Conversation
-  ) -> SignalBridge.OutgoingQuote? {
-    guard let message,
-          let timestamp = SignalBridge.timestamp(inMessageID: message.id)
-    else { return nil }
-    return SignalBridge.OutgoingQuote(
-      timestamp: timestamp,
-      author: message.senderID ?? conversation.address,
-      text: message.sidebarPreviewText
-    )
-  }
-
   // MARK: - Private
-
-  private func pollSignalOnce() async {
-    // Évite de concurrencer un plein refresh.
-    guard !isLoading else { return }
-    isLiveSyncing = true
-    defer { isLiveSyncing = false }
-
-    do {
-      let countsBefore = await signal.messageCounts()
-      let updated = try await signal.pollReceive(timeoutSeconds: 8)
-      guard !Task.isCancelled else { return }
-      let countsAfter = await signal.messageCounts()
-      var deltas: [String: Int] = [:]
-      for (id, after) in countsAfter {
-        let before = countsBefore[id] ?? 0
-        let delta = after - before
-        if delta > 0 { deltas[id] = delta }
-      }
-      await mergeSignalConversations(updated, newMessageDeltas: deltas)
-      signalStatusFR = "Signal live · \(updated.filter(\.isGroup).count) groupes · \(updated.filter(\.hasLivePreview).count) actifs"
-      if let id = selectedConversationID,
-         conversations.first(where: { $0.id == id })?.network == .signal
-      {
-        let cached = await signal.fetchMessages(conversationID: id)
-        if !cached.isEmpty {
-          messages = cached
-          applySidebarPreview(conversationID: id, from: cached)
-        }
-        // Un fil que l'app a désigné toute seule au lancement n'est pas un fil
-        // lu : le marquer tel quel effacerait, dix secondes après le rattrapage,
-        // le non-lu qu'on vient de rendre.
-        if selectionIsUserMade { clearUnread(for: id) }
-      }
-    } catch {
-      // Silencieux en live — pas d’alerte toutes les 10 s.
-      signalStatusFR = "Signal live : \(error.localizedDescription)"
-    }
-  }
-
-  /// Rattrapage : rend leur compteur aux fils Signal reconstruits par `performLoad`.
-  ///
-  /// Le catalogue du bridge revient toujours à zéro non-lu, et le delta du live
-  /// (`pollSignalOnce`) ne vaut rien ici — au premier lancement le cache mémoire
-  /// est vide avant l'appel et plein après, ce qui compterait tout l'historique.
-  /// On recompte donc en absolu depuis le marqueur « dernier vu ».
-  private func applySignalCatchUp(to signalList: inout [Conversation]) async {
-    let snapshot = await signal.cachedMessagesSnapshot()
-
-    // Ce que l'app affiche à l'instant. Surtout pas un instantané pris avant
-    // `fetchConversations` : signal-cli met des dizaines de secondes, pendant
-    // lesquelles l'utilisateur a pu lire un fil — on lui réinstallerait son badge.
-    let previousUnread = Dictionary(
-      realConversations(on: .signal).map { ($0.id, $0.unreadCount) },
-      uniquingKeysWith: { a, _ in a }
-    )
-
-    // Premier passage : tout ce qui est déjà là est réputé lu. Un utilisateur
-    // qui installe la mise à jour ne se réveille pas avec des mois de badges.
-    guard signalLastSeenAt != nil else {
-      signalLastSeenAt = SignalCatchUp.seededLastSeen(messagesByConversation: snapshot)
-      persistSignalLastSeenAt()
-      // L'amorçage ne fabrique pas de non-lu, mais il n'a pas à effacer celui
-      // qui était déjà affiché (un « marquer comme non lu » de la seconde d'avant).
-      for index in signalList.indices {
-        signalList[index].unreadCount = previousUnread[signalList[index].id] ?? 0
-      }
-      return
-    }
-
-    let counts = SignalCatchUp.unreadCounts(
-      messagesByConversation: snapshot,
-      lastSeenAt: signalLastSeenAt
-    )
-
-    var markersMoved = false
-    for index in signalList.indices {
-      let id = signalList[index].id
-      // Le fil ouvert est lu — et un membre replié se lit sous sa ligne fusionnée.
-      // Encore faut-il que l'utilisateur l'ait ouvert : la sélection d'office du
-      // lancement tombe justement sur le fil le plus récent, celui qu'on rattrape.
-      if displayRowID(for: id) == selectedConversationID, selectionIsUserMade {
-        signalList[index].unreadCount = 0
-        let seen = signalLastSeenAt?[id] ?? .distantPast
-        if signalList[index].lastMessageAt > seen {
-          signalLastSeenAt?[id] = signalList[index].lastMessageAt
-          markersMoved = true
-        }
-        continue
-      }
-      signalList[index].unreadCount = max(counts[id] ?? 0, previousUnread[id] ?? 0)
-    }
-    if markersMoved { persistSignalLastSeenAt() }
-  }
-
-  private func mergeSignalConversations(
-    _ signalList: [Conversation],
-    newMessageDeltas: [String: Int] = [:]
-  ) async {
-    var previews = await signal.lastMessageMap()
-    var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
-
-    for var incoming in signalList {
-      if let last = previews[incoming.id] {
-        incoming.preview = last.listPreview(isGroup: incoming.isGroup)
-        incoming.lastMessageAt = max(incoming.lastMessageAt, last.sentAt)
-      }
-      if var existing = byID[incoming.id] {
-        if incoming.hasLivePreview {
-          existing.preview = incoming.preview
-          existing.lastMessageAt = max(existing.lastMessageAt, incoming.lastMessageAt)
-        }
-        // Ne jamais écraser un bon nom de groupe/contact par un id technique.
-        existing.preferTitle(incoming.title)
-        existing.isGroup = incoming.isGroup || existing.isGroup
-        byID[incoming.id] = existing
-      } else {
-        // Ne pas copier un unreadCount venant du catalogue Signal (souvent 0).
-        incoming.unreadCount = byID[incoming.id]?.unreadCount ?? 0
-        byID[incoming.id] = incoming
-      }
-    }
-
-    for (id, last) in previews {
-      guard var c = byID[id] else { continue }
-      c.preview = last.listPreview(isGroup: c.isGroup)
-      c.lastMessageAt = max(c.lastMessageAt, last.sentAt)
-      byID[id] = c
-    }
-
-    for (id, delta) in newMessageDeltas where delta > 0 {
-      // Le fil ouvert est lu — et un membre replié se lit sous sa ligne fusionnée.
-      // « Ouvert » veut dire ouvert par l'utilisateur : la sélection d'office du
-      // lancement ne doit pas avaler en silence un message arrivé pendant la session.
-      guard !isReadOnScreen(id), var c = byID[id] else { continue }
-      c.unreadCount += delta
-      byID[id] = c
-    }
-
-    conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
-  }
 
   /// Fusion des fils bridgés — même logique que Signal, sans jamais toucher aux autres réseaux.
   private func mergeMatrixConversations(_ incomingList: [Conversation]) {
@@ -2318,10 +2082,6 @@ final class InboxStore {
   }
 
   private func clearUnread(for id: String) {
-    // Le marqueur Signal avance même si le compteur affiché est déjà à zéro :
-    // un marqueur en retard sur un fil sans badge suffirait à en refabriquer un
-    // au prochain recompte. Donc avant le `guard` qui sort sur `unreadCount == 0`.
-    advanceSignalSeenMarker(for: id)
     // Une ligne fusionnée additionne les non-lus de ses fils : les remettre à
     // zéro veut dire les remettre à zéro partout, cache compris.
     for memberID in expandedIDs(for: id) where memberID != id {
@@ -2342,13 +2102,9 @@ final class InboxStore {
     }
 
     iMessageStatusFR = "iMessage : actualisation…"
-    if conversations.isEmpty {
-      signalStatusFR = "Signal : actualisation…"
-    } else {
-      signalStatusFR = "Signal : sync en arrière-plan…"
-    }
 
-    // 1) iMessage d’abord (rapide) — ne pas bloquer derrière signal-cli.
+    // iMessage est le seul réseau que `load()` va encore chercher : les fils
+    // bridgés arrivent par la boucle `/sync`, qui ne s'arrête jamais.
     let im = await loadIMessageOffMain()
     if Task.isCancelled { return }
 
@@ -2429,51 +2185,9 @@ final class InboxStore {
       Task { await self.refreshIMessageSearchIndex() }
     }
 
-    // 2) Signal ensuite (peut être long — listGroups / receive / contacts).
-    let status = await signal.statusMessageFR()
-    if Task.isCancelled { return }
-    signalStatusFR = status
-
-    let signalResult: Result<[Conversation], Error>
-    do {
-      signalResult = .success(try await signal.fetchConversations())
-    } catch {
-      signalResult = .failure(error)
-    }
-    if Task.isCancelled { return }
-
-    var next = conversations.filter { $0.network != .signal }
-
-    switch signalResult {
-    case .success(let list):
-      if usingDemoData {
-        next.removeAll { $0.network == .signal && $0.transportKey == "demo" }
-      }
-      var signalList = list
-      let previews = await signal.lastMessageMap()
-      for i in signalList.indices {
-        if let last = previews[signalList[i].id] {
-          signalList[i].preview = last.listPreview(isGroup: signalList[i].isGroup)
-          signalList[i].lastMessageAt = max(signalList[i].lastMessageAt, last.sentAt)
-        }
-      }
-      await applySignalCatchUp(to: &signalList)
-      next.append(contentsOf: signalList)
-      let groups = signalList.filter(\.isGroup).count
-      let dms = signalList.count - groups
-      if signalList.isEmpty {
-        signalStatusFR += " Aucune conversation — réessaie Actualiser."
-      } else {
-        let liveGroups = signalList.filter { $0.isGroup && $0.hasLivePreview }.count
-        signalStatusFR += " \(dms) DM · \(groups) groupes (\(liveGroups) avec messages)."
-      }
-    case .failure(let error):
-      next.append(contentsOf: previousSignal)
-      lastErrorMessage = "Signal : \(error.localizedDescription)"
-      if !previousSignal.isEmpty {
-        signalStatusFR += " (cache local · \(previousSignal.filter(\.isGroup).count) groupes)"
-      }
-    }
+    // Signal arrive désormais par le `/sync`, comme WhatsApp et Instagram : plus
+    // rien à aller chercher ici, la boucle Matrix s'en charge en continu.
+    var next = conversations
 
     preserveComposing(into: &next)
 
@@ -2601,44 +2315,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal:
-      await signal.ensureMemoryCacheLoaded()
-      var cached = await signal.fetchMessages(conversationID: conversation.id)
-      if cached.isEmpty && isInitialSync {
-        messages = [
-          ChatMessage(
-            id: "signal-sync-\(conversation.id)",
-            conversationID: conversation.id,
-            network: .signal,
-            text: "Synchronisation Signal…",
-            sentAt: Date(),
-            isFromMe: false
-          )
-        ]
-      }
-      if cached.isEmpty {
-        cached = await signal.pullLatestMessages(for: conversation.id)
-        cached = await signal.ensureLocalAttachments(cached, conversationID: conversation.id)
-      }
-      if !cached.isEmpty {
-        applySidebarPreview(conversationID: conversation.id, from: cached)
-        return cached
-      } else {
-        return [
-          ChatMessage(
-            id: "signal-empty-\(conversation.id)",
-            conversationID: conversation.id,
-            network: .signal,
-            text: isInitialSync || isLiveSyncing
-              ? "Synchronisation… les messages arriveront tout seuls (comme Signal)."
-              : "Pas encore de messages pour ce fil. Écris ci-dessous, ou attends le prochain message.",
-            sentAt: Date(),
-            isFromMe: false
-          )
-        ]
-      }
-
-    case .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram:
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.isEmpty {
         // Fil jamais ouvert : on va chercher l'historique que le bridge a backfillé.
@@ -2731,36 +2408,6 @@ final class InboxStore {
     }
   }
 
-  /// Le marqueur a ses propres déclencheurs (ouvrir un fil, rattraper au
-  /// lancement) : il ne passe pas par `persistFlags`, qui répond aux gestes.
-  private func persistSignalLastSeenAt() {
-    guard let signalLastSeenAt,
-          let data = try? JSONEncoder().encode(signalLastSeenAt)
-    else { return }
-    UserDefaults.standard.set(data, forKey: Keys.signalLastSeen)
-  }
-
-  /// Un fil Signal qu'on vient de lire : son marqueur avance jusqu'à son dernier
-  /// message, sinon le recompte du prochain Actualiser ferait renaître le badge.
-  private func advanceSignalSeenMarker(for conversationID: String) {
-    // Marqueur pas encore amorcé : c'est le rattrapage qui s'en charge, poser
-    // une seule entrée ici ferait passer tous les *autres* fils pour non-lus.
-    guard var markers = signalLastSeenAt else { return }
-    let candidates = expandedIDs(for: conversationID).compactMap { id in
-      conversations.first(where: { $0.id == id }) ?? mergedMemberCache[id]
-    }
-    var didChange = false
-    for conversation in candidates where conversation.network == .signal {
-      let seen = markers[conversation.id] ?? .distantPast
-      guard conversation.lastMessageAt > seen else { continue }
-      markers[conversation.id] = conversation.lastMessageAt
-      didChange = true
-    }
-    guard didChange else { return }
-    signalLastSeenAt = markers
-    persistSignalLastSeenAt()
-  }
-
   private enum Keys {
     static let mode = "correspondance.inboxMode"
     static let networkFilter = "correspondance.networkFilter"
@@ -2768,7 +2415,7 @@ final class InboxStore {
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
-    static let signalLastSeen = "correspondance.signalLastSeenAt"
+    static let signalCLIMigration = "correspondance.signalCLIMigrationDone"
     static let messagesAutomation = "correspondance.messagesAutomation.enabled"
     static let messagesAutomationOffscreen = "correspondance.messagesAutomation.offscreenWindow"
   }

@@ -235,9 +235,20 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(whatsapp.commandPrefix, "!wa")
     XCTAssertEqual(whatsapp.loginFlow, .qrCode)
 
+    // Signal est passé de signal-cli au pont : son bot n'accepte que le QR, et
+    // son `protocol.id` n'a pas la forme en `-go` de ses deux voisins.
+    let signal = try XCTUnwrap(MessageNetwork.signal.bridge)
+    XCTAssertEqual(signal.commandPrefix, "!signal")
+    XCTAssertEqual(signal.ghostPrefix, "signal_")
+    XCTAssertEqual(signal.loginFlow, .qrCode)
+    XCTAssertFalse(signal.supportsPhonePairing)
+    XCTAssertTrue(whatsapp.supportsPhonePairing)
+    XCTAssertEqual(signal.protocolIDs, ["signal"])
+    XCTAssertEqual(signal.botUserID(serverName: "correspondance.local"), "@signalbot:correspondance.local")
+    XCTAssertEqual(MessageNetwork.fromBridgeProtocol("signal"), .signal)
+
     XCTAssertNil(MessageNetwork.iMessage.bridge)
-    XCTAssertNil(MessageNetwork.signal.bridge)
-    XCTAssertEqual(MessageNetwork.matrixBridged, [.whatsapp, .instagram])
+    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram])
   }
 
   /// Les réponses du bot pendant un login par cookies, telles que bridgev2 les écrit.

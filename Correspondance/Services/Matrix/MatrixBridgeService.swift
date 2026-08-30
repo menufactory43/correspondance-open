@@ -302,6 +302,14 @@ actor MatrixBridgeService {
     try? await client.sendReadReceipt(roomID: roomID, eventID: last.id)
   }
 
+  /// Quitte le salon d'un fil, et l'oublie côté cache : quitter le portail d'un
+  /// groupe revient à quitter le groupe sur le réseau distant.
+  func leaveRoom(conversationID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else { return }
+    try await client.leave(roomID: roomID)
+    rooms.removeValue(forKey: roomID)
+  }
+
   // MARK: - Connexion d'un pont
 
   /// Où en est le bot dans le flux de connexion, quel que soit le pont.

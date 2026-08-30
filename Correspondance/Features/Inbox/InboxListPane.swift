@@ -4,7 +4,6 @@ struct InboxListPane: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
-  @State private var pendingClearID: String?
   @State private var pendingLeaveID: String?
 
   private var theme: WritingTheme { themes.theme }
@@ -68,23 +67,6 @@ struct InboxListPane: View {
       prompt: "Rechercher un fil, un contact, un message"
     )
     .confirmationDialog(
-      "Effacer l’historique ?",
-      isPresented: Binding(
-        get: { pendingClearID != nil },
-        set: { if !$0 { pendingClearID = nil } }
-      ),
-      titleVisibility: .visible
-    ) {
-      Button("Effacer l’historique", role: .destructive) {
-        guard let id = pendingClearID else { return }
-        Task { await store.clearChatHistory(conversationID: id) }
-        pendingClearID = nil
-      }
-      Button("Annuler", role: .cancel) { pendingClearID = nil }
-    } message: {
-      Text("Les messages locaux de ce fil seront effacés de Correspondance.")
-    }
-    .confirmationDialog(
       "Quitter le groupe ?",
       isPresented: Binding(
         get: { pendingLeaveID != nil },
@@ -99,7 +81,7 @@ struct InboxListPane: View {
       }
       Button("Annuler", role: .cancel) { pendingLeaveID = nil }
     } message: {
-      Text("Tu ne recevras plus les messages de ce groupe Signal.")
+      Text("Tu ne recevras plus les messages de ce groupe.")
     }
   }
 
@@ -228,7 +210,7 @@ struct InboxListPane: View {
 
     Divider()
 
-    if conversation.network == .signal {
+    if conversation.network.isMatrixBridged {
       Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
         if conversation.hasUnread {
           Task { await store.select(conversation.id) }
@@ -243,27 +225,6 @@ struct InboxListPane: View {
 
       Button(store.isMuted(conversation.id) ? "Réactiver les notifications" : "Couper les notifications") {
         store.toggleMuted(conversationID: conversation.id)
-      }
-
-      Divider()
-
-      Menu("Messages éphémères") {
-        ForEach(DisappearingOption.allCases) { option in
-          let selected = store.disappearingSeconds(for: conversation.id) == option.seconds
-          Button {
-            Task { await store.setDisappearingMessages(conversationID: conversation.id, seconds: option.seconds) }
-          } label: {
-            if selected {
-              Label(option.titleFR, systemImage: "checkmark")
-            } else {
-              Text(option.titleFR)
-            }
-          }
-        }
-      }
-
-      Button("Effacer l’historique…", role: .destructive) {
-        pendingClearID = conversation.id
       }
 
       if conversation.isGroup {

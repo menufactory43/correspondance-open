@@ -312,11 +312,16 @@ struct MessageBubbleView: View {
     }
   }
 
-  /// Ré-attache le fichier Signal si le chemin en cache est périmé.
+  /// Ré-attache le fichier si le chemin en cache est périmé. L'identifiant d'une
+  /// pièce jointe bridgée est son MXC : le média déjà téléchargé se retrouve sous
+  /// ce nom, sans redemander quoi que ce soit au serveur.
   private static func repaired(_ attachment: MessageAttachment) -> MessageAttachment {
     if attachment.resolvedFileURL != nil { return attachment }
     var copy = attachment
-    if let path = SignalAttachmentStore.localPath(forAttachmentID: attachment.id) {
+    if let path = MatrixAttachmentStore.existingLocalPath(
+      forMXC: attachment.id,
+      contentType: attachment.contentType
+    ) {
       copy.localPath = path
     }
     return copy

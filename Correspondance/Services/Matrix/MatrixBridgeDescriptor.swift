@@ -64,7 +64,27 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     supportsPhonePairing: false
   )
 
-  static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram]
+  /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
+  /// Réglages › Appareils liés. Le pont n'expose que ce flow : pas de code
+  /// d'appairage, et l'enregistrement en appareil primaire n'existe plus.
+  static let signal = MatrixBridgeDescriptor(
+    network: .signal,
+    botLocalpart: "signalbot",
+    commandPrefix: "!signal",
+    // Les ghosts portent l'UUID ACI du correspondant, pas son numéro.
+    ghostPrefix: "signal_",
+    // Ici `BeeperBridgeType` et `NetworkID` valent tous deux « signal » — pas de
+    // forme en `-go` comme chez WhatsApp et Instagram.
+    protocolIDs: ["signal"],
+    loginFlow: .qrCode,
+    // Signal se compose bien par E.164 (`pm +336…`), même si l'identité interne
+    // est un UUID : `PhoneNormalizer` refuse les UUID, aucune fusion hasardeuse.
+    identifiersArePhoneNumbers: true,
+    displayNameSuffixes: [" (Signal)"],
+    supportsPhonePairing: false
+  )
+
+  static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .signal]
 
   static func descriptor(for network: MessageNetwork) -> MatrixBridgeDescriptor? {
     all.first { $0.network == network }
