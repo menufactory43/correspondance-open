@@ -3,8 +3,27 @@ import SwiftUI
 struct CorrespondanceCommands: Commands {
   var store: InboxStore
 
+  /// Le fil qu'un ⌘⇧D vise : celui de la fenêtre détachée au premier plan,
+  /// sinon celui que lit l'inbox.
+  private var detachedFront: String? { store.frontDetachedConversationID }
+
+  private var detachTitle: String {
+    detachedFront != nil ? "Ramener dans l’inbox" : "Détacher la conversation"
+  }
+
+  private var pinTitle: String {
+    guard let id = detachedFront, store.isPinnedDetached(id) else { return "Épingler au-dessus" }
+    return "Ne plus épingler"
+  }
+
+  /// ⌘E vise ce qu'on a sous les yeux : la fenêtre détachée si elle est
+  /// devant, le fil de l'inbox sinon.
+  private var archiveTarget: String? {
+    detachedFront ?? store.selectedConversationID
+  }
+
   private var archiveTitle: String {
-    guard let id = store.selectedConversationID else { return "Archiver" }
+    guard let id = archiveTarget else { return "Archiver" }
     return store.isArchived(id) ? "Désarchiver" : "Archiver"
   }
 
@@ -76,7 +95,7 @@ struct CorrespondanceCommands: Commands {
 
       Button(archiveTitle) {
         Task { @MainActor in
-          guard let id = store.selectedConversationID else { return }
+          guard let id = archiveTarget else { return }
           await store.toggleArchived(conversationID: id)
         }
       }
@@ -99,6 +118,28 @@ struct CorrespondanceCommands: Commands {
         Task { @MainActor in await store.sendDraftAndArchive() }
       }
       .keyboardShortcut(.return, modifiers: [.command])
+    }
+
+    CommandGroup(after: .windowArrangement) {
+      Divider()
+
+      // Une conversation n'a aucune raison de rester enfermée dans la liste.
+      Button(detachTitle) {
+        if let id = detachedFront {
+          Task { @MainActor in await store.reattach(conversationID: id) }
+        } else if let id = store.selectedConversationID {
+          store.detach(conversationID: id)
+        }
+      }
+      .keyboardShortcut("d", modifiers: [.command, .shift])
+      .disabled(detachedFront == nil && store.selectedConversationID == nil)
+
+      Button(pinTitle) {
+        guard let id = detachedFront else { return }
+        store.togglePinnedDetached(id)
+      }
+      .keyboardShortcut("p", modifiers: [.command, .option])
+      .disabled(detachedFront == nil)
     }
 
     // Rien ici pour les Réglages : la scène `Settings` pose elle-même son

@@ -217,6 +217,10 @@ struct InboxListPane: View {
       Task { await store.select(conversation.id) }
     }
 
+    Button("Détacher la conversation") {
+      store.detach(conversationID: conversation.id)
+    }
+
     Button(store.isArchived(conversation.id) ? "Désarchiver" : "Archiver") {
       Task { await store.toggleArchived(conversationID: conversation.id) }
     }
