@@ -16,6 +16,10 @@ actor MatrixBridgeService {
   private var managementRoomIDs: [MessageNetwork: String] = [:]
   /// Invitations de bridge déjà traitées (évite de marteler `/join`).
   private var attemptedInviteJoins: Set<String> = []
+  /// Invitations d'un pont qu'on n'a pas encore réussi à accepter. Elles ne
+  /// reviendront pas d'elles-mêmes : un `/sync` incrémental ne réémet pas une
+  /// invitation déjà envoyée. C'est donc à nous de les garder sous la main.
+  private var pendingInviteJoins: Set<String> = []
   /// Event de la dernière commande `login` envoyée, par réseau : borne basse de lecture
   /// des réponses du bot (tout ce qui précède appartient à une tentative passée).
   private var loginCommandEventIDs: [MessageNetwork: String] = [:]
@@ -115,20 +119,28 @@ actor MatrixBridgeService {
   /// sans double puppeting, c'est au client de les accepter. On ne rejoint que ce qui
   /// vient d'un bot ou d'un ghost de bridge — jamais une invitation humaine à l'aveugle.
   private func acceptBridgeInvites(_ response: MatrixSyncResponse) async {
-    guard let invites = response.rooms?.invite else { return }
-    for (roomID, payload) in invites where !attemptedInviteJoins.contains(roomID) {
+    for (roomID, payload) in response.rooms?.invite ?? [:] where !attemptedInviteJoins.contains(roomID) {
       let events = payload["invite_state"]?["events"]?.arrayValue ?? []
       let fromBridge = events.contains { event in
         guard let sender = event["sender"]?.stringValue else { return false }
         return MatrixIdentity.isBridgeBot(sender) || MatrixIdentity.isGhost(sender)
       }
-      guard fromBridge else { continue }
-      attemptedInviteJoins.insert(roomID)
+      if fromBridge { pendingInviteJoins.insert(roomID) }
+    }
+    // Un pont fraîchement lié crée ses portails en rafale : Synapse refuse alors
+    // une partie des `join` (429). On les reprend à chaque passe jusqu'à ce qu'ils
+    // passent — sans quoi les salons refusés resteraient invisibles pour toujours.
+    for roomID in pendingInviteJoins {
       do {
         try await client.join(roomID: roomID)
+        pendingInviteJoins.remove(roomID)
+        attemptedInviteJoins.insert(roomID)
+      } catch MatrixError.http(let status, _, _) where status == 403 {
+        // Invitation retirée, ou salon disparu : insister ne sert à rien.
+        pendingInviteJoins.remove(roomID)
+        attemptedInviteJoins.insert(roomID)
       } catch {
-        // Réessayé au prochain sync si l'invitation est encore là (réseau, rate-limit).
-        attemptedInviteJoins.remove(roomID)
+        // Réseau ou quota : on retentera au prochain `/sync`.
       }
     }
   }

@@ -69,6 +69,13 @@ rc_joins:
   remote:
     per_second: 1000
     burst_count: 10000
+# Un pont qui vient d'être lié crée ses portails en rafale et nous invite dans
+# chacun : sans ce relèvement, Synapse refuse nos `join` par 429
+# (`rc_joins_per_room`) et les groupes restent invisibles. `rc_joins` ne suffit
+# pas — la limite par salon est un compteur distinct.
+rc_joins_per_room:
+  per_second: 1000
+  burst_count: 10000
 rc_invites:
   per_room:
     per_second: 1000
