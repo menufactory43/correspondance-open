@@ -10,6 +10,12 @@ struct CorrespondanceApp: App {
   @State private var themes = ThemePreferences()
   @NSApplicationDelegateAdaptor(CorrespondanceAppDelegate.self) private var appDelegate
 
+  init() {
+    // Les cœurs libres préchauffent détecteur de liens et fonte pendant
+    // qu'AppKit monte la fenêtre : la première bulle les trouve déjà prêts.
+    LaunchWarmup.begin()
+  }
+
   var body: some Scene {
     WindowGroup(id: WindowOpener.inboxSceneID) {
       ContentView()
@@ -17,6 +23,9 @@ struct CorrespondanceApp: App {
         .environment(themes)
         .task {
           // Fenêtre visible → puis demande Contacts (sinon pas dans Confidentialité).
+          // Visible pour de vrai, pas « après 500 ms » : sinon Contacts, la sonde
+          // AX et la copie de chat.db partent avant la première frame et la retardent.
+          await LaunchGate.firstWindowOnScreen()
           try? await Task.sleep(for: .milliseconds(500))
           await store.start()
         }

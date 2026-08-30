@@ -86,17 +86,7 @@ actor MatrixBridgeService {
   /// Reprend le curseur `next_batch` du cache et vérifie que la session tient encore.
   /// `false` = pas de credentials ou token périmé : l'appelant n'ouvre pas de boucle.
   func restoreCursorAndCheckSession() async -> Bool {
-    if !didHydrate {
-      didHydrate = true
-      // Sync initial à chaque lancement (homeserver privé : c'est léger). Reprendre le
-      // curseur du cache ferait perdre les invitations de portails reçues entre-temps :
-      // Synapse ne les renvoie qu'une fois. Le cache sert à l'affichage immédiat, pas au curseur.
-      nextBatch = nil
-      // Mais son historique, lui, est repris : le sync initial ne ramène qu'une
-      // poignée d'events par salon, et `persist()` réécrirait le fichier avec ça.
-      let (_, _, cachedMessages) = MatrixConversationCache.load()
-      MatrixSyncParser(selfUserID: selfUserID).seed(cachedMessages: cachedMessages, into: &rooms)
-    }
+    hydrateIfNeeded()
     guard await client.isConfigured else { return false }
     do {
       selfUserID = try await client.whoami()
@@ -172,14 +162,16 @@ actor MatrixBridgeService {
   }
 
   func messages(conversationID: String) -> [ChatMessage] {
-    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return [] }
-    return model.sortedMessages
+    hydrateIfNeeded()
+    guard let roomID = roomID(forConversation: conversationID) else { return [] }
+    return rooms[roomID]?.sortedMessages ?? []
   }
 
   /// Complète l'historique d'un salon (ouverture d'un fil encore court). Une
   /// fois par session et par salon : un fil qui reste court après ça l'est
   /// vraiment, inutile de redemander la même page à chaque ouverture.
   func backfill(conversationID: String, limit: Int = 50) async -> [ChatMessage] {
+    hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return [] }
     guard !backfilledRoomIDs.contains(roomID) else { return rooms[roomID]?.sortedMessages ?? [] }
     backfilledRoomIDs.insert(roomID)
@@ -670,8 +662,35 @@ actor MatrixBridgeService {
 
   // MARK: - Privé
 
+  /// Le cache disque est repris dès le premier accès, pas seulement à l'ouverture
+  /// de la boucle `/sync` : au lancement, `load()` demande le fil de la conversation
+  /// ouverte avant que la sync ait commencé, et un actor encore vide lui répondait
+  /// « pas de messages » — le fil déjà à l'écran s'effaçait derrière un repère
+  /// jusqu'au retour du serveur.
+  ///
+  /// Le sync initial ne ramène qu'une poignée d'events par salon : sans ce semis,
+  /// `persist()` réécrirait le fichier avec ça, et tout ce que les sessions
+  /// précédentes avaient backfillé disparaîtrait à chaque relance. Le curseur, lui,
+  /// n'est pas repris : Synapse n'envoie les invitations de portails qu'une fois,
+  /// et un sync initial à chaque lancement reste léger sur un homeserver privé.
+  private func hydrateIfNeeded() {
+    guard !didHydrate else { return }
+    didHydrate = true
+    let (_, _, cachedMessages) = MatrixConversationCache.load()
+    MatrixSyncParser(selfUserID: selfUserID).seed(cachedMessages: cachedMessages, into: &rooms)
+  }
+
+  /// Un salon semé depuis le cache ne connaît pas encore son réseau (il vient de
+  /// l'état, donc du `/sync`) : son `conversationID` ne correspond pas. Le salon
+  /// lui-même, en revanche, se lit dans l'identifiant demandé.
   private func roomID(forConversation conversationID: String) -> String? {
-    rooms.values.first { $0.conversationID == conversationID }?.roomID
+    if let match = rooms.values.first(where: { $0.conversationID == conversationID }) {
+      return match.roomID
+    }
+    guard let parsed = MatrixSyncParser.roomID(inConversationID: conversationID),
+          rooms[parsed] != nil
+    else { return nil }
+    return parsed
   }
 
   private func persist() {

@@ -51,7 +51,7 @@ struct AudioMessageView: View {
       RoundedRectangle(cornerRadius: 14, style: .continuous)
         .fill(isFromMe ? theme.bubbleOut : theme.bubbleIn)
     )
-    .onAppear(perform: prepare)
+    .task(id: attachment.id) { await loadDuration() }
     .onDisappear(perform: stop)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Message audio, \(timeLabel)")
@@ -66,6 +66,28 @@ struct AudioMessageView: View {
     let shown = isPlaying || elapsed > 0 ? elapsed : duration
     let total = Int(shown.rounded())
     return String(format: "%d:%02d", total / 60, total % 60)
+  }
+
+  /// La durée seule, hors du fil principal. Monter un `AVAudioPlayer` réveille
+  /// mediaserverd et alloue une file audio : réservé au premier appui sur Lecture,
+  /// pas à l'apparition de la bulle — un fil rouvert au lancement en compte plusieurs.
+  private func loadDuration() async {
+    guard player == nil, duration == 0, !failed else { return }
+    guard let url = attachment.resolvedFileURL else {
+      failed = true
+      return
+    }
+    let seconds = await Task.detached(priority: .utility) { () -> Double? in
+      guard let time = try? await AVURLAsset(url: url).load(.duration) else { return nil }
+      let value = CMTimeGetSeconds(time)
+      return value.isFinite ? value : nil
+    }.value
+    guard !Task.isCancelled, player == nil else { return }
+    if let seconds {
+      duration = seconds
+    } else {
+      failed = true
+    }
   }
 
   private func prepare() {

@@ -127,6 +127,11 @@ final class InboxStore {
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
+  /// Vrai une fois le premier `/sync` intégré (ou quand il n'y aura pas de sync :
+  /// pas de session Matrix). Avant ça, ce qui arrive dans le fil n'est pas un
+  /// message qui « vient d'arriver » mais le rattrapage de ce qui s'est passé
+  /// app fermée — il se pose sans geste, comme le reste du fil.
+  var didSettleInitialMatrixSync = false
 
   /// Préférences locales (pin / mute / timer) — aucun réseau ne les porte pour nous.
   private(set) var pinnedIDs: Set<String> = []
@@ -1485,6 +1490,7 @@ final class InboxStore {
       guard await self.matrix.restoreCursorAndCheckSession() else {
         self.isMatrixConnected = false
         self.matrixStatusFR = "Matrix : non connecté."
+        self.didSettleInitialMatrixSync = true
         return
       }
       self.isMatrixConnected = true
@@ -1501,6 +1507,7 @@ final class InboxStore {
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
+          self.didSettleInitialMatrixSync = true
         } catch is CancellationError {
           return
         } catch {
@@ -2533,12 +2540,16 @@ final class InboxStore {
         cached = await matrix.backfill(conversationID: conversation.id)
       }
       if cached.isEmpty {
+        // Au lancement la session n'est pas encore vérifiée, mais des identifiants
+        // existent : ce n'est pas « pas connecté », c'est « pas encore synchronisé ».
+        var hasSession = isMatrixConnected
+        if !hasSession { hasSession = await matrix.isConnected }
         return [
           ChatMessage(
             id: "matrix-empty-\(conversation.id)",
             conversationID: conversation.id,
             network: conversation.network,
-            text: isMatrixConnected
+            text: hasSession
               ? "Pas encore de messages ici. Écris ci-dessous."
               : "Matrix n’est pas connecté — ouvre Réglages → Matrix.",
             sentAt: Date(),

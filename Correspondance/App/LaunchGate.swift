@@ -1,0 +1,37 @@
+import AppKit
+
+/// Le point de départ de ce qui n'a rien à faire avant la première frame :
+/// le fil de la conversation ouverte, la demande Contacts, la sonde AX de
+/// Messages, la copie de chat.db, la boucle `/sync`.
+///
+/// Un simple délai ne suffit pas : selon la machine la fenêtre met 300 ms ou
+/// 1,5 s à paraître, et tout ce qui se construit avant la retarde d'autant —
+/// c'est le « rebond et demi » du Dock. On attend donc que l'inbox soit
+/// réellement peinte à l'écran, avec un plafond pour ne jamais bloquer un
+/// lancement sans fenêtre (ouverture en arrière-plan, agent de session).
+@MainActor
+enum LaunchGate {
+  /// Vrai dès que l'inbox a été peinte une fois — ou que le plafond est passé.
+  /// Une vue née après n'a plus rien à différer. Lu depuis l'init des vues
+  /// (hors isolation formelle, mais toujours sur le fil principal), écrit ici.
+  nonisolated(unsafe) private(set) static var didPaintFirstWindow = false
+
+  static func firstWindowOnScreen(timeout: Duration = .seconds(3)) async {
+    if didPaintFirstWindow { return }
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline, !didPaintFirstWindow {
+      let painted = NSApp.windows.contains { window in
+        // Pas n'importe quelle fenêtre : l'icône de barre de menus et les
+        // panneaux comptent comme « à l'écran » bien avant l'inbox. SwiftUI
+        // nomme les siennes « <scène>-AppWindow-N ».
+        window.level == .normal
+          && window.identifier?.rawValue.hasPrefix(WindowOpener.inboxSceneID) == true
+          && window.isVisible
+          && window.occlusionState.contains(.visible)
+      }
+      if painted { break }
+      try? await Task.sleep(for: .milliseconds(30))
+    }
+    didPaintFirstWindow = true
+  }
+}

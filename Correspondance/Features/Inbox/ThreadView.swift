@@ -12,8 +12,17 @@ struct ThreadView: View {
   /// Ce que le fil considère comme déjà posé. Tout ce qui arrive après se
   /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
   @State private var settledMessageID: String?
+  /// Au lancement, le fil attend que la fenêtre soit peinte : construire cent
+  /// bulles avant la première frame, c'est le rebond de trop dans le Dock. Il
+  /// est de toute façon invisible tant qu'il n'est pas ancré en bas — il
+  /// arrive donc entier, un instant plus tard, sans saut.
+  @State private var awaitsFirstFrame = !LaunchGate.didPaintFirstWindow
+  /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
+  /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
+  @State private var isNearBottom = true
 
   private var theme: WritingTheme { themes.theme }
+  private var thread: [ChatMessage] { awaitsFirstFrame ? [] : store.messages }
 
   private var sendLaterPickerPresented: Binding<Bool> {
     Binding(
@@ -65,7 +74,7 @@ struct ThreadView: View {
   /// qu'après un silence. Cf. `MessageGrouping`.
   private var messageGroups: [MessageGroup] {
     MessageGrouping.groups(
-      for: store.messages,
+      for: thread,
       showsSenderNames: store.selectedConversation?.isGroup == true,
       // Fil fusionné : le séparateur d'heure dit sur quel réseau on repart.
       showsNetworkOrigin: isMergedThread
@@ -100,7 +109,7 @@ struct ThreadView: View {
           }
 
           if let delivery = store.selectedConversation?.lastDelivery,
-             store.messages.last?.isFromMe == true
+             thread.last?.isFromMe == true
           {
             DeliveryReceiptLabel(delivery: delivery, theme: theme, typeface: themes.typeface)
           }
@@ -116,6 +125,11 @@ struct ThreadView: View {
               .id("scheduled-\(scheduled.id)")
           }
 
+          // LE bas du fil : sous le dernier message il y a l'accusé, les envois
+          // programmés… Viser le message laissait tout ça hors champ.
+          Color.clear
+            .frame(height: 1)
+            .id(Self.bottomAnchorID)
         }
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.md)
@@ -125,6 +139,9 @@ struct ThreadView: View {
       .contentMargins(.top, ThreadMetrics.topClearance, for: .scrollContent)
       .defaultScrollAnchor(.bottom)
       .overlay(alignment: .top) { TopScrollFade(theme: theme) }
+      // Une réaction, une citation, un aperçu qui arrive après coup : le fil
+      // grandit sans que son compte bouge, et le bas doit tenir quand même.
+      .keepScrolledToBottom(isNearBottom: $isNearBottom) { keepBottom(proxy) }
       // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
       // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
       .opacity(isShowingThread ? 1 : 0)
@@ -132,6 +149,12 @@ struct ThreadView: View {
       // voler à la sélection de texte ni aux liens des bulles.
       .simultaneousGesture(TapGesture().onEnded { store.confirmSelectionAsRead() })
       .onAppear { pinToBottom(proxy) }
+      .task {
+        guard awaitsFirstFrame else { return }
+        await LaunchGate.firstWindowOnScreen()
+        awaitsFirstFrame = false
+        pinToBottom(proxy)
+      }
       .onChange(of: store.messages.count) { oldCount, newCount in
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
@@ -140,10 +163,13 @@ struct ThreadView: View {
         isShowingThread = false
         animatesArrivals = false
         settledMessageID = store.messages.last?.id
+        isNearBottom = true
         pinToBottom(proxy)
       }
       .onChange(of: store.threadSearchCurrentID) { _, target in
         guard let target else { return }
+        // On lit une occurrence, plus le bas : ce qui grandit ne doit pas nous y ramener.
+        isNearBottom = false
         withAnimation(.easeOut(duration: 0.18)) {
           proxy.scrollTo(target, anchor: .center)
         }
@@ -248,6 +274,7 @@ struct ThreadView: View {
   /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
   private func isFresh(_ message: ChatMessage) -> Bool {
     animatesArrivals
+      && store.didSettleInitialMatrixSync
       && message.id == store.messages.last?.id
       && message.id != settledMessageID
   }
@@ -261,15 +288,23 @@ struct ThreadView: View {
     }
   }
 
+  /// Si on lisait le bas, on y reste — dans la même passe, sans animer : rien
+  /// ne doit défiler à l'écran. Remonter d'un cran libère l'ancre.
+  private static let bottomAnchorID = "thread-bottom"
+
+  private func keepBottom(_ proxy: ScrollViewProxy) {
+    guard isNearBottom else { return }
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
+  }
+
   private func pinToBottom(_ proxy: ScrollViewProxy) {
-    let target = store.messages.last?.id
-    if let target {
-      proxy.scrollTo(target, anchor: .bottom)
-    }
+    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
     DispatchQueue.main.async {
-      if let id = store.messages.last?.id {
-        proxy.scrollTo(id, anchor: .bottom)
-      }
+      proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+      // Tant que le fil n'est pas arrivé, rien n'est « posé » ni à montrer.
+      guard !awaitsFirstFrame else { return }
       isShowingThread = true
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = store.messages.last?.id

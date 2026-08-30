@@ -148,6 +148,14 @@ struct FocusTranscriptView: View {
   @State private var settledMessageID: String?
   /// Suppression demandée au clic droit, en attente de confirmation.
   @State private var pendingDeletion: PendingDeletion?
+  /// Au lancement, la page reste blanche jusqu'à ce que la fenêtre soit peinte :
+  /// construire cent paragraphes avant la première frame, c'est le rebond de
+  /// trop dans le Dock. Le fil est de toute façon invisible tant qu'il n'est
+  /// pas ancré en bas — il arrive donc entier, un instant plus tard, sans saut.
+  @State private var awaitsFirstFrame = !LaunchGate.didPaintFirstWindow
+  /// Vrai tant que le lecteur n'a pas remonté la page : c'est ce qui décide si
+  /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
+  @State private var isNearBottom = true
 
   /// Le message visé et l'étendue de sa suppression — le temps de l'alerte.
   private struct PendingDeletion: Identifiable {
@@ -161,7 +169,7 @@ struct FocusTranscriptView: View {
   private var isWriting: Bool { store.isComposerFocused }
   private var live: ConversationSession? { session ?? store.primarySession }
   private var conversationID: String? { live?.conversationID }
-  private var thread: [ChatMessage] { live?.messages ?? [] }
+  private var thread: [ChatMessage] { awaitsFirstFrame ? [] : (live?.messages ?? []) }
   private var row: Conversation? { conversationID.flatMap { store.conversationRow($0) } }
 
   /// Le geste choisi dans les réglages — encre ou plume.
@@ -176,6 +184,7 @@ struct FocusTranscriptView: View {
   /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
   private func isFresh(_ message: ChatMessage) -> Bool {
     animatesArrivals
+      && store.didSettleInitialMatrixSync
       && message.id == thread.last?.id
       && message.id != settledMessageID
   }
@@ -327,7 +336,21 @@ struct FocusTranscriptView: View {
         MacOverlayScrollerHider()
           .allowsHitTesting(false)
       }
+      // Une réaction, une citation, un aperçu qui arrive après coup : la page
+      // grandit sans que son compte bouge, et le bas doit tenir quand même.
+      // L'ancre est le brouillon ; sous lui, la marge basse de la page fait
+      // partie du « bas ».
+      .keepScrolledToBottom(
+        threshold: (includesEditor ? metrics.bottom : Spacing.sm) + 24,
+        isNearBottom: $isNearBottom
+      ) { keepBottom(proxy) }
       .onAppear { pinToBottom(proxy) }
+      .task {
+        guard awaitsFirstFrame else { return }
+        await LaunchGate.firstWindowOnScreen()
+        awaitsFirstFrame = false
+        pinToBottom(proxy)
+      }
       .onChange(of: thread.count) { oldCount, newCount in
         // « Répondre… » est l'ancre : on la recale sans animer, le geste se
         // joue dans le paragraphe. Animer ici ferait glisser le bas de la page.
@@ -343,6 +366,7 @@ struct FocusTranscriptView: View {
         isShowingThread = false
         animatesArrivals = false
         settledMessageID = thread.last?.id
+        isNearBottom = true
         pinToBottom(proxy)
       }
       .alert(
@@ -389,10 +413,21 @@ struct FocusTranscriptView: View {
     }
   }
 
+  /// Si on lisait le bas, on y reste — dans la même passe, sans animer : rien
+  /// ne doit défiler à l'écran. Remonter d'un cran libère l'ancre.
+  private func keepBottom(_ proxy: ScrollViewProxy) {
+    guard isNearBottom else { return }
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { proxy.scrollTo("draft", anchor: .bottom) }
+  }
+
   private func pinToBottom(_ proxy: ScrollViewProxy) {
     proxy.scrollTo("draft", anchor: .bottom)
     DispatchQueue.main.async {
       proxy.scrollTo("draft", anchor: .bottom)
+      // Tant que le fil n'est pas arrivé, rien n'est « posé » ni à montrer.
+      guard !awaitsFirstFrame else { return }
       isShowingThread = true
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = thread.last?.id

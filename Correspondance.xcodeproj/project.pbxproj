@@ -70,6 +70,8 @@
 		5FFE55AB239E658DF272BAF2 /* IMessageAutomationHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94AD0E8F97378754384E6E6 /* IMessageAutomationHealth.swift */; };
 		62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */; };
 		663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */; };
+		D4AF3AB8E5B7C9DB234F6A5B /* LaunchGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39E2FA7D4A6B8CA123E5F4A /* LaunchGate.swift */; };
+		B28D1EF6C3F5A7B9012D4E3F /* LaunchWarmup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17C0DE5B2E4F6A8901C3D2E /* LaunchWarmup.swift */; };
 		6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72EC2976B9D7432A734100 /* NetworkRailView.swift */; };
 		6B7A547451740AFDC1337AB7 /* MessageGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F48AED50A82562391370A72 /* MessageGroupingTests.swift */; };
 		6C5D74E105C8D000F664DE85 /* InboxStore+Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */; };
@@ -235,6 +237,8 @@
 		5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarView.swift; sourceTree = "<group>"; };
 		5DDFA61AE66989EBCAF652C5 /* LinkedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedText.swift; sourceTree = "<group>"; };
 		5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceApp.swift; sourceTree = "<group>"; };
+		C39E2FA7D4A6B8CA123E5F4A /* LaunchGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchGate.swift; sourceTree = "<group>"; };
+		A17C0DE5B2E4F6A8901C3D2E /* LaunchWarmup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchWarmup.swift; sourceTree = "<group>"; };
 		61DCBD1AB391B2D91D9BFB4B /* InstagramSessionCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramSessionCookies.swift; sourceTree = "<group>"; };
 		625768DBC8A0E14E8A2D098D /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
 		665DCB8EDC1524BC8474BC94 /* WritingTypeface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingTypeface.swift; sourceTree = "<group>"; };
@@ -609,6 +613,8 @@
 			children = (
 				D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */,
 				5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */,
+				C39E2FA7D4A6B8CA123E5F4A /* LaunchGate.swift */,
+				A17C0DE5B2E4F6A8901C3D2E /* LaunchWarmup.swift */,
 				1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */,
 			);
 			path = App;
@@ -799,6 +805,8 @@
 				D9CE34EE5628C0B48A0190CC /* ConversationSearch.swift in Sources */,
 				01BBAC3FB153B50AF690A9DF /* ConversationSession.swift in Sources */,
 				663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */,
+				D4AF3AB8E5B7C9DB234F6A5B /* LaunchGate.swift in Sources */,
+				B28D1EF6C3F5A7B9012D4E3F /* LaunchWarmup.swift in Sources */,
 				D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */,
 				26CA1D96200F9F1AA700D982 /* DetachedConversationWindow.swift in Sources */,
 				E701985C896FDF358142ACB9 /* DetachedWindowState.swift in Sources */,

@@ -444,8 +444,7 @@ final class ThemePreferences {
     let raw = UserDefaults.standard.string(forKey: Keys.theme) ?? WritingThemeID.papier.rawValue
     self.themeID = WritingThemeID(rawValue: raw) ?? .papier
 
-    let face = UserDefaults.standard.string(forKey: Keys.typeface) ?? WritingTypeface.quattro.rawValue
-    self.typeface = WritingTypeface(rawValue: face) ?? .quattro
+    self.typeface = Self.storedTypeface()
 
     let scale = UserDefaults.standard.object(forKey: Keys.typeScale) as? Double
     self.typeScale = Self.clampTypeScale(scale ?? 1.0)
@@ -484,6 +483,13 @@ final class ThemePreferences {
     }
     let warm = UserDefaults.standard.object(forKey: Keys.warm) as? Double
     self.warmThresholdHours = warm ?? 12
+  }
+
+  /// La fonte rangée dans les réglages — lisible hors du fil principal, pour la
+  /// préchauffer au lancement avant que la première bulle la demande.
+  nonisolated static func storedTypeface() -> WritingTypeface {
+    let raw = UserDefaults.standard.string(forKey: Keys.typeface) ?? ""
+    return WritingTypeface(rawValue: raw) ?? .quattro
   }
 
   private enum Keys {

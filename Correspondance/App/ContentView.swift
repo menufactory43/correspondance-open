@@ -56,9 +56,15 @@ struct ContentView: View {
       // l'action d'ouverture pendant qu'une fenêtre existe encore.
       WindowOpener.shared.openWindow = openWindow
       // Le panneau de réponse rapide emprunte les deux mêmes sources de vérité,
-      // et le raccourci global se pose avec elles.
-      QuickReplyPanelController.shared.configure(store: store, themes: themes)
-      QuickReplyStatusItem.shared.configure(store: store)
+      // et le raccourci global se pose avec elles. Mais poser un `NSStatusItem`
+      // et armer un raccourci Carbon parlent au serveur de fenêtres : rien qui
+      // mérite de retarder la première frame. Tâche non structurée : fermer
+      // l'inbox dans la foulée ne doit pas laisser l'icône de barre orpheline.
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(300))
+        QuickReplyPanelController.shared.configure(store: store, themes: themes)
+        QuickReplyStatusItem.shared.configure(store: store)
+      }
     }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }

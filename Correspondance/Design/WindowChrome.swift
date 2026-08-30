@@ -96,6 +96,28 @@ extension View {
     }
   }
 
+  /// Le bas du fil, tenu comme Messages le tient : tant qu'on n'a pas remonté,
+  /// on y reste — quoi qu'il arrive au contenu. Cf. `KeepScrolledToBottom`.
+  /// `threshold` : la distance sous l'ancre qui compte encore comme « en bas »
+  /// (la marge basse de la page Focus, par exemple).
+  @ViewBuilder
+  func keepScrolledToBottom(
+    threshold: CGFloat = 24,
+    isNearBottom: Binding<Bool>,
+    keepBottom: @escaping () -> Void
+  ) -> some View {
+    if #available(macOS 15.0, *) {
+      modifier(KeepScrolledToBottom(threshold: threshold, isNearBottom: isNearBottom, keepBottom: keepBottom))
+    } else {
+      // Rien d'observable ici : on retient le bas à chaque changement de hauteur.
+      background {
+        GeometryReader { geometry in
+          Color.clear.onChange(of: geometry.size.height) { _, _ in keepBottom() }
+        }
+      }
+    }
+  }
+
   /// Barre d'outils SANS fond : c'est elle qui créait la bande cousue en haut.
   @ViewBuilder
   func correspondanceTransparentToolbar() -> some View {
@@ -105,6 +127,71 @@ extension View {
       toolbarBackground(.hidden, for: .windowToolbar)
     }
   }
+}
+
+/// `defaultScrollAnchor(.bottom)` ne suit ni une hauteur qui change sans que
+/// le nombre de lignes bouge (réaction sous une bulle, citation que la sync
+/// complète, aperçu, image), ni un inset qui se stabilise après la première
+/// passe (la barre d'outils) : dans les deux cas le bas glissait de quelques
+/// lignes. Ici, dès que la géométrie bouge HORS d'un défilement du lecteur et
+/// qu'on n'est plus en bas, on y retourne — sans animer.
+///
+/// « Suis-je en bas ? » ne se relit qu'à la fin d'un défilement du lecteur :
+/// les mouvements programmés (les nôtres, ceux de SwiftUI) ne décrochent jamais
+/// l'ancre. Remonter d'un cran la libère ; revenir en bas la reprend.
+@available(macOS 15.0, *)
+private struct KeepScrolledToBottom: ViewModifier {
+  let threshold: CGFloat
+  @Binding var isNearBottom: Bool
+  let keepBottom: () -> Void
+
+  @State private var isReaderScrolling = false
+  /// La géométrie sur laquelle on a déjà tenté un recalage : ne pas insister
+  /// au même endroit, sinon un bas inatteignable ferait boucler.
+  @State private var lastAttempt: ScrollBottomProbe?
+  /// `scrollTo(id, anchor: .bottom)` aligne sur le bas de la zone HORS insets
+  /// (barre d'outils, marges) et s'arrête donc toujours un peu trop haut ;
+  /// `scrollTo(edge:)` vise le bord réel du contenu — celui que
+  /// `defaultScrollAnchor(.bottom)` atteint au premier affichage.
+  @State private var position = ScrollPosition()
+
+  func body(content: Content) -> some View {
+    content
+      .scrollPosition($position)
+      .onScrollGeometryChange(for: ScrollBottomProbe.self) { geometry in
+        // Le viewport est plus haut que `containerSize` : la bande sous la barre
+        // d'outils (inset haut) en fait partie. Sans elle, le vrai bas paraît
+        // toujours à 68 px du bas.
+        ScrollBottomProbe(
+          content: geometry.contentSize.height,
+          visibleBottom: geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top,
+          contentBottom: geometry.contentSize.height + geometry.contentInsets.bottom
+        )
+      } action: { old, new in
+        guard isNearBottom, !isReaderScrolling else { return }
+        let drifted = new.visibleBottom < new.contentBottom - threshold
+        guard new.content != old.content || drifted else { return }
+        guard new != lastAttempt else { return }
+        lastAttempt = new
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { position.scrollTo(edge: .bottom) }
+      }
+      .onScrollPhaseChange { _, newPhase, context in
+        isReaderScrolling = newPhase == .tracking || newPhase == .interacting || newPhase == .decelerating
+        guard newPhase == .idle else { return }
+        let geometry = context.geometry
+        let visibleBottom = geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top
+        let contentBottom = geometry.contentSize.height + geometry.contentInsets.bottom
+        isNearBottom = visibleBottom >= contentBottom - threshold
+      }
+  }
+}
+
+private struct ScrollBottomProbe: Equatable {
+  var content: CGFloat
+  var visibleBottom: CGFloat
+  var contentBottom: CGFloat
 }
 
 /// Bouton d’outil discret, style Apple / Claude.
