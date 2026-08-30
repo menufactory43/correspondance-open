@@ -307,6 +307,17 @@ final class InboxStore {
     }
     pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.pinnedIDs) ?? [])
     mutedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.mutedIDs) ?? [])
+    // Les photos de portail passent par le service : le store d'avatars ne le connaît
+    // pas, on lui prête juste de quoi télécharger — **dès maintenant**. Les lignes de
+    // l'inbox se dessinent depuis le cache avant la première passe `/sync` ; si le
+    // chargeur n'était posé qu'à ce moment-là, un `mxc` déjà connu ne relancerait
+    // jamais sa tâche et le fil garderait ses initiales jusqu'à un changement de photo.
+    let bridge = matrix
+    Task {
+      await ConversationAvatarStore.shared.setMatrixAvatarLoader { mxc in
+        await bridge.avatarData(mxcURI: mxc)
+      }
+    }
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
     drafts = DraftStore.load()
     let mergeStore = MergedContactStore.load()
@@ -1306,12 +1317,6 @@ final class InboxStore {
         return
       }
       self.isMatrixConnected = true
-      // Les photos de portail passent par le service : le store d'avatars ne le
-      // connaît pas, on lui prête juste de quoi télécharger.
-      let bridge = self.matrix
-      await ConversationAvatarStore.shared.setMatrixAvatarLoader { mxc in
-        await bridge.avatarData(mxcURI: mxc)
-      }
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {
