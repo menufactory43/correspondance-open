@@ -34,8 +34,12 @@ extension InboxStore {
 
   /// ⌘⇧D, menu contextuel de la liste : ce fil s'en va dans sa fenêtre.
   func detach(conversationID: String) {
-    pendingDetachRequests.insert(conversationID)
     restorePinnedDetached(conversationID)
+    // La fenêtre existe déjà : `WindowGroup(for:)` la ramène devant sans
+    // repasser par `onAppear`. Poser un jeton ici, c'est en laisser un traîner
+    // — et la prochaine fenêtre ressuscitée par le système s'en servirait.
+    if raiseDetachedWindow(for: conversationID) { return }
+    pendingDetachRequests.insert(conversationID)
     WindowOpener.shared.openConversation(conversationID)
   }
 
