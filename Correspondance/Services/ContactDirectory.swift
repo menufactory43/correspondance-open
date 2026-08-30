@@ -413,8 +413,11 @@ actor ContactDirectory {
   }
 
   private func promptForAccessOnMainActor() async -> Bool {
-    await MainActor.run { NSApplication.shared.activate(ignoringOtherApps: true) }
-    try? await Task.sleep(for: .milliseconds(200))
+    let wasActive = await MainActor.run { NSApplication.shared.isActive }
+    if !wasActive {
+      await MainActor.run { NSApplication.shared.activate(ignoringOtherApps: true) }
+      try? await Task.sleep(for: .milliseconds(200))
+    }
 
     return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
       DispatchQueue.main.async {

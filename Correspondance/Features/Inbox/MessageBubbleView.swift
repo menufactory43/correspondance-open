@@ -202,7 +202,8 @@ struct MessageBubbleView: View {
   private var previewedLink: URL? {
     guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble
     else { return nil }
-    return TextLinks.firstWebURL(in: displayText)
+    // Le même mémo que le corps : le détecteur ne repasse pas sur la bulle.
+    return LinkedText.firstWebURL(in: displayText)
   }
 
   /// Réagir · répondre · tout le reste — la rangée qui n'existe qu'au survol.

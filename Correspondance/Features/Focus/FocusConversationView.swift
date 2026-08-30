@@ -429,6 +429,7 @@ struct FocusTranscriptView: View {
       // Tant que le fil n'est pas arrivé, rien n'est « posé » ni à montrer.
       guard !awaitsFirstFrame else { return }
       isShowingThread = true
+      LaunchGate.markThreadPainted()
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = thread.last?.id
       animatesArrivals = true
