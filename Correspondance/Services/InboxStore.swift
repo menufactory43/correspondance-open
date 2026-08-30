@@ -53,6 +53,8 @@ final class InboxStore {
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
   var isComposerFocused = false
+  /// Les gens du fil ouvert, pour le menu « @ » (cf. `InboxStore+Mentions`).
+  var mentionCandidates: [MentionCandidate] = []
   /// Messages programmés (⌘⇧L), tous fils confondus, triés par échéance.
   private(set) var scheduledMessages: [ScheduledMessage] = []
   /// Réglage « plus tard » du composer : tant qu'il est posé, Entrée programme
@@ -133,8 +135,8 @@ final class InboxStore {
 
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
-  private let signal = SignalBridge()
-  private let matrix = MatrixBridgeService()
+  let signal = SignalBridge()
+  let matrix = MatrixBridgeService()
   @ObservationIgnored private var loadTask: Task<Void, Never>?
   @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
   /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
@@ -1114,7 +1116,13 @@ final class InboxStore {
     let input: MatrixBridgeService.BridgeLoginInput
     switch bridge.loginFlow {
     case .qrCode:
-      input = phoneNumber.map { .whatsAppPairing(phoneNumber: $0) } ?? .whatsAppQRCode
+      // Un numéro ne vaut repli que si le pont sait s'appairer par code : le
+      // bot Signal, lui, ne connaît pas `login phone` et répondrait par une erreur.
+      if let phoneNumber, bridge.supportsPhonePairing {
+        input = .phonePairing(phoneNumber: phoneNumber)
+      } else {
+        input = .qrCode
+      }
       bridgeLoginStatusFR = "Demande du QR au bot \(network.labelFR)…"
     case .webSession:
       input = .webSession

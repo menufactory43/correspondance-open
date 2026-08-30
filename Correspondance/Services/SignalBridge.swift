@@ -480,10 +480,17 @@ actor SignalBridge {
         ? name!
         : "Groupe (\(max(members.count, 1)))"
 
+      // Les numéros des membres : c'est ce qui nourrit le menu « @ » du composer.
+      let memberHandles = members.compactMap {
+        (($0["number"] as? String) ?? ($0["uuid"] as? String))?
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+      }.filter { !$0.isEmpty }
+
       let id = "signal-group:\(groupID)"
       if var existing = conversations[id] {
         // Toujours réparer un titre technique / placeholder avec le vrai nom.
         existing.preferTitle(title)
+        if existing.participantHandles.isEmpty { existing.participantHandles = memberHandles }
         conversations[id] = existing
         continue
       }
@@ -500,7 +507,8 @@ actor SignalBridge {
         unreadCount: 0,
         isArchived: false,
         transportKey: groupID,
-        isGroup: true
+        isGroup: true,
+        participantHandles: memberHandles
       )
     }
   }

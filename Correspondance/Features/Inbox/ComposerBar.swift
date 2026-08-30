@@ -110,6 +110,8 @@ struct ComposerBar: View {
       }
       .padding(.leading, 2)
       .padding(.vertical, 4)
+      // Avant le « Entrée = envoyer » : quand le menu est ouvert, Entrée choisit.
+      .mentionMenu(text: $text, theme: theme, font: Typography.composer(themes.typeface))
       .onKeyPress(.return) {
         if NSEvent.modifierFlags.contains(.shift) { return .ignored }
         guard canSend, !isSending else { return .handled }

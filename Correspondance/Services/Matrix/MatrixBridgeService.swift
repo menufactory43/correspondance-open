@@ -139,6 +139,20 @@ actor MatrixBridgeService {
       .sorted { $0.lastMessageAt > $1.lastMessageAt }
   }
 
+  struct Member: Sendable, Hashable {
+    let userID: String
+    let displayName: String?
+    let avatarMXC: String?
+  }
+
+  /// Les correspondants d'un salon — ni moi, ni le bot, ni mon propre ghost.
+  func members(conversationID: String) -> [Member] {
+    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return [] }
+    return model.remoteMembers(selfUserID: selfUserID).map {
+      Member(userID: $0.userID, displayName: $0.member.displayName, avatarMXC: $0.member.avatarMXC)
+    }
+  }
+
   func messages(conversationID: String) -> [ChatMessage] {
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return [] }
     return model.sortedMessages
@@ -304,9 +318,12 @@ actor MatrixBridgeService {
 
   /// Ce que l'app envoie pour démarrer une connexion, selon le pont.
   enum BridgeLoginInput: Sendable, Equatable {
-    /// WhatsApp : QR par défaut, ou code d'appairage si un numéro est fourni.
-    case whatsAppQRCode
-    case whatsAppPairing(phoneNumber: String)
+    /// QR à scanner depuis le téléphone. WhatsApp et Signal s'y lient tous deux
+    /// comme appareil secondaire.
+    case qrCode
+    /// Repli par code d'appairage, quand le pont sait le faire — WhatsApp seul :
+    /// mautrix-signal n'expose que le flow QR.
+    case phonePairing(phoneNumber: String)
     /// Instagram : la commande `login` seule, la session récoltée dans la fenêtre suivra.
     case webSession
   }
@@ -315,8 +332,8 @@ actor MatrixBridgeService {
   func startLogin(network: MessageNetwork, input: BridgeLoginInput) async throws {
     let command: String
     switch input {
-    case .whatsAppQRCode: command = "login qr"
-    case .whatsAppPairing(let phoneNumber): command = "login phone \(phoneNumber)"
+    case .qrCode: command = "login qr"
+    case .phonePairing(let phoneNumber): command = "login phone \(phoneNumber)"
     // Un seul flow côté mautrix-instagram (`instagram`, par cookies) : `login` suffit,
     // et le bot enchaîne tout seul sur l'étape « colle ton JSON ».
     case .webSession: command = "login"

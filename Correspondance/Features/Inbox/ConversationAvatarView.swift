@@ -5,6 +5,8 @@ struct ConversationAvatarView: View {
   let conversation: Conversation
   var size: CGFloat = 34
   var theme: WritingTheme
+  /// Dans une liste de personnes d'un même fil, la pastille réseau ne dit plus rien.
+  var showsNetworkBadge = true
 
   @State private var image: NSImage?
 
@@ -64,8 +66,10 @@ struct ConversationAvatarView: View {
         .strokeBorder(theme.edge.opacity(0.35), lineWidth: 0.5)
     )
     .overlay(alignment: .bottomTrailing) {
-      networkBadge
-        .offset(x: 1, y: 1)
+      if showsNetworkBadge {
+        networkBadge
+          .offset(x: 1, y: 1)
+      }
     }
     // Une nouvelle photo côté réseau change le `mxc` : la tâche doit repartir,
     // sinon l'ancienne image resterait affichée jusqu'au prochain lancement.

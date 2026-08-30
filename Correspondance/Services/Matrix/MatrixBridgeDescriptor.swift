@@ -33,6 +33,10 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
   let identifiersArePhoneNumbers: Bool
   /// Suffixes que mautrix accole aux noms de ghosts (« Alice (WA) »).
   let displayNameSuffixes: [String]
+  /// Le pont accepte-t-il `login phone <numéro>` en plus du QR ? WhatsApp oui,
+  /// Signal non — mautrix-signal n'expose que le flow QR, et lui envoyer un
+  /// `login phone` ne produirait qu'un message d'erreur du bot.
+  let supportsPhonePairing: Bool
 
   static let whatsapp = MatrixBridgeDescriptor(
     network: .whatsapp,
@@ -42,7 +46,8 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     protocolIDs: ["whatsapp", "whatsappgo"],
     loginFlow: .qrCode,
     identifiersArePhoneNumbers: true,
-    displayNameSuffixes: [" (WA)", " (WhatsApp)"]
+    displayNameSuffixes: [" (WA)", " (WhatsApp)"],
+    supportsPhonePairing: true
   )
 
   static let instagram = MatrixBridgeDescriptor(
@@ -55,7 +60,8 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     identifiersArePhoneNumbers: false,
     // mautrix-instagram ne suffixe rien par défaut ; on nettoie quand même les
     // formes qu'on croise chez les instances qui l'ont configuré autrement.
-    displayNameSuffixes: [" (IG)", " (Instagram)"]
+    displayNameSuffixes: [" (IG)", " (Instagram)"],
+    supportsPhonePairing: false
   )
 
   static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram]

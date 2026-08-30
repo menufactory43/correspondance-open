@@ -143,6 +143,16 @@ actor MatrixClient {
     return json.string(at: "room_id") ?? roomID
   }
 
+  /// Quitte un salon. Côté pont, quitter le portail d'un groupe revient à quitter
+  /// le groupe sur le réseau distant — c'est ainsi qu'on remplace `quitGroup`.
+  func leave(roomID: String) async throws {
+    _ = try await request(
+      method: "POST",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/leave",
+      body: .object([:])
+    )
+  }
+
   /// Crée un DM (invitation + `is_direct`). Utilisé pour le salon de gestion du bot.
   func createDM(with userID: String) async throws -> String {
     let body: MatrixJSON = .object([
