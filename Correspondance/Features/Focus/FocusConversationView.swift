@@ -323,6 +323,11 @@ struct FocusTranscriptView: View {
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
+      // Redimensionner une fenêtre détachée ne doit pas renvoyer le fil à son
+      // début : le bas de la page est ce qu'on lit.
+      .onChange(of: metrics) { _, _ in
+        proxy.scrollTo("draft", anchor: .bottom)
+      }
       .onChange(of: conversationID) { _, _ in
         isShowingThread = false
         animatesArrivals = false
