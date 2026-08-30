@@ -350,13 +350,14 @@ struct MessageBubbleView: View {
         unavailableImageLabel(repaired)
       }
     } else if let url = repaired.resolvedFileURL, repaired.isVideo {
-      Label(repaired.filename ?? "Vidéo", systemImage: "video.fill")
-        .font(Typography.meta)
-        .foregroundStyle(theme.inkSecondary)
-        .padding(10)
-        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .onTapGesture { NSWorkspace.shared.open(url) }
-        .help("Ouvrir la vidéo")
+      AttachmentVideoView(
+        url: url,
+        maxWidth: 280,
+        maxHeight: 320,
+        placeholder: theme.bubbleIn,
+        border: theme.edge.opacity(0.5),
+        label: repaired.filename ?? "Vidéo"
+      )
     } else if repaired.isImage {
       unavailableImageLabel(repaired)
     } else {
