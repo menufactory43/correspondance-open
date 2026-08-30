@@ -37,6 +37,11 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// Signal non — mautrix-signal n'expose que le flow QR, et lui envoyer un
   /// `login phone` ne produirait qu'un message d'erreur du bot.
   let supportsPhonePairing: Bool
+  /// Quitter le portail est-il relayé comme un départ du groupe côté réseau ?
+  /// Vrai pour Signal et WhatsApp. Laissé faux pour Instagram tant que ce n'est
+  /// pas vérifié : proposer le geste sans qu'il porte, c'est promettre un départ
+  /// qui n'a pas lieu, et voir le salon renaître au message suivant.
+  let relaysGroupLeave: Bool
 
   static let whatsapp = MatrixBridgeDescriptor(
     network: .whatsapp,
@@ -47,7 +52,8 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     loginFlow: .qrCode,
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (WA)", " (WhatsApp)"],
-    supportsPhonePairing: true
+    supportsPhonePairing: true,
+    relaysGroupLeave: true
   )
 
   static let instagram = MatrixBridgeDescriptor(
@@ -61,7 +67,8 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     // mautrix-instagram ne suffixe rien par défaut ; on nettoie quand même les
     // formes qu'on croise chez les instances qui l'ont configuré autrement.
     displayNameSuffixes: [" (IG)", " (Instagram)"],
-    supportsPhonePairing: false
+    supportsPhonePairing: false,
+    relaysGroupLeave: false
   )
 
   /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
@@ -81,7 +88,8 @@ struct MatrixBridgeDescriptor: Sendable, Hashable {
     // est un UUID : `PhoneNormalizer` refuse les UUID, aucune fusion hasardeuse.
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (Signal)"],
-    supportsPhonePairing: false
+    supportsPhonePairing: false,
+    relaysGroupLeave: true
   )
 
   static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .signal]

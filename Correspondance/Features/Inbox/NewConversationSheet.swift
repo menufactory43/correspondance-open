@@ -27,6 +27,7 @@ struct NewConversationSheet: View {
   private var placeholderFR: String {
     switch network {
     case .whatsapp: "Numéro WhatsApp"
+    case .signal: "Numéro Signal"
     case .instagram: "Nom d’utilisateur Instagram"
     default: "Nom, numéro ou e-mail"
     }
@@ -41,8 +42,9 @@ struct NewConversationSheet: View {
   /// Un numéro ne se réduit pas à un pseudo, ni l'inverse : chaque réseau a sa règle.
   private func isValidHandle(_ handle: String) -> Bool {
     switch network {
-    // Le bridge WhatsApp ne prend qu'un numéro (commande bot `pm +33…`).
-    case .whatsapp:
+    // WhatsApp et Signal ne prennent qu'un numéro (commande bot `pm +33…`).
+    // Une adresse e-mail y échouerait côté bot, sans rien dire de lisible ici.
+    case .whatsapp, .signal:
       return handle.filter(\.isNumber).count >= 8 && !handle.contains("@")
     // Instagram : un pseudo ou un identifiant Meta. Pas d'arobase à l'intérieur —
     // celle de tête, l'usage la met, on la retire à l'envoi.

@@ -13,7 +13,8 @@ struct SettingsAccountsPane: View {
       SettingsCard(
         title: "Transports natifs",
         footnote: """
-          iMessage se lit dans la base de Messages, et s’envoie en pilotant           l’app — rien à connecter.
+          iMessage se lit dans la base de Messages, et s’envoie en pilotant l’app —
+          rien à connecter.
           """
       ) {
         SettingsRow(

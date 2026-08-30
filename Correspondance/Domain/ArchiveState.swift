@@ -2,7 +2,7 @@ import Foundation
 
 /// Source de vérité de l'archivage : un ensemble d'identifiants persisté côté app.
 ///
-/// Aucun réseau ne connaît notre archive — chaque catalogue (chat.db, signal-cli,
+/// Aucun réseau ne connaît notre archive — chaque catalogue (chat.db, les ponts,
 /// `/sync` Matrix) renvoie systématiquement `isArchived: false`. La règle est donc
 /// de **réappliquer** l'ensemble après chaque fusion, jamais de faire confiance à
 /// ce qui remonte du transport.

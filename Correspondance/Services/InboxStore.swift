@@ -46,7 +46,7 @@ final class InboxStore {
   var draftText: String = "" {
     didSet { captureDraft() }
   }
-  /// Chemins locaux d’images à envoyer (Signal).
+  /// Chemins locaux d’images à envoyer avec le prochain message.
   var pendingAttachmentPaths: [String] = [] {
     didSet { captureDraft() }
   }
@@ -114,7 +114,7 @@ final class InboxStore {
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
 
-  /// Préférences locales (pin / mute / timer) — pas dans le catalogue Signal.
+  /// Préférences locales (pin / mute / timer) — aucun réseau ne les porte pour nous.
   private(set) var pinnedIDs: Set<String> = []
   private(set) var mutedIDs: Set<String> = []
   /// Fils archivés — persistés, donc réappliqués à chaque fusion (le catalogue
@@ -136,8 +136,7 @@ final class InboxStore {
   private let iMessageSender = IMessageSender()
   let matrix = MatrixBridgeService()
   @ObservationIgnored private var loadTask: Task<Void, Never>?
-  @ObservationIgnored private var liveSyncTask: Task<Void, Never>?
-  /// Boucle `/sync` : long-poll dédié, indépendant du poll signal-cli.
+  /// Boucle `/sync` : un long-poll qui ne s'arrête jamais, sans intervalle à régler.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
   @ObservationIgnored private var bridgeLoginTask: Task<Void, Never>?
   /// La commande `login` est-elle partie ? Le bot n'attend une session qu'après elle.
@@ -161,6 +160,10 @@ final class InboxStore {
   /// recevoir. Le traiter comme lu effacerait le non-lu qu'on cherche à rendre.
   /// Seul un vrai clic vaut lecture.
   @ObservationIgnored private(set) var selectionIsUserMade = false
+  /// Fils qu'on a marqués « non lu » à la main. Un réseau bridgé fait autorité sur
+  /// ses compteurs : sans cette liste, le `/sync` suivant écraserait le geste en
+  /// moins de trente secondes, et le bouton ne servirait à rien.
+  @ObservationIgnored private var manuallyUnreadIDs: Set<String> = []
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   @ObservationIgnored private var searchIndex: [String: String] = [:]
@@ -324,6 +327,7 @@ final class InboxStore {
       }
     }
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
+    manuallyUnreadIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.manuallyUnread) ?? [])
     drafts = DraftStore.load()
     let mergeStore = MergedContactStore.load()
     mergedContacts = mergeStore.merged
@@ -378,19 +382,22 @@ final class InboxStore {
     }
     persistMergedContacts()
 
+    // Un message programmé vers un fil qui n'existe plus échouerait à l'échéance
+    // sur « Conversation introuvable », et resterait en erreur pour toujours ; un
+    // brouillon legacy, lui, deviendrait un orphelin qu'aucune vue n'affiche.
+    scheduledMessages.removeAll { isLegacySignalID($0.conversationID) }
+    ScheduledMessageStore.save(scheduledMessages)
+    drafts = drafts.filter { !isLegacySignalID($0.key) }
+    DraftStore.save(drafts)
+
     // Le marqueur de non-lus de signal-cli n'a plus de fils à désigner : les
     // compteurs viennent désormais du `/sync`, comme pour les autres ponts.
     UserDefaults.standard.removeObject(forKey: "correspondance.signalLastSeenAt")
 
-    // Les salons Signal ont pu apparaître côté serveur avant que l'app sache les
-    // lire : en sync incrémental leur état ne repasserait jamais. On repart d'une
-    // sync initiale complète, une fois.
-    MatrixConversationCache.resetSyncCursor()
-
     UserDefaults.standard.set(true, forKey: Keys.signalCLIMigration)
   }
 
-  /// Affiche tout de suite les caches iMessage + Signal (démarrage type Messages).
+  /// Affiche tout de suite les caches iMessage + Matrix (démarrage type Messages).
   private func hydrateFromDiskCache() {
     var list: [Conversation] = []
 
@@ -1323,14 +1330,6 @@ final class InboxStore {
     await load()
   }
 
-  func stopLiveSync() {
-    liveSyncTask?.cancel()
-    liveSyncTask = nil
-    matrixSyncTask?.cancel()
-    matrixSyncTask = nil
-    iMessageWatcher.stop()
-  }
-
   /// Boucle `/sync` Matrix : long-poll côté serveur, donc pas de sleep entre deux passes.
   func startMatrixSync() {
     matrixSyncTask?.cancel()
@@ -1348,6 +1347,9 @@ final class InboxStore {
           var updated = try await self.matrix.syncOnce()
           guard !Task.isCancelled else { return }
           backoffSeconds = 2
+          // Le long-poll a rendu quelque chose : on est en train d'intégrer.
+          self.isLiveSyncing = true
+          defer { self.isLiveSyncing = false }
           await ContactDirectory.shared.enrichBridgedTitles(&updated)
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
@@ -1471,6 +1473,8 @@ final class InboxStore {
 
   func markUnread(conversationID: String) {
     guard let idx = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+    for id in expandedIDs(for: conversationID) { manuallyUnreadIDs.insert(id) }
+    persistFlags()
     var updated = conversations[idx]
     updated.unreadCount = max(1, updated.unreadCount)
     // Sur une ligne fusionnée, le geste vaut pour chaque fil réuni : c'est le
@@ -1516,7 +1520,7 @@ final class InboxStore {
 
   func leaveGroup(conversationID: String) async {
     guard let conversation = conversations.first(where: { $0.id == conversationID }),
-          conversation.network.isMatrixBridged,
+          conversation.network.bridge?.relaysGroupLeave == true,
           conversation.isGroup
     else { return }
 
@@ -2004,6 +2008,9 @@ final class InboxStore {
       // Le fil ouvert est lu : ne pas y réinstaller un badge. Un membre replié
       // se lit sous sa ligne fusionnée — c'est elle que la sélection désigne.
       let isOpen = displayRowID(for: incoming.id) == selectedConversationID
+      // Le serveur dit « lu » ; l'utilisateur a dit « non lu ». C'est lui qui gagne,
+      // jusqu'à ce qu'il ouvre le fil.
+      let heldUnread = manuallyUnreadIDs.contains(incoming.id) && !isOpen
       if var existing = byID[incoming.id] {
         if incoming.hasLivePreview {
           existing.preview = incoming.preview
@@ -2014,7 +2021,7 @@ final class InboxStore {
         // Les accusés viennent du `/sync` : ils font autorité sur l'état local.
         existing.lastDelivery = incoming.lastDelivery
         existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
-        existing.unreadCount = isOpen ? 0 : incoming.unreadCount
+        existing.unreadCount = isOpen ? 0 : max(incoming.unreadCount, heldUnread ? 1 : 0)
         if existing.remoteAvatarID != incoming.remoteAvatarID {
           existing.remoteAvatarID = incoming.remoteAvatarID
           staleAvatarIDs.append(incoming.id)
@@ -2029,6 +2036,7 @@ final class InboxStore {
       } else {
         var fresh = incoming
         if isOpen { fresh.unreadCount = 0 }
+        if heldUnread { fresh.unreadCount = max(1, fresh.unreadCount) }
         byID[incoming.id] = fresh
       }
     }
@@ -2082,6 +2090,13 @@ final class InboxStore {
   }
 
   private func clearUnread(for id: String) {
+    // Ouvrir le fil lève le « non lu » posé à la main : c'est le seul geste qui
+    // puisse le contredire.
+    if !manuallyUnreadIDs.isEmpty {
+      let before = manuallyUnreadIDs.count
+      for memberID in expandedIDs(for: id) { manuallyUnreadIDs.remove(memberID) }
+      if manuallyUnreadIDs.count != before { persistFlags() }
+    }
     // Une ligne fusionnée additionne les non-lus de ses fils : les remettre à
     // zéro veut dire les remettre à zéro partout, cache compris.
     for memberID in expandedIDs(for: id) where memberID != id {
@@ -2156,11 +2171,12 @@ final class InboxStore {
       }
     }
 
-    // Garder le Signal déjà en mémoire pendant que signal-cli tourne.
-    let previousSignal = realConversations(on: .signal)
-    if !previousSignal.isEmpty {
-      merged.append(contentsOf: previousSignal)
-    }
+    // Cette passe ne rafraîchit qu'iMessage, mais elle réassigne `conversations`
+    // en entier : sans ça, les fils bridgés disparaîtraient de la liste jusqu'au
+    // `/sync` suivant, et la sélection sauterait sur un fil iMessage entre-temps.
+    merged.append(contentsOf: conversations.filter {
+      $0.network.isMatrixBridged && !MergedContact.isMergedID($0.id)
+    })
 
     preserveComposing(into: &merged)
 
@@ -2184,22 +2200,6 @@ final class InboxStore {
       Task { await self.enrichIMessageContactsInBackground() }
       Task { await self.refreshIMessageSearchIndex() }
     }
-
-    // Signal arrive désormais par le `/sync`, comme WhatsApp et Instagram : plus
-    // rien à aller chercher ici, la boucle Matrix s'en charge en continu.
-    var next = conversations
-
-    preserveComposing(into: &next)
-
-    let selection = selectedConversationID
-    conversations = next.sorted(by: { sortForInbox($0, $1) })
-    if selection == nil || !conversations.contains(where: { $0.id == selection }) {
-      selectedConversationID = inboxRecents.first?.id
-        ?? inboxGroups.first?.id
-        ?? activeQueue.first?.id
-      selectionIsUserMade = false
-    }
-    await loadMessagesForSelection()
   }
 
   /// Noms (+ index photos) Contacts — ne bloque jamais le chargement inbox.
@@ -2403,6 +2403,7 @@ final class InboxStore {
     UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
     UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
     UserDefaults.standard.set(Array(archivedIDs), forKey: Keys.archivedIDs)
+    UserDefaults.standard.set(Array(manuallyUnreadIDs), forKey: Keys.manuallyUnread)
     if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
       UserDefaults.standard.set(data, forKey: Keys.disappearing)
     }
@@ -2416,6 +2417,7 @@ final class InboxStore {
     static let archivedIDs = "correspondance.archivedConversationIDs"
     static let disappearing = "correspondance.disappearingSeconds"
     static let signalCLIMigration = "correspondance.signalCLIMigrationDone"
+    static let manuallyUnread = "correspondance.manuallyUnreadConversationIDs"
     static let messagesAutomation = "correspondance.messagesAutomation.enabled"
     static let messagesAutomationOffscreen = "correspondance.messagesAutomation.offscreenWindow"
   }

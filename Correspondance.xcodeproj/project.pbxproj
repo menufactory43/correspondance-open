@@ -45,7 +45,6 @@
 		3D2A11F3742DBE9FB279F832 /* MatrixSyncParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A76851FF7793F1D948CC6D49 /* MatrixSyncParser.swift */; };
 		3E8E098FF4C24E0860AA776D /* IMessageAutomationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0102675D287E0FEE9A64F /* IMessageAutomationTests.swift */; };
 		3F287CBCF7624275B0B8720E /* SendLaterTimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94483CBD64DDC5F1F2C8D617 /* SendLaterTimeTests.swift */; };
-		3FDB287BCE157F43106C3209 /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8318D812881F5319CCFB34 /* ProcessRunner.swift */; };
 		40013AB522A26DC3DC959F30 /* ArchiveStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD11D73A4B8A9CCA1A978CA4 /* ArchiveStateTests.swift */; };
 		47F2FBD4117F06D3927DE4B9 /* TextLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801E383A06476BFE39767807 /* TextLinks.swift */; };
 		48EEC6CF71BE4E21E2025571 /* DraftStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6647DD0CC086B1DA3F2A0C7 /* DraftStoreTests.swift */; };
@@ -210,7 +209,6 @@
 		729C28DC628ACA371751E703 /* ReadReceiptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadReceiptTests.swift; sourceTree = "<group>"; };
 		73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarStore.swift; sourceTree = "<group>"; };
 		76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
-		7A8318D812881F5319CCFB34 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsPermissionBanner.swift; sourceTree = "<group>"; };
 		7C72EC2976B9D7432A734100 /* NetworkRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRailView.swift; sourceTree = "<group>"; };
 		7E547D63DD99A7D820CEDB1D /* MatrixBridgeSignalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixBridgeSignalTests.swift; sourceTree = "<group>"; };
@@ -517,7 +515,6 @@
 				31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */,
 				9F34E89D38D15C29FF146A24 /* MergedContactStore.swift */,
 				76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */,
-				7A8318D812881F5319CCFB34 /* ProcessRunner.swift */,
 				FB250D66D51BBBA2C416A7F8 /* ScheduledMessageStore.swift */,
 			);
 			path = Services;
@@ -757,7 +754,6 @@
 				0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */,
 				003EBAD13023436D77C15471 /* PermissionBanner.swift in Sources */,
 				54DA624A73076F9E6701BE31 /* PhoneNormalizer.swift in Sources */,
-				3FDB287BCE157F43106C3209 /* ProcessRunner.swift in Sources */,
 				9E31BC7D5DA666B3C466FF46 /* ScheduledMessage.swift in Sources */,
 				C84F93D60A8E008D1AA97734 /* ScheduledMessageStore.swift in Sources */,
 				331E12A814F788D2A1614A97 /* SendLaterTime.swift in Sources */,

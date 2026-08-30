@@ -99,14 +99,6 @@ enum MatrixConversationCache {
     return (snap.nextBatch, conversations, messages)
   }
 
-  /// Oublie le curseur de sync sans rien jeter d'autre : la prochaine passe
-  /// repart d'une sync initiale et redécouvre les salons qu'un pont ajouté
-  /// depuis aurait créés sans que l'app sache encore les lire.
-  static func resetSyncCursor() {
-    let (_, conversations, messages) = load()
-    save(nextBatch: nil, conversations: conversations, messages: messages)
-  }
-
   static func save(nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
     let bridged = conversations.filter { $0.network.isMatrixBridged }
     let keep = Set(bridged.map(\.id))

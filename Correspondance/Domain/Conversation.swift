@@ -12,7 +12,7 @@ struct Conversation: Identifiable, Hashable, Sendable {
   var isArchived: Bool
   /// Clé chat.db / bridge pour l’envoi. Room ID Matrix pour les réseaux bridgés.
   var transportKey: String
-  /// Groupe Signal (envoi via `-g`) ou salon Matrix à plus de 2 membres humains.
+  /// Groupe iMessage, ou salon Matrix à plus de 2 membres humains.
   var isGroup: Bool
   /// Acheminement du dernier message *sortant*, si le réseau l'expose (iMessage).
   /// `nil` = information indisponible → aucune coche affichée.

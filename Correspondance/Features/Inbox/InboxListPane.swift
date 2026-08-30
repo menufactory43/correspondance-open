@@ -227,7 +227,7 @@ struct InboxListPane: View {
         store.toggleMuted(conversationID: conversation.id)
       }
 
-      if conversation.isGroup {
+      if conversation.isGroup, conversation.network.bridge?.relaysGroupLeave == true {
         Button("Quitter le groupe…", role: .destructive) {
           pendingLeaveID = conversation.id
         }

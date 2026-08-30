@@ -4,7 +4,7 @@ struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
   var id: String
   var contentType: String
   var filename: String?
-  /// Chemin local une fois téléchargé par signal-cli.
+  /// Chemin local une fois le média téléchargé.
   var localPath: String?
 
   var isImage: Bool {
