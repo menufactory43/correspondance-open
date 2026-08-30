@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 struct MessageBubbleView: View {
   let message: ChatMessage

@@ -1,14 +1,15 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Verre système (Liquid Glass) quand macOS 26 le fournit, repli opaque sinon.
 /// Aucun faux verre fait main : sous `Reduce Transparency` ou `Increase Contrast`
 /// on peint une surface pleine et un liseré net, comme le fait le système.
-struct GlassSurface: ViewModifier {
-  var cornerRadius: CGFloat
-  var tint: Color?
-  var fallbackFill: Color
-  var border: Color
-  var isInteractive: Bool = false
+public struct GlassSurface: ViewModifier {
+  public var cornerRadius: CGFloat
+  public var tint: Color?
+  public var fallbackFill: Color
+  public var border: Color
+  public var isInteractive: Bool = false
 
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
@@ -22,7 +23,7 @@ struct GlassSurface: ViewModifier {
   }
 
   @ViewBuilder
-  func body(content: Content) -> some View {
+  public func body(content: Content) -> some View {
     if #available(macOS 26.0, *), !prefersOpaque {
       content
         .glassEffect(glass, in: shape)
@@ -45,11 +46,19 @@ struct GlassSurface: ViewModifier {
     if isInteractive { value = value.interactive() }
     return value
   }
+
+  public init(cornerRadius: CGFloat, tint: Color? = nil, fallbackFill: Color, border: Color, isInteractive: Bool = false) {
+    self.cornerRadius = cornerRadius
+    self.tint = tint
+    self.fallbackFill = fallbackFill
+    self.border = border
+    self.isInteractive = isInteractive
+  }
 }
 
-extension View {
+public extension View {
   /// Pilule / carte en verre système, avec repli accessible.
-  func glassSurface(
+  public func glassSurface(
     cornerRadius: CGFloat,
     tint: Color? = nil,
     fallbackFill: Color,
@@ -67,7 +76,7 @@ extension View {
 
   /// Fond de fenêtre natif (macOS 15+) — remplace le bricolage `NSWindow.backgroundColor`.
   @ViewBuilder
-  func correspondanceWindowBackground(_ color: Color) -> some View {
+  public func correspondanceWindowBackground(_ color: Color) -> some View {
     if #available(macOS 15.0, *) {
       containerBackground(color, for: .window)
     } else {

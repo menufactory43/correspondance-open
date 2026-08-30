@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 struct ThreadView: View {
   @Environment(InboxStore.self) private var store

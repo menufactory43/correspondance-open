@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Quel moteur écoute quand on appuie sur le micro du composer.
 /// Dictus (getdictus.com, MIT) prend la main s'il est installé ; sinon Speech d'Apple.

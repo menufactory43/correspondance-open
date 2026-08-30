@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Invite à autoriser Contacts — obligatoire pour que l’app apparaisse dans Confidentialité.
 struct ContactsPermissionBanner: View {

@@ -3,7 +3,7 @@ import SwiftUI
 import CorrespondanceCore
 
 /// Familles d’écriture alignées sur iA Writer (OFL).
-enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
   case quattro
   case duo
   case mono
@@ -11,9 +11,9 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
   case plexSans
   case systemSerif
 
-  var id: String { rawValue }
+  public var id: String { rawValue }
 
-  var labelFR: String {
+  public var labelFR: String {
     switch self {
     case .quattro: "iA Writer Quattro"
     case .duo: "iA Writer Duo"
@@ -24,7 +24,7 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var subtitleFR: String {
+  public var subtitleFR: String {
     switch self {
     case .quattro: "La préférée — proportionnelle, lecture longue"
     case .duo: "Duospaced — rythme machine à écrire"
@@ -35,7 +35,7 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var postScriptRegular: String {
+  public var postScriptRegular: String {
     switch self {
     case .quattro: "iAWriterQuattroS-Regular"
     case .duo: "iAWriterDuoS-Regular"
@@ -46,7 +46,7 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var postScriptItalic: String {
+  public var postScriptItalic: String {
     switch self {
     case .quattro: "iAWriterQuattroS-Italic"
     case .duo: "iAWriterDuoS-Italic"
@@ -58,7 +58,7 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
   }
 
   /// SwiftUI font — tombe sur New York / system si la custom n’est pas chargée.
-  func font(size: CGFloat, italic: Bool = false, weight: Font.Weight = .regular) -> Font {
+  public func font(size: CGFloat, italic: Bool = false, weight: Font.Weight = .regular) -> Font {
     let name = italic ? postScriptItalic : postScriptRegular
     if !name.isEmpty {
       // weight custom fonts: iA Writer S n’a que Regular/Italic embarqués.
@@ -70,7 +70,7 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
     return .system(size: size, weight: weight, design: .serif)
   }
 
-  func nsFont(size: CGFloat, italic: Bool = false) -> PlatformFont {
+  public func nsFont(size: CGFloat, italic: Bool = false) -> PlatformFont {
     let name = italic ? postScriptItalic : postScriptRegular
     if !name.isEmpty, let font = PlatformFont(name: name, size: size) {
       return font
@@ -84,13 +84,13 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
   }
 }
 
-enum FocusScope: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum FocusScope: String, CaseIterable, Identifiable, Codable, Sendable {
   case sentence
   case paragraph
 
-  var id: String { rawValue }
+  public var id: String { rawValue }
 
-  var labelFR: String {
+  public var labelFR: String {
     switch self {
     case .sentence: "Phrase"
     case .paragraph: "Paragraphe"
@@ -98,12 +98,12 @@ enum FocusScope: String, CaseIterable, Identifiable, Codable, Sendable {
   }
 }
 
-enum LineLengthPreset: Int, CaseIterable, Identifiable, Codable, Sendable {
+public enum LineLengthPreset: Int, CaseIterable, Identifiable, Codable, Sendable {
   case narrow = 64
   case classic = 72
   case wide = 80
 
-  var id: Int { rawValue }
+  public var id: Int { rawValue }
 
-  var labelFR: String { "\(rawValue) car." }
+  public var labelFR: String { "\(rawValue) car." }
 }

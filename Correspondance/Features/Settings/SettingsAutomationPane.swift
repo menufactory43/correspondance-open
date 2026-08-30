@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Lot M2 — pilotage de Messages.app par l'Accessibilité, app cachée.
 /// Éteint, Correspondance se comporte exactement comme avant.

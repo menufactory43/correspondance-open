@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 struct ConversationRowView: View {
   let conversation: Conversation

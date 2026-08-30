@@ -1,14 +1,14 @@
 import SwiftUI
 import CorrespondanceCore
 
-enum Theme {
-  static let letterWidth = LayoutMetrics.letterWidth
-  static let noteMinWidth = LayoutMetrics.noteMinWidth
-  static let sidebarWidth = LayoutMetrics.sidebarWidth
+public enum Theme {
+  public static let letterWidth = LayoutMetrics.letterWidth
+  public static let noteMinWidth = LayoutMetrics.noteMinWidth
+  public static let sidebarWidth = LayoutMetrics.sidebarWidth
 }
 
-extension Color {
-  init(hex: UInt32, opacity: Double = 1) {
+public extension Color {
+  public init(hex: UInt32, opacity: Double = 1) {
     let r = Double((hex >> 16) & 0xFF) / 255
     let g = Double((hex >> 8) & 0xFF) / 255
     let b = Double(hex & 0xFF) / 255
@@ -24,18 +24,18 @@ extension Color {
 /// linéaire — de quoi DÉRIVER les encres secondaires et l'encre des bulles au
 /// lieu de les deviner à l'œil. `WritingThemeContrastTests` rejoue ces calculs
 /// sur les six thèmes et échoue sous 4,5:1 (texte) ou 3:1 (composants).
-struct RGB: Equatable, Hashable, Sendable {
-  let r: Double
-  let g: Double
-  let b: Double
+public struct RGB: Equatable, Hashable, Sendable {
+  public let r: Double
+  public let g: Double
+  public let b: Double
 
-  init(r: Double, g: Double, b: Double) {
+  public init(r: Double, g: Double, b: Double) {
     self.r = min(max(r, 0), 1)
     self.g = min(max(g, 0), 1)
     self.b = min(max(b, 0), 1)
   }
 
-  init(_ hex: UInt32) {
+  public init(_ hex: UInt32) {
     self.init(
       r: Double((hex >> 16) & 0xFF) / 255,
       g: Double((hex >> 8) & 0xFF) / 255,
@@ -43,13 +43,13 @@ struct RGB: Equatable, Hashable, Sendable {
     )
   }
 
-  static let black = RGB(0x000000)
-  static let white = RGB(0xFFFFFF)
+  public static let black = RGB(0x000000)
+  public static let white = RGB(0xFFFFFF)
 
-  var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: 1) }
+  public var color: Color { Color(.sRGB, red: r, green: g, blue: b, opacity: 1) }
 
   /// Mélange linéaire en sRGB : `t = 0` rend soi-même, `t = 1` rend l'autre.
-  func mix(_ other: RGB, _ t: Double) -> RGB {
+  public func mix(_ other: RGB, _ t: Double) -> RGB {
     let k = min(max(t, 0), 1)
     return RGB(
       r: r + (other.r - r) * k,
@@ -59,7 +59,7 @@ struct RGB: Equatable, Hashable, Sendable {
   }
 
   /// Luminance relative WCAG 2.1 (§ relative luminance).
-  var relativeLuminance: Double {
+  public var relativeLuminance: Double {
     func lin(_ c: Double) -> Double {
       c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
     }
@@ -67,13 +67,13 @@ struct RGB: Equatable, Hashable, Sendable {
   }
 
   /// Rapport de contraste WCAG entre deux teintes opaques (1:1 … 21:1).
-  static func contrast(_ a: RGB, _ b: RGB) -> Double {
+  public static func contrast(_ a: RGB, _ b: RGB) -> Double {
     let l1 = a.relativeLuminance
     let l2 = b.relativeLuminance
     return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
   }
 
-  func contrast(with other: RGB) -> Double { RGB.contrast(self, other) }
+  public func contrast(with other: RGB) -> Double { RGB.contrast(self, other) }
 
   /// LE PLUS PETIT PAS du fond vers l'encre qui tient `minRatio`.
   ///
@@ -82,7 +82,7 @@ struct RGB: Equatable, Hashable, Sendable {
   /// le fond le plus défavorable du thème. Marche dans les deux sens (encre
   /// claire sur fond sombre comme l'inverse), le contraste étant monotone le
   /// long du mélange.
-  static func step(on background: RGB, toward ink: RGB, minRatio: Double) -> RGB {
+  public static func step(on background: RGB, toward ink: RGB, minRatio: Double) -> RGB {
     guard contrast(background, ink) >= minRatio else { return ink }
     var low = 0.0
     var high = 1.0
@@ -104,7 +104,7 @@ struct RGB: Equatable, Hashable, Sendable {
   /// déjà ; sinon on le pousse (vers le noir s'il est clair, vers le blanc s'il
   /// est sombre) jusqu'au seuil — l'identité du thème reste, la lisibilité
   /// n'est pas négociée.
-  static func filledAccent(
+  public static func filledAccent(
     _ accent: RGB,
     lightInk: RGB,
     darkInk: RGB,

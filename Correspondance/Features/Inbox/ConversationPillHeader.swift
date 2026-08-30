@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Entête de conversation : avatar + « Nom › », au CENTRE DE LA BARRE D'OUTILS.
 ///

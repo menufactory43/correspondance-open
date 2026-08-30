@@ -9,10 +9,10 @@ import CorrespondanceCore
 ///
 /// La carte n'existe que lorsque les métadonnées sont arrivées : tant qu'on
 /// cherche, la bulle garde son lien nu et souligné, et le fil ne bouge pas.
-struct LinkPreviewCard: View {
-  let url: URL
-  let theme: WritingTheme
-  var typeface: WritingTypeface = .quattro
+public struct LinkPreviewCard: View {
+  public let url: URL
+  public let theme: WritingTheme
+  public var typeface: WritingTypeface = .quattro
 
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -20,11 +20,11 @@ struct LinkPreviewCard: View {
 
   /// Assez large pour qu'un titre tienne sur deux lignes, assez étroite pour
   /// rester une note en marge de la bulle plutôt qu'une seconde bulle.
-  static let maxWidth: CGFloat = 320
+  public static let maxWidth: CGFloat = 320
   private static let corner: CGFloat = 12
   private static let thumbnailHeight: CGFloat = 132
 
-  var body: some View {
+  public var body: some View {
     Group {
       if let preview {
         card(preview)
@@ -98,5 +98,11 @@ struct LinkPreviewCard: View {
       return "Aperçu du lien sur \(preview.domain)"
     }
     return "Aperçu du lien : \(title), sur \(preview.domain)"
+  }
+
+  public init(url: URL, theme: WritingTheme, typeface: WritingTypeface = .quattro) {
+    self.url = url
+    self.theme = theme
+    self.typeface = typeface
   }
 }

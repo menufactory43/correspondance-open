@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Feuille « Connecter <réseau> » : ce que le pont demande, et rien d'autre.
 /// WhatsApp fait scanner un QR ; Instagram ouvre une vraie fenêtre de connexion

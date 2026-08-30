@@ -1,5 +1,7 @@
 import AppKit
 import XCTest
+import CorrespondanceCore
+import CorrespondanceUI
 @testable import Correspondance
 
 /// Ce qu'une fenêtre détachée retient : sa place, et son épingle.

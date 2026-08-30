@@ -16,5 +16,6 @@ let package = Package(
             dependencies: ["CorrespondanceCore"],
             resources: [.process("Fixtures")]
         ),
+        .testTarget(name: "CorrespondanceUITests", dependencies: ["CorrespondanceUI"]),
     ]
 )

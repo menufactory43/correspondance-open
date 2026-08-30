@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Le homeserver Matrix (Synapse sur le NUC, via Tailscale) : l'état du lien,
 /// et le formulaire de session quand il n'y en a pas.

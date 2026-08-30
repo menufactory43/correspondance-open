@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Le vocabulaire visuel des Réglages : un en-tête de page, une ligne de compte,
 /// une ligne d'état, un bouton d'action. Les volets n'inventent rien d'autre.

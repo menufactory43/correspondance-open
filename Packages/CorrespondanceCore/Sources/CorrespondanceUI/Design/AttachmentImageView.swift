@@ -14,15 +14,15 @@ import CorrespondanceCore
 /// - si la vignette est déjà en mémoire, la vue naît avec. Le `LazyVStack`
 ///   détruit et reconstruit les bulles qui sortent de l'écran ; sans ça,
 ///   chacune repasserait par le rectangle d'attente à chaque recyclage.
-struct AttachmentImageView<Unavailable: View>: View {
-  let url: URL
-  var maxWidth: CGFloat
-  var maxHeight: CGFloat
-  var cornerRadius: CGFloat = 12
-  var placeholder: Color
-  var border: Color?
-  var label: String
-  @ViewBuilder var unavailable: () -> Unavailable
+public struct AttachmentImageView<Unavailable: View>: View {
+  public let url: URL
+  public var maxWidth: CGFloat
+  public var maxHeight: CGFloat
+  public var cornerRadius: CGFloat = 12
+  public var placeholder: Color
+  public var border: Color?
+  public var label: String
+  @ViewBuilder public var unavailable: () -> Unavailable
 
   private enum Load {
     case loading
@@ -34,7 +34,7 @@ struct AttachmentImageView<Unavailable: View>: View {
   /// Taille d'affichage, connue avant la photo elle-même.
   private let fitted: CGSize
 
-  init(
+  public init(
     url: URL,
     maxWidth: CGFloat,
     maxHeight: CGFloat,
@@ -80,7 +80,7 @@ struct AttachmentImageView<Unavailable: View>: View {
     max(maxWidth, maxHeight) * 2
   }
 
-  var body: some View {
+  public var body: some View {
     content
       .task(id: url) {
         guard case .loading = load else { return }

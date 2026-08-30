@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 struct ThemePickerView: View {
   @Binding var selection: WritingThemeID

@@ -2,6 +2,8 @@ import AppKit
 import AVFoundation
 import AVKit
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Une vidéo dans le fil : sa première image, un triangle de lecture et sa
 /// durée. Un clic l'ouvre dans une fenêtre de l'app — pas dans QuickTime.

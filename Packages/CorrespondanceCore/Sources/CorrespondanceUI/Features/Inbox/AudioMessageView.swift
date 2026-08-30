@@ -7,11 +7,11 @@ import CorrespondanceCore
 ///
 /// Pas de sélecteur ni de forme d'onde : un bouton, une durée, une barre qui
 /// avance — ce que Messages montre quand on n'a pas encore écouté.
-struct AudioMessageView: View {
-  let attachment: MessageAttachment
-  let theme: WritingTheme
-  var typeface: WritingTypeface = .quattro
-  var isFromMe: Bool = false
+public struct AudioMessageView: View {
+  public let attachment: MessageAttachment
+  public let theme: WritingTheme
+  public var typeface: WritingTypeface = .quattro
+  public var isFromMe: Bool = false
 
   @State private var player: AVAudioPlayer?
   @State private var isPlaying = false
@@ -20,7 +20,7 @@ struct AudioMessageView: View {
   @State private var failed = false
   @State private var ticker: Task<Void, Never>?
 
-  var body: some View {
+  public var body: some View {
     HStack(spacing: 8) {
       Button(action: toggle) {
         Image(systemName: failed ? "exclamationmark.triangle" : (isPlaying ? "pause.fill" : "play.fill"))
@@ -141,5 +141,12 @@ struct AudioMessageView: View {
     ticker = nil
     player?.stop()
     isPlaying = false
+  }
+
+  public init(attachment: MessageAttachment, theme: WritingTheme, typeface: WritingTypeface = .quattro, isFromMe: Bool = false) {
+    self.attachment = attachment
+    self.theme = theme
+    self.typeface = typeface
+    self.isFromMe = isFromMe
   }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Les Réglages tels qu'on les attend d'une app Mac : une barre latérale de
 /// rubriques à gauche, un volet à droite. Pas un formulaire fleuve où l'on

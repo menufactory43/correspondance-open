@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 enum ComposerTrailingAction: Equatable {
   case dictation

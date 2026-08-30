@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Le panneau de la réponse rapide.
 ///

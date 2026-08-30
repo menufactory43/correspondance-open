@@ -1,5 +1,5 @@
 import XCTest
-@testable import Correspondance
+@testable import CorrespondanceUI
 
 /// LE CONTRAT DE LISIBILITÉ DES THÈMES.
 ///

@@ -1,5 +1,7 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Ce que le système ne fournit pas encore : l'apparence claire/sombre suivant
 /// le thème d'écriture, et le titre de fenêtre masqué (la barre d'outils native

@@ -1,4 +1,6 @@
 import XCTest
+import CorrespondanceCore
+import CorrespondanceUI
 @testable import Correspondance
 
 final class CorrespondanceSmokeTests: XCTestCase {

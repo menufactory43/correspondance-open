@@ -1,4 +1,6 @@
 import SwiftUI
+import CorrespondanceCore
+import CorrespondanceUI
 
 /// Un fil qui passe sous du chrome s'y coupe net, à mi-bulle. On dissout sa
 /// bande haute dans le papier — pas de filet, pas d'arête — comme le fait

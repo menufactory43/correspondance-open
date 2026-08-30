@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 /// Le menu « @ » : posé au-dessus du champ, il liste les gens du fil et se
 /// pilote au clavier (↑ ↓, Entrée ou Tab pour choisir, Échap pour le ranger).

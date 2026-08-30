@@ -1,5 +1,6 @@
 import SwiftUI
 import CorrespondanceCore
+import CorrespondanceUI
 
 struct ContentView: View {
   @Environment(InboxStore.self) private var store

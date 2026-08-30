@@ -2,7 +2,7 @@ import SwiftUI
 import CorrespondanceCore
 
 /// Ambiance d’écriture — papier, encre, lumière. Pas un skin décoratif.
-enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
+public enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
   case papier
   case dune
   case clairDeLune
@@ -10,9 +10,9 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
   case vieuxBureau
   case cireEtChene
 
-  var id: String { rawValue }
+  public var id: String { rawValue }
 
-  var labelFR: String {
+  public var labelFR: String {
     switch self {
     case .papier: "Papier"
     case .dune: "Dune"
@@ -23,7 +23,7 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var subtitleFR: String {
+  public var subtitleFR: String {
     switch self {
     case .papier: "Parchemin tiède, rose fané"
     case .dune: "Sable et sépia, encre brûlée"
@@ -34,7 +34,7 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var systemImage: String {
+  public var systemImage: String {
     switch self {
     case .papier: "doc.plaintext"
     case .dune: "sun.haze"
@@ -45,7 +45,7 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  var prefersDarkChrome: Bool {
+  public var prefersDarkChrome: Bool {
     switch self {
     case .papier, .dune, .clairDeLune: false
     case .encreDeNuit, .vieuxBureau, .cireEtChene: true
@@ -66,48 +66,48 @@ enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
 /// Dawn, Gruvbox, Catppuccin Latte, Tokyo Night, Everforest — licences MIT) :
 /// leurs fonds et leurs accents ont été accordés ensemble par leurs auteurs,
 /// c'est ce qui évite les gris tristes et les accents qui hurlent.
-struct WritingPalette: Equatable, Sendable {
-  let isDark: Bool
+public struct WritingPalette: Equatable, Sendable {
+  public let isDark: Bool
 
   // Surfaces
-  let paper: RGB
-  let paperSecondary: RGB
-  let sidebar: RGB
-  let rail: RGB
-  let room: RGB
-  let glow: RGB
-  let selection: RGB
-  let separator: RGB
+  public let paper: RGB
+  public let paperSecondary: RGB
+  public let sidebar: RGB
+  public let rail: RGB
+  public let room: RGB
+  public let glow: RGB
+  public let selection: RGB
+  public let separator: RGB
 
   // Encres
-  let ink: RGB
-  let inkSecondary: RGB
-  let inkTertiary: RGB
+  public let ink: RGB
+  public let inkSecondary: RGB
+  public let inkTertiary: RGB
 
   // Accent
-  let accent: RGB
-  let accentSoft: RGB
-  let accentFill: RGB
-  let accentInk: RGB
-  let caret: RGB
+  public let accent: RGB
+  public let accentSoft: RGB
+  public let accentFill: RGB
+  public let accentInk: RGB
+  public let caret: RGB
 
   // Bulles et pastilles
-  let bubbleIn: RGB
-  let bubbleInInk: RGB
-  let bubbleOut: RGB
-  let bubbleOutInk: RGB
-  let badge: RGB
-  let badgeInk: RGB
+  public let bubbleIn: RGB
+  public let bubbleInInk: RGB
+  public let bubbleOut: RGB
+  public let bubbleOutInk: RGB
+  public let badge: RGB
+  public let badgeInk: RGB
 
   /// Les surfaces sur lesquelles du texte courant peut atterrir. Les encres
   /// secondaires se calibrent sur la PIRE d'entre elles, jamais sur le papier
   /// (le papier est toujours le cas facile).
-  var textSurfaces: [RGB] {
+  public var textSurfaces: [RGB] {
     [paper, paperSecondary, sidebar, rail, room, selection, bubbleIn]
   }
 
   /// LE BÂTISSEUR. Quatre teintes entrent, un système sort.
-  static func make(
+  public static func make(
     paper: RGB,
     ink: RGB,
     accent: RGB,
@@ -164,46 +164,72 @@ struct WritingPalette: Equatable, Sendable {
       badgeInk: filled.ink
     )
   }
+
+  public init(isDark: Bool, paper: RGB, paperSecondary: RGB, sidebar: RGB, rail: RGB, room: RGB, glow: RGB, selection: RGB, separator: RGB, ink: RGB, inkSecondary: RGB, inkTertiary: RGB, accent: RGB, accentSoft: RGB, accentFill: RGB, accentInk: RGB, caret: RGB, bubbleIn: RGB, bubbleInInk: RGB, bubbleOut: RGB, bubbleOutInk: RGB, badge: RGB, badgeInk: RGB) {
+    self.isDark = isDark
+    self.paper = paper
+    self.paperSecondary = paperSecondary
+    self.sidebar = sidebar
+    self.rail = rail
+    self.room = room
+    self.glow = glow
+    self.selection = selection
+    self.separator = separator
+    self.ink = ink
+    self.inkSecondary = inkSecondary
+    self.inkTertiary = inkTertiary
+    self.accent = accent
+    self.accentSoft = accentSoft
+    self.accentFill = accentFill
+    self.accentInk = accentInk
+    self.caret = caret
+    self.bubbleIn = bubbleIn
+    self.bubbleInInk = bubbleInInk
+    self.bubbleOut = bubbleOut
+    self.bubbleOutInk = bubbleOutInk
+    self.badge = badge
+    self.badgeInk = badgeInk
+  }
 }
 
-struct WritingTheme: Equatable, Sendable {
-  let id: WritingThemeID
-  let palette: WritingPalette
-  let bodySize: CGFloat
-  let lineSpacing: CGFloat
-  let letterTracking: CGFloat
+public struct WritingTheme: Equatable, Sendable {
+  public let id: WritingThemeID
+  public let palette: WritingPalette
+  public let bodySize: CGFloat
+  public let lineSpacing: CGFloat
+  public let letterTracking: CGFloat
 
   // MARK: - Jetons sémantiques (les vues ne voient QUE ça)
 
-  var paper: Color { palette.paper.color }
-  var paperSecondary: Color { palette.paperSecondary.color }
-  var sidebar: Color { palette.sidebar.color }
-  var rail: Color { palette.rail.color }
-  var room: Color { palette.room.color }
-  var glow: Color { palette.glow.color }
-  var selection: Color { palette.selection.color }
-  var separator: Color { palette.separator.color }
+  public var paper: Color { palette.paper.color }
+  public var paperSecondary: Color { palette.paperSecondary.color }
+  public var sidebar: Color { palette.sidebar.color }
+  public var rail: Color { palette.rail.color }
+  public var room: Color { palette.room.color }
+  public var glow: Color { palette.glow.color }
+  public var selection: Color { palette.selection.color }
+  public var separator: Color { palette.separator.color }
   /// Ancien nom du liseré — les vues historiques l'appellent encore ainsi.
-  var edge: Color { palette.separator.color }
+  public var edge: Color { palette.separator.color }
 
-  var ink: Color { palette.ink.color }
-  var inkSecondary: Color { palette.inkSecondary.color }
-  var inkTertiary: Color { palette.inkTertiary.color }
+  public var ink: Color { palette.ink.color }
+  public var inkSecondary: Color { palette.inkSecondary.color }
+  public var inkTertiary: Color { palette.inkTertiary.color }
 
-  var accent: Color { palette.accent.color }
-  var accentSoft: Color { palette.accentSoft.color }
-  var accentFill: Color { palette.accentFill.color }
-  var accentInk: Color { palette.accentInk.color }
-  var caret: Color { palette.caret.color }
+  public var accent: Color { palette.accent.color }
+  public var accentSoft: Color { palette.accentSoft.color }
+  public var accentFill: Color { palette.accentFill.color }
+  public var accentInk: Color { palette.accentInk.color }
+  public var caret: Color { palette.caret.color }
 
-  var bubbleIn: Color { palette.bubbleIn.color }
-  var bubbleInInk: Color { palette.bubbleInInk.color }
-  var bubbleOut: Color { palette.bubbleOut.color }
-  var bubbleOutInk: Color { palette.bubbleOutInk.color }
-  var badge: Color { palette.badge.color }
-  var badgeInk: Color { palette.badgeInk.color }
+  public var bubbleIn: Color { palette.bubbleIn.color }
+  public var bubbleInInk: Color { palette.bubbleInInk.color }
+  public var bubbleOut: Color { palette.bubbleOut.color }
+  public var bubbleOutInk: Color { palette.bubbleOutInk.color }
+  public var badge: Color { palette.badge.color }
+  public var badgeInk: Color { palette.badgeInk.color }
 
-  var isDark: Bool { palette.isDark }
+  public var isDark: Bool { palette.isDark }
 
   // MARK: - Interligne
 
@@ -213,7 +239,7 @@ struct WritingTheme: Equatable, Sendable {
   /// délimite déjà, et l'air d'une page l'y ferait flotter. Deux tiers — c'est
   /// ce qui pose un corps 15 autour de 4,3–4,9 pt d'interligne selon le thème,
   /// soit l'interligne de lecture visé sans desserrer la bulle en accordéon.
-  static let bubbleTightening: CGFloat = 0.65
+  public static let bubbleTightening: CGFloat = 0.65
 
   /// L'INTERLIGNE DE LECTURE pour un corps donné.
   ///
@@ -222,19 +248,19 @@ struct WritingTheme: Equatable, Sendable {
   /// paragraphe en lignes flottantes. On le ramène donc au rapport des deux
   /// corps — et comme `size` porte déjà l'échelle utilisateur (⌘+ / ⌘−),
   /// l'interligne la suit sans qu'on ait à la repasser.
-  func lineSpacing(forBodySize size: CGFloat, tightening: CGFloat = 1) -> CGFloat {
+  public func lineSpacing(forBodySize size: CGFloat, tightening: CGFloat = 1) -> CGFloat {
     guard bodySize > 0 else { return lineSpacing * tightening }
     return lineSpacing * (size / bodySize) * tightening
   }
 
   /// L'interligne d'une bulle (Inbox) ou du composer, pour le corps effectif.
-  func bubbleLineSpacing(forBodySize size: CGFloat) -> CGFloat {
+  public func bubbleLineSpacing(forBodySize size: CGFloat) -> CGFloat {
     lineSpacing(forBodySize: size, tightening: Self.bubbleTightening)
   }
 
   // MARK: - La table
 
-  static func resolve(_ id: WritingThemeID) -> WritingTheme {
+  public static func resolve(_ id: WritingThemeID) -> WritingTheme {
     switch id {
     // « Papier » — Rosé Pine Dawn : parchemin tiède, encre prune, rose fané.
     // Le thème clair par défaut : chaud sans être jaune, doux sans être fade.
@@ -343,17 +369,25 @@ struct WritingTheme: Equatable, Sendable {
       )
     }
   }
+
+  public init(id: WritingThemeID, palette: WritingPalette, bodySize: CGFloat, lineSpacing: CGFloat, letterTracking: CGFloat) {
+    self.id = id
+    self.palette = palette
+    self.bodySize = bodySize
+    self.lineSpacing = lineSpacing
+    self.letterTracking = letterTracking
+  }
 }
 
 /// Préférences d’ambiance + écriture (parité iA Writer).
 @MainActor
 @Observable
-final class ThemePreferences {
-  var themeID: WritingThemeID {
+public final class ThemePreferences {
+  public var themeID: WritingThemeID {
     didSet { UserDefaults.standard.set(themeID.rawValue, forKey: Keys.theme) }
   }
 
-  var typeface: WritingTypeface {
+  public var typeface: WritingTypeface {
     didSet { UserDefaults.standard.set(typeface.rawValue, forKey: Keys.typeface) }
   }
 
@@ -363,7 +397,7 @@ final class ThemePreferences {
   /// Focus, composer, aperçus. Le chrome (métas, sidebar, pastilles) garde sa
   /// taille : c'est ce qui laisse la place au texte de grandir. Toujours
   /// rangée dans les bornes, d'où le `didSet` qui se corrige lui-même.
-  var typeScale: Double {
+  public var typeScale: Double {
     didSet {
       // Se réassigner dans son propre `didSet` ne le rejoue pas : la valeur
       // rangée est la bonne, et c'est elle qu'on persiste.
@@ -374,14 +408,14 @@ final class ThemePreferences {
   }
 
   /// Le facteur tel que les vues le consomment : un `CGFloat`, déjà borné.
-  var textScale: CGFloat { CGFloat(Self.clampTypeScale(typeScale)) }
+  public var textScale: CGFloat { CGFloat(Self.clampTypeScale(typeScale)) }
 
   /// Les bornes du réglage. En deçà la bulle devient illisible, au-delà une
   /// phrase ne tient plus dans une fenêtre détachée réduite au post-it.
-  static let typeScaleRange: ClosedRange<Double> = 0.8...1.4
-  static let typeScaleStep: Double = 0.1
+  public static let typeScaleRange: ClosedRange<Double> = 0.8...1.4
+  public static let typeScaleStep: Double = 0.1
 
-  static func clampTypeScale(_ value: Double) -> Double {
+  public static func clampTypeScale(_ value: Double) -> Double {
     // Arrondi au cran : les raccourcis et le curseur des Réglages doivent
     // tomber sur les mêmes valeurs, sinon « 100 % » n'est jamais tout à fait 1.
     let snapped = (value / typeScaleStep).rounded() * typeScaleStep
@@ -389,58 +423,58 @@ final class ThemePreferences {
   }
 
   /// ⌘+ / ⌘− : un cran dans un sens ou dans l'autre.
-  func nudgeTypeScale(_ steps: Int) {
+  public func nudgeTypeScale(_ steps: Int) {
     typeScale = Self.clampTypeScale(typeScale + Double(steps) * Self.typeScaleStep)
   }
 
   /// ⌘0 : revenir à 100 %.
-  func resetTypeScale() { typeScale = 1.0 }
+  public func resetTypeScale() { typeScale = 1.0 }
 
-  var isTypeScaleDefault: Bool { abs(typeScale - 1.0) < 0.001 }
+  public var isTypeScaleDefault: Bool { abs(typeScale - 1.0) < 0.001 }
 
   /// « 110 % » — pour le menu et les Réglages.
-  var typeScaleLabelFR: String { "\(Int((typeScale * 100).rounded())) %" }
+  public var typeScaleLabelFR: String { "\(Int((typeScale * 100).rounded())) %" }
 
   /// Les aperçus de liens sous les bulles. Allumés d'usine : un lien nu ne dit
   /// pas où il mène.
-  var showsLinkPreviews: Bool {
+  public var showsLinkPreviews: Bool {
     didSet { UserDefaults.standard.set(showsLinkPreviews, forKey: Keys.linkPreviews) }
   }
 
-  var lineLength: LineLengthPreset {
+  public var lineLength: LineLengthPreset {
     didSet { UserDefaults.standard.set(lineLength.rawValue, forKey: Keys.lineLength) }
   }
 
-  var focusScope: FocusScope {
+  public var focusScope: FocusScope {
     didSet { UserDefaults.standard.set(focusScope.rawValue, forKey: Keys.focusScope) }
   }
 
   /// Le geste d'arrivée d'un message, en Focus. L'Inbox garde l'encre.
-  var messageArrival: MessageArrival {
+  public var messageArrival: MessageArrival {
     didSet { UserDefaults.standard.set(messageArrival.rawValue, forKey: Keys.messageArrival) }
   }
 
-  var typewriterMode: Bool {
+  public var typewriterMode: Bool {
     didSet { UserDefaults.standard.set(typewriterMode, forKey: Keys.typewriter) }
   }
 
-  var showWordCount: Bool {
+  public var showWordCount: Bool {
     didSet { UserDefaults.standard.set(showWordCount, forKey: Keys.wordCount) }
   }
 
   /// La photo de l'auteur à gauche de chaque prise de parole, en Inbox — comme
   /// Beeper. Se coupe : un tête-à-tête n'a rien à apprendre d'un visage répété.
-  var showsMessageAvatars: Bool {
+  public var showsMessageAvatars: Bool {
     didSet { UserDefaults.standard.set(showsMessageAvatars, forKey: Keys.messageAvatars) }
   }
 
-  var warmThresholdHours: Double {
+  public var warmThresholdHours: Double {
     didSet { UserDefaults.standard.set(warmThresholdHours, forKey: Keys.warm) }
   }
 
-  var theme: WritingTheme { WritingTheme.resolve(themeID) }
+  public var theme: WritingTheme { WritingTheme.resolve(themeID) }
 
-  init() {
+  public init() {
     let raw = UserDefaults.standard.string(forKey: Keys.theme) ?? WritingThemeID.papier.rawValue
     self.themeID = WritingThemeID(rawValue: raw) ?? .papier
 
@@ -487,7 +521,7 @@ final class ThemePreferences {
 
   /// La fonte rangée dans les réglages — lisible hors du fil principal, pour la
   /// préchauffer au lancement avant que la première bulle la demande.
-  nonisolated static func storedTypeface() -> WritingTypeface {
+  public nonisolated static func storedTypeface() -> WritingTypeface {
     let raw = UserDefaults.standard.string(forKey: Keys.typeface) ?? ""
     return WritingTypeface(rawValue: raw) ?? .quattro
   }
@@ -507,16 +541,16 @@ final class ThemePreferences {
   }
 }
 
-enum LayoutMetrics {
-  static let letterWidth: CGFloat = 560
-  static let noteMinWidth: CGFloat = 420
+public enum LayoutMetrics {
+  public static let letterWidth: CGFloat = 560
+  public static let noteMinWidth: CGFloat = 420
   /// Largeur type Claude / Codex — un peu plus généreuse qu’une sidebar Finder.
-  static let sidebarWidth: CGFloat = 260
-  static let pageTopInset: CGFloat = 72
-  static let pageBottomInset: CGFloat = 120
+  public static let sidebarWidth: CGFloat = 260
+  public static let pageTopInset: CGFloat = 72
+  public static let pageBottomInset: CGFloat = 120
   /// Marge gauche type iA Writer — à gauche du centre, loin des feux.
-  static let pageLeading: CGFloat = 168
+  public static let pageLeading: CGFloat = 168
   /// Lisière haute qui rappelle la barre d'outils en Focus : assez haute pour
   /// qu'on la trouve sans viser, assez basse pour ne pas s'ouvrir par accident.
-  static let focusChromeHoverHeight: CGFloat = 56
+  public static let focusChromeHoverHeight: CGFloat = 56
 }
