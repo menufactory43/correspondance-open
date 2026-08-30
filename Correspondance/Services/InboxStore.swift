@@ -1943,7 +1943,9 @@ final class InboxStore {
       replyTo: quoted.map {
         QuotedMessage(
           messageID: $0.id,
-          senderName: $0.isFromMe ? "Moi" : ($0.senderID ?? conversation.title),
+          // Le NOM, jamais l'identifiant technique : un « @signal_…:local »
+          // n'est pas quelqu'un. À défaut, le titre du fil dit à qui l'on parle.
+          senderName: $0.isFromMe ? "Moi" : ($0.displayedSenderName ?? conversation.title),
           text: $0.sidebarPreviewText
         )
       }
