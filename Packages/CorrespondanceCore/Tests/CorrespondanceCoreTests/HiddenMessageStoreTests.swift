@@ -1,6 +1,5 @@
 import XCTest
-import CorrespondanceCore
-@testable import Correspondance
+@testable import CorrespondanceCore
 
 /// Une suppression « ici » ne quitte pas la machine : aucun catalogue réseau ne
 /// la connaît, c'est donc à la relecture du fil de la réappliquer — comme
