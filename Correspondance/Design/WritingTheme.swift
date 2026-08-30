@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Ambiance d’écriture — papier, encre, lumière. Pas un skin décoratif.
 enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendable {

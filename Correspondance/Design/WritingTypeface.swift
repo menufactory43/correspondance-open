@@ -1,6 +1,6 @@
-import AppKit
 import Foundation
 import SwiftUI
+import CorrespondanceCore
 
 /// Familles d’écriture alignées sur iA Writer (OFL).
 enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
@@ -70,17 +70,17 @@ enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendable {
     return .system(size: size, weight: weight, design: .serif)
   }
 
-  func nsFont(size: CGFloat, italic: Bool = false) -> NSFont {
+  func nsFont(size: CGFloat, italic: Bool = false) -> PlatformFont {
     let name = italic ? postScriptItalic : postScriptRegular
-    if !name.isEmpty, let font = NSFont(name: name, size: size) {
+    if !name.isEmpty, let font = PlatformFont(name: name, size: size) {
       return font
     }
-    if let descriptor = NSFont.systemFont(ofSize: size).fontDescriptor.withDesign(.serif),
-       let serif = NSFont(descriptor: descriptor, size: size)
+    if let descriptor = PlatformFont.systemFont(ofSize: size).fontDescriptor.withDesign(.serif),
+       let serif = PlatformFont.make(descriptor: descriptor, size: size)
     {
       return serif
     }
-    return NSFont.systemFont(ofSize: size)
+    return PlatformFont.systemFont(ofSize: size)
   }
 }
 

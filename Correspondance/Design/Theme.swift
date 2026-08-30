@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 enum Theme {
   static let letterWidth = LayoutMetrics.letterWidth

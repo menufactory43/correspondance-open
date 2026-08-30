@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Ce que macOS a accordé, et le chemin le plus court pour le corriger.
 /// Chaque ligne dit son état et porte son bouton : jamais de chasse au réglage.
@@ -77,6 +77,6 @@ struct SettingsPermissionsPane: View {
 
   private func openPrivacy(_ anchor: String) {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
-    NSWorkspace.shared.open(url)
+    Platform.open(url)
   }
 }

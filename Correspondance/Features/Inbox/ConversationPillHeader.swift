@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import CorrespondanceCore
 
@@ -149,7 +148,7 @@ struct ConversationInfoCard: View {
         Divider()
         Button("Ouvrir dans Contacts") {
           if let url = URL(string: "addressbook://") {
-            NSWorkspace.shared.open(url)
+            Platform.open(url)
           }
         }
         .buttonStyle(.link)

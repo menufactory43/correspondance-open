@@ -1,5 +1,5 @@
-import AppKit
 import Foundation
+import AppKit
 import CorrespondanceCore
 
 /// Résout les photos de profil / groupes (portails Matrix + Contacts iMessage).

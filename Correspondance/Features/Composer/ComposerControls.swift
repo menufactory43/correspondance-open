@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 enum ComposerTrailingAction: Equatable {
   case dictation
@@ -142,8 +142,8 @@ struct ComposerAttachmentStrip: View {
       HStack(spacing: 8) {
         ForEach(Array(paths.enumerated()), id: \.offset) { index, path in
           ZStack(alignment: .topTrailing) {
-            if let img = NSImage(contentsOfFile: path) {
-              Image(nsImage: img)
+            if let img = PlatformImage(contentsOfFile: path) {
+              Image(platformImage: img)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 56, height: 56)

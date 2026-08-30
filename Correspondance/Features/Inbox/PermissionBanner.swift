@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Visible tant que chat.db est inaccessible — évite de croire que la démo = iMessage.
 struct PermissionBanner: View {

@@ -1,5 +1,4 @@
 import AVFoundation
-import AppKit
 import SwiftUI
 import CorrespondanceCore
 

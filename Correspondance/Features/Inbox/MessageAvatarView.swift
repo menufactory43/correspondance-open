@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import CorrespondanceCore
 
@@ -15,12 +14,12 @@ struct MessageAvatarView: View {
   var size: CGFloat = 26
   let theme: WritingTheme
 
-  @State private var image: NSImage?
+  @State private var image: PlatformImage?
 
   var body: some View {
     ZStack {
       if let image {
-        Image(nsImage: image)
+        Image(platformImage: image)
           .resizable()
           .scaledToFill()
       } else {
@@ -51,7 +50,7 @@ struct MessageAvatarView: View {
     // (carnet d'adresses, portail, mosaïque) plutôt que d'en chercher une autre.
     if let conversation, !conversation.isGroup {
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
-         let loaded = NSImage(data: data)
+         let loaded = PlatformImage(data: data)
       {
         image = loaded
         return
@@ -62,7 +61,7 @@ struct MessageAvatarView: View {
       senderID: message.senderID,
       network: message.network
     )
-    if let data, let loaded = NSImage(data: data) {
+    if let data, let loaded = PlatformImage(data: data) {
       image = loaded
     }
   }

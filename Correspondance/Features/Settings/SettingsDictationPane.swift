@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Quel moteur écoute quand on appuie sur le micro du composer.
 /// Dictus (getdictus.com, MIT) prend la main s'il est installé ; sinon Speech d'Apple.
@@ -67,6 +67,6 @@ struct SettingsDictationPane: View {
 
   private func openPrivacy(_ anchor: String) {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
-    NSWorkspace.shared.open(url)
+    Platform.open(url)
   }
 }

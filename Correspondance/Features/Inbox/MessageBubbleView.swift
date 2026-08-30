@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import CorrespondanceCore
 
@@ -409,8 +408,7 @@ struct MessageBubbleView: View {
     if !message.text.isEmpty {
       Divider()
       Button("Copier le texte") {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(message.text, forType: .string)
+        Platform.copyToPasteboard(message.text)
       }
     }
     if onDeleteLocally != nil || onDeleteEverywhere != nil {

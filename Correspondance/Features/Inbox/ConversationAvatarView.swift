@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import CorrespondanceCore
 
@@ -9,7 +8,7 @@ struct ConversationAvatarView: View {
   /// Dans une liste de personnes d'un même fil, la pastille réseau ne dit plus rien.
   var showsNetworkBadge = true
 
-  @State private var image: NSImage?
+  @State private var image: PlatformImage?
 
   private var initials: String {
     let parts = conversation.title
@@ -43,7 +42,7 @@ struct ConversationAvatarView: View {
   var body: some View {
     ZStack {
       if let image {
-        Image(nsImage: image)
+        Image(platformImage: image)
           .resizable()
           .scaledToFill()
       } else {
@@ -81,7 +80,7 @@ struct ConversationAvatarView: View {
     ) {
       image = nil
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
-         let loaded = NSImage(data: data)
+         let loaded = PlatformImage(data: data)
       {
         image = loaded
       }

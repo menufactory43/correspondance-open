@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import CorrespondanceCore
 
@@ -40,7 +39,7 @@ extension InboxStore {
       "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
     ]
     for raw in candidates {
-      if let url = URL(string: raw), NSWorkspace.shared.open(url) { return }
+      if let url = URL(string: raw), Platform.open(url) { return }
     }
   }
 

@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Une photo dans un fil. Le fichier n'est jamais décodé depuis le corps de la
 /// vue : la vignette vient de `AttachmentThumbnailStore`, préparée hors du fil
@@ -26,7 +26,7 @@ struct AttachmentImageView<Unavailable: View>: View {
 
   private enum Load {
     case loading
-    case ready(NSImage)
+    case ready(PlatformImage)
     case failed
   }
 
@@ -96,7 +96,7 @@ struct AttachmentImageView<Unavailable: View>: View {
   private var content: some View {
     switch load {
     case .ready(let image):
-      Image(nsImage: image)
+      Image(platformImage: image)
         .resizable()
         .frame(width: fitted.width, height: fitted.height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

@@ -1,5 +1,5 @@
-import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// L'APERÇU D'UN LIEN, sous la bulle : une vignette, un titre, un domaine.
 ///
@@ -50,7 +50,7 @@ struct LinkPreviewCard: View {
         if let path = preview.imagePath,
            let image = LinkPreviewStore.shared.thumbnail(atPath: path)
         {
-          Image(nsImage: image)
+          Image(platformImage: image)
             .resizable()
             .aspectRatio(contentMode: .fill)
             .frame(height: Self.thumbnailHeight)
