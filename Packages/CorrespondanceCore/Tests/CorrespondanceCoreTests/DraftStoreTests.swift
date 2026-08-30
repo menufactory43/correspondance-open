@@ -1,5 +1,5 @@
 import XCTest
-@testable import Correspondance
+@testable import CorrespondanceCore
 
 /// Brouillons par conversation : ce qui mérite d'être gardé, et ce qui doit être jeté.
 final class DraftStoreTests: XCTestCase {
