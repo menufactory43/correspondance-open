@@ -1,4 +1,4 @@
-import AppKit
+import CoreGraphics
 import Foundation
 import ImageIO
 
@@ -15,11 +15,11 @@ import ImageIO
 /// que le `LazyVStack` recycle retrouve sa vignette dès sa construction, donc
 /// sans repasser par la case « rectangle gris » — sinon sa hauteur change à
 /// chaque recyclage et la mise en page se met à osciller sans fin.
-final class AttachmentThumbnailStore: @unchecked Sendable {
-  static let shared = AttachmentThumbnailStore()
+public final class AttachmentThumbnailStore: @unchecked Sendable {
+  public static let shared = AttachmentThumbnailStore()
 
   /// `NSCache` est sûr entre fils d'exécution : pas de verrou à poser autour.
-  private let cache = NSCache<NSString, NSImage>()
+  private let cache = NSCache<NSString, PlatformImage>()
   private let sizes = NSCache<NSString, NSValue>()
   private let worker = ThumbnailWorker()
 
@@ -39,11 +39,11 @@ final class AttachmentThumbnailStore: @unchecked Sendable {
   /// de route oblige SwiftUI à retraduire l'ancre et à replacer tout le monde,
   /// ce qui découvre d'autres photos, qui changent de hauteur à leur tour. Une
   /// conversation chargée de photos n'en sortait jamais.
-  func pixelSize(for url: URL) -> CGSize? {
+  public func pixelSize(for url: URL) -> CGSize? {
     let key = Self.cacheKey(url: url, maxPixel: 0) as NSString
-    if let known = sizes.object(forKey: key) { return known.sizeValue }
+    if let known = sizes.object(forKey: key) { return known.platformSizeValue }
     guard let size = Self.readPixelSize(url: url) else { return nil }
-    sizes.setObject(NSValue(size: size), forKey: key)
+    sizes.setObject(.platformSize(size), forKey: key)
     return size
   }
 
@@ -66,7 +66,7 @@ final class AttachmentThumbnailStore: @unchecked Sendable {
 
   /// Vignette déjà en mémoire, sans rien décoder. Sert à construire la vue dans
   /// son état final du premier coup.
-  func cached(for url: URL, maxPixel: CGFloat) -> NSImage? {
+  public func cached(for url: URL, maxPixel: CGFloat) -> PlatformImage? {
     cache.object(forKey: Self.cacheKey(url: url, maxPixel: maxPixel) as NSString)
   }
 
@@ -76,7 +76,7 @@ final class AttachmentThumbnailStore: @unchecked Sendable {
   ///
   /// - Parameter maxPixel: plus grand côté voulu, **en pixels** — donc la taille
   ///   d'affichage multipliée par l'échelle de l'écran.
-  func thumbnail(for url: URL, maxPixel: CGFloat) async -> NSImage? {
+  public func thumbnail(for url: URL, maxPixel: CGFloat) async -> PlatformImage? {
     let key = Self.cacheKey(url: url, maxPixel: maxPixel) as NSString
     if let hit = cache.object(forKey: key) { return hit }
     let image = await worker.decode(url: url, maxPixel: maxPixel) { [self] in
@@ -105,7 +105,7 @@ final class AttachmentThumbnailStore: @unchecked Sendable {
   /// garder l'image pleine résolution en mémoire ; `ShouldCacheImmediately` sur
   /// la vignette la décode ici plutôt qu'au premier affichage, c'est-à-dire hors
   /// du fil principal.
-  fileprivate static func downsample(url: URL, maxPixel: CGFloat) -> NSImage? {
+  fileprivate static func downsample(url: URL, maxPixel: CGFloat) -> PlatformImage? {
     let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
     guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
       return nil
@@ -123,7 +123,7 @@ final class AttachmentThumbnailStore: @unchecked Sendable {
     ) else {
       return nil
     }
-    return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    return PlatformImage.from(cgImage: cgImage)
   }
 }
 
@@ -142,8 +142,8 @@ private final class ThumbnailWorker: @unchecked Sendable {
   private struct Job {
     let url: URL
     let maxPixel: CGFloat
-    let alreadyDone: @Sendable () -> NSImage?
-    let resume: @Sendable (NSImage?) -> Void
+    let alreadyDone: @Sendable () -> PlatformImage?
+    let resume: @Sendable (PlatformImage?) -> Void
   }
 
   private let queue = DispatchQueue(label: "app.correspondance.thumbnails", qos: .userInitiated)
@@ -154,8 +154,8 @@ private final class ThumbnailWorker: @unchecked Sendable {
   func decode(
     url: URL,
     maxPixel: CGFloat,
-    alreadyDone: @escaping @Sendable () -> NSImage?
-  ) async -> NSImage? {
+    alreadyDone: @escaping @Sendable () -> PlatformImage?
+  ) async -> PlatformImage? {
     await withCheckedContinuation { continuation in
       let job = Job(url: url, maxPixel: maxPixel, alreadyDone: alreadyDone) {
         continuation.resume(returning: $0)

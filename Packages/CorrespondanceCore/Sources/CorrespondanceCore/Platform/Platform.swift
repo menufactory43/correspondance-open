@@ -115,6 +115,25 @@ extension CGImage {
   }
 }
 
+extension NSValue {
+  /// `NSValue(size:)` côté AppKit, `NSValue(cgSize:)` côté UIKit — même boîte.
+  public static func platformSize(_ size: CGSize) -> NSValue {
+    #if canImport(AppKit)
+      return NSValue(size: size)
+    #else
+      return NSValue(cgSize: size)
+    #endif
+  }
+
+  public var platformSizeValue: CGSize {
+    #if canImport(AppKit)
+      return sizeValue
+    #else
+      return cgSizeValue
+    #endif
+  }
+}
+
 public enum Platform {
   /// Ouvre une URL dans l'app qui la revendique.
   @discardableResult
