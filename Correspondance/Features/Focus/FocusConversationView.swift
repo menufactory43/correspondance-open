@@ -438,16 +438,16 @@ struct FocusPageEditor: View {
   private var text: Binding<String> { Bindable(session).draftText }
   private var isSending: Bool { session.isSending }
   /// « Plus tard » n'est posé que sur le composer de l'inbox.
-  private var isScheduling: Bool {
-    store.sendLaterConfig != nil && session === store.primarySession
-  }
+  private var isScheduling: Bool { store.sendLaterConfig != nil && isPrimary }
 
   private var canSend: Bool { session.canSend }
 
+  private var isPrimary: Bool { session === store.primarySession }
+
   private func onAttach() { store.pickAttachments(into: session) }
-  private func onSendLater() {
-    guard session === store.primarySession else { return }
-    store.toggleSendLaterPicker()
+  /// « Plus tard » appartient à l'inbox : hors d'elle, le tiroir ne le propose pas.
+  private var onSendLater: (() -> Void)? {
+    isPrimary ? { store.toggleSendLaterPicker() } : nil
   }
   private func onSend() { Task { await store.send(session: session) } }
 

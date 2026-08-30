@@ -207,12 +207,22 @@ struct ComposerPlusTray: View {
   var iconSize: CGFloat = 28
   @Binding var isExpanded: Bool
   var onAttach: () -> Void
-  var onSendLater: () -> Void
+  /// `nil` là où « plus tard » n'a pas cours — une fenêtre détachée. Le tiroir
+  /// n'ouvre alors qu'un seul bouton, plutôt qu'une horloge qui ne fait rien.
+  var onSendLater: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private static let itemSpacing: CGFloat = 2
-  private var trayWidth: CGFloat { ComposerMetrics.control * 2 + Self.itemSpacing }
+  private var offersSendLater: Bool { onSendLater != nil }
+  /// La largeur du tiroir suit le nombre de boutons qu'il cache.
+  private var trayWidth: CGFloat {
+    offersSendLater
+      ? ComposerMetrics.control * 2 + Self.itemSpacing
+      : ComposerMetrics.control
+  }
+  /// Sans « plus tard », l'état « programmé » n'existe pas pour ce composer.
+  private var showsScheduling: Bool { isScheduling && offersSendLater }
   private var spring: Animation? {
     reduceMotion ? nil : .spring(duration: 0.38, bounce: 0.22)
   }
@@ -220,11 +230,11 @@ struct ComposerPlusTray: View {
   var body: some View {
     HStack(spacing: 4) {
       ComposerCircleButton(
-        systemImage: isScheduling && !isExpanded ? "clock.circle.fill" : "plus.circle",
+        systemImage: showsScheduling && !isExpanded ? "clock.circle.fill" : "plus.circle",
         helpText: isExpanded ? "Fermer" : "Options",
         theme: theme,
         iconSize: iconSize,
-        isActive: isScheduling,
+        isActive: showsScheduling,
         symbolFillsControl: true,
         action: toggle
       )
@@ -241,14 +251,16 @@ struct ComposerPlusTray: View {
           iconSize: 15,
           action: { choose(onAttach) }
         )
-        ComposerCircleButton(
-          systemImage: "clock",
-          helpText: isScheduling ? "Changer l’heure d’envoi (⌘⇧L)" : "Envoyer plus tard (⌘⇧L)",
-          theme: theme,
-          iconSize: 15,
-          isActive: isScheduling,
-          action: { choose(onSendLater) }
-        )
+        if let onSendLater {
+          ComposerCircleButton(
+            systemImage: "clock",
+            helpText: showsScheduling ? "Changer l’heure d’envoi (⌘⇧L)" : "Envoyer plus tard (⌘⇧L)",
+            theme: theme,
+            iconSize: 15,
+            isActive: showsScheduling,
+            action: { choose(onSendLater) }
+          )
+        }
       }
       .frame(width: isExpanded ? trayWidth : 0, alignment: .trailing)
       .clipped()
