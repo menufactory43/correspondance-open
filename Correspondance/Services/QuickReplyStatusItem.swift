@@ -15,6 +15,12 @@ final class QuickReplyStatusItem {
   private var item: NSStatusItem?
   private weak var store: InboxStore?
   private var defaultsToken: NSObjectProtocol?
+  /// Vrai le temps de poser ou de retirer l'élément. Voir `refresh()` : sans
+  /// ce garde-fou, l'app déborde sa pile et meurt en quelques millisecondes.
+  private var isUpdating = false
+  /// Le dernier état appliqué. `UserDefaults.didChangeNotification` se déclenche
+  /// pour TOUTE écriture de préférence : on ne refait rien si rien n'a changé.
+  private var appliedState: Bool?
 
   private init() {}
 
@@ -32,8 +38,23 @@ final class QuickReplyStatusItem {
   }
 
   /// Relit le réglage : l'icône paraît, ou s'efface.
+  ///
+  /// Poser un `NSStatusItem` écrit dans les préférences (AppKit y range la place
+  /// de l'icône dans la barre) : la notification de changement revient donc AU
+  /// MILIEU de la création, alors que l'élément n'est pas encore rangé dans
+  /// `item`. Sans garde-fou, on le recrée à chaque tour — la pile déborde et
+  /// l'app meurt (`EXC_BAD_ACCESS`, « excessive recursion ») dès qu'on allume
+  /// l'icône dans les Réglages.
   func refresh() {
+    guard !isUpdating else { return }
     let wanted = QuickReplyPreferences.showsMenuBarExtra()
+    guard wanted != appliedState || (wanted != (item != nil)) else {
+      updateLabel()
+      return
+    }
+    isUpdating = true
+    appliedState = wanted
+    defer { isUpdating = false }
     switch (wanted, item) {
     case (true, nil): install()
     case (false, .some(let existing)):
