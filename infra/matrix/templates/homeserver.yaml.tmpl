@@ -95,3 +95,6 @@ app_service_config_files:
   - /data/whatsapp-registration.yaml
   - /data/meta-registration.yaml
   - /data/signal-registration.yaml
+  # Double puppeting : registration sans `url`, dont l'as_token laisse les ponts écrire
+  # sous mon MXID. Générée par bootstrap.sh, jamais versionnée.
+  - /data/doublepuppet-registration.yaml

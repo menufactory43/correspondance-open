@@ -205,6 +205,68 @@ qu'on lit dans les MXID de ghosts (`@signal_2f9d4c60-…`). L'app ne le prend ja
 composable, donc un fil Signal ne fusionne avec une fiche du carnet d'adresses que lorsque le pont
 a réellement exposé un numéro.
 
+## 2 quater. Double puppeting — que mes messages du téléphone restent les miens
+
+Un pont mautrix, seul, ne connaît qu'un compte Matrix par correspondant : le **ghost**
+(`@whatsapp_…`, `@instagram_…`, `@signal_…`). Y compris pour moi. Un message envoyé depuis
+l'app officielle sur le téléphone remonte donc signé `@instagram_<mon id>:correspondance.local`,
+et Correspondance — qui décide « c'est moi » par `event.sender == selfUserID`, exactement comme
+Beeper — l'affiche à gauche, comme s'il venait d'en face.
+
+Le **double puppeting** corrige ça côté serveur : le pont reçoit le droit d'écrire au nom de mon
+vrai MXID `@meffysto:correspondance.local`, et repose mes propres messages sous ce compte. Rien à
+changer dans l'app.
+
+On utilise la **méthode par appservice** (celle que documente
+`docs.mau.fi/bridges/general/double-puppeting.html`), la seule qui ne demande ni jeton d'accès
+collé à la main ni renouvellement :
+
+- `bootstrap.sh` génère une fois pour toutes trois valeurs dans `~/correspondance-matrix/.env`
+  (`DOUBLEPUPPET_AS_TOKEN`, `DOUBLEPUPPET_HS_TOKEN`, `DOUBLEPUPPET_SENDER`) et écrit
+  `data/synapse/doublepuppet-registration.yaml` (chmod 600) : une registration **sans `url`** —
+  Synapse ne la rappelle jamais — dont le namespace `users` couvre `@.*:correspondance\.local`
+  en **non exclusif**, pour ne voler aucun MXID aux ponts.
+- `homeserver.yaml` la déclare dans `app_service_config_files`, à côté des trois registrations
+  de ponts. Comme pour elles, Synapse ne relit ce fichier qu'au démarrage : `bootstrap.sh`
+  redémarre le homeserver puis les ponts dès que l'empreinte des registrations bouge.
+- Chaque pont reçoit dans son `config.yaml` le bloc `double_puppet` avec
+  `secrets: {correspondance.local: "as_token:<le même jeton>"}`. Les jetons vivent dans le `.env`
+  et les configs du NUC ; les templates du repo n'en portent que le placeholder
+  `__DOUBLEPUPPET_AS_TOKEN__`.
+
+Aucun rescan de QR ni recollage de cookies : le compte déjà lié en profite dès le redémarrage du
+pont. Pour le vérifier, envoyer **`ping-matrix`** au bot (`!wa` / `!ig` / `!signal` hors salon de
+gestion). La réponse attendue, mot pour mot :
+
+```
+Confirmed valid access token for @meffysto:correspondance.local (appservice double puppeting)
+```
+
+Un jeton refusé répondrait `M_UNKNOWN_TOKEN` — signe que Synapse n'a pas rechargé la registration
+(`docker-compose restart synapse`, puis les ponts).
+
+**Ce que ça ne fait pas** : les messages déjà en base ne changent pas d'expéditeur. Seuls les
+envois postérieurs à l'activation sont attribués à mon compte. L'historique bridgé garde ses
+ghosts, et rien ne le réécrira.
+
+### Revenir en arrière
+
+1. Retirer le bloc `double_puppet` des trois templates
+   `infra/matrix/templates/mautrix-{whatsapp,meta,signal}-overrides.yaml.tmpl`.
+2. Retirer `- /data/doublepuppet-registration.yaml` de `app_service_config_files` dans
+   `infra/matrix/templates/homeserver.yaml.tmpl`.
+3. Retirer le bloc d'écriture de `doublepuppet-registration.yaml` de `infra/matrix/bootstrap.sh`,
+   puis sur le NUC :
+   `rm ~/correspondance-matrix/data/synapse/doublepuppet-registration.yaml`.
+4. `./infra/matrix/bootstrap.sh`, puis
+   `docker-compose restart synapse mautrix-whatsapp mautrix-meta mautrix-signal`.
+
+La fusion des overrides n'enlève jamais une clé : le bloc `double_puppet` resté dans les
+`config.yaml` des ponts se vide à la main (ou en supprimant le `config.yaml`, que `bootstrap.sh`
+régénère). C'est aussi pourquoi `merge-overrides.py` comprend un `__remplacer__: true` — sans lui,
+la map `double_puppet.secrets` garderait à jamais l'`example.com: as_token:foobar` que les configs
+mautrix livrent en exemple.
+
 ## 3. Dépannage
 
 Toutes les commandes ci-dessous se lancent depuis `~/correspondance-matrix/` sur le NUC

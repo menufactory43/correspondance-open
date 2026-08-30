@@ -69,6 +69,20 @@ else
   echo "SYNAPSE_BIND_IP=${SYNAPSE_BIND_IP}" >> "$ENVFILE"
 fi
 
+# Les jetons du double puppeting sont arrivés après les autres : un .env écrit par une passe
+# plus ancienne ne les connaît pas. On les ajoute ligne par ligne, une seule fois — les
+# régénérer à chaque passe casserait les ponts, qui les portent dans leur config.
+ensure_env_secret() {
+  local key="$1" value="$2"
+  if ! grep -q "^${key}=" "$ENVFILE"; then
+    echo "${key}=${value}" >> "$ENVFILE"
+    export "${key}=${value}"
+  fi
+}
+ensure_env_secret DOUBLEPUPPET_AS_TOKEN "$(openssl rand -hex 32)"
+ensure_env_secret DOUBLEPUPPET_HS_TOKEN "$(openssl rand -hex 32)"
+ensure_env_secret DOUBLEPUPPET_SENDER "dp$(openssl rand -hex 12)"
+
 # 2) Clé de signature + log config Synapse (via `generate`, une seule fois).
 if [[ ! -f "data/synapse/${SERVER_NAME}.signing.key" ]]; then
   echo "→ Synapse generate (clé de signature + squelette)"
@@ -136,6 +150,8 @@ setup_bridge() {
   sed \
     -e "s|__POSTGRES_PASSWORD__|${POSTGRES_PASSWORD}|g" \
     -e "s|__MATRIX_ADMIN__|${MATRIX_ADMIN}|g" \
+    -e "s|__SERVER_NAME__|${SERVER_NAME}|g" \
+    -e "s|__DOUBLEPUPPET_AS_TOKEN__|${DOUBLEPUPPET_AS_TOKEN}|g" \
     "templates/${tmpl}" > "$merged"
   python3 merge-overrides.py "${dir}/config.yaml" "$merged"
   rm -f "$merged"
@@ -164,6 +180,28 @@ setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
 # Ici le binaire porte bien le nom du pont — pas de piège façon `ig-`/mautrix-meta.
 setup_bridge mautrix-signal dock.mau.dev/mautrix/signal "$SIGNAL_IMAGE_TAG" \
   mautrix-signal-overrides.yaml.tmpl signal-registration.yaml mautrix-signal
+
+# Double puppeting « par appservice » (docs.mau.fi/bridges/general/double-puppeting.html) :
+# une registration sans `url`, que Synapse ne rappelle jamais, mais dont l'`as_token` autorise
+# son porteur à écrire au nom de n'importe quel compte local. Les ponts s'en servent pour poser
+# mes messages envoyés depuis le téléphone sous mon MXID plutôt que sous mon propre ghost.
+# Réécrite à chaque passe comme les autres configs, mais depuis des jetons stables (.env).
+echo "→ Écriture de doublepuppet-registration.yaml"
+SERVER_NAME_REGEX="${SERVER_NAME//./\\.}"
+cat > data/synapse/doublepuppet-registration.yaml <<EOF
+# Généré par infra/matrix/bootstrap.sh — contient des jetons, ne jamais versionner.
+id: doublepuppet
+url: null
+as_token: ${DOUBLEPUPPET_AS_TOKEN}
+hs_token: ${DOUBLEPUPPET_HS_TOKEN}
+sender_localpart: ${DOUBLEPUPPET_SENDER}
+rate_limited: false
+namespaces:
+  users:
+    - regex: '@.*:${SERVER_NAME_REGEX}'
+      exclusive: false
+EOF
+chmod 600 data/synapse/doublepuppet-registration.yaml
 
 # 6) La pile complète.
 echo "→ docker-compose up -d"

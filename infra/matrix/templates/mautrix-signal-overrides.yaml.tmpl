@@ -33,6 +33,18 @@ bridge:
 # historique côté serveur. Le pont ne voit que ce qui arrive après le scan du QR —
 # il n'y a rien à rejouer, et l'annoncer éviterait de croire à un pont en panne.
 
+# Double puppeting : sans lui, les messages que j'envoie depuis l'app officielle du
+# téléphone remontent signés par mon propre ghost, et Correspondance les prend pour ceux
+# d'un correspondant (`isFromMe` = `sender == selfUserID`). Le jeton est celui de
+# `doublepuppet-registration.yaml`, côté Synapse.
+double_puppet:
+  servers: {}
+  allow_discovery: false
+  secrets:
+    # Notre domaine et lui seul : la clé remplace la map d'amont (et son exemple bidon).
+    __remplacer__: true
+    __SERVER_NAME__: "as_token:__DOUBLEPUPPET_AS_TOKEN__"
+
 # Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
 encryption:
   allow: false

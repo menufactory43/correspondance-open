@@ -10,9 +10,21 @@ import sys
 import yaml
 
 
+# Une section d'overrides marquée ainsi remplace celle d'amont au lieu de s'y ajouter.
+# Sans ça, impossible de chasser les valeurs d'exemple que les configs mautrix livrent
+# par défaut : `double_puppet.secrets` arrive peuplé d'un `example.com: as_token:foobar`
+# qu'une fusion, par construction, ne retire jamais.
+REPLACE_MARKER = "__remplacer__"
+
+
+def replaces(value) -> bool:
+    """Un mapping vide, ou marqué, dit « cette section, c'est la mienne, entièrement »."""
+    return isinstance(value, dict) and (not value or value.pop(REPLACE_MARKER, False) is True)
+
+
 def merge(dst, src):
     for key, value in src.items():
-        if isinstance(value, dict) and isinstance(dst.get(key), dict):
+        if isinstance(value, dict) and isinstance(dst.get(key), dict) and not replaces(value):
             merge(dst[key], value)
         else:
             dst[key] = value
