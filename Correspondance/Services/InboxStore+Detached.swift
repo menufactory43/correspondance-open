@@ -101,6 +101,38 @@ extension InboxStore {
     Task { @MainActor in await self.sendReadReceipt(conversationID: conversationID) }
   }
 
+  // MARK: - Réponse rapide (Lot F3)
+
+  /// Le panneau montre ce fil : on le charge s'il est vide, et on le lit — un
+  /// panneau sous les yeux vaut une fenêtre au premier plan.
+  func quickReplyBecameVisible(_ conversationID: String) {
+    setQuickReplyConversationID(conversationID)
+    let session = session(for: conversationID)
+    Task { @MainActor in
+      if session.messages.isEmpty { await self.loadMessages(into: session) }
+      self.markDetachedThreadRead(conversationID)
+    }
+  }
+
+  func quickReplyClosed() {
+    setQuickReplyConversationID(nil)
+    pruneSessionsAfterQuickReply()
+  }
+
+  /// Envoyer depuis une notification, sans ouvrir quoi que ce soit.
+  func sendFromNotification(conversationID: String, text: String) async {
+    let rowID = displayRowID(for: conversationID)
+    let session = session(for: rowID)
+    if session.messages.isEmpty { await loadMessages(into: session) }
+    session.draftText = text
+    await send(session: session)
+  }
+
+  /// La recherche du mini-sélecteur (⌘K) : la même que celle de la liste.
+  func quickReplyMatches(_ query: String) -> [Conversation] {
+    quickSearch(query)
+  }
+
   // MARK: - Épingle (Lot F2)
 
   func isPinnedDetached(_ conversationID: String) -> Bool {

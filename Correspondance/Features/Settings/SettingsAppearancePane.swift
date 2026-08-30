@@ -10,6 +10,14 @@ struct SettingsAppearancePane: View {
   @AppStorage(DetachedWindowState.notificationsOpenDetachedKey)
   private var notificationsOpenDetached = false
 
+  // Lot F3 — la réponse rapide. Valeurs d'usine : le raccourci répond, le
+  // panneau se referme après l'envoi, rien ne s'installe dans la barre des menus.
+  @AppStorage(QuickReplyPreferences.enabledKey) private var quickReplyEnabled = true
+  @AppStorage(QuickReplyPreferences.hotKeyKey) private var quickReplyHotKey = QuickReplyHotKey.controlOptionSpace
+  @AppStorage(QuickReplyPreferences.closeAfterSendKey) private var quickReplyClosesAfterSend = true
+  @AppStorage(QuickReplyPreferences.menuBarExtraKey) private var quickReplyMenuBarExtra = false
+  @AppStorage(QuickReplyPreferences.avoidFullScreenKey) private var quickReplyAvoidsFullScreen = false
+
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
@@ -36,6 +44,61 @@ struct SettingsAppearancePane: View {
 
         SettingsRow(label: "Ouvrir les notifications en fenêtre détachée", systemImage: "macwindow.on.rectangle") {
           Toggle("", isOn: $notificationsOpenDetached)
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+      }
+
+      SettingsCard(
+        title: "Réponse rapide",
+        footnote: "Un panneau surgit sous le raccourci, répond, et disparaît. "
+          + "⌘↑ / ⌘↓ passent d’un fil à l’autre, ⌘K ouvre le sélecteur, Échap ferme."
+      ) {
+        SettingsRow(label: "Raccourci global", systemImage: "bolt") {
+          Toggle("", isOn: $quickReplyEnabled)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .onChange(of: quickReplyEnabled) { _, _ in
+              QuickReplyPanelController.shared.refreshHotKey()
+            }
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Combinaison", systemImage: "command") {
+          Picker("", selection: $quickReplyHotKey) {
+            ForEach(QuickReplyHotKey.allCases) { combo in
+              Text(combo.labelFR).tag(combo)
+            }
+          }
+          .labelsHidden()
+          .frame(width: 160)
+          .disabled(!quickReplyEnabled)
+          .onChange(of: quickReplyHotKey) { _, _ in
+            QuickReplyPanelController.shared.refreshHotKey()
+          }
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Fermer après envoi", systemImage: "paperplane") {
+          Toggle("", isOn: $quickReplyClosesAfterSend)
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Icône dans la barre des menus", systemImage: "menubar.arrow.up.rectangle") {
+          Toggle("", isOn: $quickReplyMenuBarExtra)
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Jamais au-dessus d’une app plein écran", systemImage: "arrow.up.left.and.arrow.down.right") {
+          Toggle("", isOn: $quickReplyAvoidsFullScreen)
             .labelsHidden()
             .toggleStyle(.switch)
         }

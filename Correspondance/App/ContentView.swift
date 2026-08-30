@@ -55,6 +55,10 @@ struct ContentView: View {
       // Le délégué d'application n'a pas d'environnement : on lui laisse
       // l'action d'ouverture pendant qu'une fenêtre existe encore.
       WindowOpener.shared.openWindow = openWindow
+      // Le panneau de réponse rapide emprunte les deux mêmes sources de vérité,
+      // et le raccourci global se pose avec elles.
+      QuickReplyPanelController.shared.configure(store: store, themes: themes)
+      QuickReplyStatusItem.shared.configure(store: store)
     }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }

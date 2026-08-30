@@ -210,6 +210,9 @@ final class InboxStore {
   /// La fenêtre détachée au premier plan, s'il y en a une.
   private(set) var frontDetachedConversationID: String?
 
+  /// Le fil que le panneau de réponse rapide a sous les yeux, s'il est ouvert.
+  private(set) var quickReplyConversationID: String?
+
   /// Les fils dont la fenêtre flotte au-dessus des autres apps (⌘⌥P).
   /// Relu du disque à l'ouverture de chaque fenêtre — voir `DetachedWindowState`.
   var pinnedDetachedIDs: Set<String> = []
@@ -244,6 +247,9 @@ final class InboxStore {
     var ids: [String] = []
     if let selectedConversationID { ids.append(selectedConversationID) }
     for id in detachedConversationIDs where !ids.contains(id) { ids.append(id) }
+    if let quickReplyConversationID, !ids.contains(quickReplyConversationID) {
+      ids.append(quickReplyConversationID)
+    }
     return ids.map { session(for: $0) }
   }
 
@@ -273,6 +279,11 @@ final class InboxStore {
 
   func noteDetachedWindowFront(_ conversationID: String?) {
     frontDetachedConversationID = conversationID
+  }
+
+  /// `pruneSessions` est privé : la fermeture du panneau passe par ici.
+  func pruneSessionsAfterQuickReply() {
+    pruneSessions()
   }
 
   /// Une session sans fenêtre n'a plus de raison d'occuper la mémoire.
@@ -348,6 +359,12 @@ final class InboxStore {
   }
 
   var isSearching: Bool { !ConversationSearch.fold(searchQuery).isEmpty }
+
+  /// Recherche indépendante de celle de la liste — le mini-sélecteur (⌘K) du
+  /// panneau de réponse rapide cherche sans déranger le champ de l'inbox.
+  func quickSearch(_ query: String) -> [Conversation] {
+    ConversationSearch.filter(activeQueue, query: query, index: searchIndex)
+  }
 
   var inboxRecents: [Conversation] {
     // En recherche, la partition Récents / Groupes / Contacts n'a plus de sens :
@@ -562,6 +579,18 @@ final class InboxStore {
         WindowOpener.shared.openInbox()
         self.mode = .inbox
         await self.select(rowID)
+      }
+    }
+    NotificationService.shared.onQuickReply = { [weak self] id, text in
+      guard let self else { return }
+      Task { @MainActor in
+        await self.sendFromNotification(conversationID: id, text: text)
+      }
+    }
+    NotificationService.shared.onOpenQuickReply = { [weak self] id in
+      guard let self else { return }
+      Task { @MainActor in
+        QuickReplyPanelController.shared.present(conversationID: self.displayRowID(for: id))
       }
     }
     await NotificationService.shared.requestAuthorization()
@@ -1528,6 +1557,12 @@ final class InboxStore {
     await markRead(conversation)
   }
 
+  /// Le panneau de réponse rapide dit ce qu'il montre : `InboxStore+Detached`
+  /// s'en sert pour tenir le fil à jour et l'accuser lu.
+  func setQuickReplyConversationID(_ id: String?) {
+    quickReplyConversationID = id
+  }
+
   /// `clearUnread` est privé : `InboxStore+Detached` passe par ici.
   func clearUnreadForDetached(_ conversationID: String) {
     clearUnread(for: conversationID)
@@ -2247,7 +2282,9 @@ final class InboxStore {
   /// Ce fil est-il réellement lu par quelqu'un en ce moment ? L'inbox le lit si
   /// l'utilisateur l'a choisi ; une fenêtre détachée le lit si elle est devant.
   private func isAttended(_ conversationID: String) -> Bool {
-    selectedConversationID == conversationID || frontDetachedConversationID == conversationID
+    selectedConversationID == conversationID
+      || frontDetachedConversationID == conversationID
+      || quickReplyConversationID == conversationID
   }
 
   private func clearUnread(for id: String) {

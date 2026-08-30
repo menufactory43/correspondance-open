@@ -14,6 +14,13 @@ final class NotificationService: NSObject {
   /// Appelé quand l'utilisateur clique une notification : sélectionne le fil.
   var onOpenConversation: ((String) -> Void)?
 
+  /// Réponse écrite dans la notification elle-même : le message part sans que
+  /// rien ne s'ouvre à l'écran.
+  var onQuickReply: ((String, String) -> Void)?
+
+  /// « Ouvrir en réponse rapide » : le panneau paraît sur ce fil.
+  var onOpenQuickReply: ((String) -> Void)?
+
   private(set) var authorizationStatusFR = "Notifications : état inconnu."
   private(set) var isAuthorized = false
   /// `false` tant que l'app n'est pas empaquetée (aperçus SwiftUI, tests) : on ne touche
@@ -21,6 +28,10 @@ final class NotificationService: NSObject {
   private let isAvailable: Bool
 
   nonisolated private static let conversationIDKey = "conversationID"
+  /// Une seule catégorie : « un message est arrivé », avec ses deux gestes.
+  nonisolated static let messageCategory = "correspondance.message"
+  nonisolated static let replyAction = "correspondance.reply"
+  nonisolated static let quickReplyAction = "correspondance.quickReply"
 
   private override init() {
     isAvailable = Bundle.main.bundleIdentifier != nil && Bundle.main.bundleURL.pathExtension == "app"
@@ -39,6 +50,7 @@ final class NotificationService: NSObject {
       return
     }
     let center = UNUserNotificationCenter.current()
+    registerCategories(on: center)
     let settings = await center.notificationSettings()
     switch settings.authorizationStatus {
     case .notDetermined:
@@ -57,6 +69,30 @@ final class NotificationService: NSObject {
       isAuthorized = false
       authorizationStatusFR = "Notifications : état inconnu."
     }
+  }
+
+  /// Répondre depuis la bannière, ou l'ouvrir en réponse rapide. Deux gestes,
+  /// pas un de plus : une notification n'est pas une fenêtre.
+  private func registerCategories(on center: UNUserNotificationCenter) {
+    let reply = UNTextInputNotificationAction(
+      identifier: Self.replyAction,
+      title: "Répondre",
+      options: [],
+      textInputButtonTitle: "Envoyer",
+      textInputPlaceholder: "Répondre…"
+    )
+    let quick = UNNotificationAction(
+      identifier: Self.quickReplyAction,
+      title: "Ouvrir en réponse rapide",
+      options: []
+    )
+    let category = UNNotificationCategory(
+      identifier: Self.messageCategory,
+      actions: [reply, quick],
+      intentIdentifiers: [],
+      options: []
+    )
+    center.setNotificationCategories([category])
   }
 
   func openNotificationSettings() {
@@ -81,6 +117,7 @@ final class NotificationService: NSObject {
     content.body = body
     content.sound = .default
     content.threadIdentifier = conversationID
+    content.categoryIdentifier = Self.messageCategory
     content.userInfo = [Self.conversationIDKey: conversationID]
 
     let request = UNNotificationRequest(
@@ -109,6 +146,20 @@ extension NotificationService: UNUserNotificationCenterDelegate {
   ) async {
     let userInfo = response.notification.request.content.userInfo
     guard let conversationID = userInfo[NotificationService.conversationIDKey] as? String else { return }
+    // Répondre depuis la bannière : rien ne s'ouvre, le message part.
+    if let textResponse = response as? UNTextInputNotificationResponse {
+      let text = textResponse.userText
+      await MainActor.run {
+        NotificationService.shared.onQuickReply?(conversationID, text)
+      }
+      return
+    }
+    if response.actionIdentifier == NotificationService.quickReplyAction {
+      await MainActor.run {
+        NotificationService.shared.onOpenQuickReply?(conversationID)
+      }
+      return
+    }
     await MainActor.run {
       NSApplication.shared.activate(ignoringOtherApps: true)
       NSApplication.shared.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)

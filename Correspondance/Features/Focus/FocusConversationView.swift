@@ -426,6 +426,9 @@ struct FocusPageEditor: View {
   /// détachée n'écrivent jamais dans la même page.
   var session: ConversationSession
   var theme: WritingTheme
+  /// Appelé quand le message est bel et bien parti — la réponse rapide s'en
+  /// sert pour se refermer derrière lui.
+  var onSent: (() -> Void)?
 
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -449,7 +452,13 @@ struct FocusPageEditor: View {
   private var onSendLater: (() -> Void)? {
     isPrimary ? { store.toggleSendLaterPicker() } : nil
   }
-  private func onSend() { Task { await store.send(session: session) } }
+  private func onSend() {
+    Task {
+      await store.send(session: session)
+      // Un envoi refusé remet le brouillon en place : on ne prévient que du départ.
+      if !session.canSend { onSent?() }
+    }
+  }
 
   private var showsChrome: Bool { !isActivelyTyping }
 
