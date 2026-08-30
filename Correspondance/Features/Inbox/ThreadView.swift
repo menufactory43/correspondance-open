@@ -73,7 +73,13 @@ struct ThreadView: View {
   private var messages: some View {
     ScrollViewReader { proxy in
       ScrollView {
-        LazyVStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
+        // Pile simple, et surtout pas paresseuse. Un `LazyVStack` ancré en bas
+        // sur des lignes hautes et inégales — des photos — ne converge jamais :
+        // il place, découvre que les hauteurs ne sont pas celles qu'il croyait,
+        // retraduit l'ancre, replace, sans fin. Le fil tournait à 80 % d'un cœur
+        // sans que rien ne bouge à l'écran. Le fil est borné à cent vingt
+        // messages : les construire tous coûte moins cher que cette boucle.
+        VStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
           ForEach(messageGroups) { group in
             if let stamp = group.timeSeparator {
               ThreadTimeSeparator(

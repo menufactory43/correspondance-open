@@ -3,6 +3,13 @@ import Foundation
 /// Des messages consécutifs du même auteur, tels que le fil les montre : un
 /// seul nom en tête, un seul horodatage, et des bulles serrées entre elles.
 struct MessageGroup: Identifiable, Equatable, Sendable {
+  /// Identité du groupe : celle de son premier message, qui ne change plus.
+  ///
+  /// Stockée, pas calculée : `ForEach` redemande l'identifiant de chaque groupe
+  /// à **chaque passe de placement** du `LazyVStack`, et lire `messages.first`
+  /// y recopiait tout un `ChatMessage` — retains compris — des milliers de fois
+  /// par seconde.
+  let id: String
   var messages: [ChatMessage]
   /// Nom à écrire une fois, au-dessus du groupe. `nil` quand il n'y a rien à
   /// annoncer : un tête-à-tête, ou c'est moi qui parle.
@@ -16,7 +23,6 @@ struct MessageGroup: Identifiable, Equatable, Sendable {
   /// premier groupe d'un fil fusionné, et à chaque fois qu'on change de réseau.
   var showsNetworkOrigin: Bool = false
 
-  var id: String { messages.first?.id ?? "" }
   var isFromMe: Bool { messages.first?.isFromMe ?? false }
   /// Le réseau à écrire dans le séparateur, s'il y a lieu de l'écrire.
   var networkOrigin: MessageNetwork? { showsNetworkOrigin ? network : nil }
@@ -63,6 +69,7 @@ enum MessageGrouping {
         let marksOrigin = showsNetworkOrigin && changedNetwork
         groups.append(
           MessageGroup(
+            id: message.id,
             messages: [message],
             senderLabel: showsSenderNames && !message.isFromMe && !message.isSystemEvent
               ? label(for: message)
