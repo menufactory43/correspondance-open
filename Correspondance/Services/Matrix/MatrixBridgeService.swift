@@ -346,6 +346,11 @@ actor MatrixBridgeService {
     // et le bot enchaîne tout seul sur l'étape « colle ton JSON ».
     case .webSession: command = "login"
     }
+    // Une tentative précédente peut encore être ouverte côté pont — une feuille
+    // fermée sans « Fermer », un QR qu'on a laissé tourner. Le bot refuserait alors
+    // la nouvelle par « You already have an ongoing login », et « Relancer » ne
+    // relancerait rien. On solde donc l'ancienne avant d'en ouvrir une.
+    _ = try? await sendBotCommand("cancel", to: network)
     // On retient l'event de la commande : tout ce qui la précède appartient à une
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
     loginCommandEventIDs[network] = try await sendBotCommand(command, to: network)
@@ -435,6 +440,11 @@ actor MatrixBridgeService {
       return .success(body)
     }
     // Échecs : le message d'un flow QR, et ceux que bridgev2 renvoie sur les cookies.
+    // Le pont garde une tentative ouverte : sans le dire, la feuille attendrait
+    // un QR que le bot ne postera pas.
+    if lower.contains("already have an ongoing login") {
+      return .failure(body)
+    }
     if lower.contains("failed to log in")
       || lower.contains("login failed")
       || lower.contains("timed out")
@@ -532,8 +542,28 @@ actor MatrixBridgeService {
     guard !selfUserID.isEmpty else { throw MatrixError.notConfigured }
     let serverName = String(selfUserID.split(separator: ":").last ?? "")
     let roomID = try await client.createDM(with: bridge.botUserID(serverName: serverName))
+    // `createDM` rend la main dès que le bot est *invité*. Il rejoint une fraction
+    // de seconde plus tard, et une commande postée entre-temps tombe dans le vide :
+    // le bot ne relit pas ce qui précède son arrivée. C'est ce qui faisait tourner
+    // la demande de QR sans fin — le salon existait, le bot était bien là, mais
+    // personne n'avait vu passer le `login`.
+    try await waitForBotToJoin(roomID: roomID, network: network)
     managementRoomIDs[network] = roomID
     return roomID
+  }
+
+  /// Attend que le bot du pont ait rejoint le salon, avant d'oser lui parler.
+  private func waitForBotToJoin(roomID: String, network: MessageNetwork) async throws {
+    let deadline = Date().addingTimeInterval(Self.botJoinGraceSeconds)
+    while Date() < deadline {
+      if await botHasJoined(roomID: roomID, network: network) == true { return }
+      try? await Task.sleep(for: .milliseconds(400))
+    }
+    // Passé le délai, ce n'est plus une course : la registration du pont n'est
+    // pas chargée côté Synapse, et l'erreur le dit avec la marche à suivre.
+    guard await botHasJoined(roomID: roomID, network: network) == true else {
+      throw MatrixError.bridgeBotNotJoined(network)
+    }
   }
 
   /// Envoie une commande au bot d'un pont ; si le salon retenu n'est plus valide (403),

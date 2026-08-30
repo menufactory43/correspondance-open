@@ -1124,6 +1124,10 @@ final class InboxStore {
       guard let self else { return }
       do {
         try await self.matrix.startLogin(network: network, input: input)
+      } catch is CancellationError {
+        // « Relancer » annule la tentative précédente : c'est elle qui remonte ici,
+        // et son annulation n'a rien à dire à l'utilisateur.
+        return
       } catch {
         self.bridgeLoginStatusFR = error.localizedDescription
         return
@@ -1166,6 +1170,8 @@ final class InboxStore {
       guard let self else { return }
       do {
         try await self.matrix.submitLoginCookies(raw, network: network)
+      } catch is CancellationError {
+        return
       } catch {
         self.bridgeLoginStatusFR = error.localizedDescription
         return
@@ -1197,10 +1203,10 @@ final class InboxStore {
         case .qrCode(let data):
           bridgeLoginQRData = data
           bridgeLoginPairingCode = nil
-          bridgeLoginStatusFR = "Scanne ce QR : WhatsApp → Réglages → Appareils liés."
+          bridgeLoginStatusFR = "Scanne ce QR : \(network.labelFR) → Réglages → Appareils liés."
         case .pairingCode(let code):
           bridgeLoginPairingCode = code
-          bridgeLoginStatusFR = "Saisis ce code dans WhatsApp → Appareils liés."
+          bridgeLoginStatusFR = "Saisis ce code dans \(network.labelFR) → Appareils liés."
         case .awaitingCookies:
           bridgeLoginStatusFR = "Connecte-toi à \(network.labelFR) dans la fenêtre."
         case .success(let detail):
@@ -1213,6 +1219,8 @@ final class InboxStore {
         case .waiting:
           break
         }
+      } catch is CancellationError {
+        return
       } catch {
         bridgeLoginStatusFR = error.localizedDescription
         return
