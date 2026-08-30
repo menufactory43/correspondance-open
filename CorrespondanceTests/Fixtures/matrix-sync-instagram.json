@@ -34,6 +34,19 @@
               }
             },
             {
+              "type": "m.room.avatar",
+              "state_key": "",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-avatar-dm-ig",
+              "origin_server_ts": 1756500000005,
+              "content": {
+                "url": "mxc://correspondance.local/avatar-malo-ig",
+                "info": {
+                  "mimetype": "image/jpeg"
+                }
+              }
+            },
+            {
               "type": "m.room.member",
               "state_key": "@meffysto:correspondance.local",
               "sender": "@meffysto:correspondance.local",
@@ -145,6 +158,19 @@
                   "displayname": "Atelier photo"
                 },
                 "com.beeper.room_type": "group"
+              }
+            },
+            {
+              "type": "m.room.avatar",
+              "state_key": "",
+              "sender": "@instagrambot:correspondance.local",
+              "event_id": "$state-avatar-groupe-ig",
+              "origin_server_ts": 1756500000016,
+              "content": {
+                "url": "mxc://correspondance.local/avatar-atelier-ig",
+                "info": {
+                  "mimetype": "image/jpeg"
+                }
               }
             },
             {

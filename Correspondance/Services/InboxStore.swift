@@ -1306,6 +1306,12 @@ final class InboxStore {
         return
       }
       self.isMatrixConnected = true
+      // Les photos de portail passent par le service : le store d'avatars ne le
+      // connaît pas, on lui prête juste de quoi télécharger.
+      let bridge = self.matrix
+      await ConversationAvatarStore.shared.setMatrixAvatarLoader { mxc in
+        await bridge.avatarData(mxcURI: mxc)
+      }
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {
@@ -2090,6 +2096,8 @@ final class InboxStore {
   private func mergeMatrixConversations(_ incomingList: [Conversation]) {
     guard !incomingList.isEmpty else { return }
     var byID = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
+    // Photos de portail changées : l'avatar déjà en mémoire ne vaut plus rien.
+    var staleAvatarIDs: [String] = []
 
     for incoming in incomingList {
       // Le fil ouvert est lu : ne pas y réinstaller un badge. Un membre replié
@@ -2106,6 +2114,10 @@ final class InboxStore {
         existing.lastDelivery = incoming.lastDelivery
         existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
         existing.unreadCount = isOpen ? 0 : incoming.unreadCount
+        if existing.remoteAvatarID != incoming.remoteAvatarID {
+          existing.remoteAvatarID = incoming.remoteAvatarID
+          staleAvatarIDs.append(incoming.id)
+        }
         byID[incoming.id] = existing
       } else {
         var fresh = incoming
@@ -2123,6 +2135,10 @@ final class InboxStore {
       byID.removeValue(forKey: id)
     }
 
+    if !staleAvatarIDs.isEmpty {
+      let ids = staleAvatarIDs
+      Task { for id in ids { await ConversationAvatarStore.shared.invalidate(conversationID: id) } }
+    }
     conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
   }
 

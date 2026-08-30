@@ -195,6 +195,15 @@ actor MatrixBridgeService {
     return result
   }
 
+  /// Photo d'un portail (`m.room.avatar`), depuis le cache disque sinon le homeserver.
+  /// L'inbox en a besoin pour les fils sans numéro : Instagram n'expose rien d'autre.
+  func avatarData(mxcURI: String) async -> Data? {
+    if let cached = MatrixAvatarStore.existingData(forMXC: mxcURI) { return cached }
+    guard let data = try? await client.downloadMedia(mxcURI: mxcURI), !data.isEmpty else { return nil }
+    MatrixAvatarStore.store(data: data, forMXC: mxcURI)
+    return data
+  }
+
   // MARK: - Envoi
 
   func send(

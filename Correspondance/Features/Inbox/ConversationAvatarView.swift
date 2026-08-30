@@ -67,7 +67,9 @@ struct ConversationAvatarView: View {
       networkBadge
         .offset(x: 1, y: 1)
     }
-    .task(id: conversation.id) {
+    // Une nouvelle photo côté réseau change le `mxc` : la tâche doit repartir,
+    // sinon l'ancienne image resterait affichée jusqu'au prochain lancement.
+    .task(id: "\(conversation.id)|\(conversation.remoteAvatarID ?? "")") {
       image = nil
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
          let loaded = NSImage(data: data)

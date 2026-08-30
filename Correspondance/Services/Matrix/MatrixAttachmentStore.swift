@@ -58,3 +58,32 @@ enum MatrixAttachmentStore {
     }
   }
 }
+
+/// Photos de profil / de groupe des portails, dans leur propre dossier.
+/// Séparées des pièces jointes : elles se remplacent (une par salon, écrasée quand
+/// le `mxc` change) là où une pièce jointe s'accumule.
+enum MatrixAvatarStore {
+  static var directory: URL {
+    let dir = MatrixAttachmentStore.directory.appendingPathComponent("avatars", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+  }
+
+  /// Nom stable dérivé du `mxc://` : une photo inchangée ne se retélécharge jamais,
+  /// et une photo changée porte un autre `mxc`, donc un autre fichier.
+  private static func fileName(forMXC mxc: String) -> String {
+    (MatrixClient.parseMXC(mxc).map { "\($0.server)_\($0.mediaID)" } ?? mxc)
+      .replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: ":", with: "_")
+  }
+
+  static func existingData(forMXC mxc: String) -> Data? {
+    let url = directory.appendingPathComponent(fileName(forMXC: mxc))
+    guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+    return data
+  }
+
+  static func store(data: Data, forMXC mxc: String) {
+    try? data.write(to: directory.appendingPathComponent(fileName(forMXC: mxc)), options: [.atomic])
+  }
+}

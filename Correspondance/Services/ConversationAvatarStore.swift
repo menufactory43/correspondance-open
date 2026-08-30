@@ -6,6 +6,14 @@ actor ConversationAvatarStore {
   static let shared = ConversationAvatarStore()
 
   private var memory: [String: Data] = [:]
+  /// Téléchargement d'une photo de portail Matrix. Le store ne connaît pas le
+  /// service de pont — `InboxStore` lui passe la closure au démarrage du `/sync`,
+  /// ce qui laisse le store testable sans homeserver.
+  private var matrixAvatarLoader: (@Sendable (String) async -> Data?)?
+
+  func setMatrixAvatarLoader(_ loader: @escaping @Sendable (String) async -> Data?) {
+    matrixAvatarLoader = loader
+  }
 
   private var signalAvatarsDirectory: URL {
     FileManager.default.homeDirectoryForCurrentUser
@@ -28,12 +36,19 @@ actor ConversationAvatarStore {
         resolved = await ContactDirectory.shared.imageData(for: conversation)
       }
     case .whatsapp, .instagram:
-      // Fil bridgé : photo du carnet d'adresses si le pont a exposé un numéro.
-      // Instagram n'en expose aucun — `address` y est le salon, jamais un handle
-      // que Contacts saurait reconnaître : on renvoie `nil` et les initiales suffisent.
-      resolved = conversation.address.hasPrefix("+")
+      // Fil bridgé : d'abord le carnet d'adresses si le pont a exposé un numéro —
+      // la photo qu'on a choisie soi-même vaut mieux que celle du réseau. Sinon la
+      // photo du portail (`m.room.avatar`), seule image dont dispose un fil Instagram.
+      let contact = conversation.address.hasPrefix("+")
         ? await ContactDirectory.shared.imageData(forHandle: conversation.address)
         : nil
+      if let contact {
+        resolved = contact
+      } else if let mxc = conversation.remoteAvatarID, let matrixAvatarLoader {
+        resolved = await matrixAvatarLoader(mxc)
+      } else {
+        resolved = nil
+      }
     }
 
     if let resolved {

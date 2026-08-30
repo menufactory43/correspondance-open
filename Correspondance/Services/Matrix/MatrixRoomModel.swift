@@ -11,6 +11,10 @@ struct MatrixRoomModel: Sendable {
   var bridgeChannelName: String?
   /// Numéro si — et seulement si — le bridge l'expose. Jamais déduit du MXID (ghosts LID).
   var bridgePhoneNumber: String?
+  /// `m.room.avatar` du portail : mautrix y pose la photo du chat distant (groupe,
+  /// et DM quand `private_chat_portal_meta` est actif). C'est la seule image que
+  /// le pont expose pour un fil sans numéro — Instagram n'en a jamais d'autre.
+  var avatarMXC: String?
   /// `com.beeper.room_type` de l'état de bridge : `dm` / `group`. Fait foi sur le comptage
   /// des membres (le bridge ajoute aussi notre propre ghost dans les DM).
   var bridgeRoomType: String?
@@ -159,6 +163,7 @@ struct MatrixRoomModel: Sendable {
       transportKey: roomID,
       isGroup: group
     )
+    conversation.remoteAvatarID = avatarMXC
     conversation.lastMessageIsFromMe = last?.isFromMe ?? false
     conversation.lastDelivery = (last?.isFromMe == true) ? delivery(selfUserID: selfUserID) : nil
     if conversation.lastMessageAt == .distantPast {

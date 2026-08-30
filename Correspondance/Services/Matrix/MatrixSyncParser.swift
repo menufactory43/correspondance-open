@@ -58,6 +58,12 @@ struct MatrixSyncParser: Sendable {
         model.explicitName = MatrixIdentity.stripBridgeSuffix(name)
       }
 
+    case "m.room.avatar":
+      // Le pont retire la photo en envoyant un contenu vide : on suit, sinon
+      // l'ancienne image survivrait à un changement côté réseau.
+      let url = content.string(at: "url")
+      model.avatarMXC = (url?.isEmpty == false) ? url : nil
+
     case "m.room.member":
       guard let userID = event.stateKey else { return }
       let membership = content.string(at: "membership") ?? "leave"

@@ -81,6 +81,46 @@ final class MatrixBridgeInstagramTests: XCTestCase {
     )
   }
 
+  /// La photo du portail est la seule image d'un fil Instagram : elle doit traverser
+  /// le parser puis la conversation, DM comme groupe, jusqu'au store d'avatars.
+  func testPortalAvatarReachesTheConversation() throws {
+    let rooms = try parsedRooms()
+    let dm = try XCTUnwrap(rooms[dmRoomID])
+    XCTAssertEqual(dm.avatarMXC, "mxc://correspondance.local/avatar-malo-ig")
+    XCTAssertEqual(
+      dm.conversation(selfUserID: selfUserID)?.remoteAvatarID,
+      "mxc://correspondance.local/avatar-malo-ig"
+    )
+
+    let group = try XCTUnwrap(rooms[groupRoomID])
+    XCTAssertEqual(group.avatarMXC, "mxc://correspondance.local/avatar-atelier-ig")
+    XCTAssertEqual(
+      group.conversation(selfUserID: selfUserID)?.remoteAvatarID,
+      "mxc://correspondance.local/avatar-atelier-ig"
+    )
+
+    // Le salon de gestion n'a pas de photo : rien à afficher, rien à télécharger.
+    XCTAssertNil(rooms[managementRoomID]?.avatarMXC)
+  }
+
+  /// Un `m.room.avatar` vide, c'est le pont qui retire la photo : elle doit disparaître.
+  func testEmptyAvatarStateClearsThePortalPhoto() throws {
+    var room = try XCTUnwrap(try parsedRooms()[dmRoomID])
+    let removal = try JSONDecoder().decode(
+      MatrixEvent.self,
+      from: Data(
+        """
+        {"type":"m.room.avatar","state_key":"","event_id":"$state-avatar-dm-ig-retire",
+         "sender":"@instagrambot:correspondance.local","origin_server_ts":1756500400000,
+         "content":{"url":""}}
+        """.utf8
+      )
+    )
+    MatrixSyncParser(selfUserID: selfUserID).applyMessages([removal], roomID: dmRoomID, to: &room)
+    XCTAssertNil(room.avatarMXC)
+    XCTAssertNil(room.conversation(selfUserID: selfUserID)?.remoteAvatarID)
+  }
+
   func testMessagesCarryTheInstagramNetwork() throws {
     let room = try XCTUnwrap(try parsedRooms()[dmRoomID])
     let messages = room.sortedMessages

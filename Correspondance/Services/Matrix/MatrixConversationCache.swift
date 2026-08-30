@@ -27,6 +27,8 @@ enum MatrixConversationCache {
     var unreadCount: Int
     var transportKey: String
     var isGroup: Bool
+    /// Absent des caches écrits avant les avatars de portail — d'où l'optionnel.
+    var remoteAvatarID: String?
   }
 
   struct CachedMessage: Codable, Sendable {
@@ -51,19 +53,21 @@ enum MatrixConversationCache {
     else {
       return (nil, [], [:])
     }
-    let conversations = snap.conversations.map {
-      Conversation(
-        id: $0.id,
-        network: $0.network,
-        address: $0.address,
-        title: $0.title,
-        preview: $0.preview,
-        lastMessageAt: $0.lastMessageAt,
-        unreadCount: $0.unreadCount,
+    let conversations = snap.conversations.map { cached -> Conversation in
+      var conversation = Conversation(
+        id: cached.id,
+        network: cached.network,
+        address: cached.address,
+        title: cached.title,
+        preview: cached.preview,
+        lastMessageAt: cached.lastMessageAt,
+        unreadCount: cached.unreadCount,
         isArchived: false,
-        transportKey: $0.transportKey,
-        isGroup: $0.isGroup
+        transportKey: cached.transportKey,
+        isGroup: cached.isGroup
       )
+      conversation.remoteAvatarID = cached.remoteAvatarID
+      return conversation
     }
     let messages = snap.messages.mapValues { list in
       list.map { cached in
@@ -107,7 +111,8 @@ enum MatrixConversationCache {
           lastMessageAt: $0.lastMessageAt,
           unreadCount: $0.unreadCount,
           transportKey: $0.transportKey,
-          isGroup: $0.isGroup
+          isGroup: $0.isGroup,
+          remoteAvatarID: $0.remoteAvatarID
         )
       },
       messages: messages

@@ -24,6 +24,9 @@ struct Conversation: Identifiable, Hashable, Sendable {
   var participantHandles: [String] = []
   /// Photo du groupe déjà résolue sur le disque, quand il y en a une.
   var groupPhotoPath: String? = nil
+  /// Photo du fil telle que le réseau distant l'expose, pas encore téléchargée :
+  /// un `mxc://` pour les fils bridgés. Le carnet d'adresses reste prioritaire.
+  var remoteAvatarID: String? = nil
 
   var hasUnread: Bool { unreadCount > 0 }
 
