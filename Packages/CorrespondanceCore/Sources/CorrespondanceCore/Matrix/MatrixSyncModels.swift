@@ -4,10 +4,22 @@ import Foundation
 public struct MatrixSyncResponse: Decodable, Sendable {
   public var nextBatch: String
   public var rooms: Rooms?
+  /// Account data global du compte : `m.push_rules` (d'où vient la sourdine)
+  /// et nos propres clés (`fr.correspondance.merged_contacts`).
+  public var accountData: AccountData?
 
   public enum CodingKeys: String, CodingKey {
     case nextBatch = "next_batch"
     case rooms
+    case accountData = "account_data"
+  }
+
+  public struct AccountData: Decodable, Sendable {
+    public var events: [MatrixEvent]?
+
+    public init(events: [MatrixEvent]? = nil) {
+      self.events = events
+    }
   }
 
   public struct Rooms: Decodable, Sendable {
@@ -23,10 +35,14 @@ public struct MatrixSyncResponse: Decodable, Sendable {
     public var unreadNotifications: UnreadNotifications?
     /// EDU du salon : `m.receipt` (accusés de lecture) et `m.typing`.
     public var ephemeral: Ephemeral?
+    /// Account data du salon : `m.tag` (épinglé, archivé) et nos clés de salon
+    /// (`fr.correspondance.draft`, `fr.correspondance.hidden`).
+    public var accountData: MatrixSyncResponse.AccountData?
 
     public enum CodingKeys: String, CodingKey {
       case timeline, state, summary, ephemeral
       case unreadNotifications = "unread_notifications"
+      case accountData = "account_data"
     }
   }
 
@@ -67,9 +83,10 @@ public struct MatrixSyncResponse: Decodable, Sendable {
     }
   }
 
-  public init(nextBatch: String, rooms: Rooms? = nil) {
+  public init(nextBatch: String, rooms: Rooms? = nil, accountData: AccountData? = nil) {
     self.nextBatch = nextBatch
     self.rooms = rooms
+    self.accountData = accountData
   }
 }
 

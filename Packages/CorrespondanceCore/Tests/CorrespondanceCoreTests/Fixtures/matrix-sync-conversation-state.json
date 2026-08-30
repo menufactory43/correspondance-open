@@ -1,0 +1,72 @@
+{
+  "next_batch": "s2026_08_31_1",
+  "account_data": {
+    "events": [
+      {
+        "type": "m.push_rules",
+        "content": {
+          "global": {
+            "room": [
+              { "rule_id": "!muet-actions-vides:correspondance.local", "enabled": true, "default": false, "actions": [] },
+              { "rule_id": "!muet-dont-notify:correspondance.local", "enabled": true, "default": false, "actions": ["dont_notify"] },
+              { "rule_id": "!bruyant:correspondance.local", "enabled": true, "default": false, "actions": ["notify", { "set_tweak": "sound", "value": "default" }] },
+              { "rule_id": "!muet-desactive:correspondance.local", "enabled": false, "default": false, "actions": [] }
+            ],
+            "override": [],
+            "sender": [],
+            "content": [],
+            "underride": []
+          }
+        }
+      },
+      {
+        "type": "fr.correspondance.merged_contacts",
+        "content": {
+          "merged": [
+            {
+              "id": "merged:B3D0F0B0-0000-4000-8000-000000000001",
+              "title": "Alice",
+              "memberIDs": ["iMessage:+33600000001", "whatsapp:!dm-alice:correspondance.local"],
+              "defaultConversationID": "whatsapp:!dm-alice:correspondance.local"
+            }
+          ],
+          "dismissedPairs": ["iMessage:+33600000002|signal:!dm-bob:correspondance.local"]
+        }
+      },
+      { "type": "m.direct", "content": { "@whatsapp_33600000001:correspondance.local": ["!dm-alice:correspondance.local"] } }
+    ]
+  },
+  "rooms": {
+    "join": {
+      "!dm-alice:correspondance.local": {
+        "account_data": {
+          "events": [
+            { "type": "m.tag", "content": { "tags": { "m.favourite": {} } } },
+            { "type": "fr.correspondance.draft", "content": { "text": "je te rappelle demain" } }
+          ]
+        },
+        "timeline": { "events": [] }
+      },
+      "!dm-bob:correspondance.local": {
+        "account_data": {
+          "events": [
+            { "type": "m.tag", "content": { "tags": { "fr.correspondance.archived": {} } } },
+            { "type": "fr.correspondance.hidden", "content": { "event_ids": ["$evt-a", "$evt-b"] } }
+          ]
+        },
+        "timeline": { "events": [] }
+      },
+      "!groupe-vacances:correspondance.local": {
+        "account_data": {
+          "events": [
+            { "type": "m.tag", "content": { "tags": { "m.favourite": { "order": 0.5 }, "fr.correspondance.archived": {} } } }
+          ]
+        },
+        "timeline": { "events": [] }
+      },
+      "!sans-etat:correspondance.local": {
+        "timeline": { "events": [] }
+      }
+    }
+  }
+}

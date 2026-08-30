@@ -34,6 +34,16 @@ public struct MatrixSyncParser: Sendable {
     }
   }
 
+  /// Fusionne l'état de conversation porté par le `/sync` (tags, push rules,
+  /// account data). Séparé de `apply` : les salons vivent dans le modèle,
+  /// l'état de conversation vit dans son propre instantané, que l'inbox garde.
+  public func applyConversationState(
+    _ response: MatrixSyncResponse,
+    to snapshot: inout ConversationStateSnapshot
+  ) {
+    snapshot.apply(response)
+  }
+
   /// Réinstalle l'historique du cache disque dans les salons, **avant** le premier
   /// `/sync`. Sans ce semis, le sync initial — dix events par salon chez Synapse —
   /// réécrivait le cache avec un modèle presque vide, et tout ce que les sessions
