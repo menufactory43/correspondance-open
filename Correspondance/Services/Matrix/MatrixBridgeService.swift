@@ -28,6 +28,8 @@ actor MatrixBridgeService {
   private var loginCommandSentAt: [MessageNetwork: Date] = [:]
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
   private var ledger = MatrixTransactionLedger()
+  /// Salons dont on a déjà demandé l'historique cette session.
+  private var backfilledRoomIDs: Set<String> = []
 
   init(credentials: MatrixCredentials? = MatrixCredentialStore.load()) {
     client = MatrixClient(credentials: credentials)
@@ -90,6 +92,10 @@ actor MatrixBridgeService {
       // curseur du cache ferait perdre les invitations de portails reçues entre-temps :
       // Synapse ne les renvoie qu'une fois. Le cache sert à l'affichage immédiat, pas au curseur.
       nextBatch = nil
+      // Mais son historique, lui, est repris : le sync initial ne ramène qu'une
+      // poignée d'events par salon, et `persist()` réécrirait le fichier avec ça.
+      let (_, _, cachedMessages) = MatrixConversationCache.load()
+      MatrixSyncParser(selfUserID: selfUserID).seed(cachedMessages: cachedMessages, into: &rooms)
     }
     guard await client.isConfigured else { return false }
     do {
@@ -170,9 +176,13 @@ actor MatrixBridgeService {
     return model.sortedMessages
   }
 
-  /// Complète l'historique d'un salon (ouverture d'un fil encore vide).
+  /// Complète l'historique d'un salon (ouverture d'un fil encore court). Une
+  /// fois par session et par salon : un fil qui reste court après ça l'est
+  /// vraiment, inutile de redemander la même page à chaque ouverture.
   func backfill(conversationID: String, limit: Int = 50) async -> [ChatMessage] {
     guard let roomID = roomID(forConversation: conversationID) else { return [] }
+    guard !backfilledRoomIDs.contains(roomID) else { return rooms[roomID]?.sortedMessages ?? [] }
+    backfilledRoomIDs.insert(roomID)
     do {
       let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: limit)
       guard var model = rooms[roomID] else { return [] }
@@ -209,11 +219,12 @@ actor MatrixBridgeService {
         )
       }
       // Reporter les chemins dans le modèle pour éviter un re-téléchargement.
-      // Sans les réactions : `messagesByID` est la vérité brute, l'agrégation se
-      // refait à la lecture depuis `reactionsByEventID` (qu'une redaction peut vider).
+      // Sans toucher aux réactions : `messagesByID` garde ce qu'il avait (rien
+      // pour un event du `/sync`, l'agrégat du cache pour un message semé), et
+      // l'agrégation vivante se refait à la lecture depuis `reactionsByEventID`.
       if let roomID = roomID(forConversation: message.conversationID) {
         var canonical = updated
-        canonical.reactions = []
+        canonical.reactions = rooms[roomID]?.messagesByID[message.id]?.reactions ?? []
         rooms[roomID]?.messagesByID[message.id] = canonical
       }
       result.append(updated)

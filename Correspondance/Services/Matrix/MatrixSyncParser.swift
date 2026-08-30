@@ -34,6 +34,34 @@ struct MatrixSyncParser: Sendable {
     }
   }
 
+  /// Réinstalle l'historique du cache disque dans les salons, **avant** le premier
+  /// `/sync`. Sans ce semis, le sync initial — dix events par salon chez Synapse —
+  /// réécrivait le cache avec un modèle presque vide, et tout ce que les sessions
+  /// précédentes avaient backfillé disparaissait à chaque relance de l'app.
+  ///
+  /// Le `/sync` qui suit fusionne par identifiant d'event : rien ne se duplique.
+  /// Un envoi resté en attente au moment de quitter n'est pas repris — il n'a
+  /// jamais existé côté serveur.
+  func seed(cachedMessages: [String: [ChatMessage]], into rooms: inout [String: MatrixRoomModel]) {
+    for (conversationID, list) in cachedMessages {
+      guard let roomID = Self.roomID(inConversationID: conversationID) else { continue }
+      var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
+      for message in list where !message.isPending && model.messagesByID[message.id] == nil {
+        model.messagesByID[message.id] = message
+        model.lastEventAt = max(model.lastEventAt, message.sentAt)
+      }
+      rooms[roomID] = model
+    }
+  }
+
+  /// Inverse de `MatrixRoomModel.conversationID` (`réseau:!salon:serveur`) : le
+  /// salon commence au premier `:`, ce qui suit en contient d'autres.
+  static func roomID(inConversationID conversationID: String) -> String? {
+    guard let colon = conversationID.firstIndex(of: ":") else { return nil }
+    let roomID = String(conversationID[conversationID.index(after: colon)...])
+    return roomID.hasPrefix("!") ? roomID : nil
+  }
+
   /// Messages d'un `GET /rooms/{id}/messages` (pagination arrière) fusionnés dans le salon.
   func applyMessages(_ events: [MatrixEvent], roomID: String, to model: inout MatrixRoomModel) {
     for event in events {
