@@ -1,6 +1,5 @@
-import Foundation
-import AppKit
 import CorrespondanceCore
+import Foundation
 
 /// Résout les photos de profil / groupes (portails Matrix + Contacts iMessage).
 actor ConversationAvatarStore {
@@ -78,12 +77,12 @@ actor ConversationAvatarStore {
     forMembers ids: [String],
     loader: @Sendable (String) async -> Data?
   ) async -> Data? {
-    var images: [NSImage] = []
+    var images: [PlatformImage] = []
     for id in ids {
-      guard let data = await loader(id), let image = NSImage(data: data) else { continue }
+      guard let data = await loader(id), let image = PlatformImage(data: data) else { continue }
       images.append(image)
     }
-    return AvatarMosaic.compose(images, size: 44, separator: .windowBackgroundColor)
+    return AvatarMosaic.compose(images, size: 44, separator: .platformWindowBackground)
   }
 
   func invalidate(conversationID: String) {
