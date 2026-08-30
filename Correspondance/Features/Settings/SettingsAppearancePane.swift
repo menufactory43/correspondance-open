@@ -6,13 +6,18 @@ struct SettingsAppearancePane: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
+  /// Éteint par défaut : une notification ouvre l'inbox, comme toujours.
+  @AppStorage(DetachedWindowState.notificationsOpenDetachedKey)
+  private var notificationsOpenDetached = false
+
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
         title: "Ouverture",
-        footnote: "Focus = une conversation. Inbox = liste + fil. ⌘1 / ⌘2."
+        footnote: "Focus = une conversation. Inbox = liste + fil. ⌘1 / ⌘2. "
+          + "Une conversation se détache dans sa fenêtre avec ⌘⇧D."
       ) {
         SettingsRow(label: "Mode au démarrage", systemImage: "rectangle.split.2x1") {
           Picker("", selection: Binding(
@@ -25,6 +30,14 @@ struct SettingsAppearancePane: View {
           }
           .pickerStyle(.segmented)
           .frame(width: 200)
+        }
+
+        SettingsDivider()
+
+        SettingsRow(label: "Ouvrir les notifications en fenêtre détachée", systemImage: "macwindow.on.rectangle") {
+          Toggle("", isOn: $notificationsOpenDetached)
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
       }
 
