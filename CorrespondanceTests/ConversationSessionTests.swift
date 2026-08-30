@@ -72,6 +72,33 @@ final class ConversationSessionTests: XCTestCase {
     XCTAssertTrue(ailleurs.messages.isEmpty)
   }
 
+  /// Le menu « @ » d'une fenêtre détachée cite les gens de SON fil, pas ceux
+  /// du fil que l'inbox a sous les yeux. Deux composers, deux listes.
+  func testMentionCandidatesBelongToTheirOwnSession() async {
+    let store = InboxStore()
+    var groupe = conversation(id: "sig:groupe", network: .signal, title: "Le groupe")
+    groupe.isGroup = true
+    store.conversations = [
+      groupe,
+      conversation(id: "imessage:paul", network: .iMessage, title: "Paul"),
+    ]
+    // L'inbox lit le groupe ; la fenêtre détachée lit le tête-à-tête.
+    store.selectedConversationID = "sig:groupe"
+
+    let inbox = store.session(for: "sig:groupe")
+    let detachee = store.session(for: "imessage:paul")
+
+    await store.refreshMentionCandidates(for: detachee)
+    // Un tête-à-tête ne cite qu'une personne : celle du fil.
+    XCTAssertEqual(detachee.mentionCandidates.map(\.name), ["Paul"])
+    // Et rien n'est allé se poser dans la session de l'inbox.
+    XCTAssertTrue(inbox.mentionCandidates.isEmpty)
+
+    await store.refreshMentionCandidates(for: inbox)
+    XCTAssertEqual(detachee.mentionCandidates.map(\.name), ["Paul"])
+    XCTAssertFalse(inbox.mentionCandidates.contains { $0.name == "Paul" })
+  }
+
   /// La session de l'inbox suit la sélection ; celle d'une fenêtre détachée non.
   func testPrimarySessionFollowsSelectionOnly() {
     let store = InboxStore()

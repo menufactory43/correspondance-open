@@ -494,7 +494,7 @@ struct FocusPageEditor: View {
           .focused($isFocused)
           .frame(maxWidth: .infinity, alignment: .leading)
           // Avant « Entrée = envoyer » et « Échap = quitter » : le menu « @ » a la main.
-          .mentionMenu(text: text, theme: theme, font: pageFont)
+          .mentionMenu(text: text, session: session, theme: theme, font: pageFont)
           .onKeyPress(.return) {
             if NSEvent.modifierFlags.contains(.shift) { return .ignored }
             guard canSend, !isSending else { return .handled }

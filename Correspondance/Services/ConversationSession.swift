@@ -33,6 +33,10 @@ final class ConversationSession {
   /// Message que le brouillon en cours cite (⌘R). `nil` = réponse simple.
   var replyingToMessageID: String?
 
+  /// Les gens de CE fil, pour le menu « @ » de CE composer. Deux fenêtres
+  /// ouvertes sur deux fils ne se disputent plus une seule liste.
+  var mentionCandidates: [MentionCandidate] = []
+
   /// Le magasin garde ses sessions ; une session ne fait que lui rendre son
   /// brouillon. La référence est faible pour que la boucle ne se referme pas.
   @ObservationIgnored weak var store: InboxStore?

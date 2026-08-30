@@ -66,8 +66,6 @@ final class InboxStore {
   /// True seulement pendant la frappe active (pas le simple focus).
   /// Le chrome Focus se tait le temps d’écrire, puis revient à la pause.
   var isComposerFocused = false
-  /// Les gens du fil ouvert, pour le menu « @ » (cf. `InboxStore+Mentions`).
-  var mentionCandidates: [MentionCandidate] = []
   /// Messages programmés (⌘⇧L), tous fils confondus, triés par échéance.
   private(set) var scheduledMessages: [ScheduledMessage] = []
   /// Réglage « plus tard » du composer : tant qu'il est posé, Entrée programme

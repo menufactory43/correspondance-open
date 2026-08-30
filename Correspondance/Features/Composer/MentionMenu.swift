@@ -5,6 +5,8 @@ import SwiftUI
 /// Le même modifieur sert au composer de la boîte et à la feuille du Focus.
 struct MentionField: ViewModifier {
   @Binding var text: String
+  /// Le fil dont on cite les gens. `nil` = aucun fil ouvert, pas de menu.
+  var session: ConversationSession?
   var theme: WritingTheme
   var font: Font
 
@@ -16,8 +18,8 @@ struct MentionField: ViewModifier {
   private var token: MentionParser.Token? { MentionParser.activeToken(in: text) }
 
   private var matches: [MentionCandidate] {
-    guard let token else { return [] }
-    return MentionParser.matches(store.mentionCandidates, query: token.query)
+    guard let token, let session else { return [] }
+    return MentionParser.matches(session.mentionCandidates, query: token.query)
   }
 
   private var isVisible: Bool {
@@ -38,8 +40,9 @@ struct MentionField: ViewModifier {
       .onChange(of: matches.map(\.id)) { _, _ in selectedIndex = 0 }
       // La liste dépend du fil et de ceux qui y ont parlé : on la refait quand
       // l'un ou l'autre change, pas à chaque frappe.
-      .task(id: "\(store.selectedConversationID ?? "")|\(store.messages.count)") {
-        await store.refreshMentionCandidates()
+      .task(id: "\(session?.conversationID ?? "")|\(session?.messages.count ?? 0)") {
+        guard let session else { return }
+        await store.refreshMentionCandidates(for: session)
       }
       .overlay(alignment: .topLeading) {
         if isVisible {
@@ -79,8 +82,10 @@ struct MentionField: ViewModifier {
 
 extension View {
   /// Taper « @ » dans ce champ ouvre le menu des gens du fil ouvert.
-  func mentionMenu(text: Binding<String>, theme: WritingTheme, font: Font) -> some View {
-    modifier(MentionField(text: text, theme: theme, font: font))
+  func mentionMenu(
+    text: Binding<String>, session: ConversationSession?, theme: WritingTheme, font: Font
+  ) -> some View {
+    modifier(MentionField(text: text, session: session, theme: theme, font: font))
   }
 }
 

@@ -8,11 +8,11 @@ import Foundation
 /// qui ont déjà parlé dans le fil complètent la liste. Un fil fusionné réunit
 /// les membres de tous ses réseaux, sans jamais montrer deux fois la même personne.
 extension InboxStore {
-  func refreshMentionCandidates() async {
-    guard let id = selectedConversationID else {
-      mentionCandidates = []
-      return
-    }
+  /// Les gens du fil de CETTE session, posés dans CETTE session. Rien ici ne
+  /// regarde la sélection de l'inbox : une fenêtre détachée a ses mentions.
+  func refreshMentionCandidates(for session: ConversationSession) async {
+    let id = session.conversationID
+    let thread = session.messages
     let members = isMerged(id)
       ? memberConversations(of: id)
       : (conversations.first { $0.id == id }).map { [$0] } ?? []
@@ -20,19 +20,20 @@ extension InboxStore {
     var seen: Set<String> = []
     var result: [MentionCandidate] = []
     for conversation in members {
-      for candidate in await mentionCandidates(in: conversation) {
+      for candidate in await mentionCandidates(in: conversation, thread: thread) {
         let key = MentionParser.fold(candidate.name)
         guard !key.isEmpty, seen.insert(key).inserted else { continue }
         result.append(candidate)
       }
     }
-    // Le fil a pu changer pendant qu'on résolvait les noms : ne pas poser la
-    // liste d'un autre fil sur celui-ci.
-    guard selectedConversationID == id else { return }
-    mentionCandidates = result
+    // Le fil a pu se recharger pendant qu'on résolvait les noms — la session,
+    // elle, ne change jamais de fil : ce qu'on a calculé lui appartient.
+    session.mentionCandidates = result
   }
 
-  private func mentionCandidates(in conversation: Conversation) async -> [MentionCandidate] {
+  private func mentionCandidates(
+    in conversation: Conversation, thread: [ChatMessage]
+  ) async -> [MentionCandidate] {
     guard conversation.isGroup else {
       // Tête-à-tête : une seule personne, celle du fil — et sa vraie photo.
       return [MentionCandidate(id: conversation.id, name: conversation.title, avatar: conversation)]
@@ -45,7 +46,7 @@ extension InboxStore {
     case .iMessage:
       for handle in conversation.participantHandles {
         let name = await ContactDirectory.shared.displayName(forHandle: handle)
-          ?? spokenName(of: handle, in: conversation)
+          ?? spokenName(of: handle, in: conversation, thread: thread)
           ?? handle
         known.insert(handle)
         out.append(MentionCandidate(
@@ -71,7 +72,7 @@ extension InboxStore {
     }
 
     // Ceux qui ont parlé sans figurer dans la liste du réseau.
-    for message in messages where !message.isFromMe && message.conversationID == conversation.id {
+    for message in thread where !message.isFromMe && message.conversationID == conversation.id {
       guard let label = MessageGrouping.label(for: message) else { continue }
       let handle = message.senderID ?? label
       guard known.insert(handle).inserted else { continue }
@@ -88,8 +89,10 @@ extension InboxStore {
   }
 
   /// Le nom sous lequel cette adresse a déjà parlé dans le fil, s'il y en a un.
-  private func spokenName(of handle: String, in conversation: Conversation) -> String? {
-    messages.first {
+  private func spokenName(
+    of handle: String, in conversation: Conversation, thread: [ChatMessage]
+  ) -> String? {
+    thread.first {
       $0.conversationID == conversation.id && $0.senderID == handle
         && ($0.senderName?.isEmpty == false) && $0.senderName != handle
     }?.senderName
