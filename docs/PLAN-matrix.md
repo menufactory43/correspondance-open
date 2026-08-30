@@ -101,10 +101,12 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
 4. Commits atomiques (infra / domaine / services / store / UI / tests), aucun secret.
 
 ### Hors périmètre (itérations suivantes)
-- It. 2 : Messenger via `mautrix-meta` **et** Instagram via `mautrix-instagram` (image `dock.mau.dev/mautrix/meta:ig-v26.07`,
-  préfixe `ig-`) — Meta ayant coupé l'ancienne API, ce sont deux instances distinctes. Aucun impact sur l'architecture :
-  `MatrixBridgeService` résout déjà le réseau **par salon** via `m.bridge.content.protocol.id`, donc `instagram` et
-  `facebook` peuvent parfaitement venir de deux bridges différents.
+- ~~It. 2 : Instagram~~ **faite** : `mautrix-instagram` (image `dock.mau.dev/mautrix/meta:ig-v26.08`, préfixe `ig-`,
+  binaire `mautrix-instagram` depuis v26.08). Ce que la passe a apporté : un `MatrixBridgeDescriptor` par pont
+  (bot, préfixe de commande, préfixe de ghost, `protocol.id`, flow de login), un salon de gestion **par pont** dans
+  `MatrixBridgeService`, et un flux de login générique (`startLogin` / `loginStep`) — QR pour WhatsApp, cookies pour
+  Instagram. `protocol.id` vaut le `BeeperBridgeType` de mautrix : `whatsappgo`, `instagramgo`.
+- It. 2 bis : Messenger via `mautrix-meta` (le vrai, sans préfixe) — un descripteur de plus, rien d'autre à bouger.
 - It. 3 : mautrix-signal, suppression de `SignalBridge.swift`/signal-cli après parité (groupes, pièces jointes, timers).
 - It. 4 : cible iOS (SwiftUI partagé, `MatrixClient` réutilisé tel quel, accès homeserver via Tailscale sur iPhone).
 

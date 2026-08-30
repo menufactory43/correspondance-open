@@ -1,6 +1,8 @@
 # Correspondance
 
-> Inbox Focus pour **iMessage** + **Signal** (dogfood). Spec : [`docs/PRODUCT.md`](docs/PRODUCT.md).
+> Inbox Focus pour **iMessage**, **Signal**, **WhatsApp** et **Instagram** (dogfood).
+> Spec : [`docs/PRODUCT.md`](docs/PRODUCT.md) · les deux derniers passent par des ponts mautrix,
+> voir [`docs/MATRIX-SETUP.md`](docs/MATRIX-SETUP.md).
 
 Deux modes :
 
@@ -28,6 +30,8 @@ Puis ⌘R. macOS 14+, Xcode récent.
 3. Actualise (⌘R ou bouton) pour lire `~/Library/Messages/chat.db`.
 4. L’envoi iMessage passe par l’app **Messages** (AppleScript) — accorde Automation si macOS le demande.
 5. Signal : `signal-cli` + `signal-cli link -n Correspondance`.
+6. WhatsApp / Instagram (facultatif) : pile Matrix sur le NUC (`./infra/matrix/bootstrap.sh`), puis
+   Réglages › Matrix — QR pour WhatsApp, cookies pour Instagram.
 
 ### Accès disque qui « saute » à chaque rebuild
 

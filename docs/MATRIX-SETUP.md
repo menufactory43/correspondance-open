@@ -1,12 +1,17 @@
-# Matrix & WhatsApp — installation, usage, dépannage
+# Matrix, WhatsApp & Instagram — installation, usage, dépannage
 
-Correspondance parle WhatsApp par un pont : un homeserver **Synapse** privé et le bridge
-**mautrix-whatsapp**, tous deux sur le NUC, joints depuis le Mac par Tailscale. iMessage et Signal
-restent natifs et ne passent pas par là.
+Correspondance parle WhatsApp et Instagram par des ponts : un homeserver **Synapse** privé, les
+bridges **mautrix-whatsapp** et **mautrix-instagram**, tous sur le NUC, joints depuis le Mac par
+Tailscale. iMessage et Signal restent natifs et ne passent pas par là.
 
 ```
-Mac (Correspondance) ──Tailscale──► Synapse 100.64.0.7:8008 ──► mautrix-whatsapp ──► WhatsApp
+                                                 ┌─► mautrix-whatsapp  ──► WhatsApp
+Mac (Correspondance) ──Tailscale──► Synapse ─────┤
+                       100.64.0.7:8008       └─► mautrix-instagram ──► Instagram DM
 ```
+
+Un seul `/sync` côté app pour les deux ponts (même homeserver), mais **un salon de gestion par
+pont** : `@whatsappbot` et `@instagrambot` ne se parlent pas.
 
 ## 0. Ce qui tourne déjà, et où
 
@@ -15,8 +20,14 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | Conteneur | Image | Rôle |
 | --- | --- | --- |
 | `correspondance-synapse` | `matrixdotorg/synapse` | homeserver, `server_name: correspondance.local` |
-| `correspondance-postgres` | `postgres:16-alpine` | base de Synapse et du bridge |
+| `correspondance-postgres` | `postgres:16-alpine` | base de Synapse et des bridges |
 | `correspondance-mautrix-whatsapp` | `dock.mau.dev/mautrix/whatsapp:v26.08` | pont WhatsApp (tag **épinglé**) |
+| `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
+
+Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
+`mautrix-instagram`, publié sur **la même image Docker** avec un tag préfixé `ig-`. Le
+`/docker-run.sh` de cette variante appelle encore `/usr/bin/mautrix-meta`, qui n'y est plus — le
+compose court-circuite donc l'entrypoint et lance `/usr/bin/mautrix-instagram` directement.
 
 Tout vit dans `~/correspondance-matrix/` : configs générées, données, et `CREDENTIALS.txt`
 (chmod 600) qui contient le mot de passe du compte `@meffysto:correspondance.local`. Ce fichier ne
@@ -24,6 +35,10 @@ quitte jamais le NUC et n'est pas versionné.
 
 Les sources d'infra sont dans `infra/matrix/` (compose, templates, `bootstrap.sh`). Le script est
 idempotent : `./infra/matrix/bootstrap.sh` depuis le Mac recopie et réapplique tout sans dégât.
+
+Chaque pont a sa base Postgres (`mautrix_whatsapp`, `mautrix_meta`) et sa registration côté
+Synapse (`whatsapp-registration.yaml`, `meta-registration.yaml`). `bootstrap.sh` les installe par
+la même fonction `setup_bridge` : config par défaut → fusion des overlays du repo → registration.
 
 ### Pourquoi `127.0.0.1:8008` mais un accès en `100.64.0.7:8008`
 
@@ -51,8 +66,8 @@ curl -s http://relais.exemple.ts.net:8008/_matrix/client/versions | head -c 120
    mauvaise adresse.
 
 Le jeton d'accès part dans le **Trousseau** (jamais dans UserDefaults, jamais dans le repo). La
-ligne « État » affiche ensuite le MXID connecté et le nombre de fils WhatsApp. **Déconnecter
-Matrix** révoque le jeton côté serveur, vide le Trousseau et le cache disque des conversations.
+ligne « État » affiche ensuite le MXID connecté et le décompte des fils par réseau
+(« 12 WhatsApp · 3 Instagram »). **Déconnecter Matrix** révoque le jeton côté serveur, vide le Trousseau et le cache disque des conversations.
 
 Pas de chiffrement de bout en bout côté client : le homeserver est privé, sur Tailscale, et les
 salons de bridge sont créés non chiffrés (`encryption.allow: false`).
@@ -95,20 +110,61 @@ pointé sur `http://relais.exemple.ts.net:8008` fait très bien l'affaire pour d
 `NewConversationSheet` (WhatsApp sélectionnable seulement si Matrix est connecté) envoie au bot la
 commande `pm +33612345678`. Le bot crée le portail et le salon arrive au `/sync` suivant.
 
+## 2 bis. Connecter Instagram — les cookies
+
+Meta n'offre aucun appairage par QR pour les DM Instagram : `mautrix-instagram` se connecte avec
+les cookies d'une session de navigateur déjà ouverte. C'est le seul flow que le bridge expose
+(`login` → étape `fi.mau.meta.cookies`).
+
+**Réglages › Matrix › Connecter Instagram…** ouvre la feuille : l'app envoie `login` à
+`@instagrambot:correspondance.local`, le bot répond « Enter a JSON object with your cookies, or a
+cURL command copied from browser devtools. » puis l'URL de connexion, et la feuille attend le
+collage.
+
+Récupérer les cookies, dans un navigateur **connecté à instagram.com** :
+
+1. Outils de développement (⌥⌘I) → onglet **Application** (Chrome) / **Stockage** (Firefox).
+2. **Cookies** → `https://www.instagram.com`.
+3. Relever `sessionid`, `csrftoken`, `ds_user_id`, `mid`, `ig_did` — les cinq **obligatoires**.
+   `rur`, `shbid`, `shbts` sont optionnels et n'empêchent rien s'ils manquent.
+4. Coller dans la feuille un objet JSON :
+
+```json
+{"sessionid":"…","csrftoken":"…","ds_user_id":"…","mid":"…","ig_did":"…"}
+```
+
+Une commande **cURL** copiée depuis l'onglet Réseau (« Copy as cURL ») fait aussi l'affaire : le
+bot en extrait l'entête `Cookie` tout seul. Dans les deux cas, le message est **rédigé** par le
+bot juste après lecture — les cookies ne restent pas dans l'historique du salon.
+
+Au succès, le bot répond « Logged in as <nom> (<id>) » et le backfill démarre. Les échecs sont
+explicites : `Missing some keys: [...]` (un cookie oublié), `Failed to parse input as JSON`
+(collage abîmé), `Login failed: Challenge/Checkpoint/Consent required` (Instagram demande une
+vérification — la faire sur le site officiel, puis recommencer).
+
+### Ouvrir un fil Instagram
+
+Les ghosts Instagram sont des **identifiants numériques Meta**, pas des pseudos : `pm <pseudo>`
+échoue. `NewConversationSheet` accepte donc les deux écritures — un identifiant numérique part
+directement en `pm <id>`, un pseudo passe d'abord par `search <pseudo>`, dont l'app lit la réponse
+du bot (`` `17841400000000001` / Malo ``) pour en tirer l'ID.
+
 ## 3. Dépannage
 
 Toutes les commandes ci-dessous se lancent depuis `~/correspondance-matrix/` sur le NUC
 (`ssh nuc`, puis `cd ~/correspondance-matrix`).
 
 ```sh
-docker-compose ps                        # les 3 services doivent être Up
-docker-compose logs -f mautrix-whatsapp  # le journal du pont, en direct
+docker-compose ps                        # les 4 services doivent être Up
+docker-compose logs -f mautrix-whatsapp  # le journal du pont WhatsApp, en direct
+docker-compose logs -f mautrix-meta      # celui d'Instagram
 docker-compose logs --tail=200 synapse   # le homeserver
-docker-compose restart mautrix-whatsapp  # redémarrer le pont seul
+docker-compose restart mautrix-meta      # redémarrer un pont seul
 docker-compose up -d                     # tout relancer (idempotent)
 ```
 
-**Commandes utiles à envoyer au bot** (dans le DM avec `@whatsappbot`, depuis l'app ou Element) :
+**Commandes utiles à envoyer au bot WhatsApp** (dans le DM avec `@whatsappbot`, depuis l'app ou
+Element ; hors salon de gestion, les préfixer de `!wa`) :
 
 | Commande | Effet |
 | --- | --- |
@@ -119,6 +175,19 @@ docker-compose up -d                     # tout relancer (idempotent)
 | `logout` | déconnecte le compte WhatsApp du pont |
 | `ping` | état de la connexion WhatsApp |
 | `sync space` / `backfill` | reconstruit les portails / rejoue l'historique |
+
+**Commandes du bot Instagram** (DM avec `@instagrambot`, préfixe `!ig` hors salon de gestion) :
+
+| Commande | Effet |
+| --- | --- |
+| `help` | liste complète des commandes de la version installée |
+| `login` | démarre le flow cookies (un seul flow : pas de nom à préciser) |
+| `cancel` | annule le login en cours |
+| `logout` | déconnecte le compte Instagram du pont |
+| `ping` | état de la connexion |
+| `search <pseudo>` | cherche un compte, renvoie `` `id` / Nom `` |
+| `start-chat <id>` (alias `pm`) | ouvre un DM vers un **identifiant numérique** |
+| `create-group` | crée un groupe à partir du salon courant |
 
 **Réinitialiser un login qui ne marche plus** : `cancel`, puis `logout`, puis `login qr`. Si le pont
 reste bloqué, `docker-compose restart mautrix-whatsapp` puis un nouveau `login qr` — le pont
@@ -134,9 +203,15 @@ reprend son état depuis Postgres, rien n'est perdu.
 | QR téléchargé mais vide / erreur 401 | jeton expiré : Déconnecter Matrix puis se reconnecter |
 | Fils WhatsApp absents après le scan | backfill en cours ; sinon `sync space` puis `backfill` au bot |
 | Titres de conversation en `!salon:…` ou `@whatsapp_lid-…` | le displayname n'est pas encore arrivé ; il se corrige au `/sync` suivant. Les ghosts sont des **LID** depuis v26.08 : aucun numéro n'est déductible d'un MXID |
+| Instagram : « Missing some keys » | un des cinq cookies obligatoires manque — relire `sessionid`, `csrftoken`, `ds_user_id`, `mid`, `ig_did` |
+| Instagram : « Challenge/Checkpoint required » | Meta veut une vérification : la faire sur instagram.com, puis relancer `login` |
+| Instagram : « Got logged out immediately » | cookies périmés (déconnexion côté navigateur) — se reconnecter sur instagram.com et recopier |
+| Instagram : aucun avatar dans l'inbox | attendu : Instagram n'expose pas de numéro, donc rien à rapprocher du carnet d'adresses. Les initiales font office |
+| `mautrix-meta` redémarre en boucle | l'entrypoint de l'image `ig-` est court-circuité par le compose ; vérifier que le service garde bien `entrypoint: [/usr/bin/mautrix-instagram, …]` |
 
-**Ne jamais** passer l'image mautrix en `latest` sans relire le code : le passage aux ghosts LID en
-v26.08 a changé le format des MXID que le client analyse.
+**Ne jamais** passer une image mautrix en `latest` sans relire le code : le passage aux ghosts LID
+en v26.08 a changé le format des MXID que le client analyse, et la même version a sorti Instagram
+de `mautrix-meta`. Côté Instagram, penser aussi au préfixe : `ig-v26.08`, jamais `v26.08`.
 
 ## 4. Migrer vers un VPS
 
@@ -157,6 +232,6 @@ messages. Le déménagement vers un VPS ne change rien au code Swift — seule l
    son IP 100.x. Zéro TLS à gérer, zéro port ouvert — c'est l'option la plus sobre tant que
    Correspondance reste mono-utilisateur.
 5. **Reprendre les données** (si on garde le même `server_name`) : arrêter la pile, `pg_dump` de
-   Postgres, copier les volumes `synapse-data` et `whatsapp-data`, restaurer côté VPS, relancer.
-   Le pont reprend sa session WhatsApp sans rescanner.
+   Postgres, copier `data/synapse`, `data/mautrix-whatsapp` et `data/mautrix-meta`, restaurer côté
+   VPS, relancer. Les ponts reprennent leur session sans rescanner ni recoller de cookies.
 6. Côté Mac : Réglages › Matrix › Déconnecter, puis se reconnecter sur la nouvelle URL.
