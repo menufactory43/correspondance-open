@@ -19,6 +19,9 @@ actor MatrixBridgeService {
   /// Event de la dernière commande `login` envoyée, par réseau : borne basse de lecture
   /// des réponses du bot (tout ce qui précède appartient à une tentative passée).
   private var loginCommandEventIDs: [MessageNetwork: String] = [:]
+  /// Heure de la dernière commande `login`, par réseau : au-delà de quelques secondes
+  /// sans que le bot ait rejoint le salon, ce n'est plus de la latence, c'est une panne.
+  private var loginCommandSentAt: [MessageNetwork: Date] = [:]
   /// `txnId` par message optimiste : un renvoi ne duplique rien.
   private var ledger = MatrixTransactionLedger()
 
@@ -69,6 +72,7 @@ actor MatrixBridgeService {
     selfUserID = ""
     managementRoomIDs = [:]
     loginCommandEventIDs = [:]
+    loginCommandSentAt = [:]
   }
 
   // MARK: - Sync
@@ -311,6 +315,7 @@ actor MatrixBridgeService {
     // On retient l'event de la commande : tout ce qui la précède appartient à une
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
     loginCommandEventIDs[network] = try await sendBotCommand(command, to: network)
+    loginCommandSentAt[network] = Date()
   }
 
   /// Envoie la session au bot, en réponse à son invite : soit le JSON fabriqué à partir
@@ -321,7 +326,29 @@ actor MatrixBridgeService {
     let payload = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !payload.isEmpty else { throw MatrixError.decoding("cookies vides") }
     let roomID = try await ensureManagementRoom(for: network)
-    _ = try await client.sendText(roomID: roomID, body: payload, transactionID: UUID().uuidString)
+    let eventID = try await client.sendText(roomID: roomID, body: payload, transactionID: UUID().uuidString)
+    // Le pont reçoit l'event par la transaction d'appservice, au moment même où Synapse
+    // l'accepte : rédiger juste après ne lui retire rien. Le bot rédige lui-même quand il
+    // lit une session — mais s'il n'est pas dans le salon, elle resterait en clair dans
+    // la timeline. On ne laisse pas ce soin à quelqu'un d'autre.
+    if let eventID {
+      _ = try? await client.redact(roomID: roomID, eventID: eventID)
+    }
+  }
+
+  /// Le bot doit **rejoindre** le salon de gestion pour lire quoi que ce soit ; un
+  /// homeserver qui n'a pas chargé la registration du pont laisse l'invitation en plan.
+  /// On pose la question à Synapse plutôt qu'au `/sync` : la réponse est immédiate.
+  private static let botJoinGraceSeconds: TimeInterval = 12
+
+  private func botHasJoined(roomID: String, network: MessageNetwork) async -> Bool? {
+    guard let bridge = network.bridge, !selfUserID.isEmpty else { return nil }
+    let serverName = String(selfUserID.split(separator: ":").last ?? "")
+    let bot = bridge.botUserID(serverName: serverName)
+    guard let state = try? await client.roomState(roomID: roomID, type: "m.room.member", stateKey: bot) else {
+      return nil
+    }
+    return state.string(at: "membership") == "join"
   }
 
   /// Dernier état publié par le bot **depuis** notre commande de connexion.
@@ -344,6 +371,14 @@ actor MatrixBridgeService {
         let data = try await client.downloadMedia(mxcURI: mxc)
         return .qrCode(data)
       }
+    }
+    // Rien du bot : est-il seulement là ? Passé le délai de grâce, un bot encore
+    // « invité » ne répondra jamais — on le dit tout de suite plutôt que dans 90 s.
+    if let sentAt = loginCommandSentAt[network],
+       Date().timeIntervalSince(sentAt) > Self.botJoinGraceSeconds,
+       await botHasJoined(roomID: roomID, network: network) == false
+    {
+      throw MatrixError.bridgeBotNotJoined(network)
     }
     return .waiting
   }

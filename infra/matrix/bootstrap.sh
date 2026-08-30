@@ -150,6 +150,11 @@ setup_bridge() {
   chmod 600 "data/synapse/${registration}"
 }
 
+# Synapse ne relit ses registrations qu'au démarrage : si l'une d'elles change (nouveau pont),
+# `up -d` seul le laisse tourner sans la connaître — le bot reste « invité » à jamais.
+registrations_fingerprint() { cat data/synapse/*-registration.yaml 2>/dev/null | md5sum; }
+REG_BEFORE="$(registrations_fingerprint)"
+
 setup_bridge mautrix-whatsapp dock.mau.dev/mautrix/whatsapp "$WHATSAPP_IMAGE_TAG" \
   mautrix-whatsapp-overrides.yaml.tmpl whatsapp-registration.yaml mautrix-whatsapp
 setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
@@ -170,6 +175,23 @@ for _ in $(seq 1 45); do
   sleep 2
 done
 [[ "$OK" == 1 ]] || { echo "✗ Synapse ne répond pas"; docker-compose logs --tail=40 synapse; exit 1; }
+
+# Registrations changées, ou un pont qui se plaint de son as_token : Synapse doit redémarrer,
+# puis les ponts derrière lui (ils s'arrêtent net quand le jeton est refusé).
+NEED_SYNAPSE_RESTART=0
+[[ "$(registrations_fingerprint)" != "$REG_BEFORE" ]] && NEED_SYNAPSE_RESTART=1
+for svc in mautrix-whatsapp mautrix-meta; do
+  docker-compose logs --tail=30 "$svc" 2>/dev/null | grep -q "as_token was not accepted" && NEED_SYNAPSE_RESTART=1
+done
+if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
+  echo "→ Registrations modifiées : redémarrage de Synapse puis des ponts"
+  docker-compose restart synapse >/dev/null
+  for _ in $(seq 1 45); do
+    curl -fsS "http://127.0.0.1:8008/_matrix/client/versions" >/dev/null 2>&1 && break
+    sleep 2
+  done
+  docker-compose restart mautrix-whatsapp mautrix-meta >/dev/null
+fi
 
 # 8) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
 if [[ ! -f "$CREDS" ]]; then

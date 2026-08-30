@@ -91,7 +91,9 @@ struct BridgeLoginSheet: View {
       InstagramWebLoginView { cookies in
         store.handleInstagramSessionCookies(cookies)
       }
-      .frame(width: 420, height: 640)
+      // La feuille vit dans la fenêtre Réglages (660 pt de haut au mieux) : le formulaire
+      // Instagram tient dans 360 pt, et la page défile à l'intérieur pour le reste.
+      .frame(width: 420, height: 360)
       .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: 10, style: .continuous)
