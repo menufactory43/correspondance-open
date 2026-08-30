@@ -252,13 +252,18 @@ struct MessageBubbleView: View {
   private var highlighted: AttributedString {
     var attributed = AttributedString(displayText)
     let ranges = ConversationSearch.highlightRanges(in: displayText, query: highlightQuery)
-    guard !ranges.isEmpty else { return attributed }
     let tint = isCurrentMatch ? theme.accent.opacity(0.55) : theme.accent.opacity(0.22)
     for range in ranges {
       guard let bounds = Range(range, in: attributed) else { continue }
       attributed[bounds].backgroundColor = message.isFromMe ? theme.paper.opacity(0.35) : tint
     }
-    return attributed
+    // Les liens par-dessus le surlignage : les deux se voient, l'un colore le fond,
+    // l'autre l'encre. L'encre d'accent tient sur les deux bulles des six thèmes.
+    return LinkedText.render(
+      text: displayText,
+      tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
+      base: attributed
+    )
   }
 
   @ViewBuilder

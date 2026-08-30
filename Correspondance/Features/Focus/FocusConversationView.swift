@@ -107,7 +107,7 @@ private struct FocusTranscriptView: View {
                     }
                   }
                   if shouldShowFocusText(message) {
-                    Text(message.text)
+                    LinkedText(text: message.text, tint: theme.accent)
                       .font(pageFont)
                       .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
                       .lineSpacing(theme.lineSpacing * 0.65)
