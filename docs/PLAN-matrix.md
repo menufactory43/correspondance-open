@@ -10,7 +10,7 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
  WhatsApp ─── mautrix-whatsapp ─┐
  Instagram ┐                    ├─ Synapse (NUC, Tailscale) ── Matrix CS-API ── MatrixService (Swift)
  Messenger ┴ mautrix-meta ──────┤                                                     │
- Signal ───── mautrix-signal ───┘  (itération 3, remplace signal-cli)             InboxStore
+ Signal ───── mautrix-signal ───┘                                                 InboxStore
 ```
 
 - **Homeserver** : Synapse (meilleur support mautrix, doc la plus riche). Postgres 16.
@@ -107,7 +107,15 @@ différenciation est l'UI — mode **Focus** hérité d'iA Writer. macOS d'abord
   `MatrixBridgeService`, et un flux de login générique (`startLogin` / `loginStep`) — QR pour WhatsApp, cookies pour
   Instagram. `protocol.id` vaut le `BeeperBridgeType` de mautrix : `whatsappgo`, `instagramgo`.
 - It. 2 bis : Messenger via `mautrix-meta` (le vrai, sans préfixe) — un descripteur de plus, rien d'autre à bouger.
-- It. 3 : mautrix-signal, suppression de `SignalBridge.swift`/signal-cli après parité (groupes, pièces jointes, timers).
+- ~~It. 3 : mautrix-signal~~ **faite** : `mautrix-signal:v26.08`, descripteur `.signal` (bot `@signalbot`,
+  préfixe `!signal`, ghosts `@signal_<UUID ACI>`, `protocol.id` = `signal` sans forme en `-go`), et
+  suppression de `SignalBridge.swift`, `SignalConversationCache`, `SignalAttachmentStore`,
+  `SignalCatchUp` — près de 2 000 lignes. Parité atteinte sauf deux points, actés : le **timer
+  éphémère** ne se règle plus depuis l'app (mautrix-signal applique les timers reçus, ne les pose
+  pas) et l'**historique d'avant la liaison** n'apparaît plus (Signal ne garde rien côté serveur —
+  aucun backfill possible ; l'ancien cache reste sur disque, simplement plus lu). Une migration
+  jouée une fois purge les préférences qui indexaient les anciens identifiants et remet le curseur
+  de `/sync` à zéro, sans quoi les salons créés avant l'ajout du descripteur resteraient invisibles.
 - It. 4 : cible iOS (SwiftUI partagé, `MatrixClient` réutilisé tel quel, accès homeserver via Tailscale sur iPhone).
 
 ## Itération « Chrome Golden Gate » (UI, après l'it. 1, indépendante des bridges)

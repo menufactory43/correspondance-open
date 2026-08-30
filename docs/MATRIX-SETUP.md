@@ -1,17 +1,17 @@
-# Matrix, WhatsApp & Instagram — installation, usage, dépannage
+# Matrix, WhatsApp, Instagram & Signal — installation, usage, dépannage
 
-Correspondance parle WhatsApp et Instagram par des ponts : un homeserver **Synapse** privé, les
-bridges **mautrix-whatsapp** et **mautrix-instagram**, tous sur le NUC, joints depuis le Mac par
-Tailscale. iMessage et Signal restent natifs et ne passent pas par là.
+Correspondance parle WhatsApp, Instagram et Signal par des ponts : un homeserver **Synapse**
+privé et les bridges **mautrix**, tous sur le NUC, joints depuis le Mac par Tailscale. Seul
+iMessage reste natif et ne passe pas par là.
 
 ```
                                                  ┌─► mautrix-whatsapp  ──► WhatsApp
-Mac (Correspondance) ──Tailscale──► Synapse ─────┤
-                       100.64.0.7:8008       └─► mautrix-instagram ──► Instagram DM
+Mac (Correspondance) ──Tailscale──► Synapse ─────┼─► mautrix-instagram ──► Instagram DM
+                       100.64.0.7:8008       └─► mautrix-signal    ──► Signal
 ```
 
-Un seul `/sync` côté app pour les deux ponts (même homeserver), mais **un salon de gestion par
-pont** : `@whatsappbot` et `@instagrambot` ne se parlent pas.
+Un seul `/sync` côté app pour les trois ponts (même homeserver), mais **un salon de gestion par
+pont** : `@whatsappbot`, `@instagrambot` et `@signalbot` ne se parlent pas.
 
 ## 0. Ce qui tourne déjà, et où
 
@@ -23,6 +23,7 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-postgres` | `postgres:16-alpine` | base de Synapse et des bridges |
 | `correspondance-mautrix-whatsapp` | `dock.mau.dev/mautrix/whatsapp:v26.08` | pont WhatsApp (tag **épinglé**) |
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
+| `correspondance-mautrix-signal` | `dock.mau.dev/mautrix/signal:v26.08` | pont Signal (tag **épinglé**) |
 
 Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
 `mautrix-instagram`, publié sur **la même image Docker** avec un tag préfixé `ig-`. Dans cette
@@ -166,15 +167,54 @@ Les ghosts Instagram sont des **identifiants numériques Meta**, pas des pseudos
 directement en `pm <id>`, un pseudo passe d'abord par `search <pseudo>`, dont l'app lit la réponse
 du bot (`` `17841400000000001` / Malo ``) pour en tirer l'ID.
 
+## 2 ter. Connecter Signal — le QR, et ce qu'on laisse derrière
+
+`mautrix-signal` se lie comme **appareil secondaire**, exactement comme Signal Desktop.
+**Réglages › Matrix › Connecter Signal…** envoie `login` à `@signalbot`, qui renvoie un QR ;
+il se scanne depuis **Signal (téléphone) › Réglages › Appareils liés › Lier un nouvel appareil**.
+Le pont apparaît ensuite sous le nom **Correspondance** dans cette liste.
+
+Contrairement à WhatsApp, il n'y a **pas de repli par code d'appairage** : `login phone` n'existe
+pas côté mautrix-signal, et l'app ne le propose donc jamais. L'enregistrement en appareil
+*primaire* n'est plus supporté non plus — il faut un compte Signal déjà actif sur un téléphone.
+
+### Ce que la bascule depuis signal-cli a coûté
+
+Signal ne conserve **aucun historique côté serveur** : le pont ne voit que les messages postérieurs
+au scan du QR, et aucun `backfill` n'y changera rien (c'est pourquoi le template d'overrides n'en
+active pas). Concrètement :
+
+- **L'historique d'avant la liaison n'apparaît plus dans l'app.** Il n'est pas détruit pour autant :
+  l'ancien cache de signal-cli dort toujours dans
+  `~/Library/Application Support/Correspondance/signal-conversations.json`, avec ses pièces jointes.
+  Rien ne le lit plus ; il se supprime à la main, quand on est sûr de ne plus le vouloir.
+- **Non-lus, épingles, sourdines et fusions de contacts Signal repartent de zéro** : ils indexaient
+  des identifiants (`signal:+336…`, `signal-group:<base64>`) que les salons Matrix remplacent. Une
+  migration jouée une seule fois au premier lancement les purge, et dissout une fusion à laquelle
+  il ne reste qu'un membre — le repérage de doublons la reproposera.
+- **Le timer des messages éphémères ne se règle plus depuis l'app.** mautrix-signal applique les
+  timers reçus, mais ne sait pas en poser : ça se fait sur le téléphone, et se propage.
+- Une fois tout vérifié, l'appareil lié `signal-cli` peut être révoqué depuis le téléphone, et
+  `brew uninstall signal-cli` n'a plus d'inconvénient.
+
+### Ouvrir un fil Signal
+
+Signal se compose par numéro : `pm +33612345678` au bot (`!signal pm …` hors salon de gestion).
+Attention, l'identité interne d'un correspondant est un **UUID ACI**, pas son numéro — c'est lui
+qu'on lit dans les MXID de ghosts (`@signal_2f9d4c60-…`). L'app ne le prend jamais pour une adresse
+composable, donc un fil Signal ne fusionne avec une fiche du carnet d'adresses que lorsque le pont
+a réellement exposé un numéro.
+
 ## 3. Dépannage
 
 Toutes les commandes ci-dessous se lancent depuis `~/correspondance-matrix/` sur le NUC
 (`ssh nuc`, puis `cd ~/correspondance-matrix`).
 
 ```sh
-docker-compose ps                        # les 4 services doivent être Up
+docker-compose ps                        # les 5 services doivent être Up
 docker-compose logs -f mautrix-whatsapp  # le journal du pont WhatsApp, en direct
 docker-compose logs -f mautrix-meta      # celui d'Instagram
+docker-compose logs -f mautrix-signal    # celui de Signal
 docker-compose logs --tail=200 synapse   # le homeserver
 docker-compose restart mautrix-meta      # redémarrer un pont seul
 docker-compose up -d                     # tout relancer (idempotent)
@@ -192,6 +232,17 @@ Element ; hors salon de gestion, les préfixer de `!wa`) :
 | `logout` | déconnecte le compte WhatsApp du pont |
 | `ping` | état de la connexion WhatsApp |
 | `sync space` / `backfill` | reconstruit les portails / rejoue l'historique |
+
+**Commandes du bot Signal** (DM avec `@signalbot`, préfixe `!signal` hors salon de gestion) :
+
+| Commande | Effet |
+| --- | --- |
+| `help` | liste complète des commandes de la version installée |
+| `login` | nouveau QR à scanner depuis Appareils liés (pas de `login phone` ici) |
+| `logout` | délie le pont du compte Signal |
+| `ping` | état de la connexion |
+| `pm <numéro>` | ouvre un fil vers un numéro E.164 |
+| `sync` | reconstruit les portails et les contacts |
 
 **Commandes du bot Instagram** (DM avec `@instagrambot`, préfixe `!ig` hors salon de gestion) :
 

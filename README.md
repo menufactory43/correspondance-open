@@ -29,9 +29,8 @@ Puis ⌘R. macOS 14+, Xcode récent.
 2. Réglages Système → Confidentialité → **Accès complet au disque** → autorise **une seule fois** `/Applications/Correspondance.app` (ou le build Xcode).
 3. Actualise (⌘R ou bouton) pour lire `~/Library/Messages/chat.db`.
 4. L’envoi iMessage passe par l’app **Messages** (AppleScript) — accorde Automation si macOS le demande.
-5. Signal : `signal-cli` + `signal-cli link -n Correspondance`.
-6. WhatsApp / Instagram (facultatif) : pile Matrix sur le NUC (`./infra/matrix/bootstrap.sh`), puis
-   Réglages › Matrix — QR pour WhatsApp, cookies pour Instagram.
+5. Signal / WhatsApp / Instagram : pile Matrix sur le NUC (`./infra/matrix/bootstrap.sh`), puis
+   Réglages › Matrix — QR à scanner pour Signal et WhatsApp, cookies pour Instagram.
 
 ### Accès disque qui « saute » à chaque rebuild
 
