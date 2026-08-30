@@ -72,6 +72,8 @@ struct QuickReplyView: View {
       // exactement le dernier groupe de messages.
       FocusTranscriptView(session: session, metrics: metrics, includesEditor: false)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // En post-it, le fil remonterait sous l'entête : il s'arrête à sa ligne.
+        .clipped()
       FocusPageEditor(session: session, theme: theme) {
         QuickReplyPanelController.shared.noteSent()
       }
