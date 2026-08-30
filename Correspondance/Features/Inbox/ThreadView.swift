@@ -107,7 +107,12 @@ struct ThreadView: View {
 
           // Ce qui partira plus tard attend en bas du fil, en pointillé.
           ForEach(store.scheduledForSelection) { scheduled in
-            ScheduledMessageRow(message: scheduled, theme: theme, typeface: themes.typeface)
+            ScheduledMessageRow(
+              message: scheduled,
+              theme: theme,
+              typeface: themes.typeface,
+              textScale: themes.textScale
+            )
               .id("scheduled-\(scheduled.id)")
           }
 
@@ -208,14 +213,12 @@ struct ThreadView: View {
       message: message,
       theme: theme,
       typeface: themes.typeface,
+      textScale: themes.textScale,
+      showsLinkPreviews: themes.showsLinkPreviews,
       highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
       isCurrentMatch: store.threadSearchCurrentID == message.id,
-      isSelected: store.selectedMessageID == message.id,
       onReact: { emoji in
         Task { await store.react(messageID: message.id, emoji: emoji) }
-      },
-      onSelect: {
-        store.selectMessage(store.selectedMessageID == message.id ? nil : message.id)
       },
       onReply: {
         store.selectMessage(message.id)
@@ -278,8 +281,10 @@ struct ThreadView: View {
 enum ThreadMetrics {
   /// Deux bulles d'une même prise de parole se touchent presque…
   static let intraGroupSpacing: CGFloat = 2
-  /// …et l'on ne respire qu'entre deux prises de parole.
-  static let interGroupSpacing: CGFloat = 12
+  /// …et l'on ne respire qu'entre deux prises de parole. Un cran au-dessus de
+  /// l'ancien 12 : les bulles ayant gagné leur interligne de lecture, il fallait
+  /// que l'air ENTRE deux voix reste plus large que l'air entre deux lignes.
+  static let interGroupSpacing: CGFloat = Spacing.md
   /// Le nom s'aligne sur le texte de la bulle, pas sur son bord.
   static let senderLabelLeading: CGFloat = 16
   /// Le visage de l'auteur dans la marge gauche, comme Beeper.
@@ -438,13 +443,20 @@ private struct ReplyBanner: View {
   let theme: WritingTheme
   let typeface: WritingTypeface
 
+  /// Le nom qu'on affiche — jamais l'identifiant technique du réseau. Un
+  /// message bridgé sans nom retombe sur le titre du fil : c'est toujours
+  /// à quelqu'un qu'on répond.
+  private var targetNameFR: String {
+    message.displayedSenderName ?? store.selectedConversation?.title ?? "ce message"
+  }
+
   var body: some View {
     HStack(spacing: 8) {
       RoundedRectangle(cornerRadius: 1, style: .continuous)
         .fill(theme.accent)
         .frame(width: 2, height: 26)
       VStack(alignment: .leading, spacing: 1) {
-        Text(message.isFromMe ? "Réponse à moi-même" : "En réponse à \(message.senderID ?? "ce message")")
+        Text(message.isFromMe ? "Réponse à moi-même" : "En réponse à \(targetNameFR)")
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.accent)
         Text(message.sidebarPreviewText)
