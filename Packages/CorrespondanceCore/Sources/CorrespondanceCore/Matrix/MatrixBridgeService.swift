@@ -30,6 +30,9 @@ public actor MatrixBridgeService {
   private var ledger = MatrixTransactionLedger()
   /// Salons dont on a déjà demandé l'historique cette session.
   private var backfilledRoomIDs: Set<String> = []
+  /// L'état de conversation tel que le Relais le raconte (ADR 0001). Cumulatif :
+  /// chaque `/sync` y fusionne ce qui a changé.
+  private var relayState = ConversationStateSnapshot()
 
   public init(credentials: MatrixCredentials? = MatrixCredentialStore.load()) {
     client = MatrixClient(credentials: credentials)
@@ -104,6 +107,7 @@ public actor MatrixBridgeService {
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     parser.apply(response, to: &rooms)
+    parser.applyConversationState(response, to: &relayState)
     nextBatch = response.nextBatch
     detectManagementRooms()
     persist()
@@ -352,6 +356,75 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID) else { return }
     try await client.leave(roomID: roomID)
     rooms.removeValue(forKey: roomID)
+  }
+
+  // MARK: - État de conversation (Relais)
+
+  /// L'état que le Relais a déjà raconté à cette session.
+  public var conversationState: ConversationStateSnapshot { relayState }
+
+  /// Relit tout l'état depuis le Relais, sans consommer le curseur `/sync` :
+  /// un sync initial filtré (aucun message, aucun état de salon) ne rapporte
+  /// que les tags et les account data. C'est ce qui fait revenir l'archive
+  /// après un `defaults delete`, ou sur un appareil neuf.
+  @discardableResult
+  public func fetchConversationState() async throws -> ConversationStateSnapshot {
+    guard await client.isConfigured else { throw MatrixError.notConfigured }
+    let filter = #"{"room":{"timeline":{"limit":0},"state":{"types":[]}},"presence":{"types":[]}}"#
+    let response = try await client.sync(since: nil, timeoutMilliseconds: 0, filter: filter)
+    var snapshot = ConversationStateSnapshot()
+    snapshot.apply(response)
+    relayState = snapshot
+    return snapshot
+  }
+
+  /// Envoie une écriture en attente. Jette si le Relais refuse — l'appelant la
+  /// garde alors dans sa file et la reprendra au prochain `/sync` réussi.
+  public func perform(_ write: RelayWrite) async throws {
+    switch write {
+    case .archived(let roomID, let value):
+      try await setTag(roomID: roomID, tag: ConversationStateKeys.archivedTag, on: value)
+    case .pinned(let roomID, let value):
+      try await setTag(roomID: roomID, tag: ConversationStateKeys.favouriteTag, on: value)
+    case .muted(let roomID, let value):
+      try await client.setRoomPushRule(roomID: roomID, muted: value)
+    case .draft(let roomID, let text):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.draftType,
+        content: ConversationStateCodec.draftContent(text: text)
+      )
+    case .hidden(let roomID, let eventIDs):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.hiddenType,
+        content: ConversationStateCodec.hiddenContent(eventIDs: eventIDs)
+      )
+    case .mergedContacts(let stored):
+      guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }
+      try await client.setAccountData(type: ConversationStateKeys.mergedContactsType, content: content)
+    }
+    // L'écriture partie, on la pose aussi sur notre copie : le `/sync` qui la
+    // renverra n'apprendra rien de neuf, et rien ne clignote entre-temps.
+    write.apply(to: &relayState)
+  }
+
+  private func setTag(roomID: String, tag: String, on: Bool) async throws {
+    if on {
+      try await client.setRoomTag(roomID: roomID, tag: tag)
+    } else {
+      do {
+        try await client.removeRoomTag(roomID: roomID, tag: tag)
+      } catch MatrixError.http(let status, _, _) where status == 404 {
+        // Le tag n'était pas posé : rien à retirer.
+      }
+    }
+  }
+
+  /// Le salon d'un fil, pour les écritures d'état. `nil` si le fil n'est pas
+  /// bridgé (iMessage) ou si son salon n'est pas connu de cette session.
+  public func roomID(ofConversation conversationID: String) -> String? {
+    roomID(forConversation: conversationID)
   }
 
   // MARK: - Connexion d'un pont
