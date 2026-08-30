@@ -62,6 +62,7 @@ final class QuickReplyPanelController {
 
   private var panel: QuickReplyPanel?
   private var keyMonitor: Any?
+  private var resignToken: NSObjectProtocol?
   private weak var store: InboxStore?
   private var themes: ThemePreferences?
 
@@ -112,14 +113,29 @@ final class QuickReplyPanelController {
     applyCollectionBehavior(panel)
     panel.makeKeyAndOrderFront(nil)
     installKeyMonitor()
+    observeResignKey(panel)
     if let id = model.conversationID { store.quickReplyBecameVisible(id) }
   }
 
+  /// Comme Spotlight : cliquer ailleurs, c'est avoir fini. Le panneau n'a ni
+  /// feux ni bouton — sans cela, il resterait à flotter sans porte de sortie.
+  private func observeResignKey(_ panel: QuickReplyPanel) {
+    guard resignToken == nil else { return }
+    resignToken = NotificationCenter.default.addObserver(
+      forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+    ) { _ in
+      MainActor.assumeIsolated { QuickReplyPanelController.shared.close() }
+    }
+  }
+
   func close() {
+    if let resignToken { NotificationCenter.default.removeObserver(resignToken) }
+    resignToken = nil
     panel?.orderOut(nil)
     removeKeyMonitor()
     model.isShowingPicker = false
     model.query = ""
+    store?.quickReplyClosed()
   }
 
   /// Le message est parti : « Fermer après envoi » décide de la suite.

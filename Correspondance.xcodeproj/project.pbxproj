@@ -146,6 +146,7 @@
 		EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B758EF0696E62CAE3AD887FF /* SettingsView.swift */; };
 		EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */; };
 		ED0E329DD735E4C23391A6B2 /* AttachmentThumbnailStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E4CD7F73F5A025D62EA5D61 /* AttachmentThumbnailStore.swift */; };
+		EEB24836FDC67C64A30C1376 /* AvatarStoreReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */; };
 		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
@@ -258,6 +259,7 @@
 		94483CBD64DDC5F1F2C8D617 /* SendLaterTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLaterTimeTests.swift; sourceTree = "<group>"; };
 		945532F86F3B863973DE77B3 /* SenderPrefix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenderPrefix.swift; sourceTree = "<group>"; };
 		9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Deletion.swift"; sourceTree = "<group>"; };
+		95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStoreReadinessTests.swift; sourceTree = "<group>"; };
 		95ED3D336C908CA8FB5DE7FA /* SettingsDictationPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDictationPane.swift; sourceTree = "<group>"; };
 		96C54E287CA9F90747F2C0AE /* IMessageAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAnnouncement.swift; sourceTree = "<group>"; };
 		9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageDatabase.swift; sourceTree = "<group>"; };
@@ -402,6 +404,7 @@
 				1B9AA16D44F45044FBAFD516 /* Fixtures */,
 				DD11D73A4B8A9CCA1A978CA4 /* ArchiveStateTests.swift */,
 				F9D67D1D6D0EDC608A2A7B4F /* AvatarMosaicTests.swift */,
+				95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */,
 				DC9E8ECA240D5B5AECEFF32E /* ConversationSearchTests.swift */,
 				830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */,
 				6E28BD58F9681C394ECC6E76 /* ConversationTitleTests.swift */,
@@ -721,6 +724,7 @@
 			files = (
 				40013AB522A26DC3DC959F30 /* ArchiveStateTests.swift in Sources */,
 				193F33371A6604AFBCEE8A6F /* AvatarMosaicTests.swift in Sources */,
+				EEB24836FDC67C64A30C1376 /* AvatarStoreReadinessTests.swift in Sources */,
 				98AD60CDAECCA050179A31E6 /* ConversationSearchTests.swift in Sources */,
 				5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */,
 				A115DEED0F22CA051301CA3D /* ConversationTitleTests.swift in Sources */,

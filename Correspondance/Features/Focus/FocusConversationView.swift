@@ -300,7 +300,10 @@ struct FocusTranscriptView: View {
               .id("draft")
           }
         }
-        .padding(.bottom, metrics.bottom)
+        // La grande marge basse fait respirer l'éditeur QUAND il vit dans le
+        // fil ; posé dessous (fenêtre détachée, réponse rapide), elle ne
+        // laisserait qu'un grand vide entre le dernier message et lui.
+        .padding(.bottom, includesEditor ? metrics.bottom : Spacing.sm)
       }
       .defaultScrollAnchor(.bottom)
       .scrollIndicators(.never)
