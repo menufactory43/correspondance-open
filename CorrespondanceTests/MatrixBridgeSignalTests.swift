@@ -108,6 +108,60 @@ final class MatrixBridgeSignalTests: XCTestCase {
     XCTAssertEqual(mine.reactions.map(\.emoji), ["👍"])
   }
 
+  // MARK: - Légendes de pièces jointes
+
+  /// MSC2530 : `filename` porte le nom du fichier, `body` la légende. Sans cette
+  /// lecture, le texte écrit sous une photo disparaissait de la bulle.
+  func testCaptionUnderAnImageIsKept() throws {
+    let event = Self.imageEvent(body: "d'ailleurs, demain, publication", filename: "image.jpg")
+    var model = MatrixRoomModel(roomID: dmRoomID)
+    model.network = .signal
+    MatrixSyncParser(selfUserID: selfUserID).applyMessages([event], roomID: dmRoomID, to: &model)
+    let message = try XCTUnwrap(model.sortedMessages.first)
+    XCTAssertEqual(message.text, "d'ailleurs, demain, publication")
+    XCTAssertEqual(message.attachments.first?.filename, "image.jpg")
+  }
+
+  /// Sans `filename`, `body` EST le nom du fichier : l'écrire sous la photo
+  /// afficherait « 787306034_1768317604621271 » en guise de message.
+  func testFilenameOnlyImageHasNoCaption() throws {
+    let event = Self.imageEvent(body: "787306034_1768317604621271.jpg", filename: nil)
+    var model = MatrixRoomModel(roomID: dmRoomID)
+    model.network = .signal
+    MatrixSyncParser(selfUserID: selfUserID).applyMessages([event], roomID: dmRoomID, to: &model)
+    let message = try XCTUnwrap(model.sortedMessages.first)
+    XCTAssertEqual(message.text, "")
+    XCTAssertEqual(message.attachments.first?.filename, "787306034_1768317604621271.jpg")
+  }
+
+  /// Un pont qui répète le nom du fichier dans `body` ne fournit pas une légende.
+  func testRepeatedFilenameIsNotACaption() throws {
+    let event = Self.imageEvent(body: "qr.png", filename: "qr.png")
+    var model = MatrixRoomModel(roomID: dmRoomID)
+    model.network = .signal
+    MatrixSyncParser(selfUserID: selfUserID).applyMessages([event], roomID: dmRoomID, to: &model)
+    XCTAssertEqual(try XCTUnwrap(model.sortedMessages.first).text, "")
+  }
+
+  private static func imageEvent(body: String, filename: String?) -> MatrixEvent {
+    var content: [String: Any] = [
+      "msgtype": "m.image",
+      "body": body,
+      "url": "mxc://correspondance.local/photo-abc",
+      "info": ["mimetype": "image/jpeg"],
+    ]
+    if let filename { content["filename"] = filename }
+    let raw: [String: Any] = [
+      "type": "m.room.message",
+      "event_id": "$img-1",
+      "sender": "@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local",
+      "origin_server_ts": 1_756_600_100_000,
+      "content": content,
+    ]
+    let data = try! JSONSerialization.data(withJSONObject: raw)
+    return try! JSONDecoder().decode(MatrixEvent.self, from: data)
+  }
+
   // MARK: - Connexion
 
   /// mautrix-signal n'a qu'un flow : le QR. Lui envoyer un numéro produirait une

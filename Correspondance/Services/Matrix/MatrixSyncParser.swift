@@ -169,14 +169,25 @@ struct MatrixSyncParser: Sendable {
     switch msgtype {
     case "m.image", "m.video", "m.file", "m.audio":
       if let mxc = content.string(at: "url") {
+        // MSC2530 : quand `filename` est présent, il porte le nom du fichier et
+        // `body` devient la **légende**. Sans cette distinction, le texte écrit
+        // sous une photo disparaissait — on n'affichait que l'image.
+        let explicitFilename = content.string(at: "filename")
+        let caption: String? = {
+          guard let explicitFilename, !explicitFilename.isEmpty else { return nil }
+          // Certains ponts répètent le nom du fichier dans `body` : ce n'est pas
+          // une légende, et l'écrire sous la photo n'apprendrait rien.
+          return (body.isEmpty || body == explicitFilename) ? nil : body
+        }()
         attachments.append(
           MessageAttachment(
             id: mxc,
             contentType: content.string(at: "info.mimetype") ?? Self.fallbackMime(for: msgtype),
-            filename: body.isEmpty ? nil : body,
+            filename: explicitFilename ?? (body.isEmpty ? nil : body),
             localPath: MatrixAttachmentStore.existingLocalPath(forMXC: mxc)
           )
         )
+        text = caption ?? ""
       } else {
         text = body
       }
