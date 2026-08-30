@@ -57,6 +57,7 @@ struct ComposerBar: View {
     .onDisappear { dictation.stop() }
     .onChange(of: text) { _, _ in
       if isTrayExpanded { isTrayExpanded = false }
+      dictation.noteTextChanged()
     }
   }
 

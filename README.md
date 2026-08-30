@@ -49,6 +49,10 @@ cp -R ~/Library/Developer/Xcode/DerivedData/Correspondance-*/Build/Products/Debu
 ```
 Vérifie `codesign -dv /Applications/Correspondance.app 2>&1 | grep TeamIdentifier` → doit afficher `AKMNXGVVGX`, pas `not set`.
 
+## Dictée
+
+Le micro du composer passe par **[Dictus](https://www.getdictus.com)** (libre, MIT, transcription 100 % locale) s'il est installé dans `/Applications` — Correspondance le pilote par sa CLI (`--toggle-transcription` / `--cancel`), Dictus colle le texte dans le champ. Désactivable dans Réglages → Dictée ; sans Dictus, la reconnaissance vocale d'Apple prend le relais.
+
 ## Thèmes
 
 Six ambiances (papier / dune / clair de lune / encre de nuit / vieux bureau / cire et chêne) dans Réglages.

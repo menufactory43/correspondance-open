@@ -2,11 +2,15 @@ import AppKit
 import AVFoundation
 import Speech
 
-/// Dictée → texte dans le champ. Micro / Speech, sinon dictée système.
+/// Dictée → texte dans le champ.
+/// Dictus (local, si installé et voulu) ; sinon micro / Speech ; sinon dictée système.
 @MainActor
 @Observable
 final class ComposerDictationController {
   private(set) var isListening = false
+
+  private enum Engine { case speech, dictus }
+  private var engine_: Engine = .speech
 
   private var recognizer: SFSpeechRecognizer?
   private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -17,13 +21,49 @@ final class ComposerDictationController {
 
   func toggle(currentText: String, apply: @escaping (String) -> Void) async {
     if isListening {
-      stop()
+      if engine_ == .dictus { await finishDictus() } else { stop() }
+      return
+    }
+    if DictusBridge.isActive {
+      await startDictus()
       return
     }
     await start(currentText: currentText, apply: apply)
   }
 
+  /// Le champ a changé : si Dictus écoutait, c'est qu'il vient de coller — fin d'écoute.
+  /// (Couvre aussi l'arrêt par son propre raccourci, hors de notre bouton.)
+  func noteTextChanged() {
+    if isListening, engine_ == .dictus { isListening = false }
+  }
+
+  // MARK: - Dictus
+
+  private func startDictus() async {
+    stop()
+    engine_ = .dictus
+    do {
+      try await DictusBridge.toggleTranscription()
+      isListening = true
+    } catch {
+      engine_ = .speech
+      startSystemDictation()
+    }
+  }
+
+  /// Second appui : Dictus transcrit et colle dans le champ qui a le focus.
+  private func finishDictus() async {
+    isListening = false
+    try? await DictusBridge.toggleTranscription()
+  }
+
   func stop() {
+    if engine_ == .dictus {
+      if isListening { DictusBridge.cancel() }
+      isListening = false
+      engine_ = .speech
+      return
+    }
     request?.endAudio()
     recognitionTask?.cancel()
     recognitionTask = nil

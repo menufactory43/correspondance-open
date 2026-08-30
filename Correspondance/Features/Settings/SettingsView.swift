@@ -113,6 +113,7 @@ struct SettingsView: View {
         case .automatisation: SettingsAutomationPane()
         case .autorisations: SettingsPermissionsPane()
         case .apparence: SettingsAppearancePane()
+        case .dictee: SettingsDictationPane()
         }
       }
       .padding(.horizontal, Spacing.lg)
@@ -131,6 +132,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   case automatisation
   case autorisations
   case apparence
+  case dictee
 
   var id: String { rawValue }
 
@@ -141,6 +143,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .automatisation: "Automatisation"
     case .autorisations: "Autorisations"
     case .apparence: "Apparence"
+    case .dictee: "Dictée"
     }
   }
 
@@ -151,6 +154,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
     case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."
     case .apparence: "Le mode d’ouverture, la police et l’ambiance d’écriture."
+    case .dictee: "Le moteur qui transforme la voix en texte dans le composer."
     }
   }
 
@@ -161,6 +165,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .automatisation: "wand.and.stars"
     case .autorisations: "lock.shield"
     case .apparence: "paintbrush"
+    case .dictee: "mic"
     }
   }
 }

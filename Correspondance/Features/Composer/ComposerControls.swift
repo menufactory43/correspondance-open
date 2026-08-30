@@ -120,7 +120,7 @@ struct ComposerTrailingControl: View {
     case .dictation:
       ComposerCircleButton(
         systemImage: "mic.fill",
-        helpText: isListening ? "Arrêter la dictée" : "Dicter",
+        helpText: isListening ? "Arrêter la dictée" : (DictusBridge.isActive ? "Dicter (Dictus)" : "Dicter"),
         theme: theme,
         size: ComposerMetrics.innerControl,
         iconSize: 13,
