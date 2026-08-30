@@ -28,7 +28,6 @@
 		36D13C2FDED6EA357EE9A806 /* QuickReplyPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */; };
 		3E8E098FF4C24E0860AA776D /* IMessageAutomationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0102675D287E0FEE9A64F /* IMessageAutomationTests.swift */; };
 		40276C56251E072B800E7657 /* LaunchGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1035547A9E34370159CF87 /* LaunchGate.swift */; };
-		47B5D66908C0D34DC6506787 /* LinkPreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4652F5B0B303C339F81A6CA /* LinkPreviewStore.swift */; };
 		520434530982CA23B5569BB6 /* MessageArrival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4485B780E4E3F3CB98DB28F6 /* MessageArrival.swift */; };
 		5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */; };
 		5ACE090A9482584EB9F3C4A9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */; };
@@ -189,7 +188,6 @@
 		BC47469B7E80A1746977143F /* Correspondance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Correspondance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPillHeader.swift; sourceTree = "<group>"; };
 		BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyView.swift; sourceTree = "<group>"; };
-		C4652F5B0B303C339F81A6CA /* LinkPreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewStore.swift; sourceTree = "<group>"; };
 		C618DA341603EEA853087279 /* DictusBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictusBridge.swift; sourceTree = "<group>"; };
 		C62337EDC213EAEAD5361C6E /* matrix-sync-whatsapp.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-whatsapp.json"; sourceTree = "<group>"; };
 		C7D01FDE40EA14E84BD9E90B /* DetachedConversationWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedConversationWindow.swift; sourceTree = "<group>"; };
@@ -420,7 +418,6 @@
 				8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */,
 				0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */,
 				31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */,
-				C4652F5B0B303C339F81A6CA /* LinkPreviewStore.swift */,
 				76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */,
 				24200371D508DA6447F58B59 /* QuickReplyPanel.swift */,
 				F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */,
@@ -629,7 +626,6 @@
 				40276C56251E072B800E7657 /* LaunchGate.swift in Sources */,
 				E8096E3B2FE11B4EC42F80CE /* LaunchWarmup.swift in Sources */,
 				D3D0F6B5327C5274A1266544 /* LinkPreviewCard.swift in Sources */,
-				47B5D66908C0D34DC6506787 /* LinkPreviewStore.swift in Sources */,
 				724CFAA32000F44D52C1CAEE /* LinkedText.swift in Sources */,
 				BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */,
 				9C0BCDAAB919FC4CF2FEE160 /* MergeContactSheet.swift in Sources */,

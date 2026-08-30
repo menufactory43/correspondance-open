@@ -1,21 +1,27 @@
-import AppKit
+import CoreGraphics
 import CryptoKit
 import Foundation
 import LinkPresentation
+import ImageIO
 import UniformTypeIdentifiers
-import CorrespondanceCore
 
 /// Ce qu'on sait d'une adresse, une fois la page interrogée : de quoi écrire
 /// une carte sobre. Volontairement maigre — un aperçu n'est pas un navigateur.
-struct LinkPreview: Codable, Equatable, Sendable {
-  var title: String?
+public struct LinkPreview: Codable, Equatable, Sendable {
+  public var title: String?
   /// Le domaine, sans « www. » : c'est lui qui dit où l'on va.
-  var domain: String
+  public var domain: String
   /// Chemin de la vignette déjà réduite, quand la page en offrait une.
-  var imagePath: String?
+  public var imagePath: String?
 
-  var hasSomethingToShow: Bool {
+  public var hasSomethingToShow: Bool {
     !(title ?? "").isEmpty || imagePath != nil
+  }
+
+  public init(title: String?, domain: String, imagePath: String?) {
+    self.title = title
+    self.domain = domain
+    self.imagePath = imagePath
   }
 }
 
@@ -35,22 +41,22 @@ struct LinkPreview: Codable, Equatable, Sendable {
 /// Échec silencieux : la bulle retombe sur son lien nu, souligné comme avant.
 @MainActor
 @Observable
-final class LinkPreviewStore {
-  static let shared = LinkPreviewStore()
+public final class LinkPreviewStore {
+  public static let shared = LinkPreviewStore()
 
   /// Ce que la page a une chance de nous répondre avant qu'on renonce.
   /// Court : un aperçu qui arrive après qu'on a fini de lire ne sert à rien.
-  nonisolated static let timeout: TimeInterval = 6
+  public nonisolated static let timeout: TimeInterval = 6
 
   private var memory: [String: LinkPreview] = [:]
   /// Adresses qu'on a déjà essayées sans succès — on ne réessaie pas.
   private var failed: Set<String> = []
   private var inFlight: [String: Task<LinkPreview?, Never>] = [:]
   /// Vignettes décodées, pour ne pas relire le fichier à chaque recomposition.
-  private var thumbnails: [String: NSImage] = [:]
+  private var thumbnails: [String: PlatformImage] = [:]
 
   /// Dossier des aperçus. Calculé une fois : le chemin ne bouge pas.
-  nonisolated static let directory: URL = {
+  public nonisolated static let directory: URL = {
     let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
       ?? FileManager.default.temporaryDirectory
     let dir = base
@@ -62,13 +68,13 @@ final class LinkPreviewStore {
 
   /// Nom de fichier stable dérivé de l'adresse. Une URL peut contenir n'importe
   /// quoi (accents, barres, requêtes de trois lignes) : on la hache.
-  nonisolated static func key(for url: URL) -> String {
+  public nonisolated static func key(for url: URL) -> String {
     let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
     return digest.map { String(format: "%02x", $0) }.joined()
   }
 
   /// L'aperçu de cette adresse, cherché au besoin. `nil` = on ne saura pas.
-  func metadata(for url: URL) async -> LinkPreview? {
+  public func metadata(for url: URL) async -> LinkPreview? {
     let key = Self.key(for: url)
     if let hit = memory[key] { return hit }
     if failed.contains(key) { return nil }
@@ -93,9 +99,9 @@ final class LinkPreviewStore {
   }
 
   /// La vignette, décodée une fois pour toutes.
-  func thumbnail(atPath path: String) -> NSImage? {
+  public func thumbnail(atPath path: String) -> PlatformImage? {
     if let hit = thumbnails[path] { return hit }
-    guard let image = NSImage(contentsOfFile: path) else { return nil }
+    guard let image = PlatformImage(contentsOfFile: path) else { return nil }
     thumbnails[path] = image
     return image
   }
@@ -211,8 +217,7 @@ final class LinkPreviewStore {
     ]
     guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     else { return nil }
-    let rep = NSBitmapImageRep(cgImage: cg)
-    guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
+    guard let png = cg.pngData() else { return nil }
     let url = imageURL(key: key)
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     do {
