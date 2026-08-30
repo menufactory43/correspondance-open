@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import CorrespondanceCore
 
 /// Une conversation ouverte, et tout ce qui n'appartient qu'à elle : le fil
 /// chargé, le brouillon en cours, les pièces jointes en attente, l'état d'envoi,

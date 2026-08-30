@@ -1,4 +1,5 @@
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// Une suppression « ici » ne quitte pas la machine : aucun catalogue réseau ne

@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// Au lancement, les lignes de l'inbox demandent leur photo avant que le chargeur

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// La photo posée à gauche d'une prise de parole, comme Beeper — et comme tout
 /// le monde. Un tête-à-tête emprunte le visage du fil ; un groupe cherche celui

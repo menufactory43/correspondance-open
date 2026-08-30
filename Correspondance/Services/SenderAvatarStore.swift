@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Le visage d'un **expéditeur**, pas d'un fil : c'est ce qu'il faut à gauche des
 /// bulles d'un groupe, où chaque prise de parole a un autre auteur.

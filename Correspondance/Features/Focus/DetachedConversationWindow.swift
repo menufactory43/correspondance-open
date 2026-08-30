@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Une conversation posée à côté d'un document — Focus, mais dans sa fenêtre.
 ///

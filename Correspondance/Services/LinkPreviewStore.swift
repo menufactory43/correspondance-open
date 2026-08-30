@@ -3,6 +3,7 @@ import CryptoKit
 import Foundation
 import LinkPresentation
 import UniformTypeIdentifiers
+import CorrespondanceCore
 
 /// Ce qu'on sait d'une adresse, une fois la page interrogée : de quoi écrire
 /// une carte sobre. Volontairement maigre — un aperçu n'est pas un navigateur.

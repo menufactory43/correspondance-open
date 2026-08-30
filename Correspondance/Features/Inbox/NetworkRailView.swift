@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Rail vertical à gauche de la liste : Tous + un bouton par réseau branché.
 /// Les réseaux futurs (Instagram, Messenger) apparaîtront d'eux-mêmes dès

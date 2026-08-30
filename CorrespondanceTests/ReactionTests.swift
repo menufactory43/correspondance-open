@@ -1,5 +1,6 @@
 import XCTest
 @testable import Correspondance
+import CorrespondanceCore
 
 /// Agrégation commune aux trois réseaux, tapbacks iMessage, réactions Signal.
 final class ReactionTests: XCTestCase {

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// L'action `openWindow`, gardée sous la main.
 ///

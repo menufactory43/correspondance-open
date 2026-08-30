@@ -1,5 +1,6 @@
 import Foundation
 import SQLite3
+import CorrespondanceCore
 
 enum IMessageAccessError: LocalizedError, Sendable {
   case authorizationDenied

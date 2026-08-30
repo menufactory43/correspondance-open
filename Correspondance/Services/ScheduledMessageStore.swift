@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Messages programmés, persistés dans Application Support — comme les
 /// brouillons, un seul fichier JSON dans `Correspondance/`.

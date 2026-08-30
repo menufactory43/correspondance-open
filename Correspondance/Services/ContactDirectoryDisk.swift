@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Lecture sync du cache Contacts sur disque — pour hydrater l’inbox au lancement (0 latence).
 enum ContactDirectoryDisk {

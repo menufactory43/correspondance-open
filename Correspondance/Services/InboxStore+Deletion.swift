@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Supprimer un message — parité Beeper (`Delete for Everyone` / `Delete for Me`).
 ///

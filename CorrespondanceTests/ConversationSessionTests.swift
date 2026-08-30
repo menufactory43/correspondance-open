@@ -1,4 +1,5 @@
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// Une conversation ouverte tient son propre fil et son propre brouillon —

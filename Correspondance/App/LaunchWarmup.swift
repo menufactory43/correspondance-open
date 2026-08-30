@@ -1,5 +1,6 @@
 import CoreText
 import Foundation
+import CorrespondanceCore
 
 /// Préchauffe, hors du fil principal, ce que la première frame paierait sinon
 /// comptant : les règles de `NSDataDetector` (et le chargement de

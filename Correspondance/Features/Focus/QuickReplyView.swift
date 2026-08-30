@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// La réponse rapide : le dernier de ce qui s'est dit, et de quoi répondre.
 ///

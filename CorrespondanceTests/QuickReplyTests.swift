@@ -1,4 +1,5 @@
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// La réponse rapide : ce qu'elle ouvre, ce vers quoi elle passe, et ce

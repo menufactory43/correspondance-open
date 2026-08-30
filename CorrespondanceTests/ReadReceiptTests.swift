@@ -1,4 +1,5 @@
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// Accusés de lecture WhatsApp : `m.receipt` de la section `ephemeral` du `/sync`.

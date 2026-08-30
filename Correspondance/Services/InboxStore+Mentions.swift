@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Les gens du fil ouvert, pour le menu « @ » du composer.
 ///

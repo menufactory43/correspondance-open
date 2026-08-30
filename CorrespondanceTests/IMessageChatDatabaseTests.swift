@@ -1,4 +1,5 @@
 import XCTest
+import CorrespondanceCore
 @testable import Correspondance
 
 /// Lecture d'une fixture `chat.db` au schéma macOS 26 (`scripts/make-imessage-fixture.py`) :

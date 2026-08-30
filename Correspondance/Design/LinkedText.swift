@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Le corps d'un message, liens compris. `Text(AttributedString)` suffit :
 /// sur macOS, SwiftUI confie l'attribut `.link` à `openURL`.

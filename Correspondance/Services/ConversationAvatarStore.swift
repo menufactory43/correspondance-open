@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CorrespondanceCore
 
 /// Résout les photos de profil / groupes (portails Matrix + Contacts iMessage).
 actor ConversationAvatarStore {

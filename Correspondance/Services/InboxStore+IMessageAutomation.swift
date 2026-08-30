@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import CorrespondanceCore
 
 /// Lot M2 — le branchement UI de l'automatisation Messages.
 /// Tout vit ici pour laisser `InboxStore.swift` quasi intact : ce fichier ne

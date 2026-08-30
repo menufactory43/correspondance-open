@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Cache local iMessage — démarrage instantané comme Messages, sync chat.db ensuite.
 enum IMessageConversationCache {

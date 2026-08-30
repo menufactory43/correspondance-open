@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import CorrespondanceCore
 
 /// La fenêtre de connexion Instagram, dans l'app.
 ///

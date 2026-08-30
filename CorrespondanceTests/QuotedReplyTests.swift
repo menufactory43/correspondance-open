@@ -1,5 +1,6 @@
 import XCTest
 @testable import Correspondance
+import CorrespondanceCore
 
 /// Citations : repli Matrix, quotes Signal, `thread_originator_guid` iMessage.
 final class QuotedReplyTests: XCTestCase {

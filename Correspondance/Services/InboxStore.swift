@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Observation
 import UniformTypeIdentifiers
+import CorrespondanceCore
 
 @MainActor
 @Observable

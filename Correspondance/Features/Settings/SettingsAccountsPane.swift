@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Les réseaux, un par ligne, avec leur état et leur seule action utile.
 /// La liste se déduit de `MessageNetwork` : un réseau nouveau apparaît ici seul.

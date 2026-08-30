@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 struct ConversationAvatarView: View {
   let conversation: Conversation

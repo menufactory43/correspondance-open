@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Les marges de la page, mesurées sur la largeur qu'on lui donne.
 ///

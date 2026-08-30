@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// « Fusionner ces chats ? » — la feuille où l'on décide d'un nom, d'un visage
 /// et d'un réseau par défaut avant que deux fils n'en deviennent un.

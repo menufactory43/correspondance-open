@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Messages « supprimés ici » : le réseau les garde, nous ne les montrons plus.
 ///

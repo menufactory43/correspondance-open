@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Mode d'ouverture, police, ambiance — tout ce qui change la façon dont
 /// Correspondance se lit, avec l'aperçu juste sous le réglage qui l'affecte.

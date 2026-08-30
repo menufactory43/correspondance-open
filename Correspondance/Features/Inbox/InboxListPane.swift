@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 struct InboxListPane: View {
   @Environment(InboxStore.self) private var store

@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 struct CorrespondanceCommands: Commands {
   var store: InboxStore

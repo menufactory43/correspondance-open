@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// Nouvelle conversation : contact, numéro, e-mail — ou pseudo pour un pont qui
 /// ne connaît pas les numéros (Instagram).

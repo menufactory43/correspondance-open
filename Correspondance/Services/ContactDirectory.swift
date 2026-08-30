@@ -1,6 +1,7 @@
 import AppKit
 import Contacts
 import Foundation
+import CorrespondanceCore
 
 /// Annuaire Contacts macOS — noms + photos pour iMessage.
 /// Cache disque pour démarrage instantané ; refresh Contacts en arrière-plan.

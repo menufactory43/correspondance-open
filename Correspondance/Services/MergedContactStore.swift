@@ -1,4 +1,5 @@
 import Foundation
+import CorrespondanceCore
 
 /// Fusions de contacts, persistées dans Application Support — un seul fichier
 /// JSON dans `Correspondance/`, comme les brouillons et les messages programmés.

@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 struct ComposerBar: View {
   @Binding var text: String

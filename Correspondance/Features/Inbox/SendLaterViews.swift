@@ -1,4 +1,5 @@
 import SwiftUI
+import CorrespondanceCore
 
 /// « Quand ? » — le sélecteur d'heure d'envoi (⌘⇧L), en popover sur le composer.
 ///

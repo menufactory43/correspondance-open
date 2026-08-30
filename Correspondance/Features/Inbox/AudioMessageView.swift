@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import SwiftUI
+import CorrespondanceCore
 
 /// Lecteur inline d'un message audio, quel que soit le réseau : iMessage dépose
 /// ses messages vocaux en `.caf`, Signal et WhatsApp en `.ogg` / `.m4a`.
