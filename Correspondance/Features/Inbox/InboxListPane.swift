@@ -46,6 +46,9 @@ struct InboxListPane: View {
           section(title: "Récents", items: store.inboxRecents)
           section(title: "Groupes", items: store.inboxGroups)
           section(title: "Contacts", items: store.inboxContacts)
+          // Ce qu'on a mis de côté : hors de la file, mais jamais hors de vue.
+          // Chaque ligne revient d'elle-même à l'heure dite.
+          section(title: "Rappels", items: store.remindersQueue)
         }
       }
       .listStyle(.sidebar)
@@ -85,7 +88,8 @@ struct InboxListPane: View {
 
   private var currentQueue: [Conversation] {
     if store.isShowingScheduled { return store.scheduledQueue }
-    return store.isShowingArchived ? store.archivedQueue : store.activeQueue
+    if store.isShowingArchived { return store.archivedQueue }
+    return store.activeQueue + store.remindersQueue
   }
 
   /// Vue « Programmés » (bouton du rail) : un fil par ligne, son prochain départ.
@@ -213,6 +217,26 @@ struct InboxListPane: View {
     }
   }
 
+  /// « Me le rappeler » : la conversation sort de la file jusqu'à l'heure dite,
+  /// et y revient d'elle-même — ou plus tôt si l'autre répond. Les heures
+  /// proposées sont celles d'« Envoyer plus tard » : mêmes mots, même question.
+  @ViewBuilder
+  private func reminderMenu(_ conversation: Conversation) -> some View {
+    if let rappel = store.reminder(conversation.id) {
+      Button("Remettre dans la file (de côté jusqu’à \(rappel.labelFR()))") {
+        store.setReminder(nil, conversationID: conversation.id)
+      }
+    } else {
+      Menu("Me le rappeler…") {
+        ForEach(ConversationReminder.suggestions()) { suggestion in
+          Button(suggestion.title) {
+            store.setReminder(suggestion.date, conversationID: conversation.id)
+          }
+        }
+      }
+    }
+  }
+
   @ViewBuilder
   private func conversationContextMenu(_ conversation: Conversation) -> some View {
     Button("Ouvrir la discussion") {
@@ -226,6 +250,8 @@ struct InboxListPane: View {
     Button(store.isArchived(conversation.id) ? "Désarchiver" : "Archiver") {
       Task { await store.toggleArchived(conversationID: conversation.id) }
     }
+
+    reminderMenu(conversation)
 
     Divider()
 

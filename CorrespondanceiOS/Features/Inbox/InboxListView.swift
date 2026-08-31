@@ -154,6 +154,33 @@ struct InboxListView: View {
       }
       .tint(theme.inkTertiary)
     }
+    .contextMenu { reminderMenu(conversation) }
+  }
+
+  /// « Me le rappeler » : la conversation quitte la file jusqu'à l'heure dite,
+  /// et y revient d'elle-même — ou plus tôt si l'autre répond. Les heures
+  /// proposées sont celles d'« Envoyer plus tard » : mêmes mots, même question.
+  @ViewBuilder
+  private func reminderMenu(_ conversation: Conversation) -> some View {
+    if let rappel = store.reminder(conversation.id) {
+      Section("De côté jusqu'à \(rappel.labelFR())") {
+        Button {
+          store.setReminder(nil, conversationID: conversation.id)
+        } label: {
+          Label("Remettre dans la file", systemImage: "tray.and.arrow.down")
+        }
+      }
+    } else {
+      Menu {
+        ForEach(ConversationReminder.suggestions()) { suggestion in
+          Button(suggestion.title) {
+            store.setReminder(suggestion.date, conversationID: conversation.id)
+          }
+        }
+      } label: {
+        Label("Me le rappeler…", systemImage: "clock.arrow.circlepath")
+      }
+    }
   }
 
   private func open(_ id: String) {

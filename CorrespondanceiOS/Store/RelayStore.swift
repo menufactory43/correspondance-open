@@ -293,6 +293,25 @@ final class RelayStore {
     return merged
   }
 
+  /// Le rappel posé sur ce fil, s'il en porte un.
+  func reminder(_ id: String) -> ConversationReminder? { state.reminder(id) }
+
+  /// Met une conversation de côté jusqu'à une heure — ou la ramène tout de
+  /// suite (`nil`). Le geste est immédiat ici, le Relais suit.
+  func setReminder(_ wakeAt: Date?, conversationID: String) {
+    let targets = relayTargets(of: conversationID)
+    let reminder = wakeAt.map { ConversationReminder(wakeAt: $0) }
+    for id in Set(targets + [conversationID]) {
+      if let reminder { state.reminders[id] = reminder } else { state.reminders.removeValue(forKey: id) }
+    }
+    relayNoteReminder(reminder, conversationIDs: targets)
+    // Le fil ouvert qui part de côté ne reste pas à l'écran.
+    if wakeAt != nil {
+      if selectedConversationID == conversationID { selectedConversationID = nil }
+      if focusConversationID == conversationID { focusConversationID = focusQueue.first?.id }
+    }
+  }
+
   func isPinned(_ id: String) -> Bool { state.isPinned(id) }
   func isMuted(_ id: String) -> Bool { state.isMuted(id) }
   func isArchived(_ id: String) -> Bool { state.isArchived(id) }

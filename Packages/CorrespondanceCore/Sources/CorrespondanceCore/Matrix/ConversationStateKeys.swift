@@ -15,6 +15,8 @@ public enum ConversationStateKeys {
   public static let draftType = "fr.correspondance.draft"
   /// Room account data : messages masqués « ici ». `{ "event_ids": ["…"] }`.
   public static let hiddenType = "fr.correspondance.hidden"
+  /// Room account data : le rappel posé sur ce salon. `{ "wake_at": ms, "set_at": ms }`.
+  public static let reminderType = "fr.correspondance.reminder"
   /// Account data global : les fusions de contacts, telles que le store les écrit.
   public static let mergedContactsType = "fr.correspondance.merged_contacts"
   /// Account data global : les push rules, d'où vient la sourdine.

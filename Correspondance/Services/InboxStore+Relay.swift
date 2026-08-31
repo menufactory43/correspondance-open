@@ -45,6 +45,16 @@ extension InboxStore {
     startRelayFlush()
   }
 
+  /// Un rappel posé, ou levé. Même discipline que les drapeaux.
+  func relayNoteReminder(_ reminder: ConversationReminder?, conversationIDs: [String]) {
+    for id in conversationIDs {
+      guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
+      relayQueue.enqueue(.reminder(roomID: roomID, value: reminder))
+    }
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   func relayNoteMergedContacts(_ stored: MergedContactStore.Stored) {
     relayQueue.enqueue(.mergedContacts(stored))
     saveRelayQueue()
@@ -156,6 +166,10 @@ extension InboxStore {
         relayQueue.enqueue(.muted(roomID: roomID, value: true))
         pushed += 1
       }
+      if let reminder = remindersByID[id], relay.reminders[roomID] == nil, !reminder.isElapsed(now: Date()) {
+        relayQueue.enqueue(.reminder(roomID: roomID, value: reminder))
+        pushed += 1
+      }
       let text = draftSnapshot[id]?.text ?? ""
       if !text.isEmpty, relay.drafts[roomID] == nil {
         relayQueue.enqueue(.draft(roomID: roomID, text: text))
@@ -221,6 +235,10 @@ extension InboxStore {
     for (roomID, text) in snapshot.drafts {
       if let id = roomToConversation[roomID] { drafts[id] = text }
     }
+    var reminders: [String: ConversationReminder] = [:]
+    for (roomID, reminder) in snapshot.reminders {
+      if let id = roomToConversation[roomID] { reminders[id] = reminder }
+    }
     // Le masquage s'ajoute, il ne se retire jamais : rien dans l'app ne
     // démasque un message, et un identifiant qu'on ne sait pas rattacher à un
     // salon (message pas encore chargé) serait perdu pour de bon.
@@ -235,6 +253,7 @@ extension InboxStore {
       archived: mapped(snapshot.archived),
       known: known,
       drafts: drafts,
+      reminders: reminders,
       hidden: hidden,
       merged: snapshot.mergedContacts
     )

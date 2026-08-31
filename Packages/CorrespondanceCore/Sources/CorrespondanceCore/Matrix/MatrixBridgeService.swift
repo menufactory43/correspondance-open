@@ -516,6 +516,12 @@ public actor MatrixBridgeService {
         type: ConversationStateKeys.hiddenType,
         content: ConversationStateCodec.hiddenContent(eventIDs: eventIDs)
       )
+    case .reminder(let roomID, let value):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.reminderType,
+        content: ConversationStateCodec.reminderContent(value)
+      )
     case .mergedContacts(let stored):
       guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }
       try await client.setAccountData(type: ConversationStateKeys.mergedContactsType, content: content)

@@ -15,6 +15,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
   /// locaux : elles n'ont aucun sens sur un autre appareil et restent au Mac.
   public var drafts: [String: String]
   public var hidden: [String: Set<String>]
+  /// Rappels posés : le salon revient dans la file à l'heure dite.
+  public var reminders: [String: ConversationReminder]
   /// Fusions de contacts — un seul objet global, tel que `MergedContactStore` l'écrit.
   public var mergedContacts: MergedContactStore.Stored?
 
@@ -24,6 +26,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     muted: Set<String> = [],
     drafts: [String: String] = [:],
     hidden: [String: Set<String>] = [:],
+    reminders: [String: ConversationReminder] = [:],
     mergedContacts: MergedContactStore.Stored? = nil
   ) {
     self.archived = archived
@@ -31,12 +34,13 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     self.muted = muted
     self.drafts = drafts
     self.hidden = hidden
+    self.reminders = reminders
     self.mergedContacts = mergedContacts
   }
 
   public var isEmpty: Bool {
     archived.isEmpty && pinned.isEmpty && muted.isEmpty
-      && drafts.isEmpty && hidden.isEmpty && mergedContacts == nil
+      && drafts.isEmpty && hidden.isEmpty && reminders.isEmpty && mergedContacts == nil
   }
 
   /// Fusionne un payload `/sync`. Chaque event reçu **remplace** ce qu'il décrit :
@@ -63,6 +67,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     muted.remove(roomID)
     drafts.removeValue(forKey: roomID)
     hidden.removeValue(forKey: roomID)
+    reminders.removeValue(forKey: roomID)
   }
 
   private mutating func applyGlobal(_ event: MatrixEvent) {
@@ -90,6 +95,14 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     case ConversationStateKeys.hiddenType:
       let ids = ConversationStateCodec.hiddenEventIDs(in: content)
       if ids.isEmpty { hidden.removeValue(forKey: roomID) } else { hidden[roomID] = ids }
+    case ConversationStateKeys.reminderType:
+      // Un corps vide, c'est le rappel levé : l'account data ne se supprime pas
+      // chez Matrix, on l'écrase avec `{}`.
+      if let reminder = ConversationStateCodec.reminder(in: content) {
+        reminders[roomID] = reminder
+      } else {
+        reminders.removeValue(forKey: roomID)
+      }
     default:
       break
     }
@@ -128,6 +141,25 @@ public enum ConversationStateCodec {
 
   public static func draftText(in content: MatrixJSON) -> String {
     content.string(at: "text") ?? ""
+  }
+
+  /// `fr.correspondance.reminder` → `{ "wake_at": ms, "set_at": ms }`.
+  /// Les dates partent en millisecondes depuis 1970, comme tous les temps Matrix.
+  public static func reminderContent(_ reminder: ConversationReminder?) -> MatrixJSON {
+    guard let reminder else { return .object([:]) }
+    return .object([
+      "wake_at": .number(reminder.wakeAt.timeIntervalSince1970 * 1000),
+      "set_at": .number(reminder.setAt.timeIntervalSince1970 * 1000),
+    ])
+  }
+
+  public static func reminder(in content: MatrixJSON) -> ConversationReminder? {
+    guard let wake = content["wake_at"]?.doubleValue, wake > 0 else { return nil }
+    let set = content["set_at"]?.doubleValue ?? wake
+    return ConversationReminder(
+      wakeAt: Date(timeIntervalSince1970: wake / 1000),
+      setAt: Date(timeIntervalSince1970: set / 1000)
+    )
   }
 
   /// `fr.correspondance.hidden` → `{ "event_ids": ["…"] }`, trié pour que deux

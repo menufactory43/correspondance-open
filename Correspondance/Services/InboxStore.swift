@@ -140,6 +140,10 @@ final class InboxStore {
   /// Fils archivés — persistés, donc réappliqués à chaque fusion (le catalogue
   /// d'un réseau ne connaît pas notre archivage et renvoie toujours `isArchived: false`).
   private(set) var archivedIDs: Set<String> = []
+  /// Les conversations mises de côté, et l'heure à laquelle elles reviennent.
+  /// L'état vit dans le Relais (`fr.correspondance.reminder`) — `UserDefaults`
+  /// n'est que le cache qui permet d'afficher la file avant le premier `/sync`.
+  private(set) var remindersByID: [String: ConversationReminder] = [:]
   private(set) var disappearingSecondsByID: [String: Int] = [:]
   /// Messages supprimés « ici » (`HiddenMessageStore`) : le réseau les garde,
   /// le fil ne les montre plus. `private(set)` — la suppression passe par
@@ -312,15 +316,55 @@ final class InboxStore {
 
   var activeQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived && matchesNetworkFilter($0) }
+      .filter { !$0.isArchived && !isAsleep($0) && matchesNetworkFilter($0) }
       .sorted(by: { sortForInbox($0, $1) })
   }
 
   /// File complète, rail ignoré — pour les compteurs et le repli de sélection.
   var unfilteredQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived }
+      .filter { !$0.isArchived && !isAsleep($0) }
       .sorted(by: { sortForInbox($0, $1) })
+  }
+
+  /// Les conversations mises de côté, dans l'ordre où leurs rappels sonnent.
+  var remindersQueue: [Conversation] {
+    conversations
+      .filter { isAsleep($0) && matchesNetworkFilter($0) }
+      .sorted { lhs, rhs in
+        let l = remindersByID[lhs.id]?.wakeAt ?? .distantFuture
+        let r = remindersByID[rhs.id]?.wakeAt ?? .distantFuture
+        if l != r { return l < r }
+        return lhs.id < rhs.id
+      }
+  }
+
+  /// Cette conversation dort-elle encore ? Le rappel décide, pas nous.
+  func isAsleep(_ conversation: Conversation, now: Date = Date()) -> Bool {
+    guard let reminder = remindersByID[conversation.id] else { return false }
+    return reminder.isAsleep(
+      now: now,
+      lastMessageAt: conversation.lastMessageAt,
+      lastMessageIsFromMe: conversation.lastMessageIsFromMe
+    )
+  }
+
+  func reminder(_ id: String) -> ConversationReminder? { remindersByID[id] }
+
+  /// Met une conversation de côté jusqu'à une heure — ou la ramène (`nil`).
+  /// Le geste est immédiat ; l'écriture vers le Relais suit.
+  func setReminder(_ wakeAt: Date?, conversationID: String) {
+    let ids = expandedIDs(for: conversationID)
+    let reminder = wakeAt.map { ConversationReminder(wakeAt: $0) }
+    for id in ids {
+      if let reminder { remindersByID[id] = reminder } else { remindersByID.removeValue(forKey: id) }
+    }
+    persistFlags()
+    relayNoteReminder(reminder, conversationIDs: ids)
+    // Ranger le fil ouvert enchaîne sur le suivant — c'est le geste de la file.
+    if wakeAt != nil, selectedConversationID == conversationID {
+      Task { await select(activeQueue.first?.id) }
+    }
   }
 
   private func matchesNetworkFilter(_ conversation: Conversation) -> Bool {
@@ -467,6 +511,11 @@ final class InboxStore {
       }
     }
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
+    if let data = UserDefaults.standard.data(forKey: Keys.reminders),
+       let stored = try? JSONDecoder().decode([String: ConversationReminder].self, from: data)
+    {
+      remindersByID = stored
+    }
     manuallyUnreadIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.manuallyUnread) ?? [])
     drafts = DraftStore.load()
     relayQueue = RelayWriteQueue.load(from: .standard, key: Keys.relayQueue)
@@ -506,6 +555,7 @@ final class InboxStore {
     pinnedIDs = pinnedIDs.filter { !isLegacySignalID($0) }
     mutedIDs = mutedIDs.filter { !isLegacySignalID($0) }
     archivedIDs = archivedIDs.filter { !isLegacySignalID($0) }
+    remindersByID = remindersByID.filter { !isLegacySignalID($0.key) }
     disappearingSecondsByID = disappearingSecondsByID.filter { !isLegacySignalID($0.key) }
     persistFlags()
 
@@ -1743,6 +1793,7 @@ final class InboxStore {
       pinnedIDs.remove(conversationID)
       mutedIDs.remove(conversationID)
       archivedIDs.remove(conversationID)
+      remindersByID.removeValue(forKey: conversationID)
       disappearingSecondsByID.removeValue(forKey: conversationID)
       persistFlags()
       relayForget(conversationID: conversationID)
@@ -2679,6 +2730,7 @@ final class InboxStore {
     archived: Set<String>,
     known: Set<String>,
     drafts newDrafts: [String: String],
+    reminders newReminders: [String: ConversationReminder],
     hidden: Set<String>,
     merged: MergedContactStore.Stored?
   ) {
@@ -2691,8 +2743,10 @@ final class InboxStore {
       let wasArchived = archivedIDs.contains(id)
       if archived.contains(id) { archivedIDs.insert(id) } else { archivedIDs.remove(id) }
       mergedMemberCache[id]?.isArchived = archived.contains(id)
+      let wasAsleep = remindersByID[id]
+      remindersByID[id] = newReminders[id]
       if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
-        || wasArchived != archived.contains(id) { changedFlags = true }
+        || wasArchived != archived.contains(id) || wasAsleep != newReminders[id] { changedFlags = true }
     }
     if changedFlags {
       persistFlags()
@@ -2727,10 +2781,13 @@ final class InboxStore {
     }
   }
 
-  private func persistFlags() {
+  func persistFlags() {
     UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
     UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
     UserDefaults.standard.set(Array(archivedIDs), forKey: Keys.archivedIDs)
+    if let data = try? JSONEncoder().encode(remindersByID) {
+      UserDefaults.standard.set(data, forKey: Keys.reminders)
+    }
     UserDefaults.standard.set(Array(manuallyUnreadIDs), forKey: Keys.manuallyUnread)
     if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
       UserDefaults.standard.set(data, forKey: Keys.disappearing)
@@ -2743,6 +2800,7 @@ final class InboxStore {
     static let pinnedIDs = "correspondance.pinnedConversationIDs"
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
+    static let reminders = "correspondance.conversationReminders"
     static let disappearing = "correspondance.disappearingSeconds"
     static let signalCLIMigration = "correspondance.signalCLIMigrationDone"
     static let manuallyUnread = "correspondance.manuallyUnreadConversationIDs"

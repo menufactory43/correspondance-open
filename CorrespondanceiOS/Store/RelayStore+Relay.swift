@@ -42,6 +42,17 @@ extension RelayStore {
     startRelayFlush()
   }
 
+  /// Un rappel posé, ou levé. Même discipline que les drapeaux : le geste est
+  /// déjà fait à l'écran, l'écriture attend son tour.
+  func relayNoteReminder(_ reminder: ConversationReminder?, conversationIDs: [String]) {
+    for id in conversationIDs {
+      guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
+      relayQueue.enqueue(.reminder(roomID: roomID, value: reminder))
+    }
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   /// Les messages masqués d'un salon. L'ensemble local est global ; celui du
   /// Relais est par salon, et c'est lui qui fait autorité — on lui ajoute
   /// simplement ce qu'on vient de masquer.
@@ -152,6 +163,7 @@ extension RelayStore {
     for id in state.muted where !known.contains(id) { next.muted.insert(id) }
     for id in state.archived where !known.contains(id) { next.archived.insert(id) }
     for (id, text) in state.drafts where !known.contains(id) { next.drafts[id] = text }
+    for (id, reminder) in state.reminders where !known.contains(id) { next.reminders[id] = reminder }
 
     // Une ligne de fusion porte l'état de ses membres : archivée si tous le sont.
     for contact in mergedContacts {
@@ -161,6 +173,14 @@ extension RelayStore {
       else { next.archived.remove(contact.id) }
       if members.contains(where: { next.pinned.contains($0) }) { next.pinned.insert(contact.id) }
       if members.allSatisfy({ next.muted.contains($0) }) { next.muted.insert(contact.id) }
+      // Une ligne de fusion dort quand tous ses fils dorment : le rappel qui
+      // sonne le premier la ramène.
+      let rappels = members.compactMap { next.reminders[$0] }
+      if rappels.count == members.count, let premier = rappels.min(by: { $0.wakeAt < $1.wakeAt }) {
+        next.reminders[contact.id] = premier
+      } else {
+        next.reminders.removeValue(forKey: contact.id)
+      }
     }
 
     if next != state { state = next }
