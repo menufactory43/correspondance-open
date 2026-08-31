@@ -373,6 +373,19 @@ public actor MatrixClient {
     )
   }
 
+  /// API d'administration Synapse : donner à un utilisateur le pouvoir (PL 100)
+  /// dans un salon. Ne marche que si MON compte est administrateur du serveur —
+  /// Synapse s'appuie alors sur un membre local déjà au pouvoir (le bot de
+  /// pont, dans un portail). C'est ce qui débloque « inviter » dans un groupe
+  /// où le pont ne m'a rien accordé.
+  public func makeRoomAdmin(roomID: String, userID: String) async throws {
+    _ = try await request(
+      method: "POST",
+      path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
+      body: .object(["user_id": .string(userID)])
+    )
+  }
+
   /// Retire un event — c'est ainsi qu'on retire une réaction.
   @discardableResult
   public func redact(

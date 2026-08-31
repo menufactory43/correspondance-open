@@ -367,7 +367,17 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
-    try await client.invite(roomID: roomID, userID: agentUserID)
+    do {
+      try await client.invite(roomID: roomID, userID: agentUserID)
+    } catch MatrixError.http(403, _, _) {
+      // Le pont ne m'a pas donné le droit d'inviter dans ce portail. Mon
+      // compte administre le Relais : je me donne le pouvoir dans le salon
+      // (l'API s'appuie sur le bot de pont, déjà au pouvoir), puis je réessaie.
+      // On n'ajoute personne au groupe réel — cc est un utilisateur Matrix,
+      // les ponts ne relaient pas les adhésions.
+      try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      try await client.invite(roomID: roomID, userID: agentUserID)
+    }
   }
 
   /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
