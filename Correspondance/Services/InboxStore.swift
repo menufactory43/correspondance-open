@@ -140,6 +140,16 @@ final class InboxStore {
   /// Fils archivés — persistés, donc réappliqués à chaque fusion (le catalogue
   /// d'un réseau ne connaît pas notre archivage et renvoie toujours `isArchived: false`).
   private(set) var archivedIDs: Set<String> = []
+  /// Les conversations mises de côté, et l'heure à laquelle elles reviennent.
+  /// L'état vit dans le Relais (`fr.correspondance.reminder`) — `UserDefaults`
+  /// n'est que le cache qui permet d'afficher la file avant le premier `/sync`.
+  private(set) var remindersByID: [String: ConversationReminder] = [:]
+  /// Ce que j'ai décidé des demandes — acceptée, refusée. L'état vit dans le
+  /// Relais (`fr.correspondance.request`), `UserDefaults` n'est que le cache.
+  private(set) var requestDecisions: [String: ConversationRequest.Decision] = [:]
+  /// Les numéros du carnet d'adresses rencontrés : ce qui distingue un inconnu.
+  /// Rempli au fil des `/sync`, jamais demandé à Contacts pour l'occasion.
+  private var knownCorrespondentIDs: Set<String> = []
   private(set) var disappearingSecondsByID: [String: Int] = [:]
   /// Messages supprimés « ici » (`HiddenMessageStore`) : le réseau les garde,
   /// le fil ne les montre plus. `private(set)` — la suppression passe par
@@ -191,6 +201,17 @@ final class InboxStore {
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   @ObservationIgnored private var searchIndex: [String: String] = [:]
+  /// Ce que la base locale a trouvé pour la dernière question posée. Mémoïsé :
+  /// `searched` est appelé à chaque rendu, la base ne l'est qu'au changement.
+  @ObservationIgnored private var relaySearchIndex: (query: String, index: [String: String])?
+  /// L'onglet de recherche actif — Images, Vidéos, Liens, Fichiers, Brouillons.
+  /// `nil` = on cherche des conversations, pas des choses.
+  var searchFacet: MessageFacet?
+  /// Les messages qu'on a sous la main pour la recherche par médias, fil par
+  /// fil. Rempli à la demande, jamais au lancement : c'est une passe sur les
+  /// caches (les salons en mémoire, la base iMessage), pas une requête réseau.
+  private(set) var facetMessages: [String: [ChatMessage]] = [:]
+  private var isRefreshingFacetIndex = false
   /// Brouillons par conversation, restaurés au retour sur un fil.
   @ObservationIgnored private var drafts: [String: DraftStore.Draft] = [:]
   /// Écriture disque différée — on n'écrit pas un fichier à chaque frappe.
@@ -312,15 +333,212 @@ final class InboxStore {
 
   var activeQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived && matchesNetworkFilter($0) }
+      .filter { !$0.isArchived && !isAsleep($0) && !isRequest($0) && matchesNetworkFilter($0) }
       .sorted(by: { sortForInbox($0, $1) })
   }
 
   /// File complète, rail ignoré — pour les compteurs et le repli de sélection.
   var unfilteredQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived }
+      .filter { !$0.isArchived && !isAsleep($0) && !isRequest($0) }
       .sorted(by: { sortForInbox($0, $1) })
+  }
+
+  /// Les conversations mises de côté, dans l'ordre où leurs rappels sonnent.
+  var remindersQueue: [Conversation] {
+    conversations
+      .filter { isAsleep($0) && !isRequest($0) && matchesNetworkFilter($0) }
+      .sorted { lhs, rhs in
+        let l = remindersByID[lhs.id]?.wakeAt ?? .distantFuture
+        let r = remindersByID[rhs.id]?.wakeAt ?? .distantFuture
+        if l != r { return l < r }
+        return lhs.id < rhs.id
+      }
+  }
+
+  /// Cette conversation dort-elle encore ? Le rappel décide, pas nous.
+  func isAsleep(_ conversation: Conversation, now: Date = Date()) -> Bool {
+    guard let reminder = remindersByID[conversation.id] else { return false }
+    return reminder.isAsleep(
+      now: now,
+      lastMessageAt: conversation.lastMessageAt,
+      lastMessageIsFromMe: conversation.lastMessageIsFromMe
+    )
+  }
+
+  func reminder(_ id: String) -> ConversationReminder? { remindersByID[id] }
+
+  // MARK: - Recherche par médias
+
+  /// Les résultats de l'onglet actif, tous fils confondus, du plus récent au
+  /// plus ancien. Vide tant qu'aucun onglet n'est choisi.
+  var facetHits: [FacetedSearch.Hit] {
+    guard let facet = searchFacet, !facet.isConversationFacet else { return [] }
+    // Les fils du Relais viennent de la base : tout leur historique y est,
+    // même celui des conversations qu'on n'a jamais ouvertes.
+    let bridged = LocalStore.shared?
+      .facetHits(in: conversations, facet: facet, query: searchQuery) ?? []
+    // iMessage garde son chemin : sa base est ailleurs, on cherche dans ce que
+    // `refreshFacetIndex` en a chargé.
+    let local = FacetedSearch.hits(
+      in: conversations.filter { !$0.network.livesOnRelay },
+      facet: facet,
+      query: searchQuery
+    ) { facetMessages[$0.id] ?? [] }
+    return (bridged + local).sorted { $0.message.sentAt > $1.message.sentAt }
+  }
+
+  /// Les fils qui portent un brouillon — l'onglet « Brouillons ».
+  var facetDrafts: [Conversation] {
+    FacetedSearch.conversationsWithDrafts(
+      conversations,
+      drafts: drafts.mapValues(\.text),
+      query: searchQuery
+    )
+  }
+
+  /// Choisit un onglet et remplit ce qu'il faut pour y répondre.
+  func setSearchFacet(_ facet: MessageFacet?) {
+    searchFacet = facet
+    guard let facet, !facet.isConversationFacet else { return }
+    Task { await refreshFacetIndex() }
+  }
+
+  /// Rassemble ce qu'il faut aux onglets **côté iMessage** : les fils ouverts,
+  /// puis la base `chat.db`, hors du fil principal.
+  ///
+  /// Les fils du Relais n'y sont plus : ils se cherchent dans la base locale
+  /// (FTS5), sans avoir été chargés — c'est ce qui permet de trouver la photo
+  /// d'une conversation qu'on n'a pas ouverte depuis six mois.
+  func refreshFacetIndex() async {
+    guard !isRefreshingFacetIndex else { return }
+    isRefreshingFacetIndex = true
+    defer { isRefreshingFacetIndex = false }
+
+    var index = facetMessages
+    for session in liveSessions where !session.messages.isEmpty {
+      index[session.conversationID] = session.messages
+    }
+    let iMessageKeys = conversations
+      .filter { $0.network == .iMessage }
+      .map { (id: $0.id, chatGUID: $0.transportKey) }
+    if !iMessageKeys.isEmpty {
+      let db = iMessageDB
+      let fetched = await Task.detached(priority: .utility) { () -> [String: [ChatMessage]] in
+        var result: [String: [ChatMessage]] = [:]
+        for key in iMessageKeys {
+          if let list = try? db.fetchMessages(chatGUID: key.chatGUID), !list.isEmpty {
+            result[key.id] = list
+          }
+        }
+        return result
+      }.value
+      index.merge(fetched) { _, fresh in fresh }
+    }
+    facetMessages = index
+  }
+
+  // MARK: - Demandes
+
+  /// Les conversations d'inconnus qui attendent une décision. Elles ne sont
+  /// dans aucune file — c'est tout ce qu'une demande a de particulier.
+  var requestsQueue: [Conversation] {
+    conversations
+      .filter { isRequest($0) && matchesNetworkFilter($0) }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  func isRequest(_ conversation: Conversation) -> Bool {
+    RequestPolicy.isRequest(
+      conversation,
+      signals: requestSignals(conversation),
+      decision: requestDecisions[conversation.id]
+    )
+  }
+
+  func isRequest(_ id: String) -> Bool {
+    guard let conversation = conversations.first(where: { $0.id == id }) else { return false }
+    return isRequest(conversation)
+  }
+
+  /// Ce que le Mac sait dire d'un fil : ai-je écrit, et est-ce quelqu'un que
+  /// je connais (carnet d'adresses, ou contact fusionné) ?
+  private func requestSignals(_ conversation: Conversation) -> RequestSignals {
+    // `nil` tant qu'on n'a pas le fil sous les yeux : on ne range jamais une
+    // conversation sur un soupçon. Un dernier mot de moi, ou un brouillon,
+    // suffisent en revanche à trancher sans rien charger.
+    var wrote: Bool?
+    if conversation.lastMessageIsFromMe
+      || !(drafts[conversation.id]?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      wrote = true
+    } else if selectedConversationID == conversation.id, !messages.isEmpty {
+      wrote = messages.contains(where: \.isFromMe)
+    } else if let proof = threadReplyProof[conversation.id] {
+      // Le fil a été lu une fois : ce qu'on y a vu tient, même une fois
+      // qu'on regarde ailleurs — sinon la demande changerait de section à
+      // chaque clic.
+      wrote = proof
+    }
+    let known = knownCorrespondentIDs.contains(conversation.id)
+      || mergedContacts.contains { $0.memberIDs.contains(conversation.id) }
+    return RequestSignals(
+      hasWrittenBack: wrote,
+      isKnownCorrespondent: known,
+      isFlaggedByNetwork: networkFlaggedRequestIDs.contains(conversation.id)
+    )
+  }
+
+  /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
+  /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
+  private(set) var networkFlaggedRequestIDs: Set<String> = []
+
+  /// Ce qu'un fil chargé a montré : y ai-je écrit ? Retenu par conversation,
+  /// pour que la réponse ne dépende pas de la sélection du moment.
+  private var threadReplyProof: [String: Bool] = [:]
+
+  private func recordReplyProof(for conversationID: String, in messages: [ChatMessage]) {
+    let real = messages.filter { !Self.isPlaceholderMessageID($0.id) }
+    guard !real.isEmpty else { return }
+    threadReplyProof[conversationID] = real.contains(where: \.isFromMe)
+  }
+
+  /// Note qui, dans cette liste, est déjà au carnet d'adresses. Appelé au même
+  /// endroit que l'enrichissement des titres : le carnet est alors chaud.
+  func noteKnownCorrespondents(in list: [Conversation]) async {
+    for conversation in list where !conversation.isGroup && conversation.address.hasPrefix("+") {
+      if await ContactDirectory.shared.isKnown(handle: conversation.address) {
+        knownCorrespondentIDs.insert(conversation.id)
+      }
+    }
+  }
+
+  /// Accepter fait entrer la conversation dans la file ; refuser la range.
+  func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) async {
+    let ids = expandedIDs(for: conversationID)
+    for id in ids {
+      if let decision { requestDecisions[id] = decision }
+      else { requestDecisions.removeValue(forKey: id) }
+    }
+    persistFlags()
+    relayNoteRequest(decision, conversationIDs: ids)
+    if decision == .declined { await setArchived(true, conversationID: conversationID) }
+  }
+
+  /// Met une conversation de côté jusqu'à une heure — ou la ramène (`nil`).
+  /// Le geste est immédiat ; l'écriture vers le Relais suit.
+  func setReminder(_ wakeAt: Date?, conversationID: String) {
+    let ids = expandedIDs(for: conversationID)
+    let reminder = wakeAt.map { ConversationReminder(wakeAt: $0) }
+    for id in ids {
+      if let reminder { remindersByID[id] = reminder } else { remindersByID.removeValue(forKey: id) }
+    }
+    persistFlags()
+    relayNoteReminder(reminder, conversationIDs: ids)
+    // Ranger le fil ouvert enchaîne sur le suivant — c'est le geste de la file.
+    if wakeAt != nil, selectedConversationID == conversationID {
+      Task { await select(activeQueue.first?.id) }
+    }
   }
 
   private func matchesNetworkFilter(_ conversation: Conversation) -> Bool {
@@ -373,7 +591,23 @@ final class InboxStore {
 
   /// Applique la recherche de la liste. Sans requête, renvoie la file telle quelle.
   private func searched(_ list: [Conversation]) -> [Conversation] {
-    ConversationSearch.filter(list, query: searchQuery, index: searchIndex)
+    ConversationSearch.filter(list, query: searchQuery, index: mergedSearchIndex(searchQuery))
+  }
+
+  /// L'index de recherche pour cette question : celui d'iMessage (chargé une
+  /// fois) plus ce que la base locale trouve dans les fils du Relais.
+  ///
+  /// Interrogé une fois par question, pas à chaque rendu : le résultat est
+  /// gardé tant que la question ne change pas.
+  private func mergedSearchIndex(_ query: String) -> [String: String] {
+    let folded = ConversationSearch.fold(query)
+    guard !folded.isEmpty else { return searchIndex }
+    if relaySearchIndex?.query != folded {
+      relaySearchIndex = (folded, LocalStore.shared?.searchIndex(query: query) ?? [:])
+    }
+    return searchIndex.merging(relaySearchIndex?.index ?? [:]) { local, relay in
+      local.isEmpty ? relay : local + "\n" + relay
+    }
   }
 
   var isSearching: Bool { !ConversationSearch.fold(searchQuery).isEmpty }
@@ -381,7 +615,7 @@ final class InboxStore {
   /// Recherche indépendante de celle de la liste — le mini-sélecteur (⌘K) du
   /// panneau de réponse rapide cherche sans déranger le champ de l'inbox.
   func quickSearch(_ query: String) -> [Conversation] {
-    ConversationSearch.filter(activeQueue, query: query, index: searchIndex)
+    ConversationSearch.filter(activeQueue, query: query, index: mergedSearchIndex(query))
   }
 
   var inboxRecents: [Conversation] {
@@ -467,6 +701,16 @@ final class InboxStore {
       }
     }
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
+    if let data = UserDefaults.standard.data(forKey: Keys.reminders),
+       let stored = try? JSONDecoder().decode([String: ConversationReminder].self, from: data)
+    {
+      remindersByID = stored
+    }
+    if let data = UserDefaults.standard.data(forKey: Keys.requests),
+       let stored = try? JSONDecoder().decode([String: ConversationRequest.Decision].self, from: data)
+    {
+      requestDecisions = stored
+    }
     manuallyUnreadIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.manuallyUnread) ?? [])
     drafts = DraftStore.load()
     relayQueue = RelayWriteQueue.load(from: .standard, key: Keys.relayQueue)
@@ -506,6 +750,8 @@ final class InboxStore {
     pinnedIDs = pinnedIDs.filter { !isLegacySignalID($0) }
     mutedIDs = mutedIDs.filter { !isLegacySignalID($0) }
     archivedIDs = archivedIDs.filter { !isLegacySignalID($0) }
+    remindersByID = remindersByID.filter { !isLegacySignalID($0.key) }
+    requestDecisions = requestDecisions.filter { !isLegacySignalID($0.key) }
     disappearingSecondsByID = disappearingSecondsByID.filter { !isLegacySignalID($0.key) }
     persistFlags()
 
@@ -552,9 +798,11 @@ final class InboxStore {
       iMessageStatusFR = "iMessage : première sync…"
     }
 
-    // Le cache Matrix est un simple fichier : lisible sans passer par l'actor.
-    let (_, matrixConversations, matrixMessages) = MatrixConversationCache.load()
-    seedSearchIndex(signal: [:], matrix: matrixMessages)
+    // La base locale se lit sans passer par l'actor : au lancement, l'inbox
+    // s'affiche avant que la boucle `/sync` ait commencé. On ne lit que les
+    // lignes — l'historique d'un fil attend qu'on l'ouvre.
+    let storedRooms = LocalStore.shared?.rooms() ?? []
+    let matrixConversations = storedRooms.compactMap { $0.conversation() }
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
       matrixStatusFR = "Cache · \(MatrixBridgeService.bridgedCountFR(matrixConversations)) — sync…"
@@ -569,10 +817,12 @@ final class InboxStore {
       ?? inboxGroups.first?.id
       ?? activeQueue.first?.id
     selectionIsUserMade = false
-    if let id = selectedConversationID {
-      if let cached = matrixMessages[id], !cached.isEmpty {
-        messages = cached
-      }
+    if let id = selectedConversationID,
+       let roomID = Self.relayRoomID(ofConversation: id),
+       let cached = LocalStore.shared?.messages(roomID: roomID),
+       !cached.isEmpty
+    {
+      messages = cached
     }
   }
 
@@ -756,6 +1006,113 @@ final class InboxStore {
 
   /// Pose, remplace ou retire ma réaction. Reposer le même emoji le retire :
   /// les trois réseaux n'en acceptent qu'un par personne et par message.
+  /// Voter sur un sondage. Le geste bascule ; seuls les fils bridgés en ont —
+  /// iMessage ne connaît pas les sondages.
+  func votePoll(messageID: String, answerID: String) async {
+    guard let message = messages.first(where: { $0.id == messageID }),
+          let conversation = conversation(ofMessage: message),
+          conversation.network.livesOnRelay, isMatrixConnected
+    else { return }
+    do {
+      try await matrix.votePoll(
+        conversationID: conversation.id,
+        pollMessageID: messageID,
+        answerID: answerID
+      )
+      await loadMessagesForSelection()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  // MARK: - Indicateurs de frappe
+
+  /// « Alice écrit… » par fil, relu à chaque `/sync`.
+  private(set) var typingLabels: [String: String] = [:]
+  @ObservationIgnored private var typingSentAt: [String: Date] = [:]
+
+  func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+
+  /// Relit qui écrit dans les fils ouverts. Les autres n'intéressent personne :
+  /// un indicateur qu'on ne regarde pas ne vaut pas un aller-retour d'acteur.
+  func refreshTypingLabels() async {
+    var labels: [String: String] = [:]
+    for session in liveSessions {
+      for target in expandedIDs(for: session.conversationID) {
+        if let label = await matrix.typingLabel(conversationID: target) {
+          labels[session.conversationID] = label
+        }
+      }
+    }
+    if labels != typingLabels { typingLabels = labels }
+  }
+
+  /// Dit au Relais qu'on écrit — au plus une fois par dizaine de secondes, le
+  /// serveur tenant l'information vingt.
+  func noteTyping(conversationID: String, isTyping: Bool) {
+    guard isMatrixConnected,
+          conversations.first(where: { $0.id == conversationID })?.network.livesOnRelay == true
+    else { return }
+    if isTyping {
+      guard Date().timeIntervalSince(typingSentAt[conversationID] ?? .distantPast) > 10 else { return }
+      typingSentAt[conversationID] = Date()
+    } else {
+      guard typingSentAt.removeValue(forKey: conversationID) != nil else { return }
+    }
+    let bridge = matrix
+    Task.detached { await bridge.setTyping(conversationID: conversationID, isTyping: isTyping) }
+  }
+
+  /// Modifier un de mes messages sur un fil du Relais. iMessage passe, lui,
+  /// par l'automatisation Messages (`editMessageViaAutomation`).
+  func editMessage(messageID: String, newText: String) async {
+    guard let message = messages.first(where: { $0.id == messageID }),
+          let conversation = conversation(ofMessage: message),
+          conversation.network.supportsEditing, isMatrixConnected
+    else { return }
+    do {
+      try await matrix.editMessage(
+        conversationID: conversation.id,
+        messageID: messageID,
+        newText: newText
+      )
+      await loadMessagesForSelection()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  /// Le geste « Modifier » est-il offert sur ce message ? Seulement sur les
+  /// miens, et seulement là où le réseau sait le faire — proposer ailleurs,
+  /// c'est promettre une correction que personne d'autre ne verra.
+  func canEdit(_ message: ChatMessage) -> Bool {
+    guard message.isFromMe, !message.isPending, !message.isRetracted, !message.isSystemEvent,
+          !message.text.isEmpty
+    else { return false }
+    guard let conversation = conversation(ofMessage: message) else { return false }
+    return conversation.network.supportsEditing && isMatrixConnected
+  }
+
+  /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
+  /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
+  func openSelfNote() async {
+    guard isMatrixConnected else {
+      lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      return
+    }
+    do {
+      _ = try await matrix.ensureSelfNote()
+      var fresh = await matrix.conversations()
+      await ContactDirectory.shared.enrichBridgedTitles(&fresh)
+      mergeMatrixConversations(fresh)
+      guard let id = await matrix.selfNoteConversationID() else { return }
+      isShowingArchived = false
+      await select(id)
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
   func react(messageID: String, emoji: String) async {
     guard let message = messages.first(where: { $0.id == messageID }),
           // Sur un fil fusionné, la réaction part sur le réseau de la bulle
@@ -769,7 +1126,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -829,15 +1186,6 @@ final class InboxStore {
   private func indexMessages(_ list: [ChatMessage], conversationID: String) {
     guard !list.isEmpty else { return }
     searchIndex[conversationID] = ConversationSearch.blob(for: list)
-  }
-
-  /// Index initial : ce que les caches disque contiennent déjà, sans une requête réseau.
-  private func seedSearchIndex(
-    signal: [String: [ChatMessage]],
-    matrix: [String: [ChatMessage]]
-  ) {
-    for (id, list) in signal { searchIndex[id] = ConversationSearch.blob(for: list) }
-    for (id, list) in matrix { searchIndex[id] = ConversationSearch.blob(for: list) }
   }
 
   /// Index iMessage : une passe SQL bornée, hors du fil principal.
@@ -1240,11 +1588,25 @@ final class InboxStore {
     stopBridgeLoginPolling()
     await matrix.disconnect()
     isMatrixConnected = false
-    conversations.removeAll { $0.network.isMatrixBridged }
+    conversations.removeAll { $0.network.livesOnRelay }
     if let id = selectedConversationID, !conversations.contains(where: { $0.id == id }) {
       await select(activeQueue.first?.id)
     }
     matrixStatusFR = "Matrix : déconnecté."
+  }
+
+  /// « Recharger depuis le Relais » : on jette la base locale et on repart d'un
+  /// sync initial. La porte de secours du jour où la base raconterait autre
+  /// chose que le Relais — un salon fantôme, un fil qui ne se comble pas.
+  func reloadFromRelay() async {
+    matrixSyncTask?.cancel()
+    matrixSyncTask = nil
+    await matrix.reloadFromRelay()
+    conversations.removeAll { $0.network.livesOnRelay }
+    messages = []
+    matrixStatusFR = "Matrix : rechargement depuis le Relais…"
+    didSettleInitialMatrixSync = false
+    startMatrixSync()
   }
 
   func refreshMatrixStatus() async {
@@ -1516,6 +1878,17 @@ final class InboxStore {
       // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
       // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
       await self.reloadRelayState()
+      // Et ce que le Relais dit avoir rejoint, comparé à la base : un portail
+      // créé pendant que le Mac dormait n'apparaît dans aucun `/sync`
+      // incrémental. En arrière-plan — la boucle ne l'attend pas.
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        let adopted = await self.matrix.reconcileJoinedRooms()
+        guard !adopted.isEmpty else { return }
+        var fresh = await self.matrix.conversations()
+        await ContactDirectory.shared.enrichBridgedTitles(&fresh)
+        self.mergeMatrixConversations(fresh)
+      }
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {
@@ -1526,9 +1899,12 @@ final class InboxStore {
           self.isLiveSyncing = true
           defer { self.isLiveSyncing = false }
           await ContactDirectory.shared.enrichBridgedTitles(&updated)
+          await self.noteKnownCorrespondents(in: updated)
+          self.networkFlaggedRequestIDs = await self.matrix.networkFlaggedRequestIDs()
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
+          await self.refreshTypingLabels()
           // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
           // sauf ce qui attend encore de partir. Et ce qui attend part maintenant.
           await self.flushRelayWrites()
@@ -1611,7 +1987,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -1743,6 +2119,8 @@ final class InboxStore {
       pinnedIDs.remove(conversationID)
       mutedIDs.remove(conversationID)
       archivedIDs.remove(conversationID)
+      remindersByID.removeValue(forKey: conversationID)
+      requestDecisions.removeValue(forKey: conversationID)
       disappearingSecondsByID.removeValue(forKey: conversationID)
       persistFlags()
       relayForget(conversationID: conversationID)
@@ -1955,7 +2333,7 @@ final class InboxStore {
     if conversation.network == .iMessage, !attachments.isEmpty {
       return "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
     }
-    if conversation.network.isMatrixBridged, !isMatrixConnected {
+    if conversation.network.livesOnRelay, !isMatrixConnected {
       return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
     }
     return nil
@@ -2017,7 +2395,7 @@ final class InboxStore {
           try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
         }
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -2271,7 +2649,7 @@ final class InboxStore {
     // Un salon quitté côté réseau distant disparaît de l'inbox.
     let live = Set(incomingList.map(\.id))
     for (id, conversation) in byID
-    where conversation.network.isMatrixBridged && !live.contains(id)
+    where conversation.network.livesOnRelay && !live.contains(id)
       && !MergedContact.isMergedID(id)
     {
       byID.removeValue(forKey: id)
@@ -2299,7 +2677,7 @@ final class InboxStore {
     // et on le recoud au reste. Repasser par le chargement complet du fil
     // recopierait `chat.db` à chaque `/sync` — la boucle live s'en garde.
     if isMerged(id) {
-      let bridged = memberConversations(of: id).filter { $0.network.isMatrixBridged }
+      let bridged = memberConversations(of: id).filter { $0.network.livesOnRelay }
       guard !bridged.isEmpty else { return }
       let bridgedIDs = Set(bridged.map(\.id))
       var refreshed: [ChatMessage] = []
@@ -2315,11 +2693,12 @@ final class InboxStore {
       if isAttended(id) { clearUnread(for: id) }
       return
     }
-    guard conversation.network.isMatrixBridged else { return }
+    guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
     session.messages = await matrix.ensureLocalAttachments(fetched)
     applySidebarPreview(conversationID: id, from: session.messages)
+    recordReplyProof(for: id, in: session.messages)
     if isAttended(id) { clearUnread(for: id) }
   }
 
@@ -2417,7 +2796,7 @@ final class InboxStore {
     // en entier : sans ça, les fils bridgés disparaîtraient de la liste jusqu'au
     // `/sync` suivant, et la sélection sauterait sur un fil iMessage entre-temps.
     merged.append(contentsOf: conversations.filter {
-      $0.network.isMatrixBridged && !MergedContact.isMergedID($0.id)
+      $0.network.livesOnRelay && !MergedContact.isMergedID($0.id)
     })
 
     preserveComposing(into: &merged)
@@ -2534,10 +2913,12 @@ final class InboxStore {
       let real = merged.filter { !Self.isPlaceholderMessageID($0.id) }
       session.messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
       applySidebarPreview(conversationID: conversation.id, from: session.messages)
+      recordReplyProof(for: conversation.id, in: session.messages)
       return
     }
 
     session.messages = await fetchMessages(for: conversation)
+    recordReplyProof(for: conversation.id, in: session.messages)
   }
 
   /// Un message-repère (« Synchronisation… », « Pas encore de messages ») plutôt
@@ -2567,7 +2948,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {
         // Fil jamais ouvert, ou connu seulement par la fenêtre du sync initial :
@@ -2679,6 +3060,8 @@ final class InboxStore {
     archived: Set<String>,
     known: Set<String>,
     drafts newDrafts: [String: String],
+    reminders newReminders: [String: ConversationReminder],
+    requests newRequests: [String: ConversationRequest.Decision],
     hidden: Set<String>,
     merged: MergedContactStore.Stored?
   ) {
@@ -2691,8 +3074,11 @@ final class InboxStore {
       let wasArchived = archivedIDs.contains(id)
       if archived.contains(id) { archivedIDs.insert(id) } else { archivedIDs.remove(id) }
       mergedMemberCache[id]?.isArchived = archived.contains(id)
+      let wasAsleep = remindersByID[id]
+      remindersByID[id] = newReminders[id]
+      requestDecisions[id] = newRequests[id]
       if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
-        || wasArchived != archived.contains(id) { changedFlags = true }
+        || wasArchived != archived.contains(id) || wasAsleep != newReminders[id] { changedFlags = true }
     }
     if changedFlags {
       persistFlags()
@@ -2727,10 +3113,16 @@ final class InboxStore {
     }
   }
 
-  private func persistFlags() {
+  func persistFlags() {
     UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
     UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
     UserDefaults.standard.set(Array(archivedIDs), forKey: Keys.archivedIDs)
+    if let data = try? JSONEncoder().encode(remindersByID) {
+      UserDefaults.standard.set(data, forKey: Keys.reminders)
+    }
+    if let data = try? JSONEncoder().encode(requestDecisions) {
+      UserDefaults.standard.set(data, forKey: Keys.requests)
+    }
     UserDefaults.standard.set(Array(manuallyUnreadIDs), forKey: Keys.manuallyUnread)
     if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
       UserDefaults.standard.set(data, forKey: Keys.disappearing)
@@ -2743,6 +3135,8 @@ final class InboxStore {
     static let pinnedIDs = "correspondance.pinnedConversationIDs"
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
+    static let reminders = "correspondance.conversationReminders"
+    static let requests = "correspondance.conversationRequests"
     static let disappearing = "correspondance.disappearingSeconds"
     static let signalCLIMigration = "correspondance.signalCLIMigrationDone"
     static let manuallyUnread = "correspondance.manuallyUnreadConversationIDs"

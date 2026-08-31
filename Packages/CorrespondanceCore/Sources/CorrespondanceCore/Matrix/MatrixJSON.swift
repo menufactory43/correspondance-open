@@ -79,6 +79,13 @@ public enum MatrixJSON: Codable, Hashable, Sendable {
     return nil
   }
 
+  /// Le nombre tel quel. Les temps Matrix sont des millisecondes : un `Int`
+  /// n'aurait pas suffi à les traverser sans perte sur 32 bits.
+  public var doubleValue: Double? {
+    if case .number(let v) = self { return v }
+    return nil
+  }
+
   public var boolValue: Bool? {
     if case .bool(let v) = self { return v }
     return nil
@@ -97,6 +104,14 @@ public enum MatrixJSON: Codable, Hashable, Sendable {
   /// Chaîne au chemin donné, en ignorant les vides.
   public func bool(at path: String) -> Bool? {
     value(at: path)?.boolValue
+  }
+
+  public func double(at path: String) -> Double? {
+    value(at: path)?.doubleValue
+  }
+
+  public func int(at path: String) -> Int? {
+    value(at: path)?.intValue
   }
 
   public func string(at path: String) -> String? {

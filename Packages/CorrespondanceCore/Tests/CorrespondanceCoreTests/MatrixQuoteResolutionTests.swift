@@ -67,7 +67,7 @@ final class MatrixQuoteResolutionTests: XCTestCase {
 
   /// Le cache disque garde une citation muette : au lancement suivant, elle se
   /// résout dès que la cible est là — semée elle aussi, ou revenue par le sync.
-  func testSeededPendingQuoteResolvesAgainstSeededTarget() {
+  func testPendingQuoteFromTheStoreResolvesAgainstItsTarget() {
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     let conversationID = "signal:\(roomID)"
     let target = ChatMessage(
@@ -79,9 +79,10 @@ final class MatrixQuoteResolutionTests: XCTestCase {
       sentAt: Date(timeIntervalSince1970: 1_700_000_002), isFromMe: false,
       replyTo: QuotedMessage(messageID: "$cible", senderName: "", text: "")
     )
-    var rooms: [String: MatrixRoomModel] = [:]
-    parser.seed(cachedMessages: [conversationID: [pending, target]], into: &rooms)
-    XCTAssertEqual(rooms[roomID]?.messagesByID["$r"]?.replyTo?.text, "Regardez ça")
+    var model = MatrixRoomModel(roomID: roomID)
+    model.network = .signal
+    parser.hydrate(messages: [pending, target], reactions: [:], into: &model)
+    XCTAssertEqual(model.messagesByID["$r"]?.replyTo?.text, "Regardez ça")
   }
 
   // MARK: - Aperçus de liens livrés par le pont

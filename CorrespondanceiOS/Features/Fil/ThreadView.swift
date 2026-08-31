@@ -109,13 +109,38 @@ struct ThreadView: View {
                     onHide: { store.hide(messageID: message.id, conversationID: conversationID) },
                     onDeleteEverywhere: message.isFromMe ? {
                       Task { await store.deleteEverywhere(messageID: message.id, conversationID: conversationID) }
-                    } : nil
+                    } : nil,
+                    onEdit: store.canEdit(message) ? { (nouveau: String) in
+                      let fil = conversationID
+                      let bulle = message.id
+                      Task { @MainActor in
+                        await store.editMessage(messageID: bulle, newText: nouveau, conversationID: fil)
+                      }
+                    } : nil,
+                    onVotePoll: message.poll == nil ? nil : { (answerID: String) in
+                      let fil = conversationID
+                      let bulle = message.id
+                      Task { @MainActor in
+                        await store.votePoll(conversationID: fil, messageID: bulle, answerID: answerID)
+                      }
+                    }
                   )
                   .id(message.id)
                 }
               }
             }
             .frame(maxWidth: .infinity, alignment: group.isFromMe ? .trailing : .leading)
+          }
+
+          // « Alice écrit… », au bas du fil, là où sa bulle apparaîtra.
+          if let typing = store.typingLabel(conversationID) {
+            Text(typing)
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.leading, 6)
+              .transition(.opacity)
+              .accessibilityLabel(typing)
           }
 
           if let receipt = readReceiptLabel {

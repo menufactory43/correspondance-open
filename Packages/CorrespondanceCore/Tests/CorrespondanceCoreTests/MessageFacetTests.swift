@@ -138,3 +138,173 @@ final class MessageFacetTests: XCTestCase {
     )
   }
 }
+
+/// La recherche par médias : les mêmes résultats sur les deux plateformes,
+/// parce que c'est le même code qui les produit.
+final class FacetedSearchHitsTests: XCTestCase {
+  private func conversation(_ id: String, _ title: String) -> Conversation {
+    Conversation(
+      id: id, network: .whatsapp, address: id, title: title, preview: "…",
+      lastMessageAt: Date(timeIntervalSince1970: 1_800_000_000), unreadCount: 0,
+      isArchived: false, transportKey: id, isGroup: false
+    )
+  }
+
+  private func message(_ id: String, in conversationID: String, at seconds: TimeInterval, image: Bool) -> ChatMessage {
+    ChatMessage(
+      id: id,
+      conversationID: conversationID,
+      network: .whatsapp,
+      text: image ? "" : "Le lien : https://exemple.fr/article",
+      sentAt: Date(timeIntervalSince1970: seconds),
+      isFromMe: false,
+      attachments: image
+        ? [MessageAttachment(id: "mxc://a/\(id)", contentType: "image/jpeg", filename: "plage.jpg")]
+        : []
+    )
+  }
+
+  func testLesResultatsViennentDeTousLesFilsDuPlusRecentAuPlusAncien() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let bruno = conversation("whatsapp:!b:relais", "Bruno")
+    let fils: [String: [ChatMessage]] = [
+      alice.id: [message("$1", in: alice.id, at: 100, image: true)],
+      bruno.id: [
+        message("$2", in: bruno.id, at: 300, image: true),
+        message("$3", in: bruno.id, at: 200, image: false),
+      ],
+    ]
+
+    let hits = FacetedSearch.hits(in: [alice, bruno], facet: .images) { fils[$0.id] ?? [] }
+    XCTAssertEqual(hits.map(\.message.id), ["$2", "$1"])
+    XCTAssertEqual(hits.first?.conversation.title, "Bruno")
+
+    let liens = FacetedSearch.hits(in: [alice, bruno], facet: .links) { fils[$0.id] ?? [] }
+    XCTAssertEqual(liens.map(\.message.id), ["$3"])
+  }
+
+  func testLaRequeteFiltreAussiSurLeNomDuFichier() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let fils = [alice.id: [message("$1", in: alice.id, at: 100, image: true)]]
+    XCTAssertEqual(
+      FacetedSearch.hits(in: [alice], facet: .images, query: "plage") { fils[$0.id] ?? [] }.count,
+      1
+    )
+    XCTAssertTrue(
+      FacetedSearch.hits(in: [alice], facet: .images, query: "montagne") { fils[$0.id] ?? [] }.isEmpty
+    )
+  }
+
+  func testChaqueResultatAUnIdentifiantStable() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let hit = FacetedSearch.Hit(conversation: alice, message: message("$1", in: alice.id, at: 1, image: true))
+    XCTAssertEqual(hit.id, "whatsapp:!a:relais|$1")
+  }
+}
+
+/// Un GIF est une image que les réseaux ne distinguent que par son type MIME.
+final class GIFAttachmentTests: XCTestCase {
+  func testLeTypeMimeFaitLeGIF() {
+    XCTAssertTrue(MessageAttachment(id: "mxc://a/b", contentType: "image/gif").isGIF)
+    XCTAssertFalse(MessageAttachment(id: "mxc://a/b", contentType: "image/jpeg").isGIF)
+  }
+
+  func testSansTypeDeclareLExtensionTranche() {
+    XCTAssertTrue(
+      MessageAttachment(id: "mxc://a/b", contentType: "", filename: "rire.gif").isGIF
+    )
+    XCTAssertFalse(
+      MessageAttachment(id: "mxc://a/b", contentType: "", filename: "plage.jpg").isGIF
+    )
+    // Un type déclaré et non « gif » fait foi, même sur un fichier mal nommé.
+    XCTAssertFalse(
+      MessageAttachment(id: "mxc://a/b", contentType: "image/png", filename: "rire.gif").isGIF
+    )
+  }
+
+  func testUnGIFResteUneImageMaisSeNommeAutrement() {
+    let gif = MessageAttachment(id: "mxc://a/b", contentType: "image/gif", filename: "rire.gif")
+    XCTAssertTrue(gif.isImage)
+    let message = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!a:relais", network: .whatsapp, text: "",
+      sentAt: .init(timeIntervalSince1970: 1), isFromMe: false, attachments: [gif]
+    )
+    XCTAssertEqual(message.sidebarPreviewText, "GIF")
+  }
+
+  func testUnGIFTombeDansLOngletImages() {
+    let gif = MessageAttachment(id: "mxc://a/b", contentType: "image/gif", filename: "rire.gif")
+    let message = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!a:relais", network: .whatsapp, text: "",
+      sentAt: .init(timeIntervalSince1970: 1), isFromMe: false, attachments: [gif]
+    )
+    XCTAssertTrue(FacetedSearch.matches(message, facet: .images))
+    XCTAssertFalse(FacetedSearch.matches(message, facet: .files))
+  }
+
+  func testLeSyncGardeLeTypeGIFDeLaPieceJointe() throws {
+    let json = """
+    {"next_batch":"s1","rooms":{"join":{"!a:relais":{
+      "state":{"events":[{"type":"m.bridge","state_key":"","content":{"protocol":{"id":"whatsappgo"}}}]},
+      "timeline":{"events":[{
+        "type":"m.room.message","event_id":"$1","sender":"@whatsapp_lid-1:relais",
+        "origin_server_ts":1800000000000,
+        "content":{"msgtype":"m.image","body":"rire.gif","url":"mxc://a/b",
+          "info":{"mimetype":"image/gif","w":320,"h":240}}}]}}}}}
+    """
+    let parser = MatrixSyncParser(selfUserID: "@meffysto:relais")
+    var rooms: [String: MatrixRoomModel] = [:]
+    parser.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(json.utf8)), to: &rooms)
+    let piece = try XCTUnwrap(rooms["!a:relais"]?.messagesByID["$1"]?.attachments.first)
+    XCTAssertTrue(piece.isGIF)
+  }
+}
+
+/// La note à soi : un salon du Relais dont je suis le seul membre. Aucun
+/// réseau derrière — mais bien un fil, et le même sur les deux appareils.
+final class SelfNoteTests: XCTestCase {
+  func testLaNoteASoiNaPasDePontMaisVitSurLeRelais() {
+    XCTAssertFalse(MessageNetwork.selfNote.isMatrixBridged)
+    XCTAssertTrue(MessageNetwork.selfNote.livesOnRelay)
+    XCTAssertNil(MessageNetwork.selfNote.bridge)
+    XCTAssertFalse(MessageNetwork.matrixBridged.contains(.selfNote))
+    XCTAssertEqual(MessageNetwork.selfNote.labelFR, "Note à soi")
+  }
+
+  func testLeSalonDeLaNoteASoiSeDesigneParLAccountData() throws {
+    let json = """
+    {"next_batch":"s1","account_data":{"events":[
+      {"type":"fr.correspondance.self_note","content":{"room_id":"!note:relais"}}
+    ]}}
+    """
+    var instantane = ConversationStateSnapshot()
+    instantane.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(json.utf8)))
+    XCTAssertEqual(instantane.selfNoteRoomID, "!note:relais")
+    XCTAssertEqual(
+      ConversationStateCodec.selfNoteContent(roomID: "!note:relais").string(at: "room_id"),
+      "!note:relais"
+    )
+  }
+
+  func testUnSalonSansPontNeDevientJamaisUneConversationParAccident() {
+    var model = MatrixRoomModel(roomID: "!note:relais")
+    model.members["@meffysto:relais"] = .init(displayName: "Moi", membership: "join")
+    // Sans `m.bridge`, il n'y a pas de conversation : c'est l'account data qui
+    // désigne la note à soi, jamais une déduction.
+    XCTAssertNil(model.conversation(selfUserID: "@meffysto:relais"))
+
+    let note = model.selfNoteConversation(selfUserID: "@meffysto:relais")
+    XCTAssertEqual(note.network, .selfNote)
+    XCTAssertEqual(note.id, "selfNote:!note:relais")
+    XCTAssertEqual(note.transportKey, "!note:relais")
+    XCTAssertFalse(note.isGroup)
+    XCTAssertEqual(note.title, "Note à soi")
+  }
+
+  func testLeSalonDeLaNoteSeRetrouveDepuisSonIdentifiantDeFil() {
+    XCTAssertEqual(
+      MatrixSyncParser.roomID(inConversationID: "selfNote:!note:relais"),
+      "!note:relais"
+    )
+  }
+}

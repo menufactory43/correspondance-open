@@ -154,6 +154,56 @@ struct InboxListView: View {
       }
       .tint(theme.inkTertiary)
     }
+    .contextMenu {
+      reminderMenu(conversation)
+      requestMenu(conversation)
+    }
+  }
+
+  /// Accepter ou refuser une demande. Accepter la fait entrer dans la file ;
+  /// refuser la range, et elle ne redemandera plus.
+  @ViewBuilder
+  private func requestMenu(_ conversation: Conversation) -> some View {
+    if store.isRequest(conversation.id) {
+      Section("Demande") {
+        Button {
+          store.decideRequest(.accepted, conversationID: conversation.id)
+        } label: {
+          Label("Accepter", systemImage: "checkmark.circle")
+        }
+        Button(role: .destructive) {
+          store.decideRequest(.declined, conversationID: conversation.id)
+        } label: {
+          Label("Refuser", systemImage: "xmark.circle")
+        }
+      }
+    }
+  }
+
+  /// « Me le rappeler » : la conversation quitte la file jusqu'à l'heure dite,
+  /// et y revient d'elle-même — ou plus tôt si l'autre répond. Les heures
+  /// proposées sont celles d'« Envoyer plus tard » : mêmes mots, même question.
+  @ViewBuilder
+  private func reminderMenu(_ conversation: Conversation) -> some View {
+    if let rappel = store.reminder(conversation.id) {
+      Section("De côté jusqu'à \(rappel.labelFR())") {
+        Button {
+          store.setReminder(nil, conversationID: conversation.id)
+        } label: {
+          Label("Remettre dans la file", systemImage: "tray.and.arrow.down")
+        }
+      }
+    } else {
+      Menu {
+        ForEach(ConversationReminder.suggestions()) { suggestion in
+          Button(suggestion.title) {
+            store.setReminder(suggestion.date, conversationID: conversation.id)
+          }
+        }
+      } label: {
+        Label("Me le rappeler…", systemImage: "clock.arrow.circlepath")
+      }
+    }
   }
 
   private func open(_ id: String) {
@@ -206,6 +256,11 @@ struct InboxListView: View {
           store.scheduled.isEmpty ? "Programmés" : "Programmés (\(store.scheduled.count))",
           systemImage: "clock"
         )
+      }
+      Button {
+        Task { await store.openSelfNote() }
+      } label: {
+        Label(MessageNetwork.selfNote.labelFR, systemImage: MessageNetwork.selfNote.systemImage)
       }
       Button {
         isShowingSettings = true

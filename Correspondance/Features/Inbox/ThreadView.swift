@@ -145,6 +145,16 @@ struct ThreadView: View {
               .id("scheduled-\(scheduled.id)")
           }
 
+          // « Alice écrit… », là où sa bulle apparaîtra.
+          if let id = store.selectedConversationID, let typing = store.typingLabel(id) {
+            Text(typing)
+              .font(Typography.meta(themes.typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.leading, 4)
+              .accessibilityLabel(typing)
+          }
+
           // LE bas du fil : sous le dernier message il y a l'accusé, les envois
           // programmés… Viser le message laissait tout ça hors champ.
           Color.clear
@@ -252,9 +262,20 @@ struct ThreadView: View {
   /// vérificateur de types s'y perdait.
   private func bubble(for message: ChatMessage) -> some View {
     let automatable = automationAvailable(for: message)
-    let onEdit: ((String) -> Void)? = automatable
-      ? { newText in Task { await store.editMessageViaAutomation(messageID: message.id, newText: newText) } }
-      : nil
+    // Deux chemins pour un même geste : l'automatisation Messages pour un
+    // iMessage, `m.replace` pour un fil du Relais dont le réseau sait modifier.
+    let onEdit: ((String) -> Void)?
+    if automatable {
+      onEdit = { newText in
+        Task { await store.editMessageViaAutomation(messageID: message.id, newText: newText) }
+      }
+    } else if store.canEdit(message) {
+      onEdit = { newText in
+        Task { await store.editMessage(messageID: message.id, newText: newText) }
+      }
+    } else {
+      onEdit = nil
+    }
     let onUndoSend: (() -> Void)? = automatable
       ? { Task { await store.undoSendViaAutomation(messageID: message.id) } }
       : nil
@@ -278,7 +299,10 @@ struct ThreadView: View {
       onDeleteLocally: { store.deleteLocally(messageID: message.id) },
       onDeleteEverywhere: store.canDeleteEverywhere(message)
         ? { Task { await store.deleteEverywhere(messageID: message.id) } }
-        : nil
+        : nil,
+      onVotePoll: message.poll == nil ? nil : { answerID in
+        Task { await store.votePoll(messageID: message.id, answerID: answerID) }
+      }
     )
   }
 

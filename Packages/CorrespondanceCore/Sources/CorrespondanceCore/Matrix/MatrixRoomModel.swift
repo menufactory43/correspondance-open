@@ -33,13 +33,124 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Les modifications reçues avant le message qu'elles corrigent — une page
+  /// remontée à l'envers en livre. La dernière par cible seulement : c'est
+  /// elle qui fait foi, les intermédiaires n'ont plus rien à dire.
+  public var pendingEdits: [String: PendingEdit] = [:]
+
+  /// Ce que le magasin local n'a pas encore vu : messages et réactions posés ou
+  /// corrigés depuis la dernière écriture. C'est ce qui permet d'écrire un
+  /// **lot** plutôt que de réécrire tout le fil à chaque passe de `/sync`.
+  public var pendingWrites: Set<String> = []
+  /// Ce que le magasin doit oublier : rédactions reçues depuis.
+  public var pendingDeletions: Set<String> = []
+
+  /// Après écriture : on repart d'une ardoise propre.
+  public mutating func clearPendingWrites() {
+    pendingWrites.removeAll()
+    pendingDeletions.removeAll()
+  }
+
+  /// Un event qu'on vient de poser ou de corriger.
+  mutating func markWritten(_ eventID: String) {
+    pendingDeletions.remove(eventID)
+    pendingWrites.insert(eventID)
+  }
+
+  /// Un event qui vient de disparaître.
+  mutating func markDeleted(_ eventID: String) {
+    pendingWrites.remove(eventID)
+    pendingDeletions.insert(eventID)
+  }
+
+  /// Une modification en attente de sa cible.
+  public struct PendingEdit: Sendable, Hashable, Codable {
+    public var text: String
+    public var at: Date
+    /// Qui corrige : à la naissance de la cible, seule une correction de son
+    /// auteur s'applique — comme quand la cible est déjà là.
+    public var sender: String?
+
+    public init(text: String, at: Date, sender: String? = nil) {
+      self.text = text
+      self.at = at
+      self.sender = sender
+    }
+  }
+
+  /// Qui est en train d'écrire, d'après la dernière EDU `m.typing`, et quand
+  /// on l'a apprise. L'EDU n'est renvoyée qu'au **changement** : sans date, un
+  /// « Alice écrit… » resterait à l'écran jusqu'au prochain message.
+  public var typingUserIDs: Set<String> = []
+  public var typingUpdatedAt: Date = .distantPast
+
+  /// Au-delà, on considère que la personne a fini d'écrire. Le serveur donne
+  /// aux clients un `timeout` de 20 à 30 s ; on prend la borne basse, quitte à
+  /// faire clignoter l'indicateur plutôt qu'à le laisser mentir.
+  public static let typingLifetime: TimeInterval = 20
+
+  /// Les personnes qui écrivent VRAIMENT, maintenant — moi excepté.
+  public func typingUserIDs(now: Date, selfUserID: String) -> [String] {
+    guard now.timeIntervalSince(typingUpdatedAt) < Self.typingLifetime else { return [] }
+    return typingUserIDs.filter { $0 != selfUserID }.sorted()
+  }
+
+  /// « Alice écrit… », « Alice et Bruno écrivent… », « 3 personnes écrivent… ».
+  /// `nil` quand personne n'écrit : la vue n'a alors rien à réserver.
+  public func typingLabelFR(now: Date, selfUserID: String) -> String? {
+    let names = typingUserIDs(now: now, selfUserID: selfUserID)
+      .map { members[$0]?.displayName ?? "" }
+      .filter { !$0.isEmpty }
+    let count = typingUserIDs(now: now, selfUserID: selfUserID).count
+    guard count > 0 else { return nil }
+    switch names.count {
+    case 0: return count == 1 ? "Quelqu'un écrit…" : "\(count) personnes écrivent…"
+    case 1: return "\(names[0]) écrit…"
+    case 2: return "\(names[0]) et \(names[1]) écrivent…"
+    default: return "\(names.count) personnes écrivent…"
+    }
+  }
+
+  /// Les sondages du salon, par event de départ. Séparés des messages : trois
+  /// events les composent, et une voix arrive souvent avant qu'on ait la
+  /// question sous la main.
+  public var pollsByEventID: [String: PollEvent] = [:]
+
+  /// Un sondage en cours de dépouillement : la question, les voix reçues, la
+  /// clôture. Le `Poll` du message s'en déduit à chaque lecture du fil.
+  public struct PollEvent: Sendable, Hashable, Codable {
+    public var poll: Poll
+    /// La forme sous laquelle le sondage est arrivé — c'est celle sous
+    /// laquelle il faudra répondre.
+    public var startType: String
+    /// La dernière voix de chaque personne, et quand elle l'a émise : une voix
+    /// plus ancienne qui arrive après (page remontée) ne doit rien écraser.
+    public var voteTimes: [String: Date] = [:]
+    /// L'heure de clôture, s'il y en a une. Une voix postérieure ne compte pas.
+    public var closedAt: Date?
+
+    public init(poll: Poll, startType: String) {
+      self.poll = poll
+      self.startType = startType
+    }
+  }
+
+  /// Le pont annonce-t-il un fil « en attente » — une demande côté réseau ?
+  ///
+  /// Instagram et Messenger ont bien une boîte de demandes, et Signal une
+  /// « invitation de message ». Aucun pont mautrix v26.08 ne l'expose dans
+  /// `m.bridge` à ce jour : on lit les clés que Beeper et mautrix emploieraient
+  /// s'ils s'y mettaient, et en attendant ce drapeau reste faux — la demande se
+  /// prouve alors autrement (`RequestPolicy`).
+  public var isNetworkFlaggedRequest = false
+
   /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
   /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.
   public var bridgeChannelID: String?
 
   /// Une `m.reaction` reçue. `isMine` est figé à l'analyse : le modèle n'a pas
   /// besoin de reconnaître notre identité pour rendre les pastilles.
-  public struct ReactionEvent: Sendable, Hashable {
+  public struct ReactionEvent: Sendable, Hashable, Codable {
     public var targetEventID: String
     public var emoji: String
     public var senderID: String
@@ -47,7 +158,7 @@ public struct MatrixRoomModel: Sendable {
     public var isMine: Bool
   }
 
-  public struct Member: Sendable, Hashable {
+  public struct Member: Sendable, Hashable, Codable {
     public var displayName: String?
     public var membership: String
     /// `content.avatar_url` du `m.room.member` : la photo du ghost. C'est la seule
@@ -156,12 +267,43 @@ public struct MatrixRoomModel: Sendable {
     }
     return messagesByID.values
       .map { message in
-        guard let raw = byTarget[message.id] else { return message }
         var updated = message
-        updated.reactions = MessageReaction.aggregate(raw)
+        if let raw = byTarget[message.id] {
+          updated.reactions = MessageReaction.aggregate(raw)
+        }
+        // Le sondage est dépouillé au moment de rendre le fil : les voix ont
+        // pu arriver bien après la question.
+        if let poll = pollsByEventID[message.id]?.poll { updated.poll = poll }
         return updated
       }
       .sorted { $0.sentAt < $1.sentAt }
+  }
+
+  /// La note à soi : un salon sans pont dont je suis le seul habitant.
+  ///
+  /// La reconnaissance ne se devine pas — c'est l'account data global
+  /// `fr.correspondance.self_note` qui désigne le salon, et l'appelant qui le
+  /// passe ici. Un salon vide ou un salon de gestion abandonné ne deviendra
+  /// jamais une note à soi par accident.
+  public func selfNoteConversation(selfUserID: String) -> Conversation {
+    let last = sortedMessages.last
+    var conversation = Conversation(
+      id: "\(MessageNetwork.selfNote.rawValue):\(roomID)",
+      network: .selfNote,
+      address: roomID,
+      title: explicitName?.isEmpty == false ? explicitName! : MessageNetwork.selfNote.labelFR,
+      preview: last?.sidebarPreviewText ?? "Se laisser un mot…",
+      lastMessageAt: last?.sentAt ?? lastEventAt,
+      unreadCount: 0,
+      isArchived: false,
+      transportKey: roomID,
+      isGroup: false
+    )
+    conversation.lastMessageIsFromMe = true
+    if conversation.lastMessageAt == .distantPast {
+      conversation.lastMessageAt = Date(timeIntervalSince1970: 0)
+    }
+    return conversation
   }
 
   /// `nil` tant que le salon n'est pas un portail de bridge reconnu (salon de gestion, espace…).

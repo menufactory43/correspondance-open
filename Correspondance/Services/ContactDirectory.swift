@@ -122,6 +122,13 @@ actor ContactDirectory {
     return digits.count >= 10 && handle.filter { !$0.isNumber && $0 != "+" && !$0.isWhitespace }.isEmpty
   }
 
+  /// Ce numéro est-il dans le carnet d'adresses ? Sert à reconnaître un
+  /// inconnu — donc une demande. Ne demande jamais d'autorisation : sans
+  /// accès aux contacts, tout le monde est un inconnu, et c'est honnête.
+  func isKnown(handle: String) -> Bool {
+    cachedName(for: handle) != nil
+  }
+
   func displayName(forHandle handle: String) async -> String? {
     await resolve(handle: handle).name
   }

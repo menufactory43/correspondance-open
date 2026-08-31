@@ -39,9 +39,28 @@ public actor MatrixBridgeService {
   /// L'état de conversation tel que le Relais le raconte (ADR 0001). Cumulatif :
   /// chaque `/sync` y fusionne ce qui a changé.
   private var relayState = ConversationStateSnapshot()
+  /// La base locale. `nil` seulement si SQLite refuse d'ouvrir le fichier —
+  /// l'app marche alors sans mémoire, plutôt que pas du tout.
+  private let store: LocalStore?
+  /// Salons dont l'historique est déjà relu du magasin. Un fil qu'on n'a pas
+  /// ouvert n'a en mémoire que son dernier message : c'est ce qui fait que le
+  /// lancement ne charge plus l'historique de toutes les conversations.
+  private var loadedHistoryRoomIDs: Set<String> = []
+  /// Salons dont la ligne d'inbox a bougé pendant cette passe : eux seuls sont
+  /// réécrits. Plus jamais de réécriture globale.
+  private var dirtyRoomIDs: Set<String> = []
+  /// La réconciliation avec `/joined_rooms` n'a lieu qu'une fois par lancement.
+  private var didReconcileJoinedRooms = false
 
-  public init(credentials: MatrixCredentials? = MatrixCredentialStore.load()) {
+  /// Ce qu'un fil charge à l'ouverture ; au-delà, on remonte à la demande.
+  public static let historyPageSize = LocalStore.defaultPageSize
+
+  public init(
+    credentials: MatrixCredentials? = MatrixCredentialStore.load(),
+    store: LocalStore? = LocalStore.shared
+  ) {
     client = MatrixClient(credentials: credentials)
+    self.store = store
     if let credentials { selfUserID = credentials.userID }
   }
 
@@ -72,22 +91,40 @@ public actor MatrixBridgeService {
     let creds = try await client.login(homeserver: homeserver, user: user, password: password)
     MatrixCredentialStore.save(creds)
     selfUserID = creds.userID
-    rooms = [:]
-    nextBatch = nil
-    managementRoomIDs = [:]
+    forgetEverything()
     return creds
   }
 
   public func disconnect() async {
     await client.logout()
     MatrixCredentialStore.clear()
-    MatrixConversationCache.clear()
-    rooms = [:]
-    nextBatch = nil
+    forgetEverything()
     selfUserID = ""
-    managementRoomIDs = [:]
     loginCommandEventIDs = [:]
     loginCommandSentAt = [:]
+  }
+
+  /// « Recharger depuis le Relais » : la base se vide, le curseur repart de
+  /// zéro, et le prochain `/sync` — initial, donc — la repeuple entièrement.
+  /// La porte de secours quand la base raconte autre chose que le Relais.
+  public func reloadFromRelay() {
+    forgetEverything()
+  }
+
+  /// Tout oublier : la mémoire **et** la base.
+  private func forgetEverything() {
+    store?.reset()
+    // Une base vidée n'a plus rien à relire : la prochaine passe repart d'un
+    // sync initial, pas d'une hydratation sur du vide.
+    didHydrate = true
+    rooms = [:]
+    nextBatch = nil
+    managementRoomIDs = [:]
+    loadedHistoryRoomIDs = []
+    dirtyRoomIDs = []
+    backfilledRoomIDs = []
+    pendingTimelineGaps = [:]
+    didReconcileJoinedRooms = false
   }
 
   // MARK: - Sync
@@ -109,6 +146,7 @@ public actor MatrixBridgeService {
   @discardableResult
   public func syncOnce(timeoutMilliseconds: Int = 30_000) async throws -> [Conversation] {
     guard await client.isConfigured else { throw MatrixError.notConfigured }
+    hydrateIfNeeded()
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
@@ -116,14 +154,20 @@ public actor MatrixBridgeService {
     for gap in MatrixSyncParser.timelineGaps(in: response, rooms: rooms) {
       pendingTimelineGaps[gap.roomID] = gap
     }
+    let before = Set(rooms.keys)
     parser.apply(response, to: &rooms)
     parser.applyConversationState(response, to: &relayState)
-    nextBatch = response.nextBatch
+    dirtyRoomIDs.formUnion(response.rooms?.join?.keys ?? [:].keys)
+    let left = before.subtracting(rooms.keys)
     detectManagementRooms()
     await fillTimelineGaps()
     await fetchMissingQuoteTargets()
-    persist()
+    // Les invitations d'abord, le curseur ensuite : Synapse n'envoie une
+    // invitation de portail qu'une fois, et un curseur avancé sur un lot mal
+    // digéré la perdrait pour de bon.
     await acceptBridgeInvites(response)
+    nextBatch = response.nextBatch
+    persist(cursor: response.nextBatch, leftRoomIDs: Array(left))
     return conversations()
   }
 
@@ -230,9 +274,38 @@ public actor MatrixBridgeService {
   }
 
   public func conversations() -> [Conversation] {
-    rooms.values
+    hydrateIfNeeded()
+    var list = rooms.values
       .compactMap { $0.conversation(selfUserID: selfUserID) }
-      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+    // La note à soi n'a pas de pont : c'est l'account data qui la désigne.
+    if let roomID = relayState.selfNoteRoomID, let model = rooms[roomID] {
+      list.append(model.selfNoteConversation(selfUserID: selfUserID))
+    }
+    return list.sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  /// Le salon de la note à soi, en le créant s'il n'existe pas encore.
+  ///
+  /// Un salon privé dont je suis le seul membre, désigné une fois pour toutes
+  /// par l'account data global : le Mac et l'iPhone tombent donc sur le même,
+  /// et personne n'en crée un second.
+  @discardableResult
+  public func ensureSelfNote() async throws -> String {
+    if let existing = relayState.selfNoteRoomID { return existing }
+    let roomID = try await client.createSelfRoom(name: MessageNetwork.selfNote.labelFR)
+    try await client.setAccountData(
+      type: ConversationStateKeys.selfNoteType,
+      content: ConversationStateCodec.selfNoteContent(roomID: roomID)
+    )
+    relayState.selfNoteRoomID = roomID
+    if rooms[roomID] == nil { rooms[roomID] = MatrixRoomModel(roomID: roomID) }
+    return roomID
+  }
+
+  /// L'identifiant du fil de la note à soi, s'il existe déjà.
+  public func selfNoteConversationID() -> String? {
+    guard let roomID = relayState.selfNoteRoomID else { return nil }
+    return "\(MessageNetwork.selfNote.rawValue):\(roomID)"
   }
 
   public struct Member: Sendable, Hashable {
@@ -249,10 +322,55 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
+  /// pont ne l'annonce (voir `MatrixRoomModel.isNetworkFlaggedRequest`).
+  public func networkFlaggedRequestIDs() -> Set<String> {
+    Set(rooms.values.filter(\.isNetworkFlaggedRequest).map(\.conversationID))
+  }
+
+  /// « Alice écrit… » pour ce fil, ou `nil` si personne n'écrit.
+  public func typingLabel(conversationID: String, now: Date = Date()) -> String? {
+    guard let roomID = roomID(forConversation: conversationID) else { return nil }
+    return rooms[roomID]?.typingLabelFR(now: now, selfUserID: selfUserID)
+  }
+
+  /// Dit au Relais qu'on écrit — ou qu'on a fini. Le pont le relaie au réseau
+  /// (WhatsApp et Signal dans les deux sens ; Instagram l'envoie surtout).
+  public func setTyping(conversationID: String, isTyping: Bool) async {
+    guard let roomID = roomID(forConversation: conversationID) else { return }
+    // Une frappe qui n'arrive pas n'est pas une erreur à montrer : on se tait.
+    try? await client.sendTyping(roomID: roomID, isTyping: isTyping)
+  }
+
+  /// Le fil d'une conversation. Sa dernière page se relit du magasin à la
+  /// première demande — au lancement, la mémoire ne porte que les lignes de
+  /// l'inbox, pas l'historique de tous les fils.
   public func messages(conversationID: String) -> [ChatMessage] {
     hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return [] }
+    loadHistoryIfNeeded(roomID: roomID)
     return rooms[roomID]?.sortedMessages ?? []
+  }
+
+  /// Ce qui précède ce qu'on a déjà : la page suivante en remontant, prise dans
+  /// le magasin. Rend `[]` quand on a touché le fond de ce qui est stocké — au
+  /// Relais alors de fournir la suite (`backfill`).
+  @discardableResult
+  public func loadOlderMessages(
+    conversationID: String,
+    limit: Int = MatrixBridgeService.historyPageSize
+  ) -> [ChatMessage] {
+    hydrateIfNeeded()
+    guard let store, let roomID = roomID(forConversation: conversationID) else { return [] }
+    loadHistoryIfNeeded(roomID: roomID)
+    guard var model = rooms[roomID] else { return [] }
+    let oldest = model.messagesByID.values.map(\.sentAt).min()
+    let page = store.messages(roomID: roomID, limit: limit, before: oldest)
+    guard !page.isEmpty else { return [] }
+    MatrixSyncParser(selfUserID: selfUserID)
+      .hydrate(messages: page, reactions: [:], into: &model)
+    rooms[roomID] = model
+    return page
   }
 
   /// Complète l'historique d'un salon (ouverture d'un fil encore court). Une
@@ -261,6 +379,7 @@ public actor MatrixBridgeService {
   public func backfill(conversationID: String, limit: Int = 50) async -> [ChatMessage] {
     hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return [] }
+    loadHistoryIfNeeded(roomID: roomID)
     guard !backfilledRoomIDs.contains(roomID) else { return rooms[roomID]?.sortedMessages ?? [] }
     backfilledRoomIDs.insert(roomID)
     do {
@@ -268,6 +387,8 @@ public actor MatrixBridgeService {
       guard var model = rooms[roomID] else { return [] }
       MatrixSyncParser(selfUserID: selfUserID).applyMessages(response.chunk, roomID: roomID, to: &model)
       rooms[roomID] = model
+      // Une page remontée une fois est écrite : elle ne se redemandera plus.
+      dirtyRoomIDs.insert(roomID)
       persist()
       return model.sortedMessages
     } catch {
@@ -317,6 +438,9 @@ public actor MatrixBridgeService {
         var canonical = updated
         canonical.reactions = rooms[roomID]?.messagesByID[message.id]?.reactions ?? []
         rooms[roomID]?.messagesByID[message.id] = canonical
+        // Le chemin local descendu vaut d'être gardé : sans ça, chaque
+        // relancement retéléchargerait la même photo.
+        rooms[roomID]?.markWritten(message.id)
       }
       result.append(updated)
     }
@@ -371,6 +495,86 @@ public actor MatrixBridgeService {
   /// WhatsApp comme Instagram n'acceptent **qu'un emoji par personne et par message**
   /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp et de mautrix-instagram) :
   /// reposer le même emoji le retire, en poser un autre remplace le précédent.
+  /// Envoie un message vocal : le fichier enregistré et sa forme d'onde.
+  /// Un `m.audio` marqué MSC3245, ce que les ponts traduisent en vocal chez
+  /// WhatsApp et Signal (et en pièce jointe audio ailleurs).
+  public func sendVoiceMessage(
+    conversationID: String,
+    fileURL: URL,
+    voice: VoiceNote,
+    localID: String
+  ) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.sendVoiceMessage(
+      roomID: roomID,
+      fileURL: fileURL,
+      voice: voice,
+      transactionID: ledger.transactionID(forLocalID: localID)
+    )
+  }
+
+  /// Vote sur un sondage. Le geste bascule : retoucher la réponse qu'on avait
+  /// choisie la retire (`answers: []` — une abstention explicite, ce que
+  /// MSC3381 prévoit).
+  public func votePoll(conversationID: String, pollMessageID: String, answerID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let entry = rooms[roomID]?.pollsByEventID[pollMessageID]
+    else { throw MatrixError.decoding("sondage introuvable") }
+    guard !entry.poll.isClosed else { return }
+    let next = entry.poll.toggling(answerID)
+
+    // La voix se voit tout de suite : le `/sync` la confirmera.
+    applyMyVote(next, roomID: roomID, pollMessageID: pollMessageID)
+
+    do {
+      try await client.sendPollResponse(
+        roomID: roomID,
+        pollEventID: pollMessageID,
+        answerIDs: next,
+        responseType: PollEventTypes.responseType(forStart: entry.startType)
+      )
+    } catch {
+      // Le Relais n'a rien reçu : la voix qu'on montrait n'existe pas, on la retire.
+      applyMyVote(entry.poll.myAnswerIDs, roomID: roomID, pollMessageID: pollMessageID)
+      throw error
+    }
+  }
+
+  private func applyMyVote(_ answerIDs: [String], roomID: String, pollMessageID: String) {
+    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.myAnswerIDs = answerIDs
+    if answerIDs.isEmpty {
+      rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter.removeValue(forKey: selfUserID)
+    } else {
+      rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter[selfUserID] = answerIDs
+    }
+    if var message = rooms[roomID]?.messagesByID[pollMessageID] {
+      message.poll = rooms[roomID]?.pollsByEventID[pollMessageID]?.poll
+      rooms[roomID]?.messagesByID[pollMessageID] = message
+      rooms[roomID]?.markWritten(pollMessageID)
+      dirtyRoomIDs.insert(roomID)
+    }
+  }
+
+  /// Pose un sondage dans ce fil.
+  public func sendPoll(
+    conversationID: String,
+    question: String,
+    answers: [String],
+    maxSelections: Int = 1
+  ) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.sendPollStart(
+      roomID: roomID,
+      question: question,
+      answers: answers,
+      maxSelections: maxSelections
+    )
+  }
+
   public func toggleReaction(conversationID: String, messageID: String, emoji: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
@@ -381,6 +585,7 @@ public actor MatrixBridgeService {
     if let mine {
       try await client.redact(roomID: roomID, eventID: mine.key)
       rooms[roomID]?.reactionsByEventID.removeValue(forKey: mine.key)
+      rooms[roomID]?.markDeleted(mine.key)
       // Reposer le même emoji = le retirer.
       if mine.value.emoji == emoji {
         persist()
@@ -402,6 +607,7 @@ public actor MatrixBridgeService {
       senderName: "Moi",
       isMine: true
     )
+    rooms[roomID]?.markWritten(eventID)
     persist()
   }
 
@@ -411,17 +617,36 @@ public actor MatrixBridgeService {
   /// `remote delete` Signal, `unsend` Meta) — c'est la même suppression que celle
   /// du téléphone. Le `/sync` la confirmera ; on retire l'event du modèle tout de
   /// suite pour que le fil ne le montre plus le temps du long-poll.
+  /// Modifier un de mes messages. Refuse là où le réseau ne le sait pas faire
+  /// (Instagram) : mieux vaut un geste absent qu'une correction qui n'arrive
+  /// que chez soi.
+  public func editMessage(conversationID: String, messageID: String, newText: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let message = rooms[roomID]?.messagesByID[messageID]
+    else { throw MatrixError.decoding("message introuvable") }
+    guard message.isFromMe else { throw MatrixError.decoding("on ne modifie que ses propres messages") }
+    guard message.network.supportsEditing else {
+      throw MatrixError.decoding("\(message.network.labelFR) ne sait pas modifier un message envoyé")
+    }
+    let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed != message.text else { return }
+    try await client.sendEdit(roomID: roomID, targetEventID: messageID, newText: trimmed)
+  }
+
   public func deleteMessage(conversationID: String, messageID: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
     try await client.redact(roomID: roomID, eventID: messageID)
     rooms[roomID]?.messagesByID.removeValue(forKey: messageID)
+    rooms[roomID]?.markDeleted(messageID)
     // Une réaction dont la cible disparaît n'a plus de sens.
     for (id, reaction) in rooms[roomID]?.reactionsByEventID ?? [:]
     where reaction.targetEventID == messageID {
       rooms[roomID]?.reactionsByEventID.removeValue(forKey: id)
+      rooms[roomID]?.markDeleted(id)
     }
+    dirtyRoomIDs.insert(roomID)
     persist()
   }
 
@@ -451,6 +676,8 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID) else { return }
     try await client.leave(roomID: roomID)
     rooms.removeValue(forKey: roomID)
+    loadedHistoryRoomIDs.remove(roomID)
+    store?.deleteRooms([roomID])
   }
 
   // MARK: - Push
@@ -515,6 +742,18 @@ public actor MatrixBridgeService {
         roomID: roomID,
         type: ConversationStateKeys.hiddenType,
         content: ConversationStateCodec.hiddenContent(eventIDs: eventIDs)
+      )
+    case .reminder(let roomID, let value):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.reminderType,
+        content: ConversationStateCodec.reminderContent(value)
+      )
+    case .request(let roomID, let value):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.requestType,
+        content: ConversationStateCodec.requestContent(value)
       )
     case .mergedContacts(let stored):
       guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }
@@ -863,22 +1102,95 @@ public actor MatrixBridgeService {
 
   // MARK: - Privé
 
-  /// Le cache disque est repris dès le premier accès, pas seulement à l'ouverture
-  /// de la boucle `/sync` : au lancement, `load()` demande le fil de la conversation
-  /// ouverte avant que la sync ait commencé, et un actor encore vide lui répondait
-  /// « pas de messages » — le fil déjà à l'écran s'effaçait derrière un repère
+  /// La base locale est relue dès le premier accès, pas seulement à l'ouverture
+  /// de la boucle `/sync` : au lancement, l'inbox demande le fil de la
+  /// conversation ouverte avant que la sync ait commencé, et un actor encore
+  /// vide lui répondait « pas de messages » — le fil déjà à l'écran s'effaçait
   /// jusqu'au retour du serveur.
   ///
-  /// Le sync initial ne ramène qu'une poignée d'events par salon : sans ce semis,
-  /// `persist()` réécrirait le fichier avec ça, et tout ce que les sessions
-  /// précédentes avaient backfillé disparaîtrait à chaque relance. Le curseur, lui,
-  /// n'est pas repris : Synapse n'envoie les invitations de portails qu'une fois,
-  /// et un sync initial à chaque lancement reste léger sur un homeserver privé.
+  /// Ce qu'on relit ici : **les salons seulement**, avec leur état (réseau,
+  /// membres, pont, marqueurs de lecture) et leur dernier message, de quoi
+  /// dresser l'inbox entière. L'historique d'un fil attend qu'on l'ouvre.
+  ///
+  /// Et le curseur reprend, lui aussi : l'état des salons étant gardé, un
+  /// `/sync` incrémental ne laisse plus de salon anonyme derrière lui.
   private func hydrateIfNeeded() {
     guard !didHydrate else { return }
     didHydrate = true
-    let (_, _, cachedMessages) = MatrixConversationCache.load()
-    MatrixSyncParser(selfUserID: selfUserID).seed(cachedMessages: cachedMessages, into: &rooms)
+    guard let store else { return }
+    store.importLegacySnapshotIfNeeded(selfUserID: selfUserID)
+
+    let stored = store.rooms()
+    guard !stored.isEmpty else {
+      nextBatch = store.syncCursor
+      return
+    }
+    let previews = store.lastMessages()
+    for room in stored {
+      var model = room.model()
+      // Le dernier message donne son aperçu à la ligne d'inbox ; sans lui, une
+      // conversation rechargée retomberait sur « Écrire sur WhatsApp… ».
+      if let last = previews[room.roomID] {
+        model.messagesByID[last.id] = last
+      }
+      // Et les messages que les autres disent avoir lus : sans eux, la coche
+      // « Vu » retomberait à « Envoyé » à chaque lancement.
+      let markers = Set(model.readMarkerByUser.values).subtracting(model.messagesByID.keys)
+      for message in store.messages(eventIDs: Array(markers)) {
+        model.messagesByID[message.id] = message
+      }
+      model.clearPendingWrites()
+      rooms[room.roomID] = model
+    }
+    nextBatch = store.syncCursor
+  }
+
+  /// Relit du magasin la dernière page d'un fil, une fois. Ce qui suit se
+  /// demande en remontant (`loadOlderMessages`).
+  private func loadHistoryIfNeeded(roomID: String) {
+    guard let store, !loadedHistoryRoomIDs.contains(roomID) else { return }
+    loadedHistoryRoomIDs.insert(roomID)
+    guard var model = rooms[roomID] else { return }
+    let page = store.messages(roomID: roomID, limit: Self.historyPageSize)
+    let reactions = store.reactions(roomID: roomID)
+    guard !page.isEmpty || !reactions.isEmpty else { return }
+    MatrixSyncParser(selfUserID: selfUserID)
+      .hydrate(messages: page, reactions: reactions, into: &model)
+    rooms[roomID] = model
+  }
+
+  /// Une fois par lancement, en arrière-plan : ce que le Relais dit avoir
+  /// rejoint, comparé à ce que la base connaît.
+  ///
+  /// Le curseur repris fait gagner un sync initial complet, mais il ferme aussi
+  /// la porte : un salon rejoint pendant que l'app dormait — un portail créé
+  /// par un pont, une invitation acceptée ailleurs — n'apparaîtrait dans aucun
+  /// `/sync` incrémental. On demande donc la liste, et tout salon joint que la
+  /// base ignore reçoit son état et ses derniers messages.
+  @discardableResult
+  public func reconcileJoinedRooms(limit: Int = 30) async -> [String] {
+    guard !didReconcileJoinedRooms, await client.isConfigured else { return [] }
+    didReconcileJoinedRooms = true
+    hydrateIfNeeded()
+    guard let joined = try? await client.joinedRooms() else { return [] }
+    let unknown = joined.filter { rooms[$0] == nil }
+    guard !unknown.isEmpty else { return [] }
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    var adopted: [String] = []
+    for roomID in unknown.prefix(limit) {
+      var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
+      guard let state = try? await client.roomStateEvents(roomID: roomID) else { continue }
+      parser.applyState(state, roomID: roomID, to: &model)
+      if let page = try? await client.roomMessages(roomID: roomID, direction: "b", limit: 30) {
+        parser.applyMessages(page.chunk, roomID: roomID, to: &model)
+      }
+      rooms[roomID] = model
+      dirtyRoomIDs.insert(roomID)
+      adopted.append(roomID)
+    }
+    detectManagementRooms()
+    persist()
+    return adopted
   }
 
   /// Un salon semé depuis le cache ne connaît pas encore son réseau (il vient de
@@ -894,11 +1206,41 @@ public actor MatrixBridgeService {
     return parsed
   }
 
-  private func persist() {
+  /// Écrit le lot : les salons qui ont bougé, les messages et réactions posés
+  /// ou corrigés depuis la dernière passe, ce qui a été rédigé, puis le curseur
+  /// — **une seule transaction**. Le curseur n'avance donc jamais sur un lot
+  /// qui ne serait pas écrit.
+  private func persist(cursor: String?? = nil, leftRoomIDs: [String] = []) {
+    guard let store else { return }
+    var storedRooms: [StoredRoom] = []
     var messages: [String: [ChatMessage]] = [:]
-    for model in rooms.values where model.network != nil {
-      messages[model.conversationID] = model.sortedMessages
+    var reactions: [String: [String: MatrixRoomModel.ReactionEvent]] = [:]
+    var deleted: [String] = []
+
+    for (roomID, model) in rooms {
+      let hasChanges = !model.pendingWrites.isEmpty || !model.pendingDeletions.isEmpty
+      guard hasChanges || dirtyRoomIDs.contains(roomID) else { continue }
+      storedRooms.append(StoredRoom(model: model, selfUserID: selfUserID))
+      var touchedMessages: [ChatMessage] = []
+      var touchedReactions: [String: MatrixRoomModel.ReactionEvent] = [:]
+      for eventID in model.pendingWrites {
+        if let message = model.messagesByID[eventID] { touchedMessages.append(message) }
+        if let reaction = model.reactionsByEventID[eventID] { touchedReactions[eventID] = reaction }
+      }
+      if !touchedMessages.isEmpty { messages[roomID] = touchedMessages }
+      if !touchedReactions.isEmpty { reactions[roomID] = touchedReactions }
+      deleted.append(contentsOf: model.pendingDeletions)
+      rooms[roomID]?.clearPendingWrites()
     }
-    MatrixConversationCache.save(nextBatch: nextBatch, conversations: conversations(), messages: messages)
+    dirtyRoomIDs.removeAll()
+
+    store.commit(
+      rooms: storedRooms,
+      messages: messages,
+      reactions: reactions,
+      deletedEventIDs: deleted,
+      deletedRoomIDs: leftRoomIDs,
+      cursor: cursor
+    )
   }
 }

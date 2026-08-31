@@ -44,6 +44,9 @@ extension InboxStore {
     var known: Set<String> = []
 
     switch conversation.network {
+    // Personne à mentionner dans une note à soi.
+    case .selfNote:
+      break
     case .iMessage:
       for handle in conversation.participantHandles {
         let name = await ContactDirectory.shared.displayName(forHandle: handle)

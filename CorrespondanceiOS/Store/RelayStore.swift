@@ -118,6 +118,30 @@ final class RelayStore {
     session = .connected
     conversations = mergedRows(await matrix.conversations())
     await reloadRelayState()
+    refreshPendingRequests()
+    startSyncLoop()
+    // Ce que le Relais dit avoir rejoint, comparé à la base : un portail créé
+    // pendant que l'iPhone dormait n'apparaît dans aucun `/sync` incrémental.
+    // En arrière-plan — l'écran ne l'attend pas.
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let adopted = await self.matrix.reconcileJoinedRooms()
+      guard !adopted.isEmpty else { return }
+      self.conversations = self.mergedRows(await self.matrix.conversations())
+    }
+  }
+
+  /// « Recharger depuis le Relais » : la base locale se vide et le prochain
+  /// `/sync` — initial — la repeuple. La porte de secours du jour où l'inbox ne
+  /// ressemblerait plus à ce que raconte le Relais.
+  func reloadFromRelay() async {
+    guard !isDemo, session == .connected else { return }
+    syncTask?.cancel()
+    syncTask = nil
+    await matrix.reloadFromRelay()
+    conversations = []
+    messages = [:]
+    openedConversationIDs = []
     startSyncLoop()
   }
 
@@ -225,9 +249,12 @@ final class RelayStore {
       let fresh = try await matrix.syncOnce()
       syncError = nil
       conversations = mergedRows(fresh)
+      networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
       await adoptRelayState()
+      refreshPendingRequests()
       await flushRelayWrites()
       await refreshOpenThreads()
+      await refreshTypingLabels()
     } catch MatrixError.http(let status, let code, _) where status == 401 || code == "M_UNKNOWN_TOKEN" {
       session = .disconnected
       connectionError = "Session expirée sur le Relais — reconnecte-toi."
@@ -293,6 +320,83 @@ final class RelayStore {
     return merged
   }
 
+  // MARK: - Demandes
+
+  /// Ce fil attend-il d'être accepté ? Une demande reste hors de la file
+  /// jusque-là — c'est le seul état qui la retienne.
+  func isRequest(_ id: String) -> Bool { state.isRequest(id) }
+
+  /// Les signaux que l'iPhone sait donner sur un fil. Écart assumé de la v1 :
+  /// pas de carnet d'adresses ici (décision 2 — client Matrix pur), donc
+  /// `isKnownCorrespondent` reste faux et seule la fusion, décidée sur le Mac,
+  /// vaut reconnaissance.
+  func requestSignals(_ conversation: Conversation) -> RequestSignals {
+    // `nil` tant que le fil n'est pas chargé : on ne range personne sur un
+    // soupçon. Un brouillon ou un dernier mot de moi suffisent, eux, à trancher.
+    var ecrit: Bool?
+    if conversation.lastMessageIsFromMe
+      || !draftText(conversation.id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      ecrit = true
+    } else if let fil = messages[conversation.id], !fil.isEmpty {
+      ecrit = fil.contains(where: \.isFromMe)
+    }
+    let connu = mergedContacts.contains { $0.memberIDs.contains(conversation.id) }
+    return RequestSignals(
+      hasWrittenBack: ecrit,
+      isKnownCorrespondent: connu,
+      isFlaggedByNetwork: networkFlaggedRequestIDs.contains(conversation.id)
+    )
+  }
+
+  /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
+  /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
+  private(set) var networkFlaggedRequestIDs: Set<String> = []
+
+  /// Accepter, c'est faire entrer la conversation dans la file. Refuser, c'est
+  /// la ranger : elle n'y entrera pas, et ne redemandera plus.
+  func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) {
+    for id in Set(relayTargets(of: conversationID) + [conversationID]) {
+      if let decision { state.requestDecisions[id] = decision }
+      else { state.requestDecisions.removeValue(forKey: id) }
+    }
+    refreshPendingRequests()
+    relayNoteRequest(decision, conversationIDs: relayTargets(of: conversationID))
+    if decision == .declined { setArchived(true, conversationID: conversationID) }
+  }
+
+  /// Recalcule qui attend encore d'être accepté. À rejouer dès que la liste ou
+  /// les décisions bougent : le tri, lui, ne fait que lire `pendingRequests`.
+  func refreshPendingRequests() {
+    let pending = Set(
+      conversations
+        .filter {
+          RequestPolicy.isRequest($0, signals: requestSignals($0), decision: state.requestDecisions[$0.id])
+        }
+        .map(\.id)
+    )
+    if pending != state.pendingRequests { state.pendingRequests = pending }
+  }
+
+  /// Le rappel posé sur ce fil, s'il en porte un.
+  func reminder(_ id: String) -> ConversationReminder? { state.reminder(id) }
+
+  /// Met une conversation de côté jusqu'à une heure — ou la ramène tout de
+  /// suite (`nil`). Le geste est immédiat ici, le Relais suit.
+  func setReminder(_ wakeAt: Date?, conversationID: String) {
+    let targets = relayTargets(of: conversationID)
+    let reminder = wakeAt.map { ConversationReminder(wakeAt: $0) }
+    for id in Set(targets + [conversationID]) {
+      if let reminder { state.reminders[id] = reminder } else { state.reminders.removeValue(forKey: id) }
+    }
+    relayNoteReminder(reminder, conversationIDs: targets)
+    // Le fil ouvert qui part de côté ne reste pas à l'écran.
+    if wakeAt != nil {
+      if selectedConversationID == conversationID { selectedConversationID = nil }
+      if focusConversationID == conversationID { focusConversationID = focusQueue.first?.id }
+    }
+  }
+
   func isPinned(_ id: String) -> Bool { state.isPinned(id) }
   func isMuted(_ id: String) -> Bool { state.isMuted(id) }
   func isArchived(_ id: String) -> Bool { state.isArchived(id) }
@@ -320,6 +424,33 @@ final class RelayStore {
 
   /// Les messages visibles d'un fil : ce que le Relais a livré, moins ce qu'on
   /// a masqué. Une ligne de fusion réunit les fils de ses membres, à l'heure.
+  /// Les résultats d'un onglet, tous fils du Relais confondus. Ils viennent de
+  /// la base locale : on trouve la photo d'une conversation qu'on n'a pas
+  /// ouverte depuis six mois, ce qui n'était pas le cas quand la recherche ne
+  /// voyait que ce qui était chargé.
+  func facetHits(facet: MessageFacet, query: String) -> [FacetedSearch.Hit] {
+    guard !isDemo else {
+      return FacetedSearch.hits(in: conversations, facet: facet, query: query) {
+        visibleMessages($0.id)
+      }
+    }
+    let hits = LocalStore.shared?.facetHits(in: conversations, facet: facet, query: query) ?? []
+    return hits.filter { !hiddenMessageIDs.contains($0.message.id) }
+  }
+
+  /// L'index de recherche pour cette question : ce que la base trouve dans le
+  /// corps des messages, pour que « resto » ramène le fil qui en parle.
+  func searchIndex(query: String) -> [String: String] {
+    guard !isDemo else {
+      return Dictionary(
+        uniqueKeysWithValues: conversations.map {
+          ($0.id, ConversationSearch.blob(for: visibleMessages($0.id)))
+        }
+      )
+    }
+    return LocalStore.shared?.searchIndex(query: query) ?? [:]
+  }
+
   func visibleMessages(_ conversationID: String) -> [ChatMessage] {
     let raw: [ChatMessage]
     if MergedContact.isMergedID(conversationID) {
@@ -388,6 +519,8 @@ final class RelayStore {
   func setDraft(_ text: String, conversationID: String) {
     guard draftText(conversationID) != text else { return }
     localDrafts[conversationID] = text
+    // Écrire, c'est le dire ; effacer tout, c'est dire qu'on a fini.
+    noteTyping(conversationID, isTyping: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     scheduleRelayDraftPush(conversationID: conversationID, text: text)
   }
 
@@ -447,6 +580,7 @@ final class RelayStore {
 
     // Le champ se vide tout de suite : on n'écrit pas contre le réseau.
     localDrafts[conversationID] = ""
+    noteTyping(conversationID, isTyping: false)
     pendingAttachments[conversationID] = []
     replyTargets.removeValue(forKey: conversationID)
     scheduleRelayDraftPush(conversationID: conversationID, text: "")
@@ -471,6 +605,57 @@ final class RelayStore {
       messages[target]?.removeAll { $0.id == localID }
       localDrafts[conversationID] = text
       pendingAttachments[conversationID] = paths
+    }
+  }
+
+  // MARK: - Message vocal
+
+  /// Le micro du composer. Un seul enregistreur pour l'app : on ne parle pas
+  /// dans deux fils à la fois.
+  let recorder = VoiceRecorder()
+
+  /// Envoie ce qu'on vient d'enregistrer. La bulle apparaît tout de suite, le
+  /// fichier part ensuite — la même discipline que le texte.
+  func sendVoiceMessage(_ url: URL, voice: VoiceNote, conversationID: String) async {
+    guard let target = sendingTarget(conversationID),
+          let conversation = conversation(target)
+    else { return }
+    sendingConversationIDs.insert(conversationID)
+    defer { sendingConversationIDs.remove(conversationID) }
+
+    let localID = UUID().uuidString
+    var piece = MessageAttachment(
+      id: url.path,
+      contentType: "audio/mp4",
+      filename: url.lastPathComponent,
+      localPath: url.path
+    )
+    piece.voice = voice
+    messages[target, default: []].append(
+      ChatMessage(
+        id: localID,
+        conversationID: target,
+        network: conversation.network,
+        text: "",
+        sentAt: .now,
+        isFromMe: true,
+        isPending: true,
+        attachments: [piece]
+      )
+    )
+
+    guard !isDemo else { return }
+    do {
+      try await matrix.sendVoiceMessage(
+        conversationID: target,
+        fileURL: url,
+        voice: voice,
+        localID: localID
+      )
+      await loadMessages(conversationID: conversationID, backfill: false)
+    } catch {
+      syncError = Self.readable(error)
+      messages[target]?.removeAll { $0.id == localID }
     }
   }
 
@@ -507,6 +692,39 @@ final class RelayStore {
     else { return }
     try? await matrix.toggleReaction(conversationID: target, messageID: messageID, emoji: emoji)
     await loadMessages(conversationID: conversationID, backfill: false)
+  }
+
+  /// Voter sur un sondage. Le geste bascule : retoucher sa réponse la retire.
+  func votePoll(conversationID: String, messageID: String, answerID: String) async {
+    guard !isDemo,
+          let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
+    else { return }
+    do {
+      try await matrix.votePoll(conversationID: target, pollMessageID: messageID, answerID: answerID)
+    } catch {
+      syncError = Self.readable(error)
+    }
+    await loadMessages(conversationID: conversationID, backfill: false)
+  }
+
+  /// Modifier un de mes messages, là où le réseau sait le faire.
+  func editMessage(messageID: String, newText: String, conversationID: String) async {
+    guard !isDemo,
+          let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
+    else { return }
+    do {
+      try await matrix.editMessage(conversationID: target, messageID: messageID, newText: newText)
+      await loadMessages(conversationID: conversationID, backfill: false)
+    } catch {
+      syncError = Self.readable(error)
+    }
+  }
+
+  /// Le geste « Modifier » est-il offert sur ce message ? Seulement les miens,
+  /// et seulement là où le réseau sait le faire.
+  func canEdit(_ message: ChatMessage) -> Bool {
+    message.isFromMe && !message.isPending && !message.isRetracted && !message.isSystemEvent
+      && !message.text.isEmpty && message.network.supportsEditing && !isDemo
   }
 
   func hide(messageID: String, conversationID: String) {
@@ -574,6 +792,57 @@ final class RelayStore {
   func startBridgeChat(network: MessageNetwork, identifier: String) async throws {
     guard !isDemo else { return }
     try await matrix.startConversation(network: network, identifier: identifier)
+  }
+
+  // MARK: - Indicateurs de frappe
+
+  /// « Alice écrit… » par fil, relu à chaque `/sync`. Vide = personne n'écrit.
+  private(set) var typingLabels: [String: String] = [:]
+  /// Depuis quand on a dit au Relais qu'on écrit — pour renouveler plutôt que
+  /// de le lui redire à chaque touche.
+  private var typingSentAt: [String: Date] = [:]
+
+  func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+
+  private func refreshTypingLabels() async {
+    var labels: [String: String] = [:]
+    for id in Set([selectedConversationID, focusConversationID].compactMap { $0 }) {
+      for target in relayTargets(of: id) {
+        if let label = await matrix.typingLabel(conversationID: target) { labels[id] = label }
+      }
+    }
+    if labels != typingLabels { typingLabels = labels }
+  }
+
+  /// Dit au Relais qu'on écrit. Renouvelé au plus une fois par dizaine de
+  /// secondes : le serveur tient l'information vingt, inutile de le marteler.
+  private func noteTyping(_ conversationID: String, isTyping: Bool) {
+    guard !isDemo, session == .connected, let target = sendingTarget(conversationID) else { return }
+    if isTyping {
+      let last = typingSentAt[target] ?? .distantPast
+      guard Date().timeIntervalSince(last) > 10 else { return }
+      typingSentAt[target] = Date()
+    } else {
+      guard typingSentAt.removeValue(forKey: target) != nil else { return }
+    }
+    Task { await matrix.setTyping(conversationID: target, isTyping: isTyping) }
+  }
+
+  // MARK: - Note à soi
+
+  /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
+  /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur le Mac.
+  func openSelfNote() async {
+    guard !isDemo, session == .connected else { return }
+    do {
+      _ = try await matrix.ensureSelfNote()
+      conversations = mergedRows(await matrix.conversations())
+      guard let id = await matrix.selfNoteConversationID() else { return }
+      selectedConversationID = id
+      await open(conversationID: id)
+    } catch {
+      syncError = Self.readable(error)
+    }
   }
 
   // MARK: - Focus

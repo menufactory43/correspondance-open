@@ -1,16 +1,13 @@
 import Foundation
 
-/// Persiste les conversations bridgées + le `next_batch` : au redémarrage l'inbox
-/// s'affiche immédiatement et le sync reprend là où il s'était arrêté.
+/// L'ancien instantané JSON — `matrix-conversations.json` — qui tenait lieu de
+/// mémoire avant la base locale : un fichier global, relu en entier au
+/// lancement et réécrit en entier à chaque passe de `/sync`.
+///
+/// Il ne sert plus qu'à **le relire une fois**, le temps de la reprise
+/// (`LocalStore.importLegacySnapshotIfNeeded`). Plus rien ne l'écrit. Le jour
+/// où plus personne n'aura d'ancien fichier sur son disque, ce type disparaît.
 public enum MatrixConversationCache {
-  private static var fileURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("matrix-conversations.json")
-  }
-
   public struct Snapshot: Codable, Sendable {
     public var nextBatch: String?
     public var conversations: [CachedConversation]
@@ -27,9 +24,10 @@ public enum MatrixConversationCache {
     public var unreadCount: Int
     public var transportKey: String
     public var isGroup: Bool
-    /// Absent des caches écrits avant les avatars de portail — d'où l'optionnel.
+    /// Absent des fichiers écrits avant les avatars de portail — d'où l'optionnel.
+    /// C'est exactement ce que la base a supprimé : une forme par âge du cache.
     public var remoteAvatarID: String?
-    /// Idem pour la mosaïque des membres : un cache plus ancien n'en sait rien.
+    /// Idem pour la mosaïque des membres : un fichier plus ancien n'en sait rien.
     public var memberAvatarIDs: [String]?
   }
 
@@ -41,123 +39,52 @@ public enum MatrixConversationCache {
     public var sentAt: Date
     public var isFromMe: Bool
     public var attachments: [MessageAttachment]
-    /// Absent des caches écrits avant les réactions — d'où le repli sur `[]`.
+    /// Absent des fichiers écrits avant les réactions — d'où le repli sur `[]`.
     public var reactions: [MessageReaction]?
-    /// Auteur du message et son nom lisible, pour regrouper les bulles et
-    /// nommer l'expéditeur dans un groupe. Absents des caches plus anciens.
     public var senderID: String?
     public var senderName: String?
-    /// Citation et aperçu de lien, absents des caches plus anciens. Une citation
-    /// encore muette (cible inconnue) se garde aussi : c'est ce qui permet de
-    /// la résoudre à un lancement suivant.
     public var replyTo: QuotedMessage?
     public var linkPreview: BridgedLinkPreview?
   }
 
-  public static func load() -> (nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
-    guard let data = try? Data(contentsOf: fileURL),
-          let snap = try? JSONDecoder().decode(Snapshot.self, from: data)
-    else {
-      return (nil, [], [:])
-    }
-    let conversations = snap.conversations.map { cached -> Conversation in
-      var conversation = Conversation(
-        id: cached.id,
-        network: cached.network,
-        address: cached.address,
-        title: cached.title,
-        preview: cached.preview,
-        lastMessageAt: cached.lastMessageAt,
-        unreadCount: cached.unreadCount,
-        isArchived: false,
-        transportKey: cached.transportKey,
-        isGroup: cached.isGroup
-      )
-      conversation.remoteAvatarID = cached.remoteAvatarID
-      conversation.memberAvatarIDs = cached.memberAvatarIDs ?? []
-      return conversation
-    }
-    let messages = snap.messages.mapValues { list in
-      list.map { cached in
-        // Re-résoudre les chemins : le cache disque peut avoir été vidé par macOS.
-        let attachments = cached.attachments.map { att -> MessageAttachment in
-          var copy = att
-          if copy.resolvedFileURL == nil {
-            copy.localPath = MatrixAttachmentStore.existingLocalPath(forMXC: att.id, contentType: att.contentType)
-          }
-          return copy
-        }
-        return ChatMessage(
-          id: cached.id,
-          conversationID: cached.conversationID,
-          network: cached.network,
-          text: cached.text,
-          sentAt: cached.sentAt,
-          isFromMe: cached.isFromMe,
-          senderID: cached.senderID,
-          senderName: cached.senderName,
-          attachments: attachments,
-          reactions: cached.reactions ?? [],
-          replyTo: cached.replyTo,
-          linkPreview: cached.linkPreview.map { preview in
-            var copy = preview
-            if let path = copy.imageLocalPath, !FileManager.default.fileExists(atPath: path) {
-              copy.imageLocalPath = nil
-            }
-            return copy
-          }
+  /// Les messages d'une conversation de l'instantané, retraduits. C'est par là
+  /// que passe la reprise vers la base locale.
+  public static func messages(in snapshot: Snapshot, conversationID: String) -> [ChatMessage] {
+    (snapshot.messages[conversationID] ?? []).map(chatMessage(from:))
+  }
+
+  /// Un message du fichier tel que le reste de l'app l'attend. Les chemins des
+  /// pièces jointes sont re-résolus : le cache disque a pu être vidé par le
+  /// système alors que l'instantané, lui, était resté.
+  static func chatMessage(from cached: CachedMessage) -> ChatMessage {
+    let attachments = cached.attachments.map { attachment -> MessageAttachment in
+      var copy = attachment
+      if copy.resolvedFileURL == nil {
+        copy.localPath = MatrixAttachmentStore.existingLocalPath(
+          forMXC: attachment.id, contentType: attachment.contentType
         )
       }
+      return copy
     }
-    return (snap.nextBatch, conversations, messages)
-  }
-
-  public static func save(nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
-    let bridged = conversations.filter { $0.network.isMatrixBridged }
-    let keep = Set(bridged.map(\.id))
-    let snap = Snapshot(
-      nextBatch: nextBatch,
-      conversations: bridged.map {
-        CachedConversation(
-          id: $0.id,
-          network: $0.network,
-          address: $0.address,
-          title: $0.title,
-          preview: $0.preview,
-          lastMessageAt: $0.lastMessageAt,
-          unreadCount: $0.unreadCount,
-          transportKey: $0.transportKey,
-          isGroup: $0.isGroup,
-          remoteAvatarID: $0.remoteAvatarID,
-          memberAvatarIDs: $0.memberAvatarIDs
-        )
-      },
-      messages: messages
-        .filter { keep.contains($0.key) }
-        .mapValues { list in
-          list.map {
-            CachedMessage(
-              id: $0.id,
-              conversationID: $0.conversationID,
-              network: $0.network,
-              text: $0.text,
-              sentAt: $0.sentAt,
-              isFromMe: $0.isFromMe,
-              attachments: $0.attachments,
-              reactions: $0.reactions,
-              senderID: $0.senderID,
-              senderName: $0.senderName,
-              replyTo: $0.replyTo,
-              linkPreview: $0.linkPreview
-            )
-          }
+    return ChatMessage(
+      id: cached.id,
+      conversationID: cached.conversationID,
+      network: cached.network,
+      text: cached.text,
+      sentAt: cached.sentAt,
+      isFromMe: cached.isFromMe,
+      senderID: cached.senderID,
+      senderName: cached.senderName,
+      attachments: attachments,
+      reactions: cached.reactions ?? [],
+      replyTo: cached.replyTo,
+      linkPreview: cached.linkPreview.map { preview in
+        var copy = preview
+        if let path = copy.imageLocalPath, !FileManager.default.fileExists(atPath: path) {
+          copy.imageLocalPath = nil
         }
+        return copy
+      }
     )
-    guard let data = try? JSONEncoder().encode(snap) else { return }
-    try? data.write(to: fileURL, options: [.atomic])
-  }
-
-  public static func clear() {
-    try? FileManager.default.removeItem(at: fileURL)
   }
 }

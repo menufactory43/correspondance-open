@@ -26,6 +26,8 @@ struct MessageBubbleView: View {
   /// « pour tout le monde » part sur le réseau. `nil` = ce geste n'est pas offert.
   var onDeleteLocally: (() -> Void)?
   var onDeleteEverywhere: (() -> Void)?
+  /// Voter sur le sondage de cette bulle. `nil` = sondage en lecture seule.
+  var onVotePoll: ((String) -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -80,7 +82,15 @@ struct MessageBubbleView: View {
           attachmentView(attachment)
         }
 
-        if message.isRetracted {
+        if let poll = message.poll {
+          PollView(
+            poll: poll,
+            theme: theme,
+            typeface: typeface,
+            isFromMe: message.isFromMe,
+            onVote: onVotePoll
+          )
+        } else if message.isRetracted {
           retractedBubble
         } else if message.isEmojiOnly {
           emojiOnlyBody
@@ -489,6 +499,16 @@ struct MessageBubbleView: View {
         theme: theme,
         typeface: typeface,
         isFromMe: message.isFromMe
+      )
+    } else if let url = repaired.resolvedFileURL, repaired.isGIF {
+      // Un GIF se joue : montrer sa première trame, ce serait le rater.
+      AnimatedImageView(
+        url: url,
+        maxWidth: 280,
+        maxHeight: 320,
+        cornerRadius: 12,
+        placeholder: theme.bubbleIn,
+        label: repaired.filename ?? "image animée"
       )
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       AttachmentImageView(

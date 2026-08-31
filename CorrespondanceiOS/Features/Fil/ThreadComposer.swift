@@ -7,8 +7,8 @@ import UniformTypeIdentifiers
 /// Le composer du fil.
 ///
 /// **+** à gauche (Photos / Caméra / Fichier), le champ « Répondre sur
-/// {Réseau} » au centre, le micro à droite — inactif jusqu'à la phase D, où
-/// l'enregistrement vocal arrive. Le brouillon se range à chaque frappe
+/// {Réseau} » au centre, le micro à droite : un appui commence à enregistrer,
+/// le suivant envoie le vocal. Le brouillon se range à chaque frappe
 /// (`RelayStore.setDraft`) et part au Relais une seconde après la dernière,
 /// comme sur le Mac.
 struct ThreadComposer: View {
@@ -49,6 +49,8 @@ struct ThreadComposer: View {
       if !store.attachments(conversationID).isEmpty {
         attachmentStrip
       }
+      if store.recorder.isRecording { recordingStrip }
+      if case .failed(let raison) = store.recorder.state { micError(raison) }
       HStack(alignment: .bottom, spacing: 8) {
         plusTray
         bubble
@@ -163,9 +165,23 @@ struct ThreadComposer: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Envoyer")
+    } else if store.recorder.isRecording {
+      Button {
+        guard let taken = store.recorder.stop() else { return }
+        Task { await store.sendVoiceMessage(taken.url, voice: taken.voice, conversationID: conversationID) }
+      } label: {
+        Image(systemName: "arrow.up")
+          .font(.system(size: 15, weight: .bold))
+          .foregroundStyle(theme.accentInk)
+          .frame(width: 32, height: 32)
+          .background(Circle().fill(theme.accentFill))
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Envoyer le message vocal")
     } else {
       Button {
-        // Phase D : enregistrement vocal + transcription.
+        isFocused = false
+        Task { await store.recorder.start() }
       } label: {
         Image(systemName: "mic")
           .font(.system(size: 16, weight: .medium))
@@ -173,9 +189,55 @@ struct ThreadComposer: View {
           .frame(width: 32, height: 32)
       }
       .buttonStyle(.plain)
-      .disabled(true)
-      .accessibilityLabel("Message vocal (bientôt)")
+      .accessibilityLabel("Enregistrer un message vocal")
     }
+  }
+
+  /// Ce qu'on est en train de dire : la durée qui court, le niveau du micro,
+  /// et le geste pour renoncer. Le bouton d'envoi, lui, est à sa place.
+  private var recordingStrip: some View {
+    HStack(spacing: 8) {
+      Button {
+        store.recorder.cancel()
+      } label: {
+        Image(systemName: "trash")
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(theme.inkTertiary)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Abandonner le message vocal")
+
+      Circle()
+        .fill(theme.accent)
+        .frame(width: 8, height: 8)
+        .opacity(0.4 + 0.6 * store.recorder.level)
+
+      Text(VoiceNote(duration: store.recorder.duration).durationLabel)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.ink)
+        .monospacedDigit()
+
+      // Les derniers relevés, qui défilent : on voit qu'on est entendu.
+      HStack(alignment: .center, spacing: 1.5) {
+        ForEach(Array(store.recorder.samples.suffix(40).enumerated()), id: \.offset) { _, value in
+          Capsule()
+            .fill(theme.accent.opacity(0.7))
+            .frame(width: 2, height: max(3, value * 18))
+        }
+      }
+      .frame(height: 18, alignment: .trailing)
+      .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    .padding(.horizontal, Spacing.xs)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Enregistrement en cours")
+  }
+
+  private func micError(_ raison: String) -> some View {
+    Text(raison)
+      .font(Typography.meta(typeface))
+      .foregroundStyle(theme.inkSecondary)
+      .padding(.horizontal, Spacing.xs)
   }
 
   /// Ce qui attend son heure dans CE fil, au-dessus du champ : sinon un

@@ -8,6 +8,12 @@ import Foundation
 public enum InboxScope: String, CaseIterable, Identifiable, Sendable {
   case inbox
   case archive
+  /// Les conversations mises de côté, avec l'heure à laquelle elles reviennent.
+  /// Une liste pour vérifier ce qu'on a rangé, pas un mode de travail.
+  case reminders
+  /// Les conversations entrantes d'inconnus, tenues hors de la file tant
+  /// qu'on ne les a pas acceptées.
+  case requests
 
   public var id: String { rawValue }
 
@@ -15,6 +21,8 @@ public enum InboxScope: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .inbox: "Inbox"
     case .archive: "Archive"
+    case .reminders: "Rappels"
+    case .requests: "Demandes"
     }
   }
 
@@ -22,6 +30,8 @@ public enum InboxScope: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .inbox: "tray.full"
     case .archive: "archivebox"
+    case .reminders: "clock.arrow.circlepath"
+    case .requests: "person.crop.circle.badge.questionmark"
     }
   }
 }
@@ -91,22 +101,56 @@ public struct InboxState: Sendable, Equatable {
   public var muted: Set<String>
   public var archived: Set<String>
   public var drafts: [String: String]
+  /// Les rappels posés, par conversation. Une conversation en rappel dort :
+  /// elle quitte la file jusqu'à l'heure dite (`InboxOrdering` s'en sert).
+  public var reminders: [String: ConversationReminder]
+  /// Ce que j'ai décidé des demandes. Une conversation absente d'ici n'a rien
+  /// de décidé — ce qui ne fait pas d'elle une demande pour autant : c'est
+  /// `RequestPolicy` qui tranche, avec les signaux que le store lui donne.
+  public var requestDecisions: [String: ConversationRequest.Decision]
+  /// Les conversations que le store a reconnues comme des demandes en attente.
+  /// Calculé au-dessus de `RequestPolicy` : le tri, lui, ne fait que le lire.
+  public var pendingRequests: Set<String>
 
   public init(
     pinned: Set<String> = [],
     muted: Set<String> = [],
     archived: Set<String> = [],
-    drafts: [String: String] = [:]
+    drafts: [String: String] = [:],
+    reminders: [String: ConversationReminder] = [:],
+    requestDecisions: [String: ConversationRequest.Decision] = [:],
+    pendingRequests: Set<String> = []
   ) {
     self.pinned = pinned
     self.muted = muted
     self.archived = archived
     self.drafts = drafts
+    self.reminders = reminders
+    self.requestDecisions = requestDecisions
+    self.pendingRequests = pendingRequests
   }
 
   public func isPinned(_ id: String) -> Bool { pinned.contains(id) }
   public func isMuted(_ id: String) -> Bool { muted.contains(id) }
   public func isArchived(_ id: String) -> Bool { archived.contains(id) }
+
+  public func reminder(_ id: String) -> ConversationReminder? { reminders[id] }
+
+  public func decision(_ id: String) -> ConversationRequest.Decision? { requestDecisions[id] }
+
+  /// Cette conversation attend-elle encore d'être acceptée ?
+  public func isRequest(_ id: String) -> Bool { pendingRequests.contains(id) }
+
+  /// Cette conversation est-elle encore de côté ? Non si l'heure est venue, non
+  /// si l'autre a répondu depuis — c'est `ConversationReminder` qui tranche.
+  public func isAsleep(_ conversation: Conversation, now: Date = Date()) -> Bool {
+    guard let reminder = reminders[conversation.id] else { return false }
+    return reminder.isAsleep(
+      now: now,
+      lastMessageAt: conversation.lastMessageAt,
+      lastMessageIsFromMe: conversation.lastMessageIsFromMe
+    )
+  }
 
   public func hasDraft(_ id: String) -> Bool {
     !(drafts[id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -125,6 +169,12 @@ public struct InboxState: Sendable, Equatable {
     for roomID in snapshot.archived { if let id = roomToConversation[roomID] { state.archived.insert(id) } }
     for (roomID, text) in snapshot.drafts {
       if let id = roomToConversation[roomID] { state.drafts[id] = text }
+    }
+    for (roomID, reminder) in snapshot.reminders {
+      if let id = roomToConversation[roomID] { state.reminders[id] = reminder }
+    }
+    for (roomID, decision) in snapshot.requests {
+      if let id = roomToConversation[roomID] { state.requestDecisions[id] = decision }
     }
     return state
   }
@@ -170,15 +220,37 @@ public enum InboxOrdering {
     scope: InboxScope,
     network: MessageNetwork?,
     filter: ConversationFilter,
-    state: InboxState
+    state: InboxState,
+    now: Date = Date()
   ) -> [Conversation] {
     let kept = conversations.filter { conversation in
-      let archived = state.isArchived(conversation.id)
-      guard archived == (scope == .archive) else { return false }
+      let asleep = state.isAsleep(conversation, now: now)
+      // Une conversation de côté ne se montre que dans « Rappels » — c'est tout
+      // l'intérêt de l'avoir rangée. Elle revient dans la file d'elle-même,
+      // à l'heure dite ou dès qu'on lui répond.
+      guard asleep == (scope == .reminders) else { return false }
+      // Une demande n'est pas dans la file : elle a son propre écran, et n'y
+      // entre que quand on l'accepte.
+      guard state.isRequest(conversation.id) == (scope == .requests) else { return false }
+      if scope != .reminders, scope != .requests {
+        let archived = state.isArchived(conversation.id)
+        guard archived == (scope == .archive) else { return false }
+      }
       if let network, conversation.network != network { return false }
       return filter.accepts(conversation, hasDraft: state.hasDraft(conversation.id))
     }
+    guard scope != .reminders else { return kept.sorted(by: byWakeTime(state)) }
     return sorted(kept, pinned: state.pinned)
+  }
+
+  /// Les rappels se lisent dans l'ordre où ils vont sonner.
+  private static func byWakeTime(_ state: InboxState) -> (Conversation, Conversation) -> Bool {
+    { lhs, rhs in
+      let l = state.reminders[lhs.id]?.wakeAt ?? .distantFuture
+      let r = state.reminders[rhs.id]?.wakeAt ?? .distantFuture
+      if l != r { return l < r }
+      return lhs.id < rhs.id
+    }
   }
 
   /// La liste coupée en deux sections : épinglées en tête, le reste ensuite.
@@ -200,10 +272,14 @@ public enum InboxOrdering {
   public static func focusQueue(
     _ conversations: [Conversation],
     state: InboxState,
-    network: MessageNetwork? = nil
+    network: MessageNetwork? = nil,
+    now: Date = Date()
   ) -> [Conversation] {
     conversations
-      .filter { !state.isArchived($0.id) && $0.hasLivePreview }
+      .filter {
+        !state.isArchived($0.id) && $0.hasLivePreview
+          && !state.isAsleep($0, now: now) && !state.isRequest($0.id)
+      }
       .filter { network == nil || $0.network == network }
       .sorted(by: byRecency)
   }

@@ -18,7 +18,8 @@ final class ArchiveStateTests: XCTestCase {
     )
   }
 
-  /// Le cas qui cassait : `MatrixConversationCache.load()` force `isArchived: false`.
+  /// Le cas qui cassait : une conversation rechargée du magasin local arrive
+  /// toujours avec `isArchived: false` — l'archive vit dans l'état de conversation.
   func testFreshlyMergedConversationsAreReArchived() throws {
     let merged = [conversation("a"), conversation("b")]
     let normalized = try XCTUnwrap(ArchiveState.normalized(merged, archivedIDs: ["a"]))

@@ -21,9 +21,13 @@ public struct MatrixSyncParser: Sendable {
         applyState(event, to: &model)
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
+        applyPoll(event, roomID: roomID, to: &model)
         applyRedaction(event, to: &model)
       }
-      for event in (room.ephemeral?.events ?? []) { applyReceipt(event, to: &model) }
+      for event in (room.ephemeral?.events ?? []) {
+        applyReceipt(event, to: &model)
+        applyTyping(event, to: &model)
+      }
       if let heroes = room.summary?.heroes { model.heroes = heroes }
       if let count = room.unreadNotifications?.notificationCount { model.unreadCount = count }
       resolveQuotes(in: &model)
@@ -45,26 +49,35 @@ public struct MatrixSyncParser: Sendable {
     snapshot.apply(response)
   }
 
-  /// Réinstalle l'historique du cache disque dans les salons, **avant** le premier
-  /// `/sync`. Sans ce semis, le sync initial — dix events par salon chez Synapse —
-  /// réécrivait le cache avec un modèle presque vide, et tout ce que les sessions
-  /// précédentes avaient backfillé disparaissait à chaque relance de l'app.
+  /// Installe dans un salon une page relue du magasin local : les messages,
+  /// leurs réactions, et les modifications qui attendaient leur cible.
   ///
-  /// Le `/sync` qui suit fusionne par identifiant d'event : rien ne se duplique.
-  /// Un envoi resté en attente au moment de quitter n'est pas repris — il n'a
-  /// jamais existé côté serveur.
-  public func seed(cachedMessages: [String: [ChatMessage]], into rooms: inout [String: MatrixRoomModel]) {
-    for (conversationID, list) in cachedMessages {
-      guard let roomID = Self.roomID(inConversationID: conversationID) else { continue }
-      var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
-      for message in list where !message.isPending && model.messagesByID[message.id] == nil {
-        model.messagesByID[message.id] = message
-        model.lastEventAt = max(model.lastEventAt, message.sentAt)
-        if message.replyTo?.awaitsTarget == true { model.unresolvedQuoteMessageIDs.insert(message.id) }
+  /// Rien n'est marqué à réécrire — tout cela **vient** du magasin. Un envoi
+  /// encore en vol reste tel quel : il n'a pas de version sur disque.
+  public func hydrate(
+    messages: [ChatMessage],
+    reactions: [String: MatrixRoomModel.ReactionEvent],
+    into model: inout MatrixRoomModel
+  ) {
+    for message in messages where model.messagesByID[message.id] == nil {
+      var restored = message
+      // Une correction reçue pendant que le fil dormait s'applique à l'ouverture.
+      if let waiting = model.pendingEdits.removeValue(forKey: message.id) {
+        restored = Self.edited(restored, text: waiting.text, at: waiting.at)
+        model.markWritten(restored.id)
       }
-      resolveQuotes(in: &model)
-      rooms[roomID] = model
+      model.messagesByID[restored.id] = restored
+      model.lastEventAt = max(model.lastEventAt, restored.sentAt)
+      if restored.replyTo?.awaitsTarget == true {
+        model.unresolvedQuoteMessageIDs.insert(restored.id)
+      }
     }
+    for (eventID, reaction) in reactions where model.reactionsByEventID[eventID] == nil {
+      model.reactionsByEventID[eventID] = reaction
+    }
+    // Une citation qui se résout ici gagne son texte : ça, ça vaut d'être
+    // réécrit, et `resolveQuotes` le marque de lui-même.
+    resolveQuotes(in: &model)
   }
 
   /// Inverse de `MatrixRoomModel.conversationID` (`réseau:!salon:serveur`) : le
@@ -99,6 +112,7 @@ public struct MatrixSyncParser: Sendable {
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
+      applyPoll(event, roomID: roomID, to: &model)
       applyRedaction(event, to: &model)
     }
     resolveQuotes(in: &model)
@@ -121,6 +135,7 @@ public struct MatrixSyncParser: Sendable {
         text: quoted.sidebarPreviewText
       )
       model.messagesByID[messageID] = message
+      model.markWritten(messageID)
       model.unresolvedQuoteMessageIDs.remove(messageID)
     }
   }
@@ -170,6 +185,13 @@ public struct MatrixSyncParser: Sendable {
       return TimelineGap(roomID: roomID, prevBatch: token, hasAnchor: hasAnchor)
     }
     .sorted { $0.roomID < $1.roomID }
+  }
+
+  /// L'état complet d'un salon (`GET /rooms/{id}/state`), appliqué d'un bloc.
+  /// C'est par là qu'un salon rejoint pendant que l'app dormait entre dans le
+  /// modèle : aucun `/sync` incrémental ne le raconterait.
+  public func applyState(_ events: [MatrixEvent], roomID: String, to model: inout MatrixRoomModel) {
+    for event in events { applyState(event, to: &model) }
   }
 
   // MARK: - État
@@ -236,6 +258,14 @@ public struct MatrixSyncParser: Sendable {
       model.bridgeRoomType = roomType
     }
     if let channelID = content.string(at: "channel.id") { model.bridgeChannelID = channelID }
+    // Les formes qu'un pont emploierait pour dire « demande ». Aucune n'est
+    // émise par mautrix v26.08 ; les lire ne coûte rien et le jour où l'une
+    // arrive, l'écran Demandes se remplit tout seul.
+    let pending = content.bool(at: "com.beeper.pending")
+      ?? content.bool(at: "fi.mau.pending")
+      ?? (content.string(at: "com.beeper.chat_type").map { $0 == "request" })
+      ?? (content.string(at: "channel.type").map { $0 == "request" })
+    if let pending { model.isNetworkFlaggedRequest = pending }
     // Le bridge peut exposer le numéro (`channel.id` en JID, ou un extra explicite).
     // On ne prend que ce qui ressemble vraiment à un numéro ; sinon on s'en passe.
     if model.bridgePhoneNumber == nil {
@@ -265,8 +295,13 @@ public struct MatrixSyncParser: Sendable {
           let eventID = event.eventID,
           let content = event.content
     else { return }
-    // Les éditions arrivent en double du message d'origine — on garde l'original.
-    if content.string(at: "m.relates_to.rel_type") == "m.replace" { return }
+    // Une modification (`m.replace`) n'est pas un message de plus : elle
+    // corrige celui qu'elle vise. Elle peut arriver avant lui — une page
+    // remontée à l'envers — auquel cas elle attend dans `pendingEdits`.
+    if content.string(at: "m.relates_to.rel_type") == "m.replace" {
+      applyEdit(event, content: content, to: &model)
+      return
+    }
 
     // Le réseau du salon vient de l'état `m.bridge` ; s'il n'est pas encore arrivé
     // (timeline lue avant l'état), on le déduit des ghosts et bots présents plutôt
@@ -318,7 +353,8 @@ public struct MatrixSyncParser: Sendable {
             id: mxc,
             contentType: content.string(at: "info.mimetype") ?? Self.fallbackMime(for: msgtype),
             filename: explicitFilename ?? (body.isEmpty ? nil : body),
-            localPath: MatrixAttachmentStore.existingLocalPath(forMXC: mxc)
+            localPath: MatrixAttachmentStore.existingLocalPath(forMXC: mxc),
+            voice: Self.voiceNote(in: content, msgtype: msgtype)
           )
         )
         text = caption ?? ""
@@ -329,7 +365,7 @@ public struct MatrixSyncParser: Sendable {
       text = body
     }
 
-    let message = ChatMessage(
+    var message = ChatMessage(
       id: eventID,
       conversationID: model.conversationID,
       network: network,
@@ -345,13 +381,87 @@ public struct MatrixSyncParser: Sendable {
       linkPreview: linkPreview
     )
     guard message.hasVisibleBody else { return }
+    // Une modification arrivée avant sa cible s'applique à sa naissance — si
+    // elle vient bien de l'auteur.
+    if let waiting = model.pendingEdits.removeValue(forKey: eventID),
+       waiting.sender == nil || waiting.sender == event.sender
+    {
+      message = Self.edited(message, text: waiting.text, at: waiting.at)
+    }
+    // Un message déjà corrigé qui repasse (page de backfill, sync initial) ne
+    // redevient pas sa première version : la correction reste.
+    if let known = model.messagesByID[eventID], let editedAt = known.editedAt {
+      message = Self.edited(message, text: known.text, at: editedAt)
+      message.editHistory = known.editHistory
+    }
     model.messagesByID[eventID] = message
+    model.markWritten(eventID)
     if replyTo?.awaitsTarget == true {
       model.unresolvedQuoteMessageIDs.insert(eventID)
     } else {
       model.unresolvedQuoteMessageIDs.remove(eventID)
     }
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  /// Le message vocal d'un `m.audio`, ou `nil` si ce n'en est pas un.
+  ///
+  /// C'est la présence de `org.matrix.msc3245.voice` qui tranche — un objet
+  /// vide, on ne lit donc que sa présence. La durée et la forme d'onde viennent
+  /// de `org.matrix.msc1767.audio` ; à défaut, `info.duration` sait encore dire
+  /// la durée, et la bulle se passe de forme d'onde.
+  public static func voiceNote(in content: MatrixJSON, msgtype: String) -> VoiceNote? {
+    guard msgtype == "m.audio", content.value(at: VoiceNoteKeys.voice) != nil else { return nil }
+    let audio = content.value(at: VoiceNoteKeys.audio)
+    let millis = audio?["duration"]?.doubleValue ?? content.double(at: "info.duration") ?? 0
+    let raw = (audio?["waveform"]?.arrayValue ?? []).compactMap(\.intValue)
+    return VoiceNote(duration: millis / 1000, waveform: VoiceNote.normalized(raw))
+  }
+
+  /// Applique une modification `m.replace`. Le nouveau texte vit dans
+  /// `m.new_content` ; le `body` de l'event, lui, porte le repli « * texte »
+  /// que lisent les clients qui ignorent MSC2676 — jamais ce qu'on affiche.
+  ///
+  /// Seul l'auteur peut corriger son message : une modification venue de
+  /// quelqu'un d'autre n'en est pas une, et on la laisse tomber.
+  private func applyEdit(_ event: MatrixEvent, content: MatrixJSON, to model: inout MatrixRoomModel) {
+    guard let target = content.string(at: "m.relates_to.event_id"),
+          let text = Self.newText(in: content)
+    else { return }
+    guard let existing = model.messagesByID[target] else {
+      // La cible n'est pas là : la modification attend, et seule la dernière
+      // compte — corriger deux fois ne garde que le dernier mot.
+      if let known = model.pendingEdits[target], known.at > event.sentAt { return }
+      model.pendingEdits[target] = MatrixRoomModel.PendingEdit(text: text, at: event.sentAt, sender: event.sender)
+      return
+    }
+    guard existing.senderID == event.sender else { return }
+    // Une modification plus ancienne qui arrive après ne défait pas la dernière.
+    if let editedAt = existing.editedAt, editedAt > event.sentAt { return }
+    model.messagesByID[target] = Self.edited(existing, text: text, at: event.sentAt)
+    model.markWritten(target)
+  }
+
+  /// Le message corrigé : le nouveau texte, la date, et l'ancien rangé dans
+  /// l'historique — c'est lui qu'on lit sous la mention « Modifié ».
+  private static func edited(_ message: ChatMessage, text: String, at: Date) -> ChatMessage {
+    var updated = message
+    if !message.text.isEmpty, message.text != text, !updated.editHistory.contains(message.text) {
+      updated.editHistory.append(message.text)
+    }
+    updated.text = text
+    updated.editedAt = at
+    return updated
+  }
+
+  /// Le texte d'une modification : `m.new_content.body`, et rien d'autre. Le
+  /// `body` racine est un repli préfixé d'une étoile — l'afficher ajouterait
+  /// une astérisque au message à chaque correction.
+  public static func newText(in content: MatrixJSON) -> String? {
+    if let body = content.string(at: "m.new_content.body") { return body }
+    // Certains ponts ne posent que le repli : on lui retire son étoile.
+    guard let fallback = content.string(at: "body") else { return nil }
+    return fallback.hasPrefix("* ") ? String(fallback.dropFirst(2)) : fallback
   }
 
   /// Le premier aperçu de `com.beeper.linkpreviews` qui porte une adresse. Les
@@ -395,6 +505,149 @@ public struct MatrixSyncParser: Sendable {
       senderName: displayName(of: sender, in: model),
       isMine: sender == selfUserID
     )
+    model.markWritten(eventID)
+  }
+
+  // MARK: - Sondages (MSC3381)
+
+  /// Les trois events d'un sondage. `poll.start` pose la question et devient un
+  /// message ; `poll.response` est une voix ; `poll.end` ferme les votes.
+  ///
+  /// L'ordre d'arrivée n'a aucune importance : une voix reçue avant sa question
+  /// (page remontée à l'envers) attend dans le dépouillement, et la question
+  /// la retrouve. Une voix postérieure à la clôture ne compte jamais.
+  private func applyPoll(_ event: MatrixEvent, roomID: String, to model: inout MatrixRoomModel) {
+    guard let eventID = event.eventID, let content = event.content else { return }
+
+    if PollEventTypes.isStart(event.type) {
+      guard let poll = Self.poll(inStart: content, type: event.type) else { return }
+      var entry = model.pollsByEventID[eventID] ?? MatrixRoomModel.PollEvent(poll: poll, startType: event.type)
+      // La question remplace ce qu'on avait ; les voix déjà reçues restent.
+      entry.poll.question = poll.question
+      entry.poll.answers = poll.answers
+      entry.poll.kind = poll.kind
+      entry.poll.maxSelections = poll.maxSelections
+      entry.startType = event.type
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[eventID] = entry
+
+      let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+      let message = ChatMessage(
+        id: eventID,
+        conversationID: model.conversationID,
+        network: network,
+        text: "",
+        sentAt: event.sentAt,
+        isFromMe: event.sender == selfUserID,
+        senderID: event.sender,
+        senderName: event.sender.map { displayName(of: $0, in: model) },
+        poll: entry.poll
+      )
+      model.messagesByID[eventID] = message
+      if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+      return
+    }
+
+    guard let target = content.string(at: "m.relates_to.event_id"),
+          content.string(at: "m.relates_to.rel_type") == "m.reference",
+          let sender = event.sender
+    else { return }
+
+    if PollEventTypes.isResponse(event.type) {
+      let answers = Self.answerIDs(inResponse: content, type: event.type)
+      var entry = model.pollsByEventID[target]
+        ?? MatrixRoomModel.PollEvent(poll: Poll(question: "", answers: []), startType: event.type)
+      // Une voix plus ancienne qui arrive après ne remplace pas la dernière.
+      if let known = entry.voteTimes[sender], known > event.sentAt { return }
+      if let closedAt = entry.closedAt, event.sentAt > closedAt { return }
+      entry.voteTimes[sender] = event.sentAt
+      entry.poll.votesByVoter[sender] = answers
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[target] = entry
+      refreshPollMessage(target, in: &model)
+      return
+    }
+
+    if PollEventTypes.isEnd(event.type) {
+      // Seul l'auteur du sondage — ou un modérateur — peut le clore. On s'en
+      // tient à l'auteur : c'est tout ce que les ponts produisent.
+      guard model.messagesByID[target] == nil || model.messagesByID[target]?.senderID == sender
+        || sender == selfUserID
+      else { return }
+      var entry = model.pollsByEventID[target]
+        ?? MatrixRoomModel.PollEvent(poll: Poll(question: "", answers: []), startType: PollEventTypes.startUnstable)
+      entry.closedAt = event.sentAt
+      entry.poll.isClosed = true
+      // Les voix arrivées après la clôture n'auraient jamais dû compter.
+      for (voter, when) in entry.voteTimes where when > event.sentAt {
+        entry.voteTimes.removeValue(forKey: voter)
+        entry.poll.votesByVoter.removeValue(forKey: voter)
+      }
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[target] = entry
+      refreshPollMessage(target, in: &model)
+    }
+  }
+
+  private func refreshPollMessage(_ eventID: String, in model: inout MatrixRoomModel) {
+    guard var message = model.messagesByID[eventID],
+          let poll = model.pollsByEventID[eventID]?.poll
+    else { return }
+    message.poll = poll
+    model.messagesByID[eventID] = message
+    model.markWritten(eventID)
+  }
+
+  /// Ne retient que les voix portant sur des réponses qui existent, et relit
+  /// les miennes. Rejoué après chaque event : c'est le dépouillement.
+  private static func retally(_ entry: inout MatrixRoomModel.PollEvent, selfUserID: String) {
+    let valid = Set(entry.poll.answers.map(\.id))
+    if !valid.isEmpty {
+      for (voter, answers) in entry.poll.votesByVoter {
+        let kept = answers.filter { valid.contains($0) }
+        // Une voix pour une réponse inconnue est une voix perdue, pas une
+        // abstention : la personne a bien voté, on ne sait juste pas pour quoi.
+        if kept.isEmpty { entry.poll.votesByVoter.removeValue(forKey: voter) }
+        else { entry.poll.votesByVoter[voter] = Array(kept.prefix(max(entry.poll.maxSelections, 1))) }
+      }
+    }
+    entry.poll.myAnswerIDs = entry.poll.votesByVoter[selfUserID] ?? []
+  }
+
+  /// La question et ses réponses. MSC3381 range tout sous une clé qui porte le
+  /// même nom que l'event ; la forme stable, elle, le pose à plat.
+  public static func poll(inStart content: MatrixJSON, type: String) -> Poll? {
+    let body = content.value(at: type) ?? content
+    guard let answersJSON = body["answers"]?.arrayValue, !answersJSON.isEmpty else { return nil }
+    let question = text(in: body["question"]) ?? ""
+    let answers = answersJSON.compactMap { entry -> Poll.Answer? in
+      guard let id = entry["id"]?.stringValue, !id.isEmpty else { return nil }
+      return Poll.Answer(id: id, text: text(in: entry) ?? id)
+    }
+    guard !answers.isEmpty else { return nil }
+    let kindRaw = body["kind"]?.stringValue ?? ""
+    return Poll(
+      question: question,
+      answers: answers,
+      kind: kindRaw.hasSuffix("undisclosed") ? .undisclosed : .disclosed,
+      maxSelections: max(body["max_selections"]?.intValue ?? 1, 1)
+    )
+  }
+
+  public static func answerIDs(inResponse content: MatrixJSON, type: String) -> [String] {
+    let body = content.value(at: type) ?? content
+    return (body["answers"]?.arrayValue ?? []).compactMap(\.stringValue)
+  }
+
+  /// Le texte d'un morceau MSC1767 : `m.text`, `org.matrix.msc1767.text`, ou
+  /// `body` chez les ponts qui n'ont retenu que la forme la plus ancienne.
+  private static func text(in node: MatrixJSON?) -> String? {
+    guard let node else { return nil }
+    if let value = node[PollEventTypes.textStable]?.stringValue, !value.isEmpty { return value }
+    if let value = node[PollEventTypes.textUnstable]?.stringValue, !value.isEmpty { return value }
+    if let value = node["body"]?.stringValue, !value.isEmpty { return value }
+    if let value = node.stringValue, !value.isEmpty { return value }
+    return nil
   }
 
   /// `m.receipt` : `{ "$event": { "m.read": { "@user": { "ts": … } } } }`.
@@ -411,15 +664,33 @@ public struct MatrixSyncParser: Sendable {
     }
   }
 
+  /// `m.typing` : `{ "user_ids": ["@alice:serveur"] }`.
+  ///
+  /// C'est une EDU, elle ne revient qu'au **changement** : une liste vide veut
+  /// dire « plus personne », et l'absence d'event ne veut rien dire du tout.
+  /// D'où la date, qui fait expirer l'indicateur toute seule.
+  ///
+  /// Les ponts mautrix relaient la frappe dans les deux sens pour WhatsApp et
+  /// Signal ; Instagram l'envoie sans toujours la recevoir.
+  private func applyTyping(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == "m.typing", let content = event.content else { return }
+    let ids = (content["user_ids"]?.arrayValue ?? []).compactMap(\.stringValue)
+    model.typingUserIDs = Set(ids)
+    model.typingUpdatedAt = Date()
+  }
+
   /// `m.room.redaction` : retire la réaction (ou le message) supprimé.
   /// Retirer une réaction, côté WhatsApp comme Signal, c'est rédiger son event.
   private func applyRedaction(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
     guard event.type == "m.room.redaction", let target = event.redactedEventID else { return }
     model.reactionsByEventID.removeValue(forKey: target)
     model.messagesByID.removeValue(forKey: target)
+    model.pollsByEventID.removeValue(forKey: target)
+    model.markDeleted(target)
     // Une réaction dont la cible disparaît n'a plus de sens.
     for (id, reaction) in model.reactionsByEventID where reaction.targetEventID == target {
       model.reactionsByEventID.removeValue(forKey: id)
+      model.markDeleted(id)
     }
   }
 

@@ -6,6 +6,9 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
   public var filename: String?
   /// Chemin local une fois le média téléchargé.
   public var localPath: String?
+  /// Renseigné quand le réseau annonce un **message vocal** (et pas un simple
+  /// fichier audio joint) : durée et forme d'onde de l'expéditeur.
+  public var voice: VoiceNote?
 
   public var isImage: Bool {
     if contentType.hasPrefix("image/") { return true }
@@ -24,6 +27,20 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
     return ["mp4", "mov", "m4v"].contains(ext)
   }
 
+  /// Une image animée. Les réseaux la disent tous pareil : `msgtype` `m.image`
+  /// et `info.mimetype` `image/gif` — un GIF n'a pas de type d'event à lui.
+  /// La bulle la joue en boucle plutôt que d'en montrer la première image.
+  public var isGIF: Bool {
+    if contentType.lowercased() == "image/gif" { return true }
+    // Un type déclaré et non « gif » fait foi : c'est le réseau qui parle.
+    guard !contentType.hasPrefix("image/") else { return false }
+    let ext = (filename.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? localPath.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? id.split(separator: ".").last.map(String.init)
+      ?? "").lowercased()
+    return ext == "gif"
+  }
+
   /// Message audio : iMessage les dépose en `.caf` (`audio/x-caf`), les autres
   /// réseaux en `.ogg`, `.m4a` ou `.mp3`. Le fil les joue sur place.
   public var isAudio: Bool {
@@ -40,11 +57,21 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
     return FileManager.default.fileExists(atPath: url.path) ? url : nil
   }
 
-  public init(id: String, contentType: String, filename: String? = nil, localPath: String? = nil) {
+  /// Un message vocal, pas une pièce jointe qu'on ouvre.
+  public var isVoiceNote: Bool { voice != nil }
+
+  public init(
+    id: String,
+    contentType: String,
+    filename: String? = nil,
+    localPath: String? = nil,
+    voice: VoiceNote? = nil
+  ) {
     self.id = id
     self.contentType = contentType
     self.filename = filename
     self.localPath = localPath
+    self.voice = voice
   }
 }
 
@@ -176,7 +203,7 @@ public struct BridgedLinkPreview: Hashable, Codable, Sendable {
   }
 }
 
-public struct ChatMessage: Identifiable, Hashable, Sendable {
+public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   public let id: String
   public let conversationID: String
   public let network: MessageNetwork
@@ -208,6 +235,9 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   public var isRetracted: Bool
   /// Effet d'envoi reçu (`expressive_send_style_id`), déjà traduit — « Confettis ».
   public var expressiveEffectName: String?
+  /// Le sondage que ce message pose, dépouillé (MSC3381). La bulle montre
+  /// alors la question et ses réponses, pas du texte.
+  public var poll: Poll?
   /// Événement de conversation (« X a ajouté Y ») plutôt qu'un message :
   /// le fil l'affiche en séparateur discret, sans bulle ni auteur.
   public var systemEventText: String?
@@ -233,6 +263,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     editHistory: [String] = [],
     isRetracted: Bool = false,
     expressiveEffectName: String? = nil,
+    poll: Poll? = nil,
     systemEventText: String? = nil
   ) {
     self.id = id
@@ -252,14 +283,19 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     self.editHistory = editHistory
     self.isRetracted = isRetracted
     self.expressiveEffectName = expressiveEffectName
+    self.poll = poll
     self.systemEventText = systemEventText
   }
 
   public var sidebarPreviewText: String {
     if let systemEventText { return systemEventText }
     if isRetracted { return "Message annulé" }
+    if let poll { return "📊 \(poll.question)" }
     if !text.isEmpty { return text }
+    // Le GIF passe avant la photo : c'en est une, mais on la nomme autrement.
+    if attachments.contains(where: \.isGIF) { return "GIF" }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
+    if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
     if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }
     if !attachments.isEmpty { return "Pièce jointe" }
     return text
@@ -276,7 +312,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   }
 
   public var hasVisibleBody: Bool {
-    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent
+    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent || poll != nil
   }
 
   /// Ce message n'est qu'un geste : 1 à 3 emoji, rien d'autre.
@@ -285,7 +321,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   /// (une réponse a un contexte à porter), ni annulation, ni événement de
   /// conversation. La bulle le montre alors nu et grand — cf. `MessageBubbleView`.
   public var isEmojiOnly: Bool {
-    guard attachments.isEmpty else { return false }
+    guard attachments.isEmpty, poll == nil else { return false }
     guard replyTo?.isEmpty != false else { return false }
     guard !isRetracted, !isSystemEvent else { return false }
     return EmojiText.isEmojiOnly(text)

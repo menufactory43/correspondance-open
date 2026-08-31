@@ -221,6 +221,7 @@ targets:
         NSPhotoLibraryUsageDescription: Correspondance joint vos photos à vos messages.
         NSCameraUsageDescription: Correspondance prend une photo pour la joindre à un message.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour vos messages vocaux.
+        NSSpeechRecognitionUsageDescription: Correspondance transcrit les messages vocaux pour que vous puissiez les lire.
         # ATS ouvert, et PAS de NSAllowsLocalNetworking — décision 6 de
         # docs/PRODUCT.md § « Révision iOS ».
         #

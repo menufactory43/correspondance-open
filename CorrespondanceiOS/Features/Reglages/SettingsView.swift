@@ -182,6 +182,18 @@ struct SettingsView: View {
 
   private var signOutSection: some View {
     Section {
+      Button {
+        Task { await store.reloadFromRelay() }
+      } label: {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Recharger depuis le Relais")
+          Text("Vide la base locale et refait une synchronisation complète.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .disabled(store.isDemo || store.session != .connected)
+
       Button(role: .destructive) {
         confirmsSignOut = true
       } label: {

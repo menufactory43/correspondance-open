@@ -94,5 +94,11 @@ final class ConversationSession {
   private func captureDraft() {
     guard !isRestoringDraft else { return }
     store?.captureDraft(from: self)
+    // Écrire, c'est le dire au correspondant ; tout effacer, c'est dire qu'on
+    // a fini. Le pont relaie la frappe à WhatsApp et Signal.
+    store?.noteTyping(
+      conversationID: conversationID,
+      isTyping: !draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    )
   }
 }

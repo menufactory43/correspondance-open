@@ -91,6 +91,36 @@ public enum FacetedSearch {
       .sorted { $0.sentAt > $1.sentAt }
   }
 
+  /// Un résultat de recherche par onglet : le message, et le fil d'où il vient.
+  /// Un message seul ne dit rien — c'est « la photo de Camille » qu'on cherche.
+  public struct Hit: Identifiable, Sendable {
+    public let conversation: Conversation
+    public let message: ChatMessage
+    public var id: String { "\(conversation.id)|\(message.id)" }
+
+    public init(conversation: Conversation, message: ChatMessage) {
+      self.conversation = conversation
+      self.message = message
+    }
+  }
+
+  /// Tous les résultats d'un onglet, tous fils confondus, du plus récent au
+  /// plus ancien. `messages` rend ce qu'on a déjà chargé d'un fil : la
+  /// recherche reste sur l'appareil, rien n'est demandé au Relais (décision 7).
+  public static func hits(
+    in conversations: [Conversation],
+    facet: MessageFacet,
+    query: String = "",
+    messages: (Conversation) -> [ChatMessage]
+  ) -> [Hit] {
+    conversations
+      .flatMap { conversation in
+        Self.messages(messages(conversation), facet: facet, query: query)
+          .map { Hit(conversation: conversation, message: $0) }
+      }
+      .sorted { $0.message.sentAt > $1.message.sentAt }
+  }
+
   /// Les conversations qui portent un brouillon non vide, les plus récentes
   /// d'abord. `drafts` vient de l'état de conversation du Relais, corrigé par
   /// ce qu'on est en train de taper.
