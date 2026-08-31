@@ -2,11 +2,13 @@ import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
 
-/// La barre flottante du bas — en verre, posée sur la file.
+/// La barre flottante du bas — trois surfaces de verre posées sur la file,
+/// comme Beeper : un rond à gauche, la pilule au centre, un rond à droite.
 ///
-/// À gauche le filtre (Tous / Non lus / Brouillons / Sans réponse / Groupes) ;
-/// au centre la pilule Inbox · Archive · Focus, qui est le chemin vers Focus
-/// (décision 9) ; à droite la recherche, inactive jusqu'à la phase C2.
+/// Pas une capsule qui englobe tout : chaque geste a son propre relief, et la
+/// pilule Inbox · Archive · Focus — le chemin vers Focus (décision 9) — reste
+/// seule à porter la sélection. À gauche le filtre (Tous / Non lus /
+/// Brouillons / Sans réponse / Groupes) ; à droite la recherche.
 struct InboxFloatingBar: View {
   @Binding var mode: PhoneMode
   /// La recherche est ouverte par la loupe d'ici, mais l'inbox la tient : c'est
@@ -20,24 +22,41 @@ struct InboxFloatingBar: View {
   private var typeface: WritingTypeface { themes.typeface }
 
   var body: some View {
-    HStack(spacing: Spacing.xs) {
+    HStack(spacing: Spacing.sm) {
       filterMenu
+        .modifier(FloatingGlass(cornerRadius: Self.roundSize / 2, theme: theme))
       modePill
+        .modifier(FloatingGlass(cornerRadius: Self.pillHeight / 2, theme: theme))
       searchButton
+        .modifier(FloatingGlass(cornerRadius: Self.roundSize / 2, theme: theme))
     }
-    .padding(.horizontal, 6)
-    .padding(.vertical, 6)
-    .glassSurface(
-      cornerRadius: 26,
-      fallbackFill: theme.sidebar,
-      border: theme.edge,
-      isInteractive: true
-    )
-    .shadow(color: .black.opacity(theme.isDark ? 0.35 : 0.12), radius: 12, y: 4)
     .sheet(isPresented: $isSearching) {
       SearchSheet()
         .environment(store)
         .environment(themes)
+    }
+  }
+
+  /// Les deux ronds : un carré de 46, arrondi en cercle par la surface.
+  private static let roundSize: CGFloat = 46
+  /// La pilule : 2 de marge + 8 de padding autour d'une ligne de méta.
+  private static let pillHeight: CGFloat = 46
+
+  /// Le verre commun aux trois surfaces, ombre comprise : c'est la même
+  /// matière, à trois endroits.
+  private struct FloatingGlass: ViewModifier {
+    let cornerRadius: CGFloat
+    let theme: WritingTheme
+
+    func body(content: Content) -> some View {
+      content
+        .glassSurface(
+          cornerRadius: cornerRadius,
+          fallbackFill: theme.sidebar,
+          border: theme.edge,
+          isInteractive: true
+        )
+        .shadow(color: .black.opacity(theme.isDark ? 0.35 : 0.12), radius: 12, y: 4)
     }
   }
 
@@ -56,13 +75,14 @@ struct InboxFloatingBar: View {
     } label: {
       ZStack {
         Image(systemName: "line.3.horizontal.decrease")
-          .font(.system(size: 15, weight: .medium))
+          .font(.system(size: 16, weight: .medium))
           .foregroundStyle(store.filter == .all ? theme.inkSecondary : theme.accent)
       }
-      .frame(width: 40, height: 34)
+      .frame(width: Self.roundSize, height: Self.roundSize)
       .background(
-        Capsule().fill(store.filter == .all ? Color.clear : theme.accentSoft.opacity(0.25))
+        Circle().fill(store.filter == .all ? Color.clear : theme.accentSoft.opacity(0.25))
       )
+      .contentShape(Circle())
     }
     .accessibilityLabel("Filtre : \(store.filter.labelFR). Changer de filtre.")
   }
@@ -93,8 +113,8 @@ struct InboxFloatingBar: View {
       }
     }
     .padding(2)
-    .background(Capsule().fill(theme.paperSecondary.opacity(0.6)))
     .frame(maxWidth: .infinity)
+    .frame(height: Self.pillHeight)
     .animation(.easeOut(duration: 0.16), value: mode)
   }
 
@@ -110,9 +130,10 @@ struct InboxFloatingBar: View {
       isSearching = true
     } label: {
       Image(systemName: "magnifyingglass")
-        .font(.system(size: 15, weight: .medium))
+        .font(.system(size: 16, weight: .medium))
         .foregroundStyle(theme.inkSecondary)
-        .frame(width: 40, height: 34)
+        .frame(width: Self.roundSize, height: Self.roundSize)
+        .contentShape(Circle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel("Rechercher")
