@@ -450,22 +450,33 @@ public actor MatrixBridgeService {
     let next = entry.poll.toggling(answerID)
 
     // La voix se voit tout de suite : le `/sync` la confirmera.
-    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.myAnswerIDs = next
-    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter[selfUserID] = next
-    if next.isEmpty {
+    applyMyVote(next, roomID: roomID, pollMessageID: pollMessageID)
+
+    do {
+      try await client.sendPollResponse(
+        roomID: roomID,
+        pollEventID: pollMessageID,
+        answerIDs: next,
+        responseType: PollEventTypes.responseType(forStart: entry.startType)
+      )
+    } catch {
+      // Le Relais n'a rien reçu : la voix qu'on montrait n'existe pas, on la retire.
+      applyMyVote(entry.poll.myAnswerIDs, roomID: roomID, pollMessageID: pollMessageID)
+      throw error
+    }
+  }
+
+  private func applyMyVote(_ answerIDs: [String], roomID: String, pollMessageID: String) {
+    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.myAnswerIDs = answerIDs
+    if answerIDs.isEmpty {
       rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter.removeValue(forKey: selfUserID)
+    } else {
+      rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter[selfUserID] = answerIDs
     }
     if var message = rooms[roomID]?.messagesByID[pollMessageID] {
       message.poll = rooms[roomID]?.pollsByEventID[pollMessageID]?.poll
       rooms[roomID]?.messagesByID[pollMessageID] = message
     }
-
-    try await client.sendPollResponse(
-      roomID: roomID,
-      pollEventID: pollMessageID,
-      answerIDs: next,
-      responseType: PollEventTypes.responseType(forStart: entry.startType)
-    )
   }
 
   /// Pose un sondage dans ce fil.

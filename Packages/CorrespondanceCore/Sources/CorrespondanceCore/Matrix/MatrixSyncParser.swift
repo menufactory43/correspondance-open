@@ -396,9 +396,18 @@ public struct MatrixSyncParser: Sendable {
       linkPreview: linkPreview
     )
     guard message.hasVisibleBody else { return }
-    // Une modification arrivée avant sa cible s'applique à sa naissance.
-    if let waiting = model.pendingEdits.removeValue(forKey: eventID) {
+    // Une modification arrivée avant sa cible s'applique à sa naissance — si
+    // elle vient bien de l'auteur.
+    if let waiting = model.pendingEdits.removeValue(forKey: eventID),
+       waiting.sender == nil || waiting.sender == event.sender
+    {
       message = Self.edited(message, text: waiting.text, at: waiting.at)
+    }
+    // Un message déjà corrigé qui repasse (page de backfill, sync initial) ne
+    // redevient pas sa première version : la correction reste.
+    if let known = model.messagesByID[eventID], let editedAt = known.editedAt {
+      message = Self.edited(message, text: known.text, at: editedAt)
+      message.editHistory = known.editHistory
     }
     model.messagesByID[eventID] = message
     model.markWritten(eventID)
@@ -438,7 +447,7 @@ public struct MatrixSyncParser: Sendable {
       // La cible n'est pas là : la modification attend, et seule la dernière
       // compte — corriger deux fois ne garde que le dernier mot.
       if let known = model.pendingEdits[target], known.at > event.sentAt { return }
-      model.pendingEdits[target] = MatrixRoomModel.PendingEdit(text: text, at: event.sentAt)
+      model.pendingEdits[target] = MatrixRoomModel.PendingEdit(text: text, at: event.sentAt, sender: event.sender)
       return
     }
     guard existing.senderID == event.sender else { return }

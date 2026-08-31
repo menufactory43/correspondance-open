@@ -56,6 +56,37 @@ final class MessageEditTests: XCTestCase {
     XCTAssertTrue(model.pendingEdits.isEmpty)
   }
 
+  func testUneCorrectionEnAttenteVenueDUnAutreNeSAppliquePas() throws {
+    let model = try parse([
+      edit("$2", sender: moi, target: "$1", text: "piraté", at: 1_800_000_060_000),
+      message("$1", sender: elle, text: "a demian", at: 1_800_000_000_000),
+    ])
+    XCTAssertEqual(model.messagesByID["$1"]?.text, "a demian")
+    XCTAssertNil(model.messagesByID["$1"]?.editedAt)
+  }
+
+  func testUnMessageCorrigeQuiRepasseGardeSaCorrection() throws {
+    let parser = MatrixSyncParser(selfUserID: moi)
+    var rooms: [String: MatrixRoomModel] = [:]
+    let premier = """
+    {"next_batch":"s1","rooms":{"join":{"!a:relais":{
+      "state":{"events":[{"type":"m.bridge","state_key":"","content":{"protocol":{"id":"whatsappgo"}}}]},
+      "timeline":{"events":[\(message("$1", sender: elle, text: "a demian", at: 1_800_000_000_000)),
+        \(edit("$2", sender: elle, target: "$1", text: "à demain", at: 1_800_000_060_000))]}}}}}
+    """
+    parser.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(premier.utf8)), to: &rooms)
+    // Le sync suivant relivre l'original seul — une page de backfill, un sync initial.
+    let relivraison = """
+    {"next_batch":"s2","rooms":{"join":{"!a:relais":{
+      "timeline":{"events":[\(message("$1", sender: elle, text: "a demian", at: 1_800_000_000_000))]}}}}}
+    """
+    parser.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(relivraison.utf8)), to: &rooms)
+    let message = try XCTUnwrap(rooms["!a:relais"]?.messagesByID["$1"])
+    XCTAssertEqual(message.text, "à demain")
+    XCTAssertNotNil(message.editedAt)
+    XCTAssertEqual(message.editHistory, ["a demian"])
+  }
+
   func testSeuleLaDerniereCorrectionCompte() throws {
     let model = try parse([
       message("$1", sender: elle, text: "un", at: 1_800_000_000_000),

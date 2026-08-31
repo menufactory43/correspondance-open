@@ -463,6 +463,11 @@ final class InboxStore {
       wrote = true
     } else if selectedConversationID == conversation.id, !messages.isEmpty {
       wrote = messages.contains(where: \.isFromMe)
+    } else if let proof = threadReplyProof[conversation.id] {
+      // Le fil a été lu une fois : ce qu'on y a vu tient, même une fois
+      // qu'on regarde ailleurs — sinon la demande changerait de section à
+      // chaque clic.
+      wrote = proof
     }
     let known = knownCorrespondentIDs.contains(conversation.id)
       || mergedContacts.contains { $0.memberIDs.contains(conversation.id) }
@@ -476,6 +481,16 @@ final class InboxStore {
   /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
   /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
   private(set) var networkFlaggedRequestIDs: Set<String> = []
+
+  /// Ce qu'un fil chargé a montré : y ai-je écrit ? Retenu par conversation,
+  /// pour que la réponse ne dépende pas de la sélection du moment.
+  private var threadReplyProof: [String: Bool] = [:]
+
+  private func recordReplyProof(for conversationID: String, in messages: [ChatMessage]) {
+    let real = messages.filter { !Self.isPlaceholderMessageID($0.id) }
+    guard !real.isEmpty else { return }
+    threadReplyProof[conversationID] = real.contains(where: \.isFromMe)
+  }
 
   /// Note qui, dans cette liste, est déjà au carnet d'adresses. Appelé au même
   /// endroit que l'enrichissement des titres : le carnet est alors chaud.
@@ -2636,6 +2651,7 @@ final class InboxStore {
     guard !fetched.isEmpty else { return }
     session.messages = await matrix.ensureLocalAttachments(fetched)
     applySidebarPreview(conversationID: id, from: session.messages)
+    recordReplyProof(for: id, in: session.messages)
     if isAttended(id) { clearUnread(for: id) }
   }
 
@@ -2850,10 +2866,12 @@ final class InboxStore {
       let real = merged.filter { !Self.isPlaceholderMessageID($0.id) }
       session.messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
       applySidebarPreview(conversationID: conversation.id, from: session.messages)
+      recordReplyProof(for: conversation.id, in: session.messages)
       return
     }
 
     session.messages = await fetchMessages(for: conversation)
+    recordReplyProof(for: conversation.id, in: session.messages)
   }
 
   /// Un message-repère (« Synchronisation… », « Pas encore de messages ») plutôt

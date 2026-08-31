@@ -870,6 +870,12 @@ public actor MatrixClient {
     case "mp4", "m4v": "video/mp4"
     case "mov": "video/quicktime"
     case "pdf": "application/pdf"
+    // Les vocaux : sans type audio, le pont range le fichier en pièce jointe.
+    case "m4a", "aac": "audio/mp4"
+    case "mp3": "audio/mpeg"
+    case "ogg", "oga", "opus": "audio/ogg"
+    case "wav": "audio/wav"
+    case "caf": "audio/x-caf"
     default: "application/octet-stream"
     }
   }
