@@ -77,6 +77,18 @@ public enum PhoneNormalizer {
     return "tel:" + digits
   }
 
+  /// Le numéro **composable**, en E.164 avec son `+` — ce qu'attendent les
+  /// commandes `pm` de mautrix-whatsapp et mautrix-signal.
+  ///
+  /// Même règle que `phoneKey`, d'où elle sort : une lettre au milieu
+  /// disqualifie, un 0 initial à dix chiffres se lit comme un national
+  /// français. On ne devine rien de plus — un numéro qu'on ne sait pas lire
+  /// vaut mieux refusé qu'envoyé de travers.
+  public static func e164(_ raw: String) -> String? {
+    guard let key = phoneKey(raw) else { return nil }
+    return "+" + key.dropFirst("tel:".count)
+  }
+
   /// UUID nu — l'identifiant de compte Signal, qui ne se rapproche de rien.
   public static func isUUID(_ value: String) -> Bool {
     value.range(of: #"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"#,

@@ -226,4 +226,18 @@ final class MergedContactTests: XCTestCase {
     // Le dernier utilisé a disparu : on retombe sur le défaut.
     XCTAssertEqual(merged.activeMemberID(among: ["imessage:1"]), "imessage:1")
   }
+
+  // MARK: - E.164
+
+  /// Ce que la feuille « Nouvelle conversation » compose : le numéro que le
+  /// bot du pont attend, ou rien.
+  func testE164KeepsOnlyWhatCanBeDialled() {
+    XCTAssertEqual(PhoneNormalizer.e164("+33 6 12 34 56 78"), "+33612345678")
+    XCTAssertEqual(PhoneNormalizer.e164("06 12 34 56 78"), "+33612345678")
+    XCTAssertEqual(PhoneNormalizer.e164("0033612345678"), "+33612345678")
+    // Un pseudo n'est pas un numéro, un fil non plus, et sept chiffres non plus.
+    XCTAssertNil(PhoneNormalizer.e164("alice.martin"))
+    XCTAssertNil(PhoneNormalizer.e164("!salon:correspondance.local"))
+    XCTAssertNil(PhoneNormalizer.e164("1234567"))
+  }
 }
