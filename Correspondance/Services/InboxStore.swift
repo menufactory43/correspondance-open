@@ -155,6 +155,10 @@ final class InboxStore {
   /// le fil ne les montre plus. `private(set)` — la suppression passe par
   /// `InboxStore+Deletion`.
   private(set) var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
+  /// Comment « cc » répond dans les conversations où d'autres humains lisent.
+  /// Le réglage ne vit pas ici : il vit dans l'account data globale, que l'agent
+  /// relit sur le Relais. Ceci n'en est que la copie affichée.
+  private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
@@ -1713,7 +1717,7 @@ final class InboxStore {
         if case .waiting = step {
           silentRounds += 1
           if silentRounds >= 30 {
-            bridgeLoginStatusFR = MatrixError.bridgeBotSilent(network).localizedDescription
+            bridgeLoginStatusFR = MatrixError.bridgeBotSilent(networkLabel: network.labelFR).localizedDescription
             return
           }
         } else {
@@ -2317,6 +2321,63 @@ final class InboxStore {
     }
   }
 
+  // MARK: - Propositions de l'agent
+
+  /// Le réglage « répondre à voix haute par défaut ». Il part vers le Relais,
+  /// où l'agent le relira à son prochain `/sync` : rien ici ne lui parle
+  /// directement.
+  func setAgentDefaultMode(_ mode: AgentSettings.Mode) {
+    guard mode != agentDefaultMode else { return }
+    agentDefaultMode = mode
+    relayNoteAgentSettings(AgentSettings(defaultMode: mode))
+  }
+
+  /// Adopté depuis le Relais : un autre appareil a pu trancher.
+  func installAgentSettings(_ settings: AgentSettings?) {
+    let mode = settings?.defaultMode ?? AgentSettings.fallback.defaultMode
+    if mode != agentDefaultMode { agentDefaultMode = mode }
+  }
+
+  /// « Envoyer » : le texte que « cc » propose part comme MON message, par le
+  /// chemin d'envoi ordinaire — même composer, même réseau, même citation.
+  /// La proposition quitte ensuite le fil : elle a servi.
+  ///
+  /// Le brouillon en cours est mis de côté le temps de l'envoi et rendu si
+  /// l'envoi échoue : on ne perd pas ce qu'on était en train d'écrire, et la
+  /// carte reste là pour réessayer.
+  func sendAgentProposal(_ message: ChatMessage) async {
+    guard let proposal = message.agentProposal, !proposal.isEmpty,
+          let session = primarySession
+    else { return }
+    let pending = session.draftText
+    session.draftText = proposal.text
+    await send(session: session)
+    guard session.draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      session.draftText = pending
+      return
+    }
+    session.draftText = pending
+    deleteLocally(messageID: message.id)
+  }
+
+  /// « Modifier » : le texte descend dans le composer et la carte disparaît —
+  /// à partir de là c'est un brouillon comme un autre. Ce qu'on avait déjà
+  /// écrit n'est pas écrasé : la proposition se pose à la suite.
+  func editAgentProposal(_ message: ChatMessage) {
+    guard let proposal = message.agentProposal, !proposal.isEmpty,
+          let session = primarySession
+    else { return }
+    let pending = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    session.draftText = pending.isEmpty ? proposal.text : pending + "\n" + proposal.text
+    deleteLocally(messageID: message.id)
+  }
+
+  /// « Ignorer » : la carte s'en va, rien n'est envoyé. Même masquage que
+  /// « Supprimer ici » — il rejoint le Relais, l'iPhone ne la remontrera pas.
+  func ignoreAgentProposal(_ message: ChatMessage) {
+    deleteLocally(messageID: message.id)
+  }
+
   /// Ce qui empêche d'envoyer sur ce fil, ou `nil`. Commun à l'envoi immédiat
   /// et à l'échéance d'un message programmé ; `interactive` autorise à demander
   /// l'automatisation Messages (jamais depuis la boucle d'échéance).
@@ -2688,7 +2749,13 @@ final class InboxStore {
       }
       guard !refreshed.isEmpty else { return }
       let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
-      session.messages = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      let recombined = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      // Le `/sync` revient dès qu'un événement passe QUELQUE PART — une frappe,
+      // un accusé de lecture dans un autre salon. Réécrire le fil à l'identique
+      // suffirait à faire refaire son corps et sa mise en page à chaque bulle :
+      // dans un groupe de quatre cents messages, c'est le fil qui rame sans
+      // qu'il soit rien arrivé. On n'écrit que si le fil a vraiment changé.
+      if session.messages != recombined { session.messages = recombined }
       applySidebarPreview(conversationID: bridged[0].id, from: refreshed)
       if isAttended(id) { clearUnread(for: id) }
       return
@@ -2696,7 +2763,10 @@ final class InboxStore {
     guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
-    session.messages = await matrix.ensureLocalAttachments(fetched)
+    let refreshed = await matrix.ensureLocalAttachments(fetched)
+    // Même raison qu'au-dessus : un fil identique se réécrit sans rien apporter,
+    // et l'observation, elle, y croit.
+    if session.messages != refreshed { session.messages = refreshed }
     applySidebarPreview(conversationID: id, from: session.messages)
     recordReplyProof(for: id, in: session.messages)
     if isAttended(id) { clearUnread(for: id) }

@@ -27,6 +27,10 @@ struct MessageBubble: View {
   var onLongPress: (() -> Void)?
   /// Taper la citation : remonter au message cité dans le fil. `nil` = citation inerte.
   var onQuoteTap: (() -> Void)?
+  /// Les trois gestes d'une proposition de « cc ». `nil` = carte en lecture seule.
+  var onSendProposal: (() -> Void)?
+  var onEditProposal: (() -> Void)?
+  var onIgnoreProposal: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var dragOffset: CGFloat = 0
@@ -34,6 +38,24 @@ struct MessageBubble: View {
   private var bodySize: CGFloat { Typography.bubbleSize() }
 
   var body: some View {
+    // Une proposition n'est pas une bulle : ni auteur, ni balayage pour citer,
+    // ni appui long. C'est une carte, et elle ne quitte pas cet appareil.
+    if let proposal = message.agentProposal {
+      AgentProposalCard(
+        proposal: proposal,
+        theme: theme,
+        typeface: typeface,
+        onSend: onSendProposal,
+        onEdit: onEditProposal,
+        onIgnore: onIgnoreProposal
+      )
+      .frame(maxWidth: .infinity, alignment: .leading)
+    } else {
+      bubble
+    }
+  }
+
+  private var bubble: some View {
     VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 4) {
       if let senderLabel, !message.isFromMe {
         Text(senderLabel)
@@ -85,6 +107,9 @@ struct MessageBubble: View {
           .font(Typography.bubble(typeface))
           .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
           .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+          // Un mot plus long que la bulle — un chemin, une URL — : sans ceci,
+          // `Text` tronque la ligne d'une ellipse au lieu de couper le mot.
+          .fixedSize(horizontal: false, vertical: true)
           // Pas de sélection de texte : elle prendrait l'appui long, qui
           // ouvre les actions — et « Copier le texte » y est.
           .padding(.horizontal, 13)
@@ -176,11 +201,13 @@ struct MessageBubble: View {
         Text(quote.text)
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkSecondary)
-          .lineLimit(2)
+          // Quatre lignes : assez pour relire ce à quoi on répond — un ordre
+          // à @cc, une phrase entière — sans transformer la citation en fil.
+          .lineLimit(4)
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 260, alignment: .leading)
+    .frame(maxWidth: 420, alignment: .leading)
     // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
     // prend toute celle qu'on lui propose et la citation avale la bulle —
     // le texte du message se tronquait derrière elle. Même parade que le

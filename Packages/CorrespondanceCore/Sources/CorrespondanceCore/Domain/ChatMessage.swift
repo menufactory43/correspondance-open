@@ -241,9 +241,16 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   /// Événement de conversation (« X a ajouté Y ») plutôt qu'un message :
   /// le fil l'affiche en séparateur discret, sans bulle ni auteur.
   public var systemEventText: String?
+  /// Ce que « cc » propose d'envoyer ici. Le fil montre alors une carte au lieu
+  /// d'une bulle — visible chez nous seulement, tant qu'on n'a rien envoyé.
+  public var agentProposal: AgentProposal?
 
   /// Un événement de conversation, pas une prise de parole.
   public var isSystemEvent: Bool { systemEventText != nil }
+
+  /// Un brouillon d'agent, pas un message du fil. Rien de ce qui compte les
+  /// messages — l'aperçu de l'inbox, le non-lu, la recherche — ne le compte.
+  public var isAgentProposal: Bool { agentProposal != nil }
 
   public init(
     id: String,
@@ -264,7 +271,8 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     isRetracted: Bool = false,
     expressiveEffectName: String? = nil,
     poll: Poll? = nil,
-    systemEventText: String? = nil
+    systemEventText: String? = nil,
+    agentProposal: AgentProposal? = nil
   ) {
     self.id = id
     self.conversationID = conversationID
@@ -285,9 +293,13 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     self.expressiveEffectName = expressiveEffectName
     self.poll = poll
     self.systemEventText = systemEventText
+    self.agentProposal = agentProposal
   }
 
   public var sidebarPreviewText: String {
+    // Une proposition n'a jamais été dite : elle ne peut pas résumer un fil.
+    // La ligne d'inbox montre le dernier VRAI message — cf. `MatrixRoomModel`.
+    if isAgentProposal { return "" }
     if let systemEventText { return systemEventText }
     if isRetracted { return "Message annulé" }
     if let poll { return "📊 \(poll.question)" }
@@ -312,7 +324,10 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   }
 
   public var hasVisibleBody: Bool {
-    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent || poll != nil
+    // Une proposition se montre, mais elle n'est le « dernier message » de rien :
+    // ni la cible d'une réaction rapide, ni ce qu'un aperçu doit citer.
+    guard !isAgentProposal else { return false }
+    return !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent || poll != nil
   }
 
   /// Ce message n'est qu'un geste : 1 à 3 emoji, rien d'autre.
@@ -321,7 +336,7 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   /// (une réponse a un contexte à porter), ni annulation, ni événement de
   /// conversation. La bulle le montre alors nu et grand — cf. `MessageBubbleView`.
   public var isEmojiOnly: Bool {
-    guard attachments.isEmpty, poll == nil else { return false }
+    guard attachments.isEmpty, poll == nil, !isAgentProposal else { return false }
     guard replyTo?.isEmpty != false else { return false }
     guard !isRetracted, !isSystemEvent else { return false }
     return EmojiText.isEmojiOnly(text)

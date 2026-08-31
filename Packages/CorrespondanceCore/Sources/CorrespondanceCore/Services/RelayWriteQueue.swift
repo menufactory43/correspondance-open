@@ -18,6 +18,8 @@ public enum RelayWrite: Codable, Sendable, Equatable {
   /// Une demande acceptée, refusée, ou remise en attente (`nil`).
   case request(roomID: String, value: ConversationRequest.Decision?)
   case mergedContacts(MergedContactStore.Stored)
+  /// Les réglages de l'agent — account data globale, comme les fusions.
+  case agentSettings(AgentSettings)
 
   /// Le salon visé, `nil` pour une écriture globale (les fusions).
   public var roomID: String? {
@@ -25,7 +27,7 @@ public enum RelayWrite: Codable, Sendable, Equatable {
     case .archived(let roomID, _), .pinned(let roomID, _), .muted(let roomID, _),
          .draft(let roomID, _), .hidden(let roomID, _), .reminder(let roomID, _), .request(let roomID, _):
       roomID
-    case .mergedContacts:
+    case .mergedContacts, .agentSettings:
       nil
     }
   }
@@ -42,6 +44,7 @@ public enum RelayWrite: Codable, Sendable, Equatable {
     case .reminder(let roomID, _): "reminder:\(roomID)"
     case .request(let roomID, _): "request:\(roomID)"
     case .mergedContacts: "merged"
+    case .agentSettings: "agent"
     }
   }
 
@@ -65,6 +68,8 @@ public enum RelayWrite: Codable, Sendable, Equatable {
       if let value { snapshot.requests[roomID] = value } else { snapshot.requests.removeValue(forKey: roomID) }
     case .mergedContacts(let stored):
       snapshot.mergedContacts = stored
+    case .agentSettings(let settings):
+      snapshot.agentSettings = settings
     }
   }
 }

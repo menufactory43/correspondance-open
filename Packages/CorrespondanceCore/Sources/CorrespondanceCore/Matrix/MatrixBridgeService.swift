@@ -131,6 +131,33 @@ public actor MatrixBridgeService {
 
   /// Reprend le curseur `next_batch` du cache et vérifie que la session tient encore.
   /// `false` = pas de credentials ou token périmé : l'appelant n'ouvre pas de boucle.
+  /// Reprend l'inbox du disque, sans réseau : l'identité vient des identifiants
+  /// enregistrés, la base locale fait le reste. C'est ce qui permet à l'écran
+  /// de s'allumer avant que le tunnel (Tailscale, dehors) ne soit monté.
+  public func restoreFromDisk() async -> Bool {
+    guard let credentials = await client.currentCredentials else { return false }
+    selfUserID = credentials.userID
+    hydrateIfNeeded()
+    return true
+  }
+
+  /// La session, vue du Relais. « Injoignable » n'est pas « invalide » : dehors,
+  /// le premier est fréquent et passager, le second demande une reconnexion.
+  public enum SessionCheck: Sendable { case valid, invalid, unreachable }
+
+  public func checkSession() async -> SessionCheck {
+    hydrateIfNeeded()
+    guard await client.isConfigured else { return .invalid }
+    do {
+      selfUserID = try await client.whoami()
+      return .valid
+    } catch MatrixError.http(let status, let errcode, _) where status == 401 || errcode == "M_UNKNOWN_TOKEN" {
+      return .invalid
+    } catch {
+      return .unreachable
+    }
+  }
+
   public func restoreCursorAndCheckSession() async -> Bool {
     hydrateIfNeeded()
     guard await client.isConfigured else { return false }
@@ -528,14 +555,28 @@ public actor MatrixBridgeService {
     }
     if !text.isEmpty {
       let quoted = replyToMessageID.flatMap { rooms[roomID]?.messagesByID[$0] }
+      let sendsFallback = Self.sendsReplyFallback(on: rooms[roomID]?.network)
       try await client.sendText(
         roomID: roomID,
         body: text,
         replyToEventID: replyToMessageID,
-        replyFallback: quoted.map { (sender: $0.senderID ?? selfUserID, text: $0.sidebarPreviewText) },
+        replyFallback: sendsFallback
+          ? quoted.map { (sender: $0.senderID ?? selfUserID, text: $0.sidebarPreviewText) }
+          : nil,
         transactionID: txnID
       )
     }
+  }
+
+  /// Faut-il joindre le repli « > <@x> … » à une réponse citée ?
+  ///
+  /// mautrix-signal transmet le corps **tel quel** : le repli arrive chez le
+  /// correspondant en texte brut, MXID `@signal_…:correspondance.local` compris.
+  /// La citation passe par `m.in_reply_to`, le repli n'apporte rien — on ne
+  /// l'envoie pas. WhatsApp, lui, le retire correctement ; on ne change rien
+  /// à ce qui marche.
+  static func sendsReplyFallback(on network: MessageNetwork?) -> Bool {
+    network != .signal
   }
 
   /// Pose, remplace ou retire ma réaction sur un message.
@@ -806,6 +847,11 @@ public actor MatrixBridgeService {
     case .mergedContacts(let stored):
       guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }
       try await client.setAccountData(type: ConversationStateKeys.mergedContactsType, content: content)
+    case .agentSettings(let settings):
+      try await client.setAccountData(
+        type: ConversationStateKeys.agentSettingsType,
+        content: ConversationStateCodec.agentSettingsContent(settings)
+      )
     }
     // L'écriture partie, on la pose aussi sur notre copie : le `/sync` qui la
     // renverra n'apprendra rien de neuf, et rien ne clignote entre-temps.
@@ -954,7 +1000,7 @@ public actor MatrixBridgeService {
        Date().timeIntervalSince(sentAt) > Self.botJoinGraceSeconds,
        await botHasJoined(roomID: roomID, network: network) == false
     {
-      throw MatrixError.bridgeBotNotJoined(network)
+      throw MatrixError.bridgeBotNotJoined(networkLabel: network.labelFR)
     }
     return .waiting
   }
@@ -1125,7 +1171,7 @@ public actor MatrixBridgeService {
     // Passé le délai, ce n'est plus une course : la registration du pont n'est
     // pas chargée côté Synapse, et l'erreur le dit avec la marche à suivre.
     guard await botHasJoined(roomID: roomID, network: network) == true else {
-      throw MatrixError.bridgeBotNotJoined(network)
+      throw MatrixError.bridgeBotNotJoined(networkLabel: network.labelFR)
     }
   }
 

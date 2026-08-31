@@ -22,6 +22,7 @@ public struct MatrixSyncParser: Sendable {
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
         applyPoll(event, roomID: roomID, to: &model)
+        applyAgentProposal(event, to: &model)
         applyRedaction(event, to: &model)
       }
       for event in (room.ephemeral?.events ?? []) {
@@ -109,10 +110,12 @@ public struct MatrixSyncParser: Sendable {
       {
         alreadyKnown += 1
       }
+      applyMembershipNotice(event, roomID: roomID, to: &model)
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
       applyPoll(event, roomID: roomID, to: &model)
+      applyAgentProposal(event, to: &model)
       applyRedaction(event, to: &model)
     }
     resolveQuotes(in: &model)
@@ -286,6 +289,99 @@ public struct MatrixSyncParser: Sendable {
         }
       }
     }
+  }
+
+  // MARK: - Arrivées et départs
+
+  /// « cc a rejoint la conversation » : une ligne d'événement quand un
+  /// utilisateur du Relais — un agent, pas un ghost ni un bot de pont — entre
+  /// ou sort d'un salon. Les ghosts vont et viennent au rythme du réseau
+  /// distant et n'ont rien à annoncer ici ; moi non plus.
+  ///
+  /// À jouer **avant** `applyState` : c'est l'adhésion précédente, encore en
+  /// mémoire, qui dit si quelque chose a changé. Un `join` qui suit un `join`
+  /// n'est qu'un changement de nom ou de photo.
+  private func applyMembershipNotice(_ event: MatrixEvent, roomID: String, to model: inout MatrixRoomModel) {
+    guard event.type == "m.room.member",
+          let eventID = event.eventID,
+          let userID = event.stateKey,
+          userID != selfUserID,
+          !MatrixIdentity.isGhost(userID),
+          !MatrixIdentity.isBridgeBot(userID),
+          let content = event.content
+    else { return }
+    let membership = content.string(at: "membership") ?? "leave"
+    let wasJoined = model.members[userID]?.membership == "join"
+    let verb: String
+    switch (wasJoined, membership) {
+    case (false, "join"): verb = "a rejoint la conversation"
+    case (true, "leave"), (true, "ban"): verb = "a quitté la conversation"
+    default: return
+    }
+    let name = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
+      ?? model.members[userID]?.displayName
+      ?? MatrixIdentity.localpart(of: userID)
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      isFromMe: false,
+      senderID: userID,
+      senderName: name,
+      systemEventText: "\(name) \(verb)"
+    )
+    model.markWritten(eventID)
+    if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  // MARK: - Propositions de l'agent
+
+  /// Un brouillon posé par « cc » (`fr.correspondance.agent.proposal`).
+  ///
+  /// Il entre dans le fil comme un message, mais il n'en est pas un : aucun
+  /// pont ne le relaie, il ne bouge pas `lastEventAt` (le fil ne remonte donc
+  /// pas dans la file pour une phrase que personne n'a dite), et
+  /// `sidebarPreviewText` reste muet. Ce qui l'efface est ce qui efface un
+  /// message : une redaction, ou le masquage « ici ».
+  private func applyAgentProposal(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == AgentProposal.eventType,
+          let eventID = event.eventID,
+          let content = event.content,
+          let proposal = Self.agentProposal(in: content, sender: event.sender),
+          !proposal.isEmpty
+    else { return }
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      // Une proposition n'est de personne : ni de moi, ni du correspondant.
+      isFromMe: false,
+      senderID: event.sender,
+      senderName: event.sender.map { displayName(of: $0, in: model) },
+      agentProposal: proposal
+    )
+    model.markWritten(eventID)
+  }
+
+  /// Le corps d'une proposition : `{ "body", "agent", "m.relates_to" }`.
+  /// À défaut de champ `agent`, le localpart de l'expéditeur fait le nom.
+  public static func agentProposal(in content: MatrixJSON, sender: String?) -> AgentProposal? {
+    guard let body = content.string(at: "body"), !body.isEmpty else { return nil }
+    let declared = content.string(at: "agent")?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let agent = (declared?.isEmpty == false)
+      ? declared!
+      : sender.map { MatrixIdentity.localpart(of: $0) } ?? ""
+    return AgentProposal(
+      agent: agent,
+      text: body,
+      inReplyToEventID: content.string(at: "m.relates_to.m.in_reply_to.event_id")
+    )
   }
 
   // MARK: - Messages

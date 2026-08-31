@@ -69,8 +69,10 @@ public enum MessageGrouping {
       let changedNetwork = previous.map { $0.network != message.network } ?? true
 
       // Un événement de conversation (« X a ajouté Y ») ne se groupe avec rien :
-      // il s'écrit seul, en travers du fil, sans nom d'auteur au-dessus.
+      // il s'écrit seul, en travers du fil, sans nom d'auteur au-dessus. Une
+      // proposition de l'agent non plus : c'est une carte, pas une prise de parole.
       let isolated = message.isSystemEvent || previous?.isSystemEvent == true
+        || message.isAgentProposal || previous?.isAgentProposal == true
 
       if silence || changedAuthor || isolated || changedNetwork {
         // On n'annonce l'origine qu'au premier groupe et aux bascules — pas à
@@ -81,6 +83,7 @@ public enum MessageGrouping {
             id: message.id,
             messages: [message],
             senderLabel: showsSenderNames && !message.isFromMe && !message.isSystemEvent
+              && !message.isAgentProposal
               ? label(for: message)
               : nil,
             timeSeparator: silence || marksOrigin ? message.sentAt : nil,

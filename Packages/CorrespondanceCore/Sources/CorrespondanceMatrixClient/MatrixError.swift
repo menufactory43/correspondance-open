@@ -6,9 +6,9 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
   case http(status: Int, errcode: String?, message: String?)
   case decoding(String)
   case transport(String)
-  case bridgeBotSilent(MessageNetwork)
+  case bridgeBotSilent(networkLabel: String)
   /// Le bot n'a pas accepté l'invitation au salon de gestion : Synapse ne le connaît pas.
-  case bridgeBotNotJoined(MessageNetwork)
+  case bridgeBotNotJoined(networkLabel: String)
 
   public var errorDescription: String? {
     switch self {
@@ -22,10 +22,10 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
       "Réponse Matrix incompréhensible : \(detail)"
     case .transport(let detail):
       "Le homeserver ne répond pas : \(detail)"
-    case .bridgeBotSilent(let network):
-      "Le bot \(network.labelFR) ne répond pas. Vérifie le pont sur le NUC."
-    case .bridgeBotNotJoined(let network):
-      "Le bot \(network.labelFR) n'a pas rejoint le salon : Synapse n'a pas chargé la registration du pont. Sur le NUC : docker-compose restart synapse, puis Relancer."
+    case .bridgeBotSilent(let label):
+      "Le bot \(label) ne répond pas. Vérifie le pont sur le NUC."
+    case .bridgeBotNotJoined(let label):
+      "Le bot \(label) n'a pas rejoint le salon : Synapse n'a pas chargé la registration du pont. Sur le NUC : docker-compose restart synapse, puis Relancer."
     }
   }
 

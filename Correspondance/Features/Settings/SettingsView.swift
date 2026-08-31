@@ -112,6 +112,7 @@ struct SettingsView: View {
         case .comptes: SettingsAccountsPane()
         case .matrix: SettingsMatrixPane()
         case .automatisation: SettingsAutomationPane()
+        case .agent: SettingsAgentPane()
         case .autorisations: SettingsPermissionsPane()
         case .apparence: SettingsAppearancePane()
         case .dictee: SettingsDictationPane()
@@ -131,6 +132,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   case comptes
   case matrix
   case automatisation
+  case agent
   case autorisations
   case apparence
   case dictee
@@ -142,6 +144,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .comptes: "Comptes"
     case .matrix: "Serveur Matrix"
     case .automatisation: "Automatisation"
+    case .agent: "Agent"
     case .autorisations: "Autorisations"
     case .apparence: "Apparence"
     case .dictee: "Dictée"
@@ -153,6 +156,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .comptes: "Les réseaux branchés sur Correspondance et l’état de chaque lien."
     case .matrix: "Le homeserver qui porte les ponts WhatsApp et Instagram."
     case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
+    case .agent: "Comment « cc » répond quand on l’appelle dans une conversation."
     case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."
     case .apparence: "Le mode d’ouverture, la police et l’ambiance d’écriture."
     case .dictee: "Le moteur qui transforme la voix en texte dans le composer."
@@ -164,9 +168,52 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case .comptes: "person.2.fill"
     case .matrix: "server.rack"
     case .automatisation: "wand.and.stars"
+    case .agent: "pencil.line"
     case .autorisations: "lock.shield"
     case .apparence: "paintbrush"
     case .dictee: "mic"
+    }
+  }
+}
+
+/// Le seul réglage que l'agent lise.
+///
+/// « cc » ne tourne pas dans l'app : c'est un processus à part, sur le Relais.
+/// Ce choix-ci part dans l'account data Matrix globale, et l'agent l'y relit à
+/// son prochain `/sync` — d'où la phrase du bas, qui dit que rien n'est
+/// instantané. En tête-à-tête l'agent répond toujours à voix haute : il n'y a
+/// personne à ménager, et ce réglage n'a donc rien à en dire.
+struct SettingsAgentPane: View {
+  @Environment(InboxStore.self) private var store
+  @Environment(ThemePreferences.self) private var themes
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Spacing.lg) {
+      SettingsCard(
+        title: "Réponses de cc",
+        footnote: "En tête-à-tête avec toi, cc répond toujours à voix haute. "
+          + "Ce choix ne concerne que les conversations où d’autres personnes lisent."
+      ) {
+        SettingsRow(
+          label: "Dans les conversations de groupe",
+          detail: store.agentDefaultMode.subtitleFR,
+          systemImage: "person.2.wave.2"
+        ) {
+          Picker("", selection: Binding(
+            get: { store.agentDefaultMode },
+            set: { store.setAgentDefaultMode($0) }
+          )) {
+            Text("Brouillon à valider").tag(AgentSettings.Mode.draft)
+            Text("À voix haute").tag(AgentSettings.Mode.direct)
+          }
+          .pickerStyle(.menu)
+          .frame(width: 190)
+        }
+      }
+
+      Text("Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(themes.theme.inkTertiary)
     }
   }
 }

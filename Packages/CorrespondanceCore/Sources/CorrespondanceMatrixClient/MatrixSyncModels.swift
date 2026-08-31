@@ -26,6 +26,12 @@ public struct MatrixSyncResponse: Decodable, Sendable {
     public var join: [String: JoinedRoom]?
     public var leave: [String: MatrixJSON]?
     public var invite: [String: MatrixJSON]?
+
+    public init(join: [String: JoinedRoom]? = nil, leave: [String: MatrixJSON]? = nil, invite: [String: MatrixJSON]? = nil) {
+      self.join = join
+      self.leave = leave
+      self.invite = invite
+    }
   }
 
   public struct JoinedRoom: Decodable, Sendable {
@@ -44,10 +50,25 @@ public struct MatrixSyncResponse: Decodable, Sendable {
       case unreadNotifications = "unread_notifications"
       case accountData = "account_data"
     }
+
+    public init(
+      timeline: Timeline? = nil, state: State? = nil, summary: Summary? = nil,
+      unreadNotifications: UnreadNotifications? = nil, ephemeral: Ephemeral? = nil,
+      accountData: MatrixSyncResponse.AccountData? = nil
+    ) {
+      self.timeline = timeline
+      self.state = state
+      self.summary = summary
+      self.unreadNotifications = unreadNotifications
+      self.ephemeral = ephemeral
+      self.accountData = accountData
+    }
   }
 
   public struct Ephemeral: Decodable, Sendable {
     public var events: [MatrixEvent]?
+
+    public init(events: [MatrixEvent]? = nil) { self.events = events }
   }
 
   public struct Timeline: Decodable, Sendable {
@@ -59,10 +80,18 @@ public struct MatrixSyncResponse: Decodable, Sendable {
       case events, limited
       case prevBatch = "prev_batch"
     }
+
+    public init(events: [MatrixEvent]? = nil, limited: Bool? = nil, prevBatch: String? = nil) {
+      self.events = events
+      self.limited = limited
+      self.prevBatch = prevBatch
+    }
   }
 
   public struct State: Decodable, Sendable {
     public var events: [MatrixEvent]?
+
+    public init(events: [MatrixEvent]? = nil) { self.events = events }
   }
 
   public struct Summary: Decodable, Sendable {
@@ -73,6 +102,11 @@ public struct MatrixSyncResponse: Decodable, Sendable {
       case heroes = "m.heroes"
       case joinedMemberCount = "m.joined_member_count"
     }
+
+    public init(heroes: [String]? = nil, joinedMemberCount: Int? = nil) {
+      self.heroes = heroes
+      self.joinedMemberCount = joinedMemberCount
+    }
   }
 
   public struct UnreadNotifications: Decodable, Sendable {
@@ -81,6 +115,8 @@ public struct MatrixSyncResponse: Decodable, Sendable {
     public enum CodingKeys: String, CodingKey {
       case notificationCount = "notification_count"
     }
+
+    public init(notificationCount: Int? = nil) { self.notificationCount = notificationCount }
   }
 
   public init(nextBatch: String, rooms: Rooms? = nil, accountData: AccountData? = nil) {

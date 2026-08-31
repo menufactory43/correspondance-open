@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 /// Client Matrix Client-Server v3 en REST pur (`URLSession`). Pas de SDK, pas d'E2EE :
 /// homeserver privé sur Tailscale, salons de bridge non chiffrés.
@@ -14,8 +17,22 @@ public actor MatrixClient {
     // Le long-poll /sync tient 30 s côté serveur : la marge évite les faux timeouts.
     config.timeoutIntervalForRequest = 60
     config.timeoutIntervalForResource = 120
-    config.waitsForConnectivity = false
+    #if !canImport(FoundationNetworking)
+      config.waitsForConnectivity = false
+    #endif
     session = URLSession(configuration: config)
+  }
+
+  /// Le nom sous lequel la session apparaît côté serveur. Inchangé sur Mac et
+  /// iPhone ; « agent » ailleurs — le bot qui tourne sur le NUC.
+  public static var deviceDisplayName: String {
+    #if canImport(AppKit)
+      return "Correspondance (Mac)"
+    #elseif canImport(UIKit)
+      return "Correspondance (iPhone)"
+    #else
+      return "Correspondance (agent)"
+    #endif
   }
 
   public var currentCredentials: MatrixCredentials? { credentials }
@@ -33,7 +50,7 @@ public actor MatrixClient {
       "type": .string("m.login.password"),
       "identifier": .object(["type": .string("m.id.user"), "user": .string(user)]),
       "password": .string(password),
-      "initial_device_display_name": .string(Platform.deviceDisplayName),
+      "initial_device_display_name": .string(Self.deviceDisplayName),
     ]
     let json = try await request(
       method: "POST",
@@ -244,6 +261,26 @@ public actor MatrixClient {
       method: "PUT",
       path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.room.message/\(Self.escape(transactionID))",
       body: .object(content)
+    )
+    ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
+  /// Un event de salon d'un type quelconque — nos propres types
+  /// (`fr.correspondance.agent.*`), que les ponts mautrix ne relaient pas :
+  /// ce qui s'y dit reste entre le Relais et ses clients.
+  @discardableResult
+  public func sendEvent(
+    roomID: String,
+    type: String,
+    content: MatrixJSON,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    guard !ledger.isUsed(transactionID) else { return nil }
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(type))/\(Self.escape(transactionID))",
+      body: content
     )
     ledger.markUsed(transactionID)
     return json.string(at: "event_id")

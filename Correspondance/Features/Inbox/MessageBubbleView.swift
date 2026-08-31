@@ -101,6 +101,10 @@ struct MessageBubbleView: View {
             // de la fonte. Dérivé du thème et du corps effectif — cf. `WritingTheme`.
             .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
             .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+            // Un mot plus long que la bulle — un chemin, une URL — : sans
+            // ceci, `Text` tronque la ligne d'une ellipse au lieu de couper
+            // le mot. On lui rend sa hauteur libre, il replie.
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
@@ -354,11 +358,13 @@ struct MessageBubbleView: View {
         Text(quote.text)
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkSecondary)
-          .lineLimit(2)
+          // Quatre lignes : assez pour relire ce à quoi on répond — un ordre
+          // à @cc, une phrase entière — sans transformer la citation en fil.
+          .lineLimit(4)
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 260, alignment: .leading)
+    .frame(maxWidth: 420, alignment: .leading)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
   }
 
@@ -565,5 +571,32 @@ struct MessageBubbleView: View {
       copy.localPath = path
     }
     return copy
+  }
+}
+
+/// Une bulle ne dépend que de son message et de la façon de l'écrire. Sans ce
+/// `==`, SwiftUI compare la vue champ par champ, tombe sur les fermetures
+/// d'action — jamais égales entre elles — et conclut que TOUTE bulle a changé :
+/// le moindre rafraîchissement du fil (« Alice écrit… », un accusé de lecture)
+/// refaisait le corps et la mise en page des quatre cents bulles d'un groupe.
+/// On ne compare donc pas les fermetures, on compare ce qu'elles offrent :
+/// l'action est-elle proposée ou non. Leur contenu, lui, ne capture que le
+/// magasin et l'identifiant du message — deux choses qui ne bougent pas.
+extension MessageBubbleView: Equatable {
+  nonisolated static func == (lhs: MessageBubbleView, rhs: MessageBubbleView) -> Bool {
+    lhs.message == rhs.message
+      && lhs.theme == rhs.theme
+      && lhs.typeface == rhs.typeface
+      && lhs.textScale == rhs.textScale
+      && lhs.showsLinkPreviews == rhs.showsLinkPreviews
+      && lhs.highlightQuery == rhs.highlightQuery
+      && lhs.isCurrentMatch == rhs.isCurrentMatch
+      && (lhs.onReact == nil) == (rhs.onReact == nil)
+      && (lhs.onReply == nil) == (rhs.onReply == nil)
+      && (lhs.onEdit == nil) == (rhs.onEdit == nil)
+      && (lhs.onUndoSend == nil) == (rhs.onUndoSend == nil)
+      && (lhs.onDeleteLocally == nil) == (rhs.onDeleteLocally == nil)
+      && (lhs.onDeleteEverywhere == nil) == (rhs.onDeleteEverywhere == nil)
+      && (lhs.onVotePoll == nil) == (rhs.onVotePoll == nil)
   }
 }

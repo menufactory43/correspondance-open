@@ -1,0 +1,23 @@
+# Unité systemd *utilisateur* de l'agent « cc » sur le NUC.
+#   ~/.config/systemd/user/correspondance-agent.service
+#   systemctl --user enable --now correspondance-agent
+# Le compte doit avoir `loginctl enable-linger` pour survivre à la déconnexion.
+[Unit]
+Description=Correspondance — agent cc (Claude Code dans tes conversations)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/correspondance-agent run
+Restart=always
+RestartSec=5
+# Le `claude` du NUC et son login : même PATH qu'un shell de l'utilisateur.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CORRESPONDANCE_AGENT_HOME=%h/.correspondance-agent
+# Un tour de Claude peut durer : ne pas le tuer trop vite à l'arrêt.
+TimeoutStopSec=30
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
