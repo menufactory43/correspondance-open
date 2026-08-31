@@ -19,12 +19,18 @@ struct ThreadView: View {
   /// est de toute façon invisible tant qu'il n'est pas ancré en bas — il
   /// arrive donc entier, un instant plus tard, sans saut.
   @State private var awaitsFirstFrame = !LaunchGate.didPaintFirstWindow
-  /// Au lancement, le fil paraît par sa QUEUE : l'écran ne montre que les
-  /// derniers messages, inutile d'en construire cent vingt — corps, mise en
-  /// page, rendu — avant de le montrer. Le reste s'ajoute au-dessus, hors
-  /// champ, une frame plus tard ; le bas tient (`keepScrolledToBottom`), rien
-  /// ne bouge à l'écran. Mesuré : le fil paraît ~190 ms plus tôt. `nil` = entier.
+  /// Au lancement comme à chaque bascule de fil, le fil paraît par sa QUEUE :
+  /// l'écran ne montre que les derniers messages, inutile d'en construire
+  /// cent vingt — corps, mise en page, rendu — avant de le montrer. Le reste
+  /// s'ajoute au-dessus, hors champ, une frame plus tard ; le bas tient
+  /// (`keepScrolledToBottom`), rien ne bouge à l'écran. Mesuré : le fil
+  /// paraît ~190 ms plus tôt au lancement, et 710 → 135 ms entre le clic et
+  /// le fil à l'écran sur un fil de 199 messages. `nil` = entier.
   @State private var launchTail: Int? = LaunchGate.didPaintFirstWindow ? nil : ThreadMetrics.launchTailCount
+  /// Le compte de messages pour lequel une expansion est programmée : si le
+  /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
+  /// la passe suivante reprogrammer la sienne.
+  @State private var pendingExpansionCount: Int?
   /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
   /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
   @State private var isNearBottom = true
@@ -175,7 +181,9 @@ struct ThreadView: View {
         pinToBottom(proxy)
       }
       .onChange(of: store.selectedConversationID) { _, _ in
+        LaunchTrace.event("select")
         isShowingThread = false
+        launchTail = ThreadMetrics.launchTailCount
         animatesArrivals = false
         settledMessageID = store.messages.last?.id
         isNearBottom = true
@@ -325,13 +333,23 @@ struct ThreadView: View {
       guard !awaitsFirstFrame else { return }
       isShowingThread = true
       LaunchTrace.mark("thread")
+      LaunchTrace.event("shown", store.messages.count)
       LaunchGate.markThreadPainted()
-      if launchTail != nil {
+      if launchTail != nil, !store.messages.isEmpty {
         // La queue est peinte ; le reste du fil monte au-dessus, hors champ.
-        // Un court délai, pour que la frame de la queue parte avant.
+        // Un court délai, pour que la frame de la queue parte avant. Si le
+        // fil change d'ici là (chargement après la bascule), la passe qui
+        // suit reprogrammera la sienne.
+        let count = store.messages.count
+        pendingExpansionCount = count
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(80)) {
+          guard pendingExpansionCount == count, store.messages.count == count else { return }
+          pendingExpansionCount = nil
           launchTail = nil
-          DispatchQueue.main.async { LaunchTrace.mark("thread-full") }
+          DispatchQueue.main.async {
+            LaunchTrace.mark("thread-full")
+            LaunchTrace.event("full", store.messages.count)
+          }
         }
       }
       // Ce qui est à l'écran à l'ouverture est déjà posé.

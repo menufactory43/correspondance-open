@@ -38,6 +38,13 @@ enum LaunchTrace {
   /// chaque bascule de fil.
   @MainActor private static var marked: Set<String> = []
 
+  /// Un événement qui se répète (chaque bascule de fil), avec une valeur.
+  @MainActor
+  static func event(_ name: StaticString, _ value: Int = 0) {
+    let ms = Int((Date().timeIntervalSince1970 - processStart) * 1000)
+    os_log("EVENT %{public}@ ms=%d n=%d", log: log, "\(name)", ms, value)
+  }
+
   @MainActor
   static func mark(_ name: StaticString) {
     let key = "\(name)"
