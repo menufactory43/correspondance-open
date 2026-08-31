@@ -109,12 +109,14 @@ public actor MatrixBridgeService {
   /// La porte de secours quand la base raconte autre chose que le Relais.
   public func reloadFromRelay() {
     forgetEverything()
-    didHydrate = true
   }
 
   /// Tout oublier : la mémoire **et** la base.
   private func forgetEverything() {
     store?.reset()
+    // Une base vidée n'a plus rien à relire : la prochaine passe repart d'un
+    // sync initial, pas d'une hydratation sur du vide.
+    didHydrate = true
     rooms = [:]
     nextBatch = nil
     managementRoomIDs = [:]
@@ -144,6 +146,7 @@ public actor MatrixBridgeService {
   @discardableResult
   public func syncOnce(timeoutMilliseconds: Int = 30_000) async throws -> [Conversation] {
     guard await client.isConfigured else { throw MatrixError.notConfigured }
+    hydrateIfNeeded()
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
@@ -271,6 +274,7 @@ public actor MatrixBridgeService {
   }
 
   public func conversations() -> [Conversation] {
+    hydrateIfNeeded()
     var list = rooms.values
       .compactMap { $0.conversation(selfUserID: selfUserID) }
     // La note à soi n'a pas de pont : c'est l'account data qui la désigne.
@@ -672,6 +676,8 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID) else { return }
     try await client.leave(roomID: roomID)
     rooms.removeValue(forKey: roomID)
+    loadedHistoryRoomIDs.remove(roomID)
+    store?.deleteRooms([roomID])
   }
 
   // MARK: - Push
