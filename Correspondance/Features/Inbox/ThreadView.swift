@@ -27,6 +27,12 @@ struct ThreadView: View {
   /// paraît ~190 ms plus tôt au lancement, et 710 → 135 ms entre le clic et
   /// le fil à l'écran sur un fil de 199 messages. `nil` = entier.
   @State private var launchTail: Int? = LaunchGate.didPaintFirstWindow ? nil : ThreadMetrics.launchTailCount
+  /// Combien de messages le fil MONTE — pas combien il en connaît. Un fil de
+  /// groupe fleuve (quatre cents messages et plus) monté d'un bloc fait un
+  /// arbre de calques que le compositeur recompose à chaque frame : l'app ne
+  /// calcule rien, et le défilement rame quand même. On monte la fin, le
+  /// reste attend derrière « Voir les messages précédents ».
+  @State private var windowCount = ThreadMetrics.windowCount
   /// Le compte de messages pour lequel une expansion est programmée : si le
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
@@ -38,8 +44,13 @@ struct ThreadView: View {
   private var theme: WritingTheme { themes.theme }
   private var thread: [ChatMessage] {
     if awaitsFirstFrame { return [] }
-    if let launchTail { return Array(store.messages.suffix(launchTail)) }
-    return store.messages
+    let cap = launchTail.map { min($0, windowCount) } ?? windowCount
+    return Array(store.messages.suffix(cap))
+  }
+
+  /// Ce que la fenêtre laisse hors champ, au-dessus.
+  private var hiddenOlderCount: Int {
+    max(0, store.messages.count - thread.count)
   }
 
   private var sendLaterPickerPresented: Binding<Bool> {
@@ -106,6 +117,31 @@ struct ThreadView: View {
     return store.isMerged(id)
   }
 
+  /// « Voir les messages précédents » : la fenêtre s'ouvre d'un cran, et la
+  /// vue reste sur le message qu'on lisait — ce qui arrive arrive au-dessus.
+  private func olderMessagesButton(_ proxy: ScrollViewProxy) -> some View {
+    Button {
+      let anchorID = thread.first?.id
+      isNearBottom = false
+      windowCount += ThreadMetrics.windowCount
+      if let anchorID {
+        DispatchQueue.main.async {
+          var transaction = Transaction()
+          transaction.disablesAnimations = true
+          withTransaction(transaction) { proxy.scrollTo(anchorID, anchor: .top) }
+        }
+      }
+    } label: {
+      Text("Voir les \(min(hiddenOlderCount, ThreadMetrics.windowCount)) messages précédents")
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(theme.accent)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Voir les messages précédents")
+  }
+
   private var messages: some View {
     ScrollViewReader { proxy in
       ScrollView {
@@ -113,9 +149,12 @@ struct ThreadView: View {
         // sur des lignes hautes et inégales — des photos — ne converge jamais :
         // il place, découvre que les hauteurs ne sont pas celles qu'il croyait,
         // retraduit l'ancre, replace, sans fin. Le fil tournait à 80 % d'un cœur
-        // sans que rien ne bouge à l'écran. Le fil est borné à cent vingt
-        // messages : les construire tous coûte moins cher que cette boucle.
+        // sans que rien ne bouge à l'écran. La pile reste donc simple, et c'est
+        // `windowCount` qui la borne — cf. `thread`.
         VStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
+          if hiddenOlderCount > 0, launchTail == nil {
+            olderMessagesButton(proxy)
+          }
           ForEach(messageGroups) { group in
             if let stamp = group.timeSeparator {
               ThreadTimeSeparator(
@@ -194,6 +233,7 @@ struct ThreadView: View {
         LaunchTrace.event("select")
         isShowingThread = false
         launchTail = ThreadMetrics.launchTailCount
+        windowCount = ThreadMetrics.windowCount
         animatesArrivals = false
         settledMessageID = store.messages.last?.id
         isNearBottom = true
@@ -203,6 +243,16 @@ struct ThreadView: View {
         guard let target else { return }
         // On lit une occurrence, plus le bas : ce qui grandit ne doit pas nous y ramener.
         isNearBottom = false
+        // L'occurrence peut vivre au-dessus de la fenêtre : on l'ouvre jusqu'à
+        // elle, puis on y va — après la passe de layout, sinon l'ancre n'existe pas.
+        if !thread.contains(where: { $0.id == target }),
+           let index = store.messages.firstIndex(where: { $0.id == target }) {
+          windowCount = max(windowCount, store.messages.count - index + 10)
+          DispatchQueue.main.async {
+            proxy.scrollTo(target, anchor: .center)
+          }
+          return
+        }
         withAnimation(.easeOut(duration: 0.18)) {
           proxy.scrollTo(target, anchor: .center)
         }
@@ -425,6 +475,10 @@ enum ThreadMetrics {
   /// fenêtre haute de bulles courtes (≈ 40 pt chacune), assez peu pour que
   /// la passe reste brève : 15 → 30 messages coûtaient ~50 ms de plus.
   static let launchTailCount = 20
+  /// La fenêtre d'affichage du fil : ce qui est monté d'un coup. Au-delà,
+  /// « Voir les messages précédents ». Cent cinquante : trois fois le plus
+  /// gros fil sain mesuré, un tiers du fil qui ramait.
+  static let windowCount = 150
   /// Hauteur de la bande où le fil se dissout sous la barre d'outils.
   static let topFadeHeight: CGFloat = 64
 }
