@@ -177,7 +177,12 @@ struct ThreadView: View {
           if let delivery = store.selectedConversation?.lastDelivery,
              thread.last?.isFromMe == true
           {
-            DeliveryReceiptLabel(delivery: delivery, theme: theme, typeface: themes.typeface)
+            DeliveryReceiptLabel(
+              delivery: delivery,
+              seenBy: store.selectedConversationID.flatMap { store.seenByLabel($0) },
+              theme: theme,
+              typeface: themes.typeface
+            )
           }
 
           // Ce qui partira plus tard attend en bas du fil, en pointillé.
@@ -678,19 +683,26 @@ private struct ReplyBanner: View {
 /// aucun accusé de livraison — rien ne s'affiche.
 private struct DeliveryReceiptLabel: View {
   let delivery: MessageDelivery
+  /// « Vu par Alice et Bruno » — le détail des lecteurs, dans un groupe.
+  /// Quand il existe, il remplace le « Vu » anonyme.
+  var seenBy: String?
   let theme: WritingTheme
   let typeface: WritingTypeface
+
+  private var label: String {
+    delivery == .read ? (seenBy ?? delivery.labelFR) : delivery.labelFR
+  }
 
   var body: some View {
     HStack(spacing: 3) {
       Image(systemName: delivery.systemImage)
         .font(.system(size: 9))
-      Text(delivery.labelFR)
+      Text(label)
         .font(Typography.meta(typeface))
     }
     .foregroundStyle(delivery == .read ? theme.accent : theme.inkTertiary)
     .frame(maxWidth: .infinity, alignment: .trailing)
     .padding(.trailing, 4)
-    .accessibilityLabel("Dernier message : \(delivery.labelFR)")
+    .accessibilityLabel("Dernier message : \(label)")
   }
 }

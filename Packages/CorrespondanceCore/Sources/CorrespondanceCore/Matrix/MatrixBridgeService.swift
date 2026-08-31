@@ -351,8 +351,7 @@ public actor MatrixBridgeService {
 
   /// Le Matrix ID de l'agent « cc » sur ce Relais — même serveur que moi.
   public var agentUserID: String {
-    let serverName = String(selfUserID.split(separator: ":").last ?? "")
-    return "@cc:\(serverName)"
+    MatrixIdentity.agentUserID(sameServerAs: selfUserID)
   }
 
   /// L'agent est-il déjà membre (ou invité) de ce fil ?
@@ -390,6 +389,13 @@ public actor MatrixBridgeService {
   public func typingLabel(conversationID: String, now: Date = Date()) -> String? {
     guard let roomID = roomID(forConversation: conversationID) else { return nil }
     return rooms[roomID]?.typingLabelFR(now: now, selfUserID: selfUserID)
+  }
+
+  /// « Vu par Alice et Bruno » pour ce fil de groupe, ou `nil` : en DM le
+  /// « Vu » de `Conversation.lastDelivery` dit déjà tout.
+  public func seenByLabel(conversationID: String) -> String? {
+    guard let roomID = roomID(forConversation: conversationID) else { return nil }
+    return rooms[roomID]?.seenByLabelFR(selfUserID: selfUserID)
   }
 
   /// Dit au Relais qu'on écrit — ou qu'on a fini. Le pont le relaie au réseau

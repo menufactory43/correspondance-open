@@ -350,6 +350,8 @@ struct ThreadView: View {
     guard let delivery = conversation?.lastDelivery,
           messages.last?.isFromMe == true
     else { return nil }
+    // Dans un groupe, le détail des lecteurs remplace le « Vu » anonyme.
+    if delivery == .read, let seenBy = store.seenByLabel(conversationID) { return seenBy }
     return delivery.labelFR
   }
 

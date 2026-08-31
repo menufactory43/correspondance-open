@@ -249,14 +249,52 @@ public struct MatrixRoomModel: Sendable {
   /// mais rien n'en ressort côté Matrix pour un client tiers. On n'affiche donc jamais
   /// « Livré » ici — seulement « Envoyé » ou « Vu ».
   public func delivery(selfUserID: String) -> MessageDelivery? {
-    guard let mine = lastOutgoingMessage else { return nil }
-    for (userID, eventID) in readMarkerByUser where userID != selfUserID {
-      guard !MatrixIdentity.isBridgeBot(userID) else { continue }
-      // Le marqueur vaut « lu jusqu'ici » : il suffit qu'il ait atteint mon message.
-      guard let marker = messagesByID[eventID] else { continue }
-      if marker.sentAt >= mine.sentAt { return .read }
+    guard lastOutgoingMessage != nil else { return nil }
+    return readersOfLastOutgoingMessage(selfUserID: selfUserID).isEmpty ? .sent : .read
+  }
+
+  /// Qui a lu mon dernier message sortant — moi, les bots et l'agent « cc »
+  /// exclus. La lecture de l'agent est celle d'un robot : elle ne vaut pas
+  /// un « Vu » de quelqu'un.
+  public func readersOfLastOutgoingMessage(selfUserID: String) -> [String] {
+    guard let mine = lastOutgoingMessage else { return [] }
+    let agentID = MatrixIdentity.agentUserID(sameServerAs: selfUserID)
+    return readMarkerByUser.compactMap { userID, eventID in
+      guard userID != selfUserID, userID != agentID,
+            !MatrixIdentity.isBridgeBot(userID),
+            // Le marqueur vaut « lu jusqu'ici » : il suffit qu'il ait atteint mon message.
+            let marker = messagesByID[eventID],
+            marker.sentAt >= mine.sentAt
+      else { return nil }
+      return userID
     }
-    return .sent
+  }
+
+  /// « Vu par Alice et Bruno » : le détail des lecteurs de mon dernier message,
+  /// dans un groupe seulement — en DM, le « Vu » simple dit déjà tout.
+  /// `nil` tant que personne n'a lu : la vue n'a alors rien à réserver.
+  public func seenByLabelFR(selfUserID: String) -> String? {
+    guard isGroup(selfUserID: selfUserID) else { return nil }
+    let readers = readersOfLastOutgoingMessage(selfUserID: selfUserID)
+    guard !readers.isEmpty else { return nil }
+    let remoteCount = remoteMembers(selfUserID: selfUserID).count
+    if remoteCount > 1, readers.count >= remoteCount { return "Vu par tout le monde" }
+    let names = readers
+      .compactMap { members[$0]?.displayName }
+      .filter { !$0.isEmpty }
+      .sorted()
+    switch (names.count, readers.count) {
+    case (0, 1): return "Vu par 1 personne"
+    case (0, let count): return "Vu par \(count) personnes"
+    case (1, 1): return "Vu par \(names[0])"
+    case (2, 2): return "Vu par \(names[0]) et \(names[1])"
+    case (3, 3): return "Vu par \(names[0]), \(names[1]) et \(names[2])"
+    default:
+      // Des lecteurs sans nom, ou trop de noms : deux noms puis le reste en nombre.
+      let rest = readers.count - 2
+      guard names.count >= 2 else { return "Vu par \(readers.count) personnes" }
+      return "Vu par \(names[0]), \(names[1]) et \(rest) autre\(rest > 1 ? "s" : "")"
+    }
   }
 
   public var sortedMessages: [ChatMessage] {
@@ -359,6 +397,11 @@ public enum MatrixIdentity {
 
   public static func isBridgeBot(_ userID: String) -> Bool {
     network(ofBot: userID) != nil
+  }
+
+  /// Le MXID de l'agent « cc » : il vit sur le même Relais que soi.
+  public static func agentUserID(sameServerAs selfUserID: String) -> String {
+    "@cc:\(String(selfUserID.split(separator: ":").last ?? ""))"
   }
 
   /// Réseau du bot de gestion, quand ce MXID en est un.

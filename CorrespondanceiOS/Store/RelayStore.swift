@@ -931,20 +931,26 @@ final class RelayStore {
 
   /// « Alice écrit… » par fil, relu à chaque `/sync`. Vide = personne n'écrit.
   private(set) var typingLabels: [String: String] = [:]
+  /// « Vu par Alice et Bruno » par fil de groupe, relu au même rythme.
+  private(set) var seenByLabels: [String: String] = [:]
   /// Depuis quand on a dit au Relais qu'on écrit — pour renouveler plutôt que
   /// de le lui redire à chaque touche.
   private var typingSentAt: [String: Date] = [:]
 
   func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+  func seenByLabel(_ conversationID: String) -> String? { seenByLabels[conversationID] }
 
   private func refreshTypingLabels() async {
     var labels: [String: String] = [:]
+    var seen: [String: String] = [:]
     for id in Set([selectedConversationID, focusConversationID].compactMap { $0 }) {
       for target in relayTargets(of: id) {
         if let label = await matrix.typingLabel(conversationID: target) { labels[id] = label }
+        if let label = await matrix.seenByLabel(conversationID: target) { seen[id] = label }
       }
     }
     if labels != typingLabels { typingLabels = labels }
+    if seen != seenByLabels { seenByLabels = seen }
   }
 
   /// Dit au Relais qu'on écrit. Renouvelé au plus une fois par dizaine de

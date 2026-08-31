@@ -1033,22 +1033,31 @@ final class InboxStore {
 
   /// « Alice écrit… » par fil, relu à chaque `/sync`.
   private(set) var typingLabels: [String: String] = [:]
+  /// « Vu par Alice et Bruno » par fil de groupe, relu au même rythme.
+  private(set) var seenByLabels: [String: String] = [:]
   @ObservationIgnored private var typingSentAt: [String: Date] = [:]
 
   func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+  func seenByLabel(_ conversationID: String) -> String? { seenByLabels[conversationID] }
 
-  /// Relit qui écrit dans les fils ouverts. Les autres n'intéressent personne :
-  /// un indicateur qu'on ne regarde pas ne vaut pas un aller-retour d'acteur.
+  /// Relit qui écrit — et qui a vu — dans les fils ouverts. Les autres
+  /// n'intéressent personne : un indicateur qu'on ne regarde pas ne vaut pas
+  /// un aller-retour d'acteur.
   func refreshTypingLabels() async {
     var labels: [String: String] = [:]
+    var seen: [String: String] = [:]
     for session in liveSessions {
       for target in expandedIDs(for: session.conversationID) {
         if let label = await matrix.typingLabel(conversationID: target) {
           labels[session.conversationID] = label
         }
+        if let label = await matrix.seenByLabel(conversationID: target) {
+          seen[session.conversationID] = label
+        }
       }
     }
     if labels != typingLabels { typingLabels = labels }
+    if seen != seenByLabels { seenByLabels = seen }
   }
 
   /// Dit au Relais qu'on écrit — au plus une fois par dizaine de secondes, le
