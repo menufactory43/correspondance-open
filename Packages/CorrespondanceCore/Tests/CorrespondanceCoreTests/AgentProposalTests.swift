@@ -134,6 +134,11 @@ final class AgentProposalTests: XCTestCase {
     XCTAssertFalse(message.isEmojiOnly)
   }
 
+  func testLEnTeteDeLaCarteNommeLAgent() {
+    XCTAssertEqual(AgentProposal(agent: "cc", text: "…").headerFR, "cc propose")
+    XCTAssertEqual(AgentProposal(agent: " ", text: "…").headerFR, "L'agent propose")
+  }
+
   // MARK: - Masquage
 
   func testLeMasquageIciRetireLaProposition() throws {

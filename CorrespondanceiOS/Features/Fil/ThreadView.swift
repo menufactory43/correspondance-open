@@ -143,11 +143,16 @@ struct ThreadView: View {
                     onReact: { emoji in
                       Task { await store.react(conversationID: conversationID, messageID: message.id, emoji: emoji) }
                     },
-                    onLongPress: {
+                    onLongPress: message.isAgentProposal ? nil : {
                       withAnimation(.easeOut(duration: 0.18)) {
                         focused = FocusedMessage(message: message, senderLabel: group.senderLabel)
                       }
-                    }
+                    },
+                    onSendProposal: {
+                      Task { await store.sendAgentProposal(message, conversationID: conversationID) }
+                    },
+                    onEditProposal: { store.editAgentProposal(message, conversationID: conversationID) },
+                    onIgnoreProposal: { store.ignoreAgentProposal(message, conversationID: conversationID) }
                   )
                   .id(message.id)
                 }

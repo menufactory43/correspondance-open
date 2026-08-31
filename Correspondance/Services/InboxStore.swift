@@ -2317,6 +2317,48 @@ final class InboxStore {
     }
   }
 
+  // MARK: - Propositions de l'agent
+
+  /// « Envoyer » : le texte que « cc » propose part comme MON message, par le
+  /// chemin d'envoi ordinaire — même composer, même réseau, même citation.
+  /// La proposition quitte ensuite le fil : elle a servi.
+  ///
+  /// Le brouillon en cours est mis de côté le temps de l'envoi et rendu si
+  /// l'envoi échoue : on ne perd pas ce qu'on était en train d'écrire, et la
+  /// carte reste là pour réessayer.
+  func sendAgentProposal(_ message: ChatMessage) async {
+    guard let proposal = message.agentProposal, !proposal.isEmpty,
+          let session = primarySession
+    else { return }
+    let pending = session.draftText
+    session.draftText = proposal.text
+    await send(session: session)
+    guard session.draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      session.draftText = pending
+      return
+    }
+    session.draftText = pending
+    deleteLocally(messageID: message.id)
+  }
+
+  /// « Modifier » : le texte descend dans le composer et la carte disparaît —
+  /// à partir de là c'est un brouillon comme un autre. Ce qu'on avait déjà
+  /// écrit n'est pas écrasé : la proposition se pose à la suite.
+  func editAgentProposal(_ message: ChatMessage) {
+    guard let proposal = message.agentProposal, !proposal.isEmpty,
+          let session = primarySession
+    else { return }
+    let pending = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    session.draftText = pending.isEmpty ? proposal.text : pending + "\n" + proposal.text
+    deleteLocally(messageID: message.id)
+  }
+
+  /// « Ignorer » : la carte s'en va, rien n'est envoyé. Même masquage que
+  /// « Supprimer ici » — il rejoint le Relais, l'iPhone ne la remontrera pas.
+  func ignoreAgentProposal(_ message: ChatMessage) {
+    deleteLocally(messageID: message.id)
+  }
+
   /// Ce qui empêche d'envoyer sur ce fil, ou `nil`. Commun à l'envoi immédiat
   /// et à l'échéance d'un message programmé ; `interactive` autorise à demander
   /// l'automatisation Messages (jamais depuis la boucle d'échéance).

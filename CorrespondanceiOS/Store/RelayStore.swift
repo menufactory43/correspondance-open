@@ -741,6 +741,41 @@ final class RelayStore {
       && !message.text.isEmpty && message.network.supportsEditing && !isDemo
   }
 
+  // MARK: - Propositions de l'agent
+
+  /// « Envoyer » : le texte que « cc » propose part comme MON message, par le
+  /// chemin d'envoi ordinaire. La proposition quitte ensuite le fil.
+  ///
+  /// Le brouillon en cours est mis de côté et rendu si l'envoi échoue : on ne
+  /// perd pas ce qu'on écrivait, et la carte reste là pour réessayer.
+  func sendAgentProposal(_ message: ChatMessage, conversationID: String) async {
+    guard let proposal = message.agentProposal, !proposal.isEmpty else { return }
+    let pending = draftText(conversationID)
+    setDraft(proposal.text, conversationID: conversationID)
+    await send(conversationID: conversationID)
+    guard draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      setDraft(pending, conversationID: conversationID)
+      return
+    }
+    setDraft(pending, conversationID: conversationID)
+    hide(messageID: message.id, conversationID: conversationID)
+  }
+
+  /// « Modifier » : le texte descend dans le composer et la carte disparaît.
+  /// Ce qu'on avait déjà écrit n'est pas écrasé — la proposition se pose à la suite.
+  func editAgentProposal(_ message: ChatMessage, conversationID: String) {
+    guard let proposal = message.agentProposal, !proposal.isEmpty else { return }
+    let pending = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
+    setDraft(pending.isEmpty ? proposal.text : pending + "\n" + proposal.text, conversationID: conversationID)
+    hide(messageID: message.id, conversationID: conversationID)
+  }
+
+  /// « Ignorer » : la carte s'en va, rien n'est envoyé. Le masquage rejoint le
+  /// Relais (`fr.correspondance.hidden`) : le Mac ne la remontrera pas non plus.
+  func ignoreAgentProposal(_ message: ChatMessage, conversationID: String) {
+    hide(messageID: message.id, conversationID: conversationID)
+  }
+
   func hide(messageID: String, conversationID: String) {
     hiddenMessageIDs.insert(messageID)
     HiddenMessageStore.save(hiddenMessageIDs)
