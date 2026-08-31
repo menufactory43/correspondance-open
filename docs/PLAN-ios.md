@@ -108,3 +108,14 @@ Agents (utilisateurs Matrix sur le Relais) → E2EE (matrix-rust-sdk dans Core) 
 - Tailscale iOS tombé = app qui ne charge pas.
 - `InboxStore` (Mac) et le futur store iOS divergent : extraction d'un store commun **après** que les deux existent, pas avant.
 - 8 Go de RAM : un simulateur à la fois.
+
+---
+
+## État au 2026-08-31 (fin de la première passe A → C)
+
+- **Phase A** ✅ 14 commits. Paquet `CorrespondanceCore` (Domain 19, Matrix 13, Services 7, Platform, Design) + `CorrespondanceUI`. AppKit : 40 → 21 fichiers. Écarts : Domain et Matrix déplacés ensemble (dépendance réelle) ; les vues liées à `InboxStore` restent Mac.
+- **Phase B** ✅ 7 commits. État de conversation dans le Relais, file d'écritures, migration unique, ligne d'état dans Réglages. **À vérifier à la main contre le NUC** (voir bilan de session).
+- **Phase C** ✅ 16 commits. App iOS : connexion, inbox + filtres + barre flottante, fil complet, adaptatif (iPhone/iPad), Focus, état du Relais, push (Sygnal + extension), nouvelle conversation, recherche par facettes, envoyer plus tard, réglages. Test UI de navigation. Captures dans `docs/screens/ios/`.
+- **Non prouvé sur simulateur** : l'extension de notification (simctl ne la réveille pas), les entitlements App Group / Trousseau partagé (vides sur simulateur). À valider sur un vrai iPhone.
+- **Dettes connues** : Team ID en dur dans `SharedRelayState`, pas d'icône iOS, `NSAllowsArbitraryLoads` (documenté, décision 6), contacts de « nouvelle conversation » = tête-à-tête seulement, micro inactif (phase D), `Platform.open` iOS non vérifié.
+- **Découverte ATS** : `NSAllowsLocalNetworking` ne couvre pas 100.64/10 **et** annule `NSAllowsArbitraryLoads` ; une exception par IP littérale fonctionne (le commentaire du plist Mac dit l'inverse — à corriger).
