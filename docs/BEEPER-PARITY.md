@@ -15,15 +15,17 @@ archivage durable, fil conversationnel réel — sont faits, ainsi que : rappels
 vocaux (lus partout, enregistrés sur iPhone), réponse depuis la notification, accusés de lecture
 avec le détail « Vu par Alice et Bruno » en groupe, l'app iOS complète, et l'état de conversation
 synchronisé entre appareils via le Relais.
-Ce qui manque tient en cinq paquets, du plus au moins important :
-**1) le cycle de vie d'un message** — pas d'édition de mes messages (la réception de `m.replace`
-est faite), pas de transfert, pas d'annuler l'envoi, pas d'enregistrement vocal sur Mac ;
-**2) le pilotage des groupes** — pas de création, pas de retrait ni de renommage (l'ajout de membre existe, depuis la fiche iPhone) ;
-**3) les filtres d'inbox** — non-lus, sans réponse, par réseau, brouillons ; plus « archiver tout ce
-qui est lu », la sélection multiple, et le regroupement anti-rafale des notifications (OTP immédiats) ;
-**4) les réseaux** — 4 chez nous (iMessage, Signal, WhatsApp, Instagram) contre 14 chez Beeper ;
+Les paquets 1 à 3 de la revue du 2026-08-31 (cycle de vie du message, pilotage des groupes,
+filtres d'inbox) ont été **implémentés le 2026-09-01** — commits `8a1b371`, `27adebc`, `c710f76`,
+`b1992e1` : édition là où le pont la porte, transfert, annuler l'envoi, micro Mac, filtres et
+pilules, archivage des fils lus, sélection multiple Mac, regroupement anti-rafale avec OTP
+immédiats, renommage/retrait/ajout/création de groupe (WhatsApp et Signal), et les notifications
+locales iOS. Ce qui manque encore :
+**1) le réveil de l'iPhone** — le push de bout en bout attend trois gestes d'infra (clé APNs `.p8`,
+bootstrap avec Sygnal, bascule production) : sans eux l'iPhone ne notifie que l'app ouverte ;
+**2) les réseaux** — 4 chez nous (iMessage, Signal, WhatsApp, Instagram) contre 14 chez Beeper ;
 Telegram et Messenger sont les deux leviers mautrix évidents ; pas de multi-comptes par réseau ;
-**5) l'écosystème** — Beeper 4.3.73 embarque un serveur MCP local et des intégrations agents prêtes
+**3) l'écosystème** — Beeper 4.3.73 embarque un serveur MCP local et des intégrations agents prêtes
 à l'emploi (voir § « IA & écosystème ») ; nous avons l'agent cc *dans* les fils, mais aucune API locale.
 
 ---
@@ -50,7 +52,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
 | Archivage | `TOGGLE_THREAD_ARCHIVE` = ⌘E ou `e` ; API `POST /v1/chats/{id}/archive` + champ `isArchived` ; « Anything you've handled is in your __ARCHIVE__. » | **Fait + persisté** : `archivedIDs` (UserDefaults), réappliqué après chaque fusion par `Domain/ArchiveState.swift` — aucun catalogue réseau ne peut plus l'écraser. ⌘E bascule, ⌘⇧E ouvre la vue « Archivés » (bouton en pied de liste + menu contextuel « Désarchiver ») | — | — |
-| Archiver tout ce qui est lu | `ARCHIVE_ALL_READ_THREADS` ⌘⇧E, `Archive all read chats` | **Absent** | S | P1 |
+| Archiver tout ce qui est lu | `ARCHIVE_ALL_READ_THREADS` ⌘⇧E, `Archive all read chats` | **Fait** : `Domain/ArchiveSweep.swift` (testé) — ⌥⌘E sur Mac (⌘⇧E est pris par la vue Archivés), menu du titre sur iPhone, confirmation avec le compte. Épargne épinglés, non lus, rappels et demandes | — | — |
 | Auto-archivage par règle | `Auto-archive chats based on a rule`, `Archive __TYPE__ chats older than __DURATION__` | **Absent** | M | P2 |
 | Sync de l'archivage avec la plateforme native | Réglage `Sync chat archive state with native platform` (clé `NATIVE_ARCHIVE`) | **Absent** | M | P2 |
 | Action après archivage | Réglages `AFTER_ARCHIVE` / `AFTER_TOGGLE_READ` → `SELECT_NEXT_THREAD` par défaut | **Fait de fait** : le mode Focus enchaîne déjà (`focusNext()` après `archiveSelected()`) — c'est notre cœur | — | — |
@@ -59,11 +61,11 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Muet | `TOGGLE_THREAD_MUTE` ⌘⇧M | **Fait** : `mutedIDs` persistés, respectés par les notifications *et* par la pastille du Dock | — | — |
 | Non-lus / marquer lu-non lu | `TOGGLE_THREAD_READ` ⌘⇧U, `SELECT_NEXT_UNREAD_THREAD` ⌘U, `Mark All as Read` | **Fait localement** : `clearUnread`, `markUnread`. iMessage renvoie toujours 0 non-lu | S | P1 |
 | Rappels / snooze | `OPEN_REMIND_LATER_MENU` ⌘L ; « Remind Me marks this chat as new at the scheduled time, if there is no reply » ; API `POST /v1/chats/{id}/reminders` (`remindAt`, `dismissOnIncomingMessage`) + champ `snooze` | **Fait** : `ConversationReminder` (`Domain/InboxFiltering.swift`) — le fil revient dans la file à l'heure dite **si personne n'a répondu entre-temps**, section « Rappels » dans la liste (`InboxListPane`), état porté par le Relais (`ConversationStateSnapshot`) donc partagé Mac/iPhone. Vocabulaire « Rappel », pas « Snooze » (cf. contradiction bundle/API en annexe) | — | — |
-| Filtres | `TOGGLE_FILTER_UNREAD` ⌘⇧Y, `CYCLE_TABS` ⌥⇥ ; jeu de dossiers `UNREAD, UNRESPONDED, DRAFTS, ARCHIVED, MUTED, HIDDEN, REQUESTS, LOW_PRIORITY, REMINDERS, SCHEDULED` ; API `chats/search?inbox=primary` / `low-priority` / `archive` | **Absent** (le rail de réseaux n'existe que dans `PLAN-matrix.md`) | M | P1 |
-| Filtre par compte / réseau | `FILTER_ACCOUNT` ⌘⌥A | **Absent** | S | P1 |
+| Filtres | `TOGGLE_FILTER_UNREAD` ⌘⇧Y, `CYCLE_TABS` ⌥⇥ ; jeu de dossiers `UNREAD, UNRESPONDED, DRAFTS, ARCHIVED, MUTED, HIDDEN, REQUESTS, LOW_PRIORITY, REMINDERS, SCHEDULED` ; API `chats/search?inbox=primary` / `low-priority` / `archive` | **Fait** : `.scheduled` ajouté à `ConversationFilter`, logique pure testée dans `Domain/InboxFiltering.swift`. Mac : rangée de pilules ⌘⇧Y (masquée par défaut) — Non-lus / Sans réponse / Brouillons / Programmés + un cran par réseau branché ; ne touche que la liste, jamais la file Focus. iOS : ces filtres vivaient déjà dans le menu de la barre flottante, `.scheduled` y est câblé | — | — |
+| Filtre par compte / réseau | `FILTER_ACCOUNT` ⌘⌥A | **Fait** : pilule par réseau dans la rangée de filtres Mac ; `networkFilter` existait déjà sur iOS | — | — |
 | Tri / sections | Sections Pins / Inbox / Archive / Low Priority (help : Inbox tips) | **Fait, différemment** : `InboxStore.sortForInbox` + sections « Récents / Groupes Signal / Contacts » (`InboxListPane.section`) | — | — |
 | Liste compacte | Réglage `COMPACT_CHAT_LIST` | **Fait** : `isSidebarCompact`, clé `correspondance.sidebarCompact` | — | — |
-| Sélection multiple | `TOGGLE_CHAT_SELECTION_MODE`, `%d chat selected`, `Moved %d chat to Inbox` | **Absent** : `selectedConversationID: String?` | M | P2 |
+| Sélection multiple | `TOGGLE_CHAT_SELECTION_MODE`, `%d chat selected`, `Moved %d chat to Inbox` | **Fait sur Mac** : mode sélection (case sur la ligne, barre de pied Archiver / Marquer lu / Muet — « Muet » coupe, il ne bascule pas). iOS non repris | — | P2 (iOS) |
 | Low Priority | `Add chats to Low Priority to hide them from the inbox permanently` | **Absent** | S | ✗ (redondant avec l'archive ; deux poubelles = deux dettes) |
 | Demandes de message / inconnus | `Requests`, `No mysterious strangers in your inbox`, réglage `ENABLE_MESSAGE_REQUESTS` | **Fait** : section « Demandes » dans la liste (`InboxListPane`, `store.requestsQueue`), fils annoncés comme demandes par le pont (`MatrixRoomModel.isNetworkFlaggedRequest` → `networkFlaggedRequestIDs`), tenus hors de la file tant qu'on n'accepte pas — le mot du domaine est « Demande » (`CONTEXT.md`) | — | — |
 | Labels / Spaces | `Create Label`, `Edit Spaces`, `TOGGLE_FILTER_BAR` ⌘S, `SWITCH_FIRST_9_ACCOUNTS` ; blog 2025-12-08 et 2026-08-10 | **Absent** | L | ✗ (organiser au lieu de traiter — anti-Focus) |
@@ -76,19 +78,19 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 |---|---|---|---|---|---|
 | Réactions | `OPEN_REACTION_PICKER` (→), `QUICK_REACT_SELECTED` ⌘⇧R, `Quick reaction emoji`, `Remove %s reaction` ; API `POST /v1/chats/{c}/messages/{m}/reactions` (`reactionKey`) | **Fait en lecture partout, en écriture sur 2 réseaux sur 3.** Réception : `m.reaction` + `m.room.redaction` (WhatsApp), `dataMessage.reaction` rattachée à sa cible et non plus muée en faux message (Signal), tapbacks `associated_message_type` 2000-3005 (iMessage). Envoi : `m.reaction` / redaction (WhatsApp), `sendReaction` (Signal). **iMessage en lecture seule** : Messages n'expose aucune commande AppleScript de tapback. UI : pastilles sous la bulle, menu contextuel, ⌘⇧R | — | ✅ `ReactionCount: 1` — un seul emoji par personne, appliqué | Partiel (iMessage) |
 | Réponses / citations | `QUOTE_AND_REPLY` ⌘R, `Message: Quote or Edit Selected Message` (Entrée) ; API `replyToMessageID` → champ `linkedMessageID` | **Fait en lecture partout, en écriture sur 2 réseaux sur 3.** Réception : `m.in_reply_to` avec nettoyage du repli `> <@…>` (WhatsApp), `dataMessage.quote` (Signal), `thread_originator_guid` résolu contre le fil (iMessage). Envoi : `m.relates_to.m.in_reply_to` + repli (WhatsApp), `--quote-timestamp/-author/-message` (Signal). **iMessage en lecture seule** (AppleScript n'envoie qu'un message nu). ⌘R cite la bulle visée, bandeau annulable au-dessus du composer, citation compacte au-dessus des bulles | — | ✅ | Partiel (iMessage) |
-| Édition de message | `EDIT_MESSAGE` ⌘T ; API `messages.update` (changelog 4.2.499) | **Partiel — réception faite, envoi absent.** `m.replace` est appliqué au texte de la cible, y compris quand la correction arrive avant elle (`MatrixRoomModel.pendingEdits`, la dernière par cible fait foi, filtrée par auteur). Aucun ⌘T pour modifier **mes** messages | M | ⚠️ `m.replace` OK sur Meta et Telegram ; **non supporté** WhatsApp ni Signal | P1 |
+| Édition de message | `EDIT_MESSAGE` ⌘T ; API `messages.update` (changelog 4.2.499) | **Fait, là où le pont le porte.** Réception : `m.replace` appliqué même quand la correction précède sa cible (`pendingEdits`). Envoi : mode correction du composer (bandeau annulable, Entrée envoie, Échap rend le brouillon mis de côté), ⌘T sur Mac — affiché **seulement** sur mes messages des réseaux capables via `Domain/NetworkCapabilities.swift` (testée) : Instagram/Meta oui ; WhatsApp et Signal non (le pont ne relaie pas) ; iMessage par son chemin d'automatisation à part | — | ⚠️ `m.replace` relayé par Meta seulement parmi nos ponts | — |
 | Suppression | `Delete for Everyone` / `Delete for Me`, `Delete message is not supported for %s yet` ; API `messages.delete` | **Fait.** Clic droit sur une bulle → « Supprimer pour tout le monde… » (mes messages bridgés : une `m.room.redaction` sur l'event, que les ponts traduisent en `revoke` / `remote delete` / `unsend`) et « Supprimer ici… » (tous réseaux : l'identifiant rejoint `Services/HiddenMessageStore.swift`, réappliqué à chaque relecture du fil comme `ArchiveState`, et écarté de la requête catalogue chat.db pour que l'aperçu de la ligne recule d'un message). Confirmation avant, dans les deux cas. iMessage n'a pas de suppression réseau — ni AppleScript ni AX — seule « Annuler l'envoi » (≤ 2 min) existe déjà | — | ✅ redaction supportée dans les deux sens sur WhatsApp, Meta, Signal, Telegram | — |
 | Accusés de lecture | `Seen %s`, `Seen by %1$s & %2$d other`, `Delivered`, réglage `AVATAR_READ_RECEIPTS` ; API champ `seen` (map par participant) | **Fait, détail de groupe compris.** Affichage : coche sous le dernier message sortant du fil ; en groupe, le détail des lecteurs façon Beeper — « Vu par Alice et Bruno », « Vu par Alice, Bruno et 2 autres », « Vu par tout le monde » (`MatrixRoomModel.seenByLabelFR`, Mac et iPhone). La lecture de l'agent cc et des bots ne compte pas comme un « Vu ». Réception : `m.receipt` de la section `ephemeral` du `/sync` → « Vu » sur WhatsApp ; `is_delivered` / `is_read` sur iMessage. Envoi à l'ouverture d'un fil : `POST /rooms/{id}/receipt/m.read/{eventId}` (WhatsApp) et `sendReceipt --type read` (Signal, DM seulement — la commande ne prend pas de groupe). iMessage : c'est Messages qui pose `is_read`, chat.db nous est en lecture seule | — | ✅ `m.receipt` bidirectionnel **sans double puppeting** (MSC2409, `ephemeral_events` par défaut) et le bridge marque tout l'intervalle, pas seulement le dernier message. ⚠️ Aucun accusé de **livraison** n'atteint un client Matrix tiers → on n'affiche jamais « Livré » sur WhatsApp. ✅ **Double puppeting actif** (méthode appservice, `infra/matrix/bootstrap.sh` — voir `docs/MATRIX-SETUP.md` §2 quater) : ce que j'envoie et lis depuis le téléphone est reposé sous `@meffysto:correspondance.local` au lieu de mon propre ghost. Ne vaut que pour les événements postérieurs à l'activation | — |
 | Indicateurs de frappe | `SHOW_TYPING_INDICATOR`, `Notify when someone starts typing (supported platforms only)`, `Show recipients I'm typing` | **Fait, bidirectionnel** : réception par l'EDU `m.typing` avec expiration à 20 s (`MatrixRoomModel.typingLabelFR` — « Alice écrit… », « 3 personnes écrivent… »), affichée en bas du fil sur Mac et iPhone ; émission renouvelée au plus toutes les 10 s (`noteTyping` → `sendTyping`) | — | ✅ `m.typing` bidirectionnel sur WhatsApp, Meta, Instagram, Signal, Telegram | — |
 | Pièces jointes — envoi | ⌘O `SEND_FILE`, `Could not attach %s — total size would exceed 90MB.` | **Fait, tout fichier** : `NSOpenPanel` sans restriction de type sur Mac (« Les trois réseaux acceptent n'importe quel fichier »), `.item` sur iOS ; iMessage passe par `send POSIX file` | — | ✅ médias et fichiers partout | — |
 | Pièces jointes — affichage | Visionneuse (`Media viewer`, `Preview in Carousel`, `NEXT/PREVIOUS Carousel Item`), ⌘D `DOWNLOAD_ATTACHMENTS` | **Fait pour l'essentiel** : images inline, vidéo lue sur place (lecteur AppKit — le lecteur SwiftUI abattait l'app), audio joué dans la bulle (`AudioMessageView`). Pas de visionneuse plein écran type carrousel, pas de ⌘D « tout télécharger » | S | — | P2 |
-| Messages vocaux | ⌘⇧A `Message: Record Audio`, `AUTO_PLAY_NEXT_VOICE_NOTE`, `Mark as played`, transcription | **Partiel — lus partout, enregistrés sur iPhone seulement** : le micro du composer iOS enregistre et envoie (`sendVoiceMessage`, `VoiceNote`) ; le Mac joue les vocaux mais n'en enregistre pas. Pas de transcription | S (micro Mac) | ✅ voix supportée WhatsApp, Meta, Instagram, Signal | P1 (micro Mac) |
+| Messages vocaux | ⌘⇧A `Message: Record Audio`, `AUTO_PLAY_NEXT_VOICE_NOTE`, `Mark as played`, transcription | **Fait** : enregistrés et envoyés sur iPhone **et** sur Mac (bouton `waveform` du composer — le mic est déjà la dictée —, bandeau annulable, même pipeline), lus partout (`AudioMessageView`). Pas de transcription | — | ✅ voix supportée WhatsApp, Meta, Instagram, Signal | P2 (transcription) |
 | Aperçus de liens | `DISABLE_LINK_PREVIEWS`, `Remove Preview`, `Message: Open First Link` ⌘⇧H | **Fait** : `LinkPreviewStore` (LinkPresentation, cache disque avec vignette), rendu sous la bulle sur Mac et iPhone, réglage d'apparence pour couper | — | — | — |
 | Mentions | `%d unread mention`, `unreadMentionsCount` (API) | **Fait en composition** : `@` déclenche l'autocomplétion des membres (`Domain/Mention.swift` — candidats, requête accent-insensible, insertion). Pas de compteur « mentions non lues » dans la liste | S (badge) | ✅ Meta, Instagram, Signal, Telegram | P2 (badge) |
 | Sondages | `Create Poll`, `Hide results until end of poll`, `%d vote`, badge `Poll` ; blog 2026-08-10 | **Fait** : création (`sendPoll` → `sendPollStart`), vote (`votePoll` → `sendPollResponse`), dépouillement au rendu du fil (`PollEvent` — la voix arrive souvent avant la question), clôture | — | ⚠️ **WhatsApp uniquement** (polls + votes, bidirectionnel). Meta, Signal, Telegram : ❌ | — |
-| Transfert | `FORWARD_MESSAGES` ⌘⇧F, `Forwarding messages through Beeper will not include any attribution` | **Absent** | S | — | P2 |
+| Transfert | `FORWARD_MESSAGES` ⌘⇧F, `Forwarding messages through Beeper will not include any attribution` | **Fait** : ⌘⇧F + « Transférer… » au menu de bulle, `ForwardSheet` (Mac et iOS) sur la recherche de conversations existante, renvoi par les chemins d'envoi du fil cible, sans attribution — comme Beeper. Le mode Focus est passé de ⌘⇧F à ⌘⇧O | — | — | — |
 | Stickers / GIF | ⌘⇧G `Send GIF` (KLIPY), ⌘⌥⇧S `Send Sticker`, `AUTO_SEND_GIFS` | **Absent** | M | ✅ techniquement | ✗ (le GIF est l'anti-Focus incarné) |
-| Groupes | `CREATE_NEW_GROUP` ⌘⇧N, gestion de membres, `group_creation` (capabilities API) | **Partiel** : détection (`MatrixRoomModel.isGroup`, `com.beeper.room_type`), liste des membres et **ajout** depuis la fiche iPhone (`inviteMember`). Pas de création de groupe, pas de retrait, pas de renommage | M | ✅ | P2 |
+| Groupes | `CREATE_NEW_GROUP` ⌘⇧N, gestion de membres, `group_creation` (capabilities API) | **Fait pour l'essentiel** : renommage (`setRoomName`) et retrait (`kick`) — 403 paré par `withRoomPower`, extrait de l'invitation de cc — depuis la fiche iPhone et la nouvelle `GroupSheet` Mac ; ajout des deux côtés. **Création** (⌥⌘N, Mac seulement) par la commande `create-group` de bridgev2 : WhatsApp (pont ≥ v0.12.5) et Signal (≥ v0.8.7, nom ≤ 32 signes) ; Instagram exclu, l'entrée se masque sans pont capable ; un échec nettoie le salon. Capacités par réseau dans `NetworkCapabilities` | — | ✅ | P2 (création iOS) |
 | Avatars par expéditeur | Avatars dans le fil + `AVATAR_READ_RECEIPTS` | **Fait** : la photo de l'auteur dans la marge gauche de chaque prise de parole en Inbox (`Features/Inbox/MessageAvatarView.swift`). Tête-à-tête : le visage du fil ; groupe : celui du membre — carnet d'adresses pour un handle iMessage, `m.room.member` → `avatar_url` pour un ghost mautrix (`SenderAvatarStore`, même cache disque que les portails) ; à défaut les initiales sur une couleur tirée de l'auteur. Réglages › Apparence › Fil coupe l'affichage. La page Focus reste sans visages — elle se lit comme une lettre | — | — | — |
 | Fiche conversation | `TOGGLE_THREAD_INFO` ⌘⇧I, `%s — Chat Info` | **Partiel** : fiche sur iPhone (`ThreadInfoSheet` — membres, médias du fil, inviter cc), tiroir du « + » sur Mac. Pas de ⌘⇧I ni de fiche complète sur Mac | S | — | P2 |
 | Historique / backfill | `We're syncing your chats. This may take a while...` | **Fait Matrix** : `MatrixBridgeService.backfill(conversationID:limit:)` | — | — | — |
@@ -100,7 +102,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Brouillons par conversation | `Filter: Drafts`, `No drafts…`, champ `draft{text, attachments}` sur l'objet Chat (API), `PATCH /v1/chats/{id}` avec `draft` | **Fait** : `Services/DraftStore.swift` — texte **et** pièces jointes en attente, par `conversationID`, persistés en JSON dans Application Support et restaurés au retour sur le fil. Écriture différée (600 ms) pour ne pas écrire à chaque frappe ; les pièces jointes disparues du disque sont écartées au chargement. Filtre « Drafts » non repris | — | P1 (filtre) |
 | Envoi et nouvelle ligne | `SEND_MESSAGE` Entrée, `NEW_LINE` ⇧/⌥/⌃+Entrée | **Fait** : `onKeyPress(.return)`, `.shift` → `.ignored`, `TextField(axis: .vertical)` | — | — |
 | Envoyer et archiver | `SEND_MESSAGE_AND_ARCHIVE` ⌘Entrée | **Fait** : `InboxStore.sendDraftAndArchive()`, commande de menu ⌘Entrée (vaut donc en Inbox *et* en Focus). Un envoi échoué restaure le brouillon et n'archive pas | — | — |
-| Annuler l'envoi | `Allow undo send (%s) for`, `UNDO_SEND_DELAY_MS`, `Click pending messages to undo send` | **Absent** | S | P1 |
+| Annuler l'envoi | `Allow undo send (%s) for`, `UNDO_SEND_DELAY_MS`, `Click pending messages to undo send` | **Fait** : `Domain/UndoSendDelay.swift` (0/3/5/10 s, défaut 5, testé), Réglages › Envoi des deux côtés. Bulle optimiste immédiate, réseau différé, « Annuler » rend texte + pièces jointes + citation. ⌘Entrée archive tout de suite et l'annulation désarchive (la boucle Focus n'attend pas). Limite : le bouton n'apparaît que dans le fil de l'Inbox — Focus et fenêtres détachées diffèrent l'envoi sans le bouton | — | — |
 | Échec d'envoi / renvoi | `Message failed to send`, `Retry`, `Resend`, `Queued` | **Partiel** : `sendDraft()` retire le message optimiste, restaure texte et pièces jointes, alerte globale. Pas de badge d'échec persistant, pas de renvoi, pas de file hors-ligne | M | P1 |
 | Dictée | `SHOW_TRANSCRIBE_BAR` ⌘⇧T « Talk to Type » (audio → OpenAI via serveurs Beeper) | **Fait, et mieux** : `ComposerDictation.swift`, `SFSpeechRecognizer` on-device + repli dictée système. Aucune donnée ne sort de la machine | — | — |
 | Envoi planifié | `SCHEDULE_MESSAGE` ⌘⇧L, `Reschedule message`, `Cancel schedule message`, `sendLaterConfig{sendOn, sendOnlyOnNoResponse}`, dossier `Send Later`, « can only send if app is running » | **Fait** : `Domain/SendLaterTime.swift` (« demain 9h », « lundi matin », « dans 2h », raccourcis) + `ScheduledMessage` persisté (`scheduled-messages.json`). ⌘⇧L ou l'horloge du composer pose l'heure sur le composer (bannière) ; Entrée programme, ⌘Entrée programme *et* archive. Bulle en pointillé en bas du fil (envoyer maintenant / reprogrammer / supprimer), bouton « Programmés » au bas du rail. Option « seulement s'il n'a pas répondu ». Boucle d'échéance dans `InboxStore` — même limite que Beeper : l'app doit tourner | — | — |
@@ -116,7 +118,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Notifications système | `Enable notifications`, `MESSAGE_NOTIFICATIONS`, `macOS Notifications`, `Open Notifications in System Preferences`, `notification replied` | **Fait** : `Services/NotificationService.swift` + `Domain/NotificationPolicy.swift`. Notification par message entrant, tous réseaux ; respecte `mutedIDs`, le fil ouvert et les messages sortants ; clic → sélection du fil. Autorisation au premier lancement + bouton dans Réglages | — | — |
 | Badge Dock | `Dock badge count`, `BADGE_COUNT` | **Fait** : `NotificationService.updateDockBadge`, total des non-lus hors archivés et muets | — | — |
 | Répondre depuis la notification | `notification replied`, `notification action button ⇒ Remind in 1 Hour / 8 Hours` | **Fait** : `UNTextInputNotificationAction` dans `NotificationService` — on répond sans ouvrir l'app. Pas d'action « Me le rappeler » sur la notification | — | — |
-| Regroupement / anti-spam | `DEBOUNCE_NOTIFICATIONS` (« delay and batch notifications for successive texts… OTP/2FA codes are always notified immediately »), `RENOTIFY_UNREAD_DELAY` | **Absent** | M | P1 — c'est la fonction la plus « Focus » de tout Beeper |
+| Regroupement / anti-spam | `DEBOUNCE_NOTIFICATIONS` (« delay and batch notifications for successive texts… OTP/2FA codes are always notified immediately »), `RENOTIFY_UNREAD_DELAY` | **Fait** : `Domain/NotificationGrouping.swift` + `Domain/OneTimeCode.swift` (testés) — rafale < 15 s du même fil = UNE notification qui remplace la précédente (« et N autres messages ») ; un code OTP/2FA détecté notifie immédiatement, sous sa propre identité. Branché sur Mac et sur les notifications locales iOS | — | — |
 | Sons | `NOTIFICATION_SOUND_NAME`, sons par réseau (help/desktop) | **Absent** | S | P2 |
 | Notifier quand l'app est au premier plan | `NOTIFY_IN_FOCUS` | **Absent** | S | ✗ (notifier ce qu'on regarde déjà) |
 | Réagir aux réactions | `NOTIFY_FOR_REACTIONS` | **Absent** | S | ✗ |
@@ -140,7 +142,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| iOS / Android | Apps natives, `UNNotificationServiceExtension` (blog 2025-10-01), CarPlay, swipe-to-archive, labels mobiles | **Fait pour iOS** : app native complète (`CorrespondanceiOS` — Connexion, Inbox, Fil, Focus, Recherche, Réglages) + extension de notification (`CorrespondanceiOSNotificationService`), sur le pari gagné du client Matrix REST pur. Android hors-cible | — | — |
+| iOS / Android | Apps natives, `UNNotificationServiceExtension` (blog 2025-10-01), CarPlay, swipe-to-archive, labels mobiles | **Fait pour iOS** : app native complète (`CorrespondanceiOS` — Connexion, Inbox, Fil, Focus, Recherche, Réglages) + extension de notification (`CorrespondanceiOSNotificationService`), sur le pari gagné du client Matrix REST pur. Notifications : locales depuis la boucle `/sync` (politique du Mac réutilisée, regroupement + OTP compris), pusher posé au Relais, délégué qui ouvre le fil — mais le **réveil téléphone éteint attend l'infra** : clé APNs `.p8` + `bootstrap.sh` avec Sygnal sur le NUC (le service existe dans `infra/matrix/docker-compose.yml`, commit `3f659ed`, jamais déployé). Android hors-cible | — | P1 (infra push) |
 | Métadonnées synchronisées entre appareils | help : en On-Device, « metadata (including archive status) syncs between Beeper apps » | **Fait** : l'état de conversation (archivée, épinglée, muette, fusionnée, rappel, brouillon) vit sur le Relais (`ConversationStateSnapshot`), adopté à chaque `/sync` (`adoptRelayState`) après une migration unique de l'état local — « cet état appartient à l'utilisateur, pas au réseau » (`CONTEXT.md`) | — | — |
 | Verrouillage biométrique | `REQUIRE_TOUCH_ID_AUTH` | **Absent** | S | P2 |
 
@@ -246,32 +248,35 @@ ci-dessous), ainsi qu'une bonne moitié du lot 3 (Instagram, sondages, mentions,
 demandes, envoi planifié, fiche iPhone, sync des métadonnées, iOS lui-même). Voici ce qui reste,
 par paquet et par ordre d'importance.
 
-### Lot A — le cycle de vie d'un message (P1, ≈ 4 S + 2 M)
+### Lots A, B, C — faits le 2026-09-01
 
-Édition de mes messages, ⌘T (`m.replace` à l'envoi — ✅ Meta/Telegram, ❌ WhatsApp/Signal : table de
-capacités par réseau pour masquer le bouton) · Transfert ⌘⇧F · Annuler l'envoi (délai réglable) ·
-Enregistrement vocal sur Mac (le micro iOS existe, `AudioMessageView` aussi — il manque la capture) ·
-File d'envoi hors-ligne pour les **messages** + badge d'échec + renvoi (l'état a déjà sa file).
+Implémentés et testés (500 tests du package, builds Mac + iOS) — commits `8a1b371` (cycle de vie),
+`27adebc` (filtres & gestes), `c710f76` (groupes), `b1992e1` (notifications iOS). Reliquats connus :
+« Annuler l'envoi » n'a son bouton que dans le fil de l'Inbox (Focus et fenêtres détachées diffèrent
+sans bouton) · sélection multiple Mac seulement · création de groupe Mac seulement, et à valider
+contre les versions de ponts du Relais (mautrix-whatsapp ≥ v0.12.5, signal ≥ v0.8.7) · transcription
+des vocaux absente · l'App Group `group.com.correspondance` n'est déclaré dans aucun entitlement
+(l'extension de notification ne voit pas les muets — fail-open) : à créer au portail Apple puis
+régénérer les deux profils.
 
-### Lot B — filtres & gestes d'inbox (P1, ≈ 4 S + 1 M)
+### Lot D' — push iOS de bout en bout (infra, à faire à la main)
 
-Filtres non-lus / sans réponse / brouillons + filtre par réseau (⌥⇥, ⌘⌥A) · « Archiver tout ce qui
-est lu » · ⌘U « prochain non lu » · Regroupement anti-rafale des notifications (`DEBOUNCE_NOTIFICATIONS`
-— OTP immédiats ; la fonction la plus « Focus » de tout Beeper) · Sélection multiple (P2).
+1. Créer une clé APNs `.p8` au portail Apple (Team ID `AKMNXGVVGX`). 2. La poser en
+`nuc:~/correspondance-matrix/secrets/apns/apns.p8` (`chmod 600`). 3. `APNS_KEY_ID=… APNS_TEAM_ID=AKMNXGVVGX
+APNS_PLATFORM=sandbox ./infra/matrix/bootstrap.sh` — le compose déployé est antérieur au service
+`sygnal`, c'est le bootstrap qui l'installe. 4. Vérifier `http://sygnal:5000/health` depuis le
+conteneur Synapse ; le pusher est déjà en base, redémarrer Synapse pour sauter le backoff.
+5. Au passage App Store : `aps-environment` **et** `APNS_PLATFORM` basculent en production ensemble.
 
-### Lot C — groupes (P2, ≈ 2 M)
-
-Création de groupe · Retrait de membre et renommage (l'ajout existe sur iPhone) · Fiche ⌘⇧I sur Mac.
-
-### Lot D — réseaux (P1/P2, ≈ 2 L)
+### Lot E — réseaux (P1/P2, ≈ 2 L)
 
 **Telegram** (`mautrix-telegram`) puis **Messenger** (`mautrix-meta`, le pont est déjà en place pour
 Instagram) · Multi-comptes par réseau (sortir `account = "default"` de `MatrixCredentialStore`).
 
-### Lot E — écosystème & finitions (P2)
+### Lot F — écosystème & finitions (P2)
 
 API locale/MCP (nos fils pilotables par un agent extérieur — voir § « IA & écosystème ») ·
-Transcription des vocaux on-device · Texte enrichi Markdown → `formatted_body` (⚠️ perdu vers Signal) ·
+Transcription des vocaux on-device · Étendre « Annuler l'envoi » au Focus et aux fenêtres détachées · Texte enrichi Markdown → `formatted_body` (⚠️ perdu vers Signal) ·
 Incognito (interrupteur des accusés) · Zoom ⌘+/⌘-/⌘0 et accessibilité (`ScaledMetric`, labels
 composites VoiceOver, `accessibilityReduceTransparency`) · Verrouillage biométrique · Export `.txt` ·
 Gestion du stockage · Sons de notification.
