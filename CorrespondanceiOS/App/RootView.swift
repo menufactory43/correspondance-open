@@ -78,18 +78,13 @@ struct RootView: View {
     .background(theme.paper.ignoresSafeArea())
   }
 
-  /// La liste et le fil arrivent aux étapes suivantes ; pour l'instant, se
-  /// connecter et savoir qu'on l'est suffit à prouver la chaîne.
+  /// Le fil arrive à l'étape suivante ; la liste, elle, est déjà l'écran par
+  /// défaut (décision 9).
   private var connected: some View {
-    VStack(spacing: Spacing.sm) {
-      Text("Connecté au Relais")
-        .font(Typography.letterHeading(themes.typeface, 22))
-        .foregroundStyle(theme.ink)
-      Text("\(store.conversations.count) conversation(s)")
-        .font(Typography.emptyState(themes.typeface))
-        .foregroundStyle(theme.inkSecondary)
+    NavigationStack {
+      InboxListView(mode: $mode)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .tint(theme.accent)
   }
 
   /// En démonstration, l'écran demandé s'ouvre seul — les captures n'ont pas
@@ -107,7 +102,9 @@ struct RootView: View {
           password: "mauvais"
         )
       }
-    case .fil, .focus, .vide:
+    case .fil:
+      store.selectedConversationID = store.visibleConversations.first?.id
+    case .focus, .vide:
       break
     }
   }
