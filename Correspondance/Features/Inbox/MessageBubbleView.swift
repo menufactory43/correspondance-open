@@ -100,7 +100,7 @@ struct MessageBubbleView: View {
         }
 
         if let link = previewedLink {
-          LinkPreviewCard(url: link, theme: theme, typeface: typeface)
+          LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
         }
 
         if let footnote = footnoteLabel {
@@ -203,9 +203,14 @@ struct MessageBubbleView: View {
   private var previewedLink: URL? {
     guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble
     else { return nil }
+    // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.
+    if let bridged = message.linkPreview, bridgedPreview != nil, let url = bridged.webURL { return url }
     // Le même mémo que le corps : le détecteur ne repasse pas sur la bulle.
     return LinkedText.firstWebURL(in: displayText)
   }
+
+  /// L'aperçu déjà produit côté réseau, s'il a de quoi faire une carte.
+  private var bridgedPreview: LinkPreview? { message.linkPreview?.asLinkPreview }
 
   /// Réagir · répondre · tout le reste — la rangée qui n'existe qu'au survol.
   ///

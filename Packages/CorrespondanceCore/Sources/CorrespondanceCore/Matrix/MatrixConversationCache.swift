@@ -47,6 +47,11 @@ public enum MatrixConversationCache {
     /// nommer l'expéditeur dans un groupe. Absents des caches plus anciens.
     public var senderID: String?
     public var senderName: String?
+    /// Citation et aperçu de lien, absents des caches plus anciens. Une citation
+    /// encore muette (cible inconnue) se garde aussi : c'est ce qui permet de
+    /// la résoudre à un lancement suivant.
+    public var replyTo: QuotedMessage?
+    public var linkPreview: BridgedLinkPreview?
   }
 
   public static func load() -> (nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
@@ -92,7 +97,15 @@ public enum MatrixConversationCache {
           senderID: cached.senderID,
           senderName: cached.senderName,
           attachments: attachments,
-          reactions: cached.reactions ?? []
+          reactions: cached.reactions ?? [],
+          replyTo: cached.replyTo,
+          linkPreview: cached.linkPreview.map { preview in
+            var copy = preview
+            if let path = copy.imageLocalPath, !FileManager.default.fileExists(atPath: path) {
+              copy.imageLocalPath = nil
+            }
+            return copy
+          }
         )
       }
     }
@@ -133,7 +146,9 @@ public enum MatrixConversationCache {
               attachments: $0.attachments,
               reactions: $0.reactions,
               senderID: $0.senderID,
-              senderName: $0.senderName
+              senderName: $0.senderName,
+              replyTo: $0.replyTo,
+              linkPreview: $0.linkPreview
             )
           }
         }

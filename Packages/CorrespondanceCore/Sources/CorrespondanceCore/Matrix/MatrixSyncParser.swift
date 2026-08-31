@@ -26,6 +26,7 @@ public struct MatrixSyncParser: Sendable {
       for event in (room.ephemeral?.events ?? []) { applyReceipt(event, to: &model) }
       if let heroes = room.summary?.heroes { model.heroes = heroes }
       if let count = room.unreadNotifications?.notificationCount { model.unreadCount = count }
+      resolveQuotes(in: &model)
       rooms[roomID] = model
     }
     // Un salon quitté disparaît de l'inbox.
@@ -59,7 +60,9 @@ public struct MatrixSyncParser: Sendable {
       for message in list where !message.isPending && model.messagesByID[message.id] == nil {
         model.messagesByID[message.id] = message
         model.lastEventAt = max(model.lastEventAt, message.sentAt)
+        if message.replyTo?.awaitsTarget == true { model.unresolvedQuoteMessageIDs.insert(message.id) }
       }
+      resolveQuotes(in: &model)
       rooms[roomID] = model
     }
   }
@@ -72,14 +75,101 @@ public struct MatrixSyncParser: Sendable {
     return roomID.hasPrefix("!") ? roomID : nil
   }
 
+  /// Ce qu'une page fusionnée a changé. Quand on remonte un trou, c'est
+  /// `added` qui dit s'il faut continuer : une page qui n'apporte plus rien
+  /// veut dire qu'on a rejoint l'historique en main.
+  public struct MergeOutcome: Sendable, Equatable {
+    /// Events (messages ou réactions) que le salon connaissait déjà.
+    public var alreadyKnown: Int
+    /// Messages ou réactions entrés dans le modèle par cette page.
+    public var added: Int
+  }
+
   /// Messages d'un `GET /rooms/{id}/messages` (pagination arrière) fusionnés dans le salon.
-  public func applyMessages(_ events: [MatrixEvent], roomID: String, to model: inout MatrixRoomModel) {
+  @discardableResult
+  public func applyMessages(_ events: [MatrixEvent], roomID: String, to model: inout MatrixRoomModel) -> MergeOutcome {
+    var alreadyKnown = 0
+    let before = model.messagesByID.count + model.reactionsByEventID.count
     for event in events {
+      if let id = event.eventID,
+         model.messagesByID[id] != nil || model.reactionsByEventID[id] != nil
+      {
+        alreadyKnown += 1
+      }
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
       applyRedaction(event, to: &model)
     }
+    resolveQuotes(in: &model)
+    let after = model.messagesByID.count + model.reactionsByEventID.count
+    return MergeOutcome(alreadyKnown: alreadyKnown, added: max(0, after - before))
+  }
+
+  /// Donne leur texte aux citations dont la cible vient d'arriver. À jouer après
+  /// chaque fusion : une page remontée en arrière livre la réponse **avant** le
+  /// message cité, et un `/sync` peut n'apporter que l'un des deux.
+  public func resolveQuotes(in model: inout MatrixRoomModel) {
+    for messageID in model.unresolvedQuoteMessageIDs {
+      guard var message = model.messagesByID[messageID],
+            let targetID = message.replyTo?.messageID,
+            let quoted = model.messagesByID[targetID]
+      else { continue }
+      message.replyTo = QuotedMessage(
+        messageID: targetID,
+        senderName: quotedSenderName(of: quoted, fallbackBody: "", in: model),
+        text: quoted.sidebarPreviewText
+      )
+      model.messagesByID[messageID] = message
+      model.unresolvedQuoteMessageIDs.remove(messageID)
+    }
+  }
+
+  /// Cibles de citation qu'on ne trouvera pas dans ce qu'on a : à demander au
+  /// Relais une par une (`GET /rooms/{r}/event/{e}`).
+  public static func missingQuoteTargets(in model: MatrixRoomModel) -> Set<String> {
+    Set(
+      model.unresolvedQuoteMessageIDs.compactMap { messageID -> String? in
+        guard let target = model.messagesByID[messageID]?.replyTo?.messageID,
+              model.messagesByID[target] == nil
+        else { return nil }
+        return target
+      }
+    )
+  }
+
+  /// Un trou de timeline signalé par `/sync` : Synapse n'a rendu qu'une fenêtre
+  /// (dix events sans filtre) et a posé `limited: true`. Ce qui précède la
+  /// fenêtre est resté chez le Relais, et **aucun `/sync` suivant ne le rendra** —
+  /// après une nuit Mac éteint, un groupe bavard perdait tout sauf ses dix
+  /// derniers messages. `prevBatch` est le curseur d'où repartir en arrière.
+  public struct TimelineGap: Sendable, Equatable {
+    public var roomID: String
+    public var prevBatch: String
+    /// Le salon avait-il déjà des messages avant cette passe ? Si oui, on remonte
+    /// jusqu'à les retrouver ; sinon (salon rejoint en retard, première
+    /// installation) il n'y a pas de borne et on se contente d'une page.
+    public var hasAnchor: Bool
+
+    public init(roomID: String, prevBatch: String, hasAnchor: Bool) {
+      self.roomID = roomID
+      self.prevBatch = prevBatch
+      self.hasAnchor = hasAnchor
+    }
+  }
+
+  /// Les trous que ce `/sync` laisse derrière lui. À calculer **avant** `apply` :
+  /// c'est l'état d'avant la passe qui dit si le salon a une borne connue.
+  public static func timelineGaps(
+    in response: MatrixSyncResponse,
+    rooms: [String: MatrixRoomModel]
+  ) -> [TimelineGap] {
+    (response.rooms?.join ?? [:]).compactMap { roomID, room in
+      guard room.timeline?.limited == true, let token = room.timeline?.prevBatch else { return nil }
+      let hasAnchor = !(rooms[roomID]?.messagesByID.isEmpty ?? true)
+      return TimelineGap(roomID: roomID, prevBatch: token, hasAnchor: hasAnchor)
+    }
+    .sorted { $0.roomID < $1.roomID }
   }
 
   // MARK: - État
@@ -201,8 +291,11 @@ public struct MatrixSyncParser: Sendable {
         ),
         text: quoted?.sidebarPreviewText ?? Self.fallbackQuotedText(in: content.string(at: "body") ?? "")
       )
-      if replyTo?.isEmpty == true { replyTo = nil }
+      // Cible inconnue et pas de repli (Signal) : la citation attend, on ne la jette pas.
     }
+
+    // `com.beeper.linkpreviews` : l'aperçu que l'expéditeur a lui-même produit.
+    let linkPreview = Self.bridgedLinkPreview(in: content)
 
     var text = ""
     var attachments: [MessageAttachment] = []
@@ -248,11 +341,37 @@ public struct MatrixSyncParser: Sendable {
       // nom d'affichage de la salle, pas le MXID du bridge.
       senderName: event.sender.map { displayName(of: $0, in: model) },
       attachments: attachments,
-      replyTo: replyTo
+      replyTo: replyTo,
+      linkPreview: linkPreview
     )
     guard message.hasVisibleBody else { return }
     model.messagesByID[eventID] = message
+    if replyTo?.awaitsTarget == true {
+      model.unresolvedQuoteMessageIDs.insert(eventID)
+    } else {
+      model.unresolvedQuoteMessageIDs.remove(eventID)
+    }
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  /// Le premier aperçu de `com.beeper.linkpreviews` qui porte une adresse. Les
+  /// clés sont celles d'Open Graph, l'image est déjà sur le Relais (`mxc://`).
+  public static func bridgedLinkPreview(in content: MatrixJSON) -> BridgedLinkPreview? {
+    guard let previews = content["com.beeper.linkpreviews"]?.arrayValue else { return nil }
+    for preview in previews {
+      guard let url = preview["matched_url"]?.stringValue ?? preview["og:url"]?.stringValue,
+            !url.isEmpty
+      else { continue }
+      let image = preview["og:image"]?.stringValue
+      return BridgedLinkPreview(
+        url: url,
+        title: preview["og:title"]?.stringValue,
+        description: preview["og:description"]?.stringValue,
+        imageMXC: (image?.hasPrefix("mxc://") == true) ? image : nil,
+        imageContentType: preview["og:image:type"]?.stringValue
+      )
+    }
+    return nil
   }
 
   // MARK: - Réactions

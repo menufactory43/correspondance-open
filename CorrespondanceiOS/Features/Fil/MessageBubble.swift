@@ -89,7 +89,7 @@ struct MessageBubble: View {
       }
 
       if let link = previewedLink {
-        LinkPreviewCard(url: link, theme: theme, typeface: typeface)
+        LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
       }
 
       if let footnote = footnoteLabel {
@@ -344,8 +344,13 @@ struct MessageBubble: View {
   private var previewedLink: URL? {
     guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble
     else { return nil }
+    // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.
+    if let bridged = message.linkPreview, bridgedPreview != nil, let url = bridged.webURL { return url }
     return TextLinks.firstWebURL(in: displayText)
   }
+
+  /// L'aperçu déjà produit côté réseau, s'il a de quoi faire une carte.
+  private var bridgedPreview: LinkPreview? { message.linkPreview?.asLinkPreview }
 
   private var highlighted: AttributedString {
     LinkedText.render(

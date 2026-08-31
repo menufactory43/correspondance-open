@@ -18,6 +18,13 @@ public struct LinkPreview: Codable, Equatable, Sendable {
     !(title ?? "").isEmpty || imagePath != nil
   }
 
+  /// Le domaine tel qu'on l'écrit sous le titre : « lemonde.fr », pas
+  /// « www.lemonde.fr » — le « www. » n'apprend rien à personne.
+  public static func domain(of url: URL) -> String {
+    let host = url.host ?? url.absoluteString
+    return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+  }
+
   public init(title: String?, domain: String, imagePath: String?) {
     self.title = title
     self.domain = domain
@@ -140,7 +147,7 @@ public final class LinkPreviewStore {
   /// des valeurs transportables : `LPLinkMetadata` et son fournisseur d'image
   /// ne sont pas `Sendable`, et n'ont aucune raison de quitter leur file.
   private nonisolated static func fetch(url: URL, key: String) async -> LinkPreview? {
-    let domain = displayDomain(of: url)
+    let domain = LinkPreview.domain(of: url)
     guard let raw = await rawMetadata(for: url) else { return nil }
     var preview = LinkPreview(title: raw.title, domain: domain, imagePath: nil)
     if let data = raw.imageData, let path = storeThumbnail(data, key: key) {
@@ -148,13 +155,6 @@ public final class LinkPreviewStore {
     }
     guard preview.hasSomethingToShow else { return nil }
     return preview
-  }
-
-  /// Le domaine tel qu'on l'écrit sous le titre : « lemonde.fr », pas
-  /// « www.lemonde.fr » — le « www. » n'apprend rien à personne.
-  private nonisolated static func displayDomain(of url: URL) -> String {
-    let host = url.host ?? url.absoluteString
-    return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
   }
 
   /// Le titre et l'image, arrachés au `LPLinkMetadata` avant qu'il ne s'éteigne.

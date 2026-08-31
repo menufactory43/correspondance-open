@@ -13,6 +13,10 @@ public struct LinkPreviewCard: View {
   public let url: URL
   public let theme: WritingTheme
   public var typeface: WritingTypeface = .quattro
+  /// L'aperçu que le réseau a livré avec le message, quand il y en a un : on
+  /// l'affiche tel quel, sans interroger la page — c'est celui que voient les
+  /// autres membres, et bien des sites ne répondent pas à un robot.
+  public var bridged: LinkPreview?
 
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -32,6 +36,10 @@ public struct LinkPreviewCard: View {
       }
     }
     .task(id: url) {
+      if let bridged {
+        preview = bridged
+        return
+      }
       let found = await LinkPreviewStore.shared.metadata(for: url)
       guard !Task.isCancelled else { return }
       // Le fil est ancré en bas : la carte pousse le contenu sans arracher la
@@ -100,9 +108,15 @@ public struct LinkPreviewCard: View {
     return "Aperçu du lien : \(title), sur \(preview.domain)"
   }
 
-  public init(url: URL, theme: WritingTheme, typeface: WritingTypeface = .quattro) {
+  public init(
+    url: URL,
+    theme: WritingTheme,
+    typeface: WritingTypeface = .quattro,
+    bridged: LinkPreview? = nil
+  ) {
     self.url = url
     self.theme = theme
     self.typeface = typeface
+    self.bridged = bridged
   }
 }

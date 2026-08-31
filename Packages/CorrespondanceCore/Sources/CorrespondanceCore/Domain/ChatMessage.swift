@@ -116,6 +116,64 @@ public struct QuotedMessage: Hashable, Codable, Sendable {
     self.senderName = senderName
     self.text = text
   }
+
+  /// Une citation dont on connaît la cible sans l'avoir encore en main : le pont
+  /// Signal ne met que l'`event_id` cité, aucun texte de repli. Elle reste
+  /// muette jusqu'à ce que la cible arrive — par un trou comblé, ou en allant
+  /// la chercher — et ne doit surtout pas être jetée entre-temps. Le critère
+  /// est le texte seul : en tête-à-tête, le nom se déduit du fil sans la cible,
+  /// alors qu'un message cité chargé a toujours quelque chose à dire (au moins
+  /// « 📷 Photo »).
+  public var awaitsTarget: Bool {
+    messageID != nil && text.trimmingCharacters(in: .whitespaces).isEmpty
+  }
+}
+
+/// L'aperçu d'un lien tel que le **réseau** l'a livré (`com.beeper.linkpreviews`) :
+/// le téléphone de l'expéditeur a déjà interrogé la page, le pont nous passe le
+/// titre, la description et la vignette (un `mxc://` du Relais). C'est l'aperçu
+/// que voient les autres membres — bien plus fiable que d'aller nous-mêmes sur
+/// une page qui refuse les robots.
+public struct BridgedLinkPreview: Hashable, Codable, Sendable {
+  public var url: String
+  public var title: String?
+  public var description: String?
+  public var imageMXC: String?
+  public var imageContentType: String?
+  /// Chemin local de la vignette, une fois téléchargée du Relais.
+  public var imageLocalPath: String?
+
+  public init(
+    url: String,
+    title: String? = nil,
+    description: String? = nil,
+    imageMXC: String? = nil,
+    imageContentType: String? = nil,
+    imageLocalPath: String? = nil
+  ) {
+    self.url = url
+    self.title = title
+    self.description = description
+    self.imageMXC = imageMXC
+    self.imageContentType = imageContentType
+    self.imageLocalPath = imageLocalPath
+  }
+
+  public var webURL: URL? {
+    guard let parsed = URL(string: url), let scheme = parsed.scheme?.lowercased(),
+          scheme == "http" || scheme == "https"
+    else { return nil }
+    return parsed
+  }
+
+  /// La carte qu'on peut en tirer, dans le même moule que celles qu'on cherche
+  /// nous-mêmes. `nil` tant qu'il n'y a ni titre ni vignette : une carte sans
+  /// rien dessus n'apprendrait rien.
+  public var asLinkPreview: LinkPreview? {
+    guard let webURL else { return nil }
+    let preview = LinkPreview(title: title, domain: LinkPreview.domain(of: webURL), imagePath: imageLocalPath)
+    return preview.hasSomethingToShow ? preview : nil
+  }
 }
 
 public struct ChatMessage: Identifiable, Hashable, Sendable {
@@ -138,6 +196,8 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   public var reactions: [MessageReaction]
   /// Message auquel celui-ci répond, si c'en est une.
   public var replyTo: QuotedMessage?
+  /// Aperçu du premier lien, quand le réseau l'a fourni avec le message.
+  public var linkPreview: BridgedLinkPreview?
   /// Date de la dernière modification, quand l'auteur a modifié son message
   /// (iMessage, 15 minutes). La bulle porte alors la mention « Modifié ».
   public var editedAt: Date?
@@ -168,6 +228,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     attachments: [MessageAttachment] = [],
     reactions: [MessageReaction] = [],
     replyTo: QuotedMessage? = nil,
+    linkPreview: BridgedLinkPreview? = nil,
     editedAt: Date? = nil,
     editHistory: [String] = [],
     isRetracted: Bool = false,
@@ -186,6 +247,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     self.attachments = attachments
     self.reactions = reactions
     self.replyTo = replyTo
+    self.linkPreview = linkPreview
     self.editedAt = editedAt
     self.editHistory = editHistory
     self.isRetracted = isRetracted

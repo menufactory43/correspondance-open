@@ -28,6 +28,10 @@ public struct MatrixRoomModel: Sendable {
   /// Dernier event lu par chaque correspondant (`m.receipt` / `m.read` du `/sync`).
   /// mautrix-whatsapp pose un seul marqueur « jusqu'ici » par personne.
   public var readMarkerByUser: [String: String] = [:]
+  /// Réponses dont la cible n'est pas encore en main (le pont Signal ne donne
+  /// que l'`event_id` cité, sans texte). Elles se résolvent dès que la cible
+  /// arrive — et disent au service ce qu'il reste à aller chercher.
+  public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
   /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
   /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.

@@ -30,6 +30,12 @@ public actor MatrixBridgeService {
   private var ledger = MatrixTransactionLedger()
   /// Salons dont on a déjà demandé l'historique cette session.
   private var backfilledRoomIDs: Set<String> = []
+  /// Trous de timeline signalés par `/sync` (`limited`) et pas encore comblés,
+  /// par salon. Un `/sync` incrémental ne les resignale jamais : c'est à nous
+  /// de les garder jusqu'à ce que le rattrapage passe.
+  private var pendingTimelineGaps: [String: MatrixSyncParser.TimelineGap] = [:]
+  /// Cibles de citation déjà demandées au Relais cette session, trouvées ou non.
+  private var attemptedQuoteTargets: Set<String> = []
   /// L'état de conversation tel que le Relais le raconte (ADR 0001). Cumulatif :
   /// chaque `/sync` y fusionne ce qui a changé.
   private var relayState = ConversationStateSnapshot()
@@ -106,14 +112,92 @@ public actor MatrixBridgeService {
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
+    // Avant `apply` : c'est l'état d'avant la passe qui dit jusqu'où remonter.
+    for gap in MatrixSyncParser.timelineGaps(in: response, rooms: rooms) {
+      pendingTimelineGaps[gap.roomID] = gap
+    }
     parser.apply(response, to: &rooms)
     parser.applyConversationState(response, to: &relayState)
     nextBatch = response.nextBatch
     detectManagementRooms()
+    await fillTimelineGaps()
+    await fetchMissingQuoteTargets()
     persist()
     await acceptBridgeInvites(response)
     return conversations()
   }
+
+  /// Comble les trous de timeline laissés par `/sync` : remonte `/messages` depuis
+  /// `prev_batch`, page par page, tant qu'une page apporte encore du nouveau —
+  /// ou, sans borne connue, une seule page. « Tant que du nouveau » plutôt que
+  /// « jusqu'au premier event connu » : un historique troué par le passé (salon
+  /// rejoint en retard, anciennes absences) se répare ainsi au passage, dans
+  /// la même borne. Un échec réseau laisse le trou en attente : on retentera à
+  /// la passe suivante, le curseur ne le resignalera pas.
+  private func fillTimelineGaps() async {
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    for (roomID, gap) in pendingTimelineGaps.sorted(by: { $0.key < $1.key }) {
+      guard rooms[roomID] != nil else {
+        pendingTimelineGaps.removeValue(forKey: roomID)
+        continue
+      }
+      var from = gap.prevBatch
+      var pages = 0
+      let maxPages = gap.hasAnchor ? Self.gapPagesWithAnchor : 1
+      do {
+        while pages < maxPages {
+          let page = try await client.roomMessages(
+            roomID: roomID, from: from, direction: "b", limit: Self.gapPageSize
+          )
+          pages += 1
+          guard var model = rooms[roomID] else { break }
+          let outcome = parser.applyMessages(page.chunk, roomID: roomID, to: &model)
+          rooms[roomID] = model
+          // Plus rien de nouveau, ou début du salon : le trou est comblé.
+          guard outcome.added > 0, !page.chunk.isEmpty, let next = page.end else { break }
+          from = next
+        }
+        pendingTimelineGaps.removeValue(forKey: roomID)
+      } catch {
+        // Réseau ou quota : le trou reste en attente pour la prochaine passe.
+      }
+    }
+  }
+
+  /// Va chercher au Relais les messages cités qu'on n'a pas : le pont Signal
+  /// ne met que l'`event_id` dans une réponse, sans texte de repli, et la cible
+  /// peut être plus vieille que tout ce qu'on a chargé. Un seul essai par
+  /// event : une cible introuvable (message d'avant la liaison) le restera.
+  private func fetchMissingQuoteTargets() async {
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    var budget = Self.quoteFetchBudgetPerPass
+    for roomID in rooms.keys.sorted() {
+      guard budget > 0, let model = rooms[roomID] else { continue }
+      let targets = MatrixSyncParser.missingQuoteTargets(in: model)
+        .subtracting(attemptedQuoteTargets)
+        .sorted()
+      for eventID in targets where budget > 0 {
+        budget -= 1
+        attemptedQuoteTargets.insert(eventID)
+        guard let json = try? await client.roomEvent(roomID: roomID, eventID: eventID),
+              let data = try? JSONEncoder().encode(json),
+              let event = try? JSONDecoder().decode(MatrixEvent.self, from: data),
+              var current = rooms[roomID]
+        else { continue }
+        parser.applyMessages([event], roomID: roomID, to: &current)
+        rooms[roomID] = current
+      }
+    }
+  }
+
+  /// Vingt-cinq cibles par passe : de quoi rattraper une soirée de groupe sans
+  /// transformer un `/sync` en rafale de requêtes.
+  private static let quoteFetchBudgetPerPass = 25
+
+  private static let gapPageSize = 100
+  /// Dix pages de cent : une longue absence sur un groupe très bavard, sans que
+  /// le rattrapage devienne une aspiration de tout l'historique du salon.
+  private static let gapPagesWithAnchor = 10
 
   /// Les portails (un par chat distant) arrivent sous forme d'invitations du bridge :
   /// sans double puppeting, c'est au client de les accepter. On ne rejoint que ce qui
@@ -195,11 +279,22 @@ public actor MatrixBridgeService {
   public func ensureLocalAttachments(_ messages: [ChatMessage]) async -> [ChatMessage] {
     var result: [ChatMessage] = []
     for message in messages {
-      guard !message.attachments.isEmpty else {
+      guard !message.attachments.isEmpty || message.linkPreview?.imageMXC != nil else {
         result.append(message)
         continue
       }
       var updated = message
+      // La vignette d'un aperçu de lien vit sur le Relais comme une pièce jointe.
+      if var preview = updated.linkPreview, let mxc = preview.imageMXC, preview.imageLocalPath == nil {
+        if let path = MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: preview.imageContentType) {
+          preview.imageLocalPath = path
+        } else if let data = try? await client.downloadMedia(mxcURI: mxc), !data.isEmpty {
+          preview.imageLocalPath = MatrixAttachmentStore.store(
+            data: data, forMXC: mxc, contentType: preview.imageContentType
+          )
+        }
+        updated.linkPreview = preview
+      }
       for index in updated.attachments.indices {
         let attachment = updated.attachments[index]
         if attachment.resolvedFileURL != nil { continue }
