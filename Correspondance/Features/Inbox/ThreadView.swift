@@ -243,7 +243,10 @@ struct ThreadView: View {
             ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
               .id(message.id)
           } else {
+            // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
+            // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.
             bubble(for: message)
+              .equatable()
               .id(message.id)
               .messageArrival(
                 .encre,
@@ -260,7 +263,9 @@ struct ThreadView: View {
 
   /// Une bulle et tout ce qu'on peut lui faire. Extraite de la boucle : le
   /// vérificateur de types s'y perdait.
-  private func bubble(for message: ChatMessage) -> some View {
+  /// Le type concret, pas `some View` : `.equatable()` a besoin de savoir que
+  /// c'est une `MessageBubbleView` pour se servir de son `==`.
+  private func bubble(for message: ChatMessage) -> MessageBubbleView {
     let automatable = automationAvailable(for: message)
     // Deux chemins pour un même geste : l'automatisation Messages pour un
     // iMessage, `m.replace` pour un fil du Relais dont le réseau sait modifier.

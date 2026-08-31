@@ -573,3 +573,30 @@ struct MessageBubbleView: View {
     return copy
   }
 }
+
+/// Une bulle ne dépend que de son message et de la façon de l'écrire. Sans ce
+/// `==`, SwiftUI compare la vue champ par champ, tombe sur les fermetures
+/// d'action — jamais égales entre elles — et conclut que TOUTE bulle a changé :
+/// le moindre rafraîchissement du fil (« Alice écrit… », un accusé de lecture)
+/// refaisait le corps et la mise en page des quatre cents bulles d'un groupe.
+/// On ne compare donc pas les fermetures, on compare ce qu'elles offrent :
+/// l'action est-elle proposée ou non. Leur contenu, lui, ne capture que le
+/// magasin et l'identifiant du message — deux choses qui ne bougent pas.
+extension MessageBubbleView: Equatable {
+  nonisolated static func == (lhs: MessageBubbleView, rhs: MessageBubbleView) -> Bool {
+    lhs.message == rhs.message
+      && lhs.theme == rhs.theme
+      && lhs.typeface == rhs.typeface
+      && lhs.textScale == rhs.textScale
+      && lhs.showsLinkPreviews == rhs.showsLinkPreviews
+      && lhs.highlightQuery == rhs.highlightQuery
+      && lhs.isCurrentMatch == rhs.isCurrentMatch
+      && (lhs.onReact == nil) == (rhs.onReact == nil)
+      && (lhs.onReply == nil) == (rhs.onReply == nil)
+      && (lhs.onEdit == nil) == (rhs.onEdit == nil)
+      && (lhs.onUndoSend == nil) == (rhs.onUndoSend == nil)
+      && (lhs.onDeleteLocally == nil) == (rhs.onDeleteLocally == nil)
+      && (lhs.onDeleteEverywhere == nil) == (rhs.onDeleteEverywhere == nil)
+      && (lhs.onVotePoll == nil) == (rhs.onVotePoll == nil)
+  }
+}

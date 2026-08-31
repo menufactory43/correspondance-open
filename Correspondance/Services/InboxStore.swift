@@ -2688,7 +2688,13 @@ final class InboxStore {
       }
       guard !refreshed.isEmpty else { return }
       let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
-      session.messages = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      let recombined = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      // Le `/sync` revient dès qu'un événement passe QUELQUE PART — une frappe,
+      // un accusé de lecture dans un autre salon. Réécrire le fil à l'identique
+      // suffirait à faire refaire son corps et sa mise en page à chaque bulle :
+      // dans un groupe de quatre cents messages, c'est le fil qui rame sans
+      // qu'il soit rien arrivé. On n'écrit que si le fil a vraiment changé.
+      if session.messages != recombined { session.messages = recombined }
       applySidebarPreview(conversationID: bridged[0].id, from: refreshed)
       if isAttended(id) { clearUnread(for: id) }
       return
@@ -2696,7 +2702,10 @@ final class InboxStore {
     guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
-    session.messages = await matrix.ensureLocalAttachments(fetched)
+    let refreshed = await matrix.ensureLocalAttachments(fetched)
+    // Même raison qu'au-dessus : un fil identique se réécrit sans rien apporter,
+    // et l'observation, elle, y croit.
+    if session.messages != refreshed { session.messages = refreshed }
     applySidebarPreview(conversationID: id, from: session.messages)
     recordReplyProof(for: id, in: session.messages)
     if isAttended(id) { clearUnread(for: id) }
