@@ -33,7 +33,7 @@ public actor MatrixClient {
       "type": .string("m.login.password"),
       "identifier": .object(["type": .string("m.id.user"), "user": .string(user)]),
       "password": .string(password),
-      "initial_device_display_name": .string("Correspondance (Mac)"),
+      "initial_device_display_name": .string(Platform.deviceDisplayName),
     ]
     let json = try await request(
       method: "POST",

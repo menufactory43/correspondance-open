@@ -1,0 +1,217 @@
+{
+  "next_batch": "s31337_4242_0001",
+  "rooms": {
+    "join": {
+      "!dm-alice:correspondance.local": {
+        "summary": {
+          "m.heroes": ["@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local"],
+          "m.joined_member_count": 3
+        },
+        "unread_notifications": { "notification_count": 2 },
+        "state": {
+          "events": [
+            {
+              "type": "m.bridge",
+              "state_key": "fi.mau.signal://signal/2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-bridge-dm-sig",
+              "origin_server_ts": 1756600000000,
+              "content": {
+                "bridgebot": "@signalbot:correspondance.local",
+                "protocol": { "id": "signal", "displayname": "Signal" },
+                "channel": {
+                  "id": "2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10",
+                  "displayname": "Alice"
+                },
+                "com.beeper.room_type": "dm"
+              }
+            },
+            {
+              "type": "m.room.avatar",
+              "state_key": "",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-avatar-dm-sig",
+              "origin_server_ts": 1756600000005,
+              "content": {
+                "url": "mxc://correspondance.local/avatar-alice-sig",
+                "info": { "mimetype": "image/jpeg" }
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-dm-sig",
+              "origin_server_ts": 1756600000001,
+              "content": { "membership": "join", "displayname": "meffysto" }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local",
+              "sender": "@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local",
+              "event_id": "$state-member-alice",
+              "origin_server_ts": 1756600000002,
+              "content": {
+                "membership": "join",
+                "displayname": "Alice (Signal)",
+                "avatar_url": "mxc://correspondance.local/avatar-alice-ghost-sig"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signalbot:correspondance.local",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-member-bot-dm-sig",
+              "origin_server_ts": 1756600000004,
+              "content": { "membership": "join", "displayname": "Signal bridge bot" }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "prev_batch": "t7-1000_0_0",
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-alice-1",
+              "sender": "@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local",
+              "origin_server_ts": 1756600100000,
+              "content": { "msgtype": "m.text", "body": "On se voit demain ?" }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-moi-sig",
+              "sender": "@meffysto:correspondance.local",
+              "origin_server_ts": 1756600200000,
+              "content": {
+                "msgtype": "m.text",
+                "body": "Oui, vers 18h.",
+                "m.relates_to": { "m.in_reply_to": { "event_id": "$msg-alice-1" } }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$reaction-alice-sig",
+              "sender": "@signal_2f9d4c60-1a7b-4f3e-9c21-8ab5d0e77f10:correspondance.local",
+              "origin_server_ts": 1756600300000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-moi-sig",
+                  "key": "👍"
+                }
+              }
+            }
+          ]
+        }
+      },
+
+      "!groupe-parrots:correspondance.local": {
+        "summary": { "m.joined_member_count": 4 },
+        "unread_notifications": { "notification_count": 0 },
+        "state": {
+          "events": [
+            {
+              "type": "m.bridge",
+              "state_key": "fi.mau.signal://signal/Vzj4sWySRh",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-bridge-grp-sig",
+              "origin_server_ts": 1756600000000,
+              "content": {
+                "bridgebot": "@signalbot:correspondance.local",
+                "protocol": { "id": "signal", "displayname": "Signal" },
+                "channel": { "id": "Vzj4sWySRh", "displayname": "Les Perroquets" },
+                "com.beeper.room_type": "group"
+              }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-grp-sig",
+              "origin_server_ts": 1756600000001,
+              "content": { "membership": "join", "displayname": "meffysto" }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signal_7c1e9a02-33bd-4a55-8f10-6d2c4b9e1a88:correspondance.local",
+              "sender": "@signal_7c1e9a02-33bd-4a55-8f10-6d2c4b9e1a88:correspondance.local",
+              "event_id": "$state-member-silex",
+              "origin_server_ts": 1756600000002,
+              "content": { "membership": "join", "displayname": "Silexperience" }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signal_9b3f2d81-77ac-4e19-b0d6-1f5e8c40a2b7:correspondance.local",
+              "sender": "@signal_9b3f2d81-77ac-4e19-b0d6-1f5e8c40a2b7:correspondance.local",
+              "event_id": "$state-member-pivi",
+              "origin_server_ts": 1756600000003,
+              "content": { "membership": "join", "displayname": "Pivi" }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signalbot:correspondance.local",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-member-bot-grp-sig",
+              "origin_server_ts": 1756600000004,
+              "content": { "membership": "join", "displayname": "Signal bridge bot" }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "prev_batch": "t7-2000_0_0",
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-parrots-1",
+              "sender": "@signal_9b3f2d81-77ac-4e19-b0d6-1f5e8c40a2b7:correspondance.local",
+              "origin_server_ts": 1756600400000,
+              "content": { "msgtype": "m.text", "body": "https://blueprint.io/community" }
+            }
+          ]
+        }
+      },
+
+      "!gestion-signal:correspondance.local": {
+        "summary": { "m.joined_member_count": 2 },
+        "state": {
+          "events": [
+            {
+              "type": "m.room.member",
+              "state_key": "@meffysto:correspondance.local",
+              "sender": "@meffysto:correspondance.local",
+              "event_id": "$state-member-self-mgmt-sig",
+              "origin_server_ts": 1756600000001,
+              "content": { "membership": "join", "displayname": "meffysto" }
+            },
+            {
+              "type": "m.room.member",
+              "state_key": "@signalbot:correspondance.local",
+              "sender": "@signalbot:correspondance.local",
+              "event_id": "$state-member-bot-mgmt-sig",
+              "origin_server_ts": 1756600000002,
+              "content": { "membership": "join", "displayname": "Signal bridge bot" }
+            }
+          ]
+        },
+        "timeline": {
+          "limited": false,
+          "prev_batch": "t7-3000_0_0",
+          "events": [
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-bot-login-sig",
+              "sender": "@signalbot:correspondance.local",
+              "origin_server_ts": 1756600500000,
+              "content": {
+                "msgtype": "m.notice",
+                "body": "Input the code from the QR on your Signal app to log in"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

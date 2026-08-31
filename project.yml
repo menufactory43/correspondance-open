@@ -134,6 +134,16 @@ targets:
     platform: iOS
     sources:
       - path: CorrespondanceiOS
+        excludes:
+          - Demo/**
+      # Payloads /sync de démonstration (les fixtures de Core) : ce sont des
+      # ressources, pas des sources. Cf. CorrespondanceiOS/Store/DemoRelay.swift.
+      - path: CorrespondanceiOS/Demo
+        buildPhase: resources
+      # Les mêmes fontes que sur le Mac (iA Writer S, IBM Plex — OFL).
+      - path: Correspondance/Resources/Fonts
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: CorrespondanceCore
         product: CorrespondanceCore
@@ -155,6 +165,53 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: CorrespondanceiOS/Info.plist
+    info:
+      path: CorrespondanceiOS/Info.plist
+      properties:
+        CFBundleName: Correspondance
+        CFBundleDisplayName: Correspondance
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Les fontes embarquées, comme ATSApplicationFontsPath côté Mac.
+        UIAppFonts:
+          - Fonts/iAWriterQuattroS-Regular.ttf
+          - Fonts/iAWriterQuattroS-Italic.ttf
+          - Fonts/iAWriterDuoS-Regular.ttf
+          - Fonts/iAWriterDuoS-Italic.ttf
+          - Fonts/iAWriterMonoS-Regular.ttf
+          - Fonts/iAWriterMonoS-Italic.ttf
+          - Fonts/IBMPlexSerif-Regular.ttf
+          - Fonts/IBMPlexSerif-Italic.ttf
+          - Fonts/IBMPlexSans-Regular.ttf
+          - Fonts/IBMPlexSans-Italic.ttf
+        NSPhotoLibraryUsageDescription: Correspondance joint vos photos à vos messages.
+        NSCameraUsageDescription: Correspondance prend une photo pour la joindre à un message.
+        NSMicrophoneUsageDescription: Correspondance utilise le micro pour vos messages vocaux.
+        # Le Relais est un homeserver privé, en HTTP clair sur le tailnet, et
+        # son adresse est une CONFIGURATION (décision 6) : elle n'est pas connue
+        # à la compilation, donc aucune liste d'exceptions ne peut la couvrir.
+        # ATS est donc ouvert ici — l'app ne parle qu'au serveur que l'utilisateur
+        # lui a désigné, sur son propre réseau. Le tailnet reste nommé pour la
+        # journée où l'exception suffira (exposition publique = HTTPS, cf. ADR 0001).
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            ts.net:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
 
 schemes:
   Correspondance:

@@ -135,6 +135,17 @@ extension NSValue {
 }
 
 public enum Platform {
+  /// Le nom que cet appareil donne à sa session Matrix (`/login`).
+  /// Le Relais liste les sessions : « Correspondance (Mac) » et
+  /// « Correspondance (iPhone) » doivent s'y distinguer.
+  public static var deviceDisplayName: String {
+    #if canImport(AppKit)
+      return "Correspondance (Mac)"
+    #else
+      return "Correspondance (iPhone)"
+    #endif
+  }
+
   /// Ouvre une URL dans l'app qui la revendique.
   @discardableResult
   public static func open(_ url: URL) -> Bool {
