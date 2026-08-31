@@ -41,6 +41,13 @@ suppress_key_server_warning: true
 trusted_key_servers: []
 federation_domain_whitelist: []
 
+# Le pusher doit joindre Sygnal, qui vit sur le réseau Docker interne : sans
+# cette dérogation, la liste noire d'adresses privées de Synapse bloque la
+# résolution même de « sygnal » et aucun push ne part. On n'ouvre que le
+# sous-réseau du compose, pas tout le RFC1918.
+ip_range_whitelist:
+  - "172.19.0.0/16"
+
 # La présence coûte cher et n'apporte rien à une inbox.
 presence:
   enabled: false
