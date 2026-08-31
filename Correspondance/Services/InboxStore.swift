@@ -1713,7 +1713,7 @@ final class InboxStore {
         if case .waiting = step {
           silentRounds += 1
           if silentRounds >= 30 {
-            bridgeLoginStatusFR = MatrixError.bridgeBotSilent(network).localizedDescription
+            bridgeLoginStatusFR = MatrixError.bridgeBotSilent(networkLabel: network.labelFR).localizedDescription
             return
           }
         } else {

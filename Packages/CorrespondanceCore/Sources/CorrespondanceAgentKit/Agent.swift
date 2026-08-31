@@ -1,4 +1,4 @@
-import CorrespondanceCore
+import CorrespondanceMatrixClient
 import Foundation
 
 /// La boucle de « cc » : un `/sync` sans fin, et pour chaque ordre d'un

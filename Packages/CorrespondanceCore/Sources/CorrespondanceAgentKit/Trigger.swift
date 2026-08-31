@@ -1,4 +1,4 @@
-import CorrespondanceCore
+import CorrespondanceMatrixClient
 import Foundation
 
 /// Un message qui réveille l'agent : de qui, où, ce qu'il demande.

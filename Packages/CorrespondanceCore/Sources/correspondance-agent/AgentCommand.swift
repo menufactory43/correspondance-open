@@ -22,8 +22,8 @@ struct AgentCommand {
   static func stamp(_ line: String) {
     let f = DateFormatter()
     f.dateFormat = "HH:mm:ss"
-    print("\(f.string(from: Date())) \(line)")
-    fflush(stdout)
+    // Non tamponné : sous systemd ou Docker, le journal doit suivre en direct.
+    FileHandle.standardOutput.write(Data("\(f.string(from: Date())) \(line)\n".utf8))
   }
 
   static func fail(_ message: String) -> Never {

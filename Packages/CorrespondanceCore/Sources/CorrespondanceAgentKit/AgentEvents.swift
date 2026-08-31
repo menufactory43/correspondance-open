@@ -1,4 +1,4 @@
-import CorrespondanceCore
+import CorrespondanceMatrixClient
 import Foundation
 
 /// Les events que l'agent pose et que les ponts ne relaient pas. Un seul type

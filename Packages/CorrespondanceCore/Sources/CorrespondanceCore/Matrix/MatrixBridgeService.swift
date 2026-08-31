@@ -906,7 +906,7 @@ public actor MatrixBridgeService {
        Date().timeIntervalSince(sentAt) > Self.botJoinGraceSeconds,
        await botHasJoined(roomID: roomID, network: network) == false
     {
-      throw MatrixError.bridgeBotNotJoined(network)
+      throw MatrixError.bridgeBotNotJoined(networkLabel: network.labelFR)
     }
     return .waiting
   }
@@ -1077,7 +1077,7 @@ public actor MatrixBridgeService {
     // Passé le délai, ce n'est plus une course : la registration du pont n'est
     // pas chargée côté Synapse, et l'erreur le dit avec la marche à suivre.
     guard await botHasJoined(roomID: roomID, network: network) == true else {
-      throw MatrixError.bridgeBotNotJoined(network)
+      throw MatrixError.bridgeBotNotJoined(networkLabel: network.labelFR)
     }
   }
 

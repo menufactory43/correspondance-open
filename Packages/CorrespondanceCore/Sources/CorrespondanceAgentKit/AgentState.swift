@@ -1,4 +1,4 @@
-import CorrespondanceCore
+import CorrespondanceMatrixClient
 import Foundation
 
 /// Ce que l'agent doit retenir entre deux lancements : sa session Matrix, où

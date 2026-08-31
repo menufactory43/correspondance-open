@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 /// Client Matrix Client-Server v3 en REST pur (`URLSession`). Pas de SDK, pas d'E2EE :
 /// homeserver privé sur Tailscale, salons de bridge non chiffrés.
@@ -14,8 +17,22 @@ public actor MatrixClient {
     // Le long-poll /sync tient 30 s côté serveur : la marge évite les faux timeouts.
     config.timeoutIntervalForRequest = 60
     config.timeoutIntervalForResource = 120
-    config.waitsForConnectivity = false
+    #if !canImport(FoundationNetworking)
+      config.waitsForConnectivity = false
+    #endif
     session = URLSession(configuration: config)
+  }
+
+  /// Le nom sous lequel la session apparaît côté serveur. Inchangé sur Mac et
+  /// iPhone ; « agent » ailleurs — le bot qui tourne sur le NUC.
+  public static var deviceDisplayName: String {
+    #if canImport(AppKit)
+      return "Correspondance (Mac)"
+    #elseif canImport(UIKit)
+      return "Correspondance (iPhone)"
+    #else
+      return "Correspondance (agent)"
+    #endif
   }
 
   public var currentCredentials: MatrixCredentials? { credentials }
@@ -33,7 +50,7 @@ public actor MatrixClient {
       "type": .string("m.login.password"),
       "identifier": .object(["type": .string("m.id.user"), "user": .string(user)]),
       "password": .string(password),
-      "initial_device_display_name": .string(Platform.deviceDisplayName),
+      "initial_device_display_name": .string(Self.deviceDisplayName),
     ]
     let json = try await request(
       method: "POST",

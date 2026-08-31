@@ -1,4 +1,4 @@
-import CorrespondanceCore
+import CorrespondanceMatrixClient
 import XCTest
 @testable import CorrespondanceAgentKit
 
