@@ -2,27 +2,29 @@
 
 Source primaire : `/Applications/Beeper Desktop.app` (v4.3.73, `com.automattic.beeper.desktop`, Electron, arm64).
 Sources secondaires : `developers.beeper.com`, `help.beeper.com`, `blog.beeper.com`, `docs.mau.fi` + `ROADMAP.md` des dépôts mautrix.
-Cible comparée : `Correspondance` au 2026-08-29 (branche `main`, arbre de travail en cours de modification).
+Cible comparée : `Correspondance` au 2026-08-31 (branche `main`).
+Statuts revérifiés le 2026-08-31 contre le code du jour ET une ré-extraction du bundle 4.3.73 (voir Annexe).
 
 ---
 
 ## Résumé
 
-Correspondance a le socle transport : iMessage en lecture/écriture (chat.db + AppleScript), Signal via `signal-cli`,
-WhatsApp via Matrix/mautrix avec long-poll `/sync`, cache disque des quatre sources, envoi optimiste, dictée,
-mode Focus complet (précédent/suivant/archiver) et un chrome typographique déjà supérieur à Beeper.
-Ce qui manque n'est pas du transport : c'est **la couche « inbox qu'on vide »**.
-Beeper repose sur quatre piliers absents chez nous : notifications, recherche, archivage durable, et un fil
-conversationnel réel (réactions, réponses, accusés).
-Aujourd'hui l'app ne prévient de rien, ne retrouve rien, oublie ce qu'on archive au redémarrage, et affiche les
-réactions Signal comme de faux messages texte.
-Les cinq manques qui coûtent chaque jour, dans l'ordre : **1) notifications système + badge** (sans elles l'app
-n'est jamais ouverte au bon moment et le « muet » existant est décoratif) ; **2) archivage persistant + vue Archivés**
-(la promesse produit « tu réponds, tu archives » est aujourd'hui perdue au relancement) ; **3) recherche**
-(aucune, alors que Beeper en fait son ⌘K central) ; **4) réponses citées + réactions** (envoi et affichage —
-tout groupe devient illisible sans elles) ; **5) accusés de lecture** (envoi au réseau *et* affichage : le socle
-`MessageDelivery` existe mais aucune vue ne le lit, et on n'a jamais marqué un message lu côté réseau).
-Les brouillons par conversation arrivent juste derrière. Rien de tout cela n'est bloqué par mautrix.
+Le socle quotidien est quasi à parité. Les quatre piliers jadis absents — notifications, recherche,
+archivage durable, fil conversationnel réel — sont faits, ainsi que : rappels, demandes, sondages
+(création + vote), frappe bidirectionnelle, mentions, aperçus de liens, pièces jointes tous types,
+vocaux (lus partout, enregistrés sur iPhone), réponse depuis la notification, accusés de lecture
+avec le détail « Vu par Alice et Bruno » en groupe, l'app iOS complète, et l'état de conversation
+synchronisé entre appareils via le Relais.
+Ce qui manque tient en cinq paquets, du plus au moins important :
+**1) le cycle de vie d'un message** — pas d'édition de mes messages (la réception de `m.replace`
+est faite), pas de transfert, pas d'annuler l'envoi, pas d'enregistrement vocal sur Mac ;
+**2) le pilotage des groupes** — pas de création, pas de retrait ni de renommage (l'ajout de membre existe, depuis la fiche iPhone) ;
+**3) les filtres d'inbox** — non-lus, sans réponse, par réseau, brouillons ; plus « archiver tout ce
+qui est lu », la sélection multiple, et le regroupement anti-rafale des notifications (OTP immédiats) ;
+**4) les réseaux** — 4 chez nous (iMessage, Signal, WhatsApp, Instagram) contre 14 chez Beeper ;
+Telegram et Messenger sont les deux leviers mautrix évidents ; pas de multi-comptes par réseau ;
+**5) l'écosystème** — Beeper 4.3.73 embarque un serveur MCP local et des intégrations agents prêtes
+à l'emploi (voir § « IA & écosystème ») ; nous avons l'agent cc *dans* les fils, mais aucune API locale.
 
 ---
 
@@ -35,8 +37,8 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Réseaux supportés | 12 : Discord, Google Messages, Google Chat, Google Voice, Instagram, LinkedIn, Signal, Slack, Telegram, X, WhatsApp, LINE + iMessage macOS (help.beeper.com/en_US/chat-networks/which-chat-networks-can-you-connect-in-beeper). Bundle : chaînes `BridgeV2 <réseau> login flow name` pour Discord, Google Messages, Google Voice, LinkedIn, Signal, Telegram, WhatsApp, Instagram/Messenger, Facebook/Messenger, X/Twitter | **Partiel** : iMessage, Signal, WhatsApp — `Domain/MessageNetwork.swift` (`fromBridgeProtocol` ne mappe que `whatsapp`/`whatsappgo`) | — | — |
-| Instagram / Messenger | `mautrix-meta`, chaînes `BridgeV2 Instagram/Messenger login flow name` | **Absent** (prévu it. 2 de `PLAN-matrix.md`, zéro code) | M | P2 |
+| Réseaux supportés | 12 : Discord, Google Messages, Google Chat, Google Voice, Instagram, LinkedIn, Signal, Slack, Telegram, X, WhatsApp, LINE + iMessage macOS (help.beeper.com/en_US/chat-networks/which-chat-networks-can-you-connect-in-beeper). Bundle : chaînes `BridgeV2 <réseau> login flow name` pour Discord, Google Messages, Google Voice, LinkedIn, Signal, Telegram, WhatsApp, Instagram/Messenger, Facebook/Messenger, X/Twitter | **Partiel** : iMessage, Signal, WhatsApp, Instagram (+ la note à soi) — manquent Telegram, Messenger, Google Messages, LinkedIn, X, Discord, Slack, Google Chat, Google Voice, LINE. Telegram et Messenger sont les deux ponts mautrix évidents pour notre relais | — | P1 (Telegram, Messenger) |
+| Instagram / Messenger | `mautrix-meta`, chaînes `BridgeV2 Instagram/Messenger login flow name` | **Fait pour Instagram** (`mautrix-meta`, `MessageNetwork.instagram`, avatars de portail, session par cookies — `InstagramSessionCookies`). Messenger absent | M | P2 (Messenger) |
 | Bridge on-device vs cloud | Chaînes `Beeper On-Device: this account runs on your device.` / `Beeper Cloud` / `Only one account per network can use Beeper Cloud.` ; blog 2025-07-16 « the app connects directly to the messaging networks » | **Fait par construction** : tout est local (chat.db, signal-cli, Synapse perso) — c'est notre avantage structurel | — | — |
 | Multi-comptes par réseau | `%d Account Per Network`, `SELECT_NEXT_ACCOUNT ⌘⇧]`, `FILTER_ACCOUNT ⌘⌥A` ; API `GET /v1/accounts` | **Absent** : `MatrixCredentialStore` a `account = "default"` en dur ; un seul `signal-cli` | M | P2 |
 | Login guidé par réseau | Flows `login_flows.list` / `login_sessions.create` / `steps.submit` (developers.beeper.com/desktop-api-reference/resources/bridges) ; QR, code d'appairage, 2FA | **Partiel** : WhatsApp OK (`WhatsAppLoginSheet.swift` + `startWhatsAppLogin`), Matrix OK (`SettingsView.matrixSection`). Signal = instruction texte à recopier au terminal | S | P1 |
@@ -56,14 +58,14 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Épingles | `TOGGLE_THREAD_PIN` ⌘P, `Pinned chats can't be archived` | **Fait + persisté** : `togglePinned`, `UserDefaults correspondance.pinnedConversationIDs` | — | — |
 | Muet | `TOGGLE_THREAD_MUTE` ⌘⇧M | **Fait** : `mutedIDs` persistés, respectés par les notifications *et* par la pastille du Dock | — | — |
 | Non-lus / marquer lu-non lu | `TOGGLE_THREAD_READ` ⌘⇧U, `SELECT_NEXT_UNREAD_THREAD` ⌘U, `Mark All as Read` | **Fait localement** : `clearUnread`, `markUnread`. iMessage renvoie toujours 0 non-lu | S | P1 |
-| Rappels / snooze | `OPEN_REMIND_LATER_MENU` ⌘L ; « Remind Me marks this chat as new at the scheduled time, if there is no reply » ; API `POST /v1/chats/{id}/reminders` (`remindAt`, `dismissOnIncomingMessage`) + champ `snooze` | **Absent** | M | P1 |
+| Rappels / snooze | `OPEN_REMIND_LATER_MENU` ⌘L ; « Remind Me marks this chat as new at the scheduled time, if there is no reply » ; API `POST /v1/chats/{id}/reminders` (`remindAt`, `dismissOnIncomingMessage`) + champ `snooze` | **Fait** : `ConversationReminder` (`Domain/InboxFiltering.swift`) — le fil revient dans la file à l'heure dite **si personne n'a répondu entre-temps**, section « Rappels » dans la liste (`InboxListPane`), état porté par le Relais (`ConversationStateSnapshot`) donc partagé Mac/iPhone. Vocabulaire « Rappel », pas « Snooze » (cf. contradiction bundle/API en annexe) | — | — |
 | Filtres | `TOGGLE_FILTER_UNREAD` ⌘⇧Y, `CYCLE_TABS` ⌥⇥ ; jeu de dossiers `UNREAD, UNRESPONDED, DRAFTS, ARCHIVED, MUTED, HIDDEN, REQUESTS, LOW_PRIORITY, REMINDERS, SCHEDULED` ; API `chats/search?inbox=primary` / `low-priority` / `archive` | **Absent** (le rail de réseaux n'existe que dans `PLAN-matrix.md`) | M | P1 |
 | Filtre par compte / réseau | `FILTER_ACCOUNT` ⌘⌥A | **Absent** | S | P1 |
 | Tri / sections | Sections Pins / Inbox / Archive / Low Priority (help : Inbox tips) | **Fait, différemment** : `InboxStore.sortForInbox` + sections « Récents / Groupes Signal / Contacts » (`InboxListPane.section`) | — | — |
 | Liste compacte | Réglage `COMPACT_CHAT_LIST` | **Fait** : `isSidebarCompact`, clé `correspondance.sidebarCompact` | — | — |
 | Sélection multiple | `TOGGLE_CHAT_SELECTION_MODE`, `%d chat selected`, `Moved %d chat to Inbox` | **Absent** : `selectedConversationID: String?` | M | P2 |
 | Low Priority | `Add chats to Low Priority to hide them from the inbox permanently` | **Absent** | S | ✗ (redondant avec l'archive ; deux poubelles = deux dettes) |
-| Demandes de message / inconnus | `Requests`, `No mysterious strangers in your inbox`, réglage `ENABLE_MESSAGE_REQUESTS` | **Absent** | M | P2 |
+| Demandes de message / inconnus | `Requests`, `No mysterious strangers in your inbox`, réglage `ENABLE_MESSAGE_REQUESTS` | **Fait** : section « Demandes » dans la liste (`InboxListPane`, `store.requestsQueue`), fils annoncés comme demandes par le pont (`MatrixRoomModel.isNetworkFlaggedRequest` → `networkFlaggedRequestIDs`), tenus hors de la file tant qu'on n'accepte pas — le mot du domaine est « Demande » (`CONTEXT.md`) | — | — |
 | Labels / Spaces | `Create Label`, `Edit Spaces`, `TOGGLE_FILTER_BAR` ⌘S, `SWITCH_FIRST_9_ACCOUNTS` ; blog 2025-12-08 et 2026-08-10 | **Absent** | L | ✗ (organiser au lieu de traiter — anti-Focus) |
 | Suppression / quitter | `Chat: Delete` (désactivé par défaut), `Leave Chat` | **Partiel Signal** : `leaveGroup` (`quitGroup --delete`), `clearChatHistory` | — | — |
 | Messages éphémères | `%1$s set new messages to disappear after %2$s.` | **Fait pour Signal** : `setDisappearingMessages`, menu 30 s → 4 semaines | — | — |
@@ -74,21 +76,21 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 |---|---|---|---|---|---|
 | Réactions | `OPEN_REACTION_PICKER` (→), `QUICK_REACT_SELECTED` ⌘⇧R, `Quick reaction emoji`, `Remove %s reaction` ; API `POST /v1/chats/{c}/messages/{m}/reactions` (`reactionKey`) | **Fait en lecture partout, en écriture sur 2 réseaux sur 3.** Réception : `m.reaction` + `m.room.redaction` (WhatsApp), `dataMessage.reaction` rattachée à sa cible et non plus muée en faux message (Signal), tapbacks `associated_message_type` 2000-3005 (iMessage). Envoi : `m.reaction` / redaction (WhatsApp), `sendReaction` (Signal). **iMessage en lecture seule** : Messages n'expose aucune commande AppleScript de tapback. UI : pastilles sous la bulle, menu contextuel, ⌘⇧R | — | ✅ `ReactionCount: 1` — un seul emoji par personne, appliqué | Partiel (iMessage) |
 | Réponses / citations | `QUOTE_AND_REPLY` ⌘R, `Message: Quote or Edit Selected Message` (Entrée) ; API `replyToMessageID` → champ `linkedMessageID` | **Fait en lecture partout, en écriture sur 2 réseaux sur 3.** Réception : `m.in_reply_to` avec nettoyage du repli `> <@…>` (WhatsApp), `dataMessage.quote` (Signal), `thread_originator_guid` résolu contre le fil (iMessage). Envoi : `m.relates_to.m.in_reply_to` + repli (WhatsApp), `--quote-timestamp/-author/-message` (Signal). **iMessage en lecture seule** (AppleScript n'envoie qu'un message nu). ⌘R cite la bulle visée, bandeau annulable au-dessus du composer, citation compacte au-dessus des bulles | — | ✅ | Partiel (iMessage) |
-| Édition de message | `EDIT_MESSAGE` ⌘T ; API `messages.update` (changelog 4.2.499) | **Absent et activement ignoré** : `MatrixSyncParser.applyMessage` fait `if rel_type == "m.replace" { return }` → l'original reste affiché, l'édition disparaît | M | ⚠️ `m.replace` OK sur Meta et Telegram ; **non supporté** WhatsApp ni Signal | P1 |
+| Édition de message | `EDIT_MESSAGE` ⌘T ; API `messages.update` (changelog 4.2.499) | **Partiel — réception faite, envoi absent.** `m.replace` est appliqué au texte de la cible, y compris quand la correction arrive avant elle (`MatrixRoomModel.pendingEdits`, la dernière par cible fait foi, filtrée par auteur). Aucun ⌘T pour modifier **mes** messages | M | ⚠️ `m.replace` OK sur Meta et Telegram ; **non supporté** WhatsApp ni Signal | P1 |
 | Suppression | `Delete for Everyone` / `Delete for Me`, `Delete message is not supported for %s yet` ; API `messages.delete` | **Fait.** Clic droit sur une bulle → « Supprimer pour tout le monde… » (mes messages bridgés : une `m.room.redaction` sur l'event, que les ponts traduisent en `revoke` / `remote delete` / `unsend`) et « Supprimer ici… » (tous réseaux : l'identifiant rejoint `Services/HiddenMessageStore.swift`, réappliqué à chaque relecture du fil comme `ArchiveState`, et écarté de la requête catalogue chat.db pour que l'aperçu de la ligne recule d'un message). Confirmation avant, dans les deux cas. iMessage n'a pas de suppression réseau — ni AppleScript ni AX — seule « Annuler l'envoi » (≤ 2 min) existe déjà | — | ✅ redaction supportée dans les deux sens sur WhatsApp, Meta, Signal, Telegram | — |
-| Accusés de lecture | `Seen %s`, `Seen by %1$s & %2$d other`, `Delivered`, réglage `AVATAR_READ_RECEIPTS` ; API champ `seen` (map par participant) | **Fait.** Affichage : coche sous le dernier message sortant du fil. Réception : `m.receipt` de la section `ephemeral` du `/sync` → « Vu » sur WhatsApp ; `is_delivered` / `is_read` sur iMessage. Envoi à l'ouverture d'un fil : `POST /rooms/{id}/receipt/m.read/{eventId}` (WhatsApp) et `sendReceipt --type read` (Signal, DM seulement — la commande ne prend pas de groupe). iMessage : c'est Messages qui pose `is_read`, chat.db nous est en lecture seule | — | ✅ `m.receipt` bidirectionnel **sans double puppeting** (MSC2409, `ephemeral_events` par défaut) et le bridge marque tout l'intervalle, pas seulement le dernier message. ⚠️ Aucun accusé de **livraison** n'atteint un client Matrix tiers → on n'affiche jamais « Livré » sur WhatsApp. ✅ **Double puppeting actif** (méthode appservice, `infra/matrix/bootstrap.sh` — voir `docs/MATRIX-SETUP.md` §2 quater) : ce que j'envoie et lis depuis le téléphone est reposé sous `@meffysto:correspondance.local` au lieu de mon propre ghost. Ne vaut que pour les événements postérieurs à l'activation | — |
-| Indicateurs de frappe | `SHOW_TYPING_INDICATOR`, `Notify when someone starts typing (supported platforms only)`, `Show recipients I'm typing` | **Absent** (le `isActivelyTyping` de `FocusConversationView` est local, il masque le chrome — rien n'est émis) | S | ✅ `m.typing` bidirectionnel sur WhatsApp, Meta, Instagram, Signal, Telegram | P1 |
-| Pièces jointes — envoi | ⌘O `SEND_FILE`, `Could not attach %s — total size would exceed 90MB.` | **Partiel** : Signal (`-a`) et WhatsApp (upload Matrix) mais **images seulement** (`pickAttachments` : `allowedContentTypes = [.image]`) ; **iMessage bloqué** (message d'erreur explicite dans `sendDraft`) | M | ✅ médias et fichiers partout | P1 |
-| Pièces jointes — affichage | Visionneuse (`Media viewer`, `Preview in Carousel`, `NEXT/PREVIOUS Carousel Item`), ⌘D `DOWNLOAD_ATTACHMENTS` | **Partiel** : images inline (`MessageBubbleView.attachmentView`) ; vidéo = étiquette qui ouvre le Finder ; audio/fichiers = trombone inerte | M | — | P1 |
-| Messages vocaux | ⌘⇧A `Message: Record Audio`, `AUTO_PLAY_NEXT_VOICE_NOTE`, `Mark as played`, transcription | **Absent** (le parseur accepte `m.audio` mais l'UI ne le joue pas) | M | ✅ voix supportée WhatsApp, Meta, Instagram, Signal | P1 |
-| Aperçus de liens | `DISABLE_LINK_PREVIEWS`, `Remove Preview`, `Message: Open First Link` ⌘⇧H | **Absent** | M | — | P2 |
-| Mentions | `%d unread mention`, `unreadMentionsCount` (API) | **Absent** | M | ✅ Meta, Instagram, Signal, Telegram | P2 |
-| Sondages | `Create Poll`, `Hide results until end of poll`, `%d vote`, badge `Poll` ; blog 2026-08-10 | **Absent** | M | ⚠️ **WhatsApp uniquement** (polls + votes, bidirectionnel). Meta, Signal, Telegram : ❌ | P2 |
+| Accusés de lecture | `Seen %s`, `Seen by %1$s & %2$d other`, `Delivered`, réglage `AVATAR_READ_RECEIPTS` ; API champ `seen` (map par participant) | **Fait, détail de groupe compris.** Affichage : coche sous le dernier message sortant du fil ; en groupe, le détail des lecteurs façon Beeper — « Vu par Alice et Bruno », « Vu par Alice, Bruno et 2 autres », « Vu par tout le monde » (`MatrixRoomModel.seenByLabelFR`, Mac et iPhone). La lecture de l'agent cc et des bots ne compte pas comme un « Vu ». Réception : `m.receipt` de la section `ephemeral` du `/sync` → « Vu » sur WhatsApp ; `is_delivered` / `is_read` sur iMessage. Envoi à l'ouverture d'un fil : `POST /rooms/{id}/receipt/m.read/{eventId}` (WhatsApp) et `sendReceipt --type read` (Signal, DM seulement — la commande ne prend pas de groupe). iMessage : c'est Messages qui pose `is_read`, chat.db nous est en lecture seule | — | ✅ `m.receipt` bidirectionnel **sans double puppeting** (MSC2409, `ephemeral_events` par défaut) et le bridge marque tout l'intervalle, pas seulement le dernier message. ⚠️ Aucun accusé de **livraison** n'atteint un client Matrix tiers → on n'affiche jamais « Livré » sur WhatsApp. ✅ **Double puppeting actif** (méthode appservice, `infra/matrix/bootstrap.sh` — voir `docs/MATRIX-SETUP.md` §2 quater) : ce que j'envoie et lis depuis le téléphone est reposé sous `@meffysto:correspondance.local` au lieu de mon propre ghost. Ne vaut que pour les événements postérieurs à l'activation | — |
+| Indicateurs de frappe | `SHOW_TYPING_INDICATOR`, `Notify when someone starts typing (supported platforms only)`, `Show recipients I'm typing` | **Fait, bidirectionnel** : réception par l'EDU `m.typing` avec expiration à 20 s (`MatrixRoomModel.typingLabelFR` — « Alice écrit… », « 3 personnes écrivent… »), affichée en bas du fil sur Mac et iPhone ; émission renouvelée au plus toutes les 10 s (`noteTyping` → `sendTyping`) | — | ✅ `m.typing` bidirectionnel sur WhatsApp, Meta, Instagram, Signal, Telegram | — |
+| Pièces jointes — envoi | ⌘O `SEND_FILE`, `Could not attach %s — total size would exceed 90MB.` | **Fait, tout fichier** : `NSOpenPanel` sans restriction de type sur Mac (« Les trois réseaux acceptent n'importe quel fichier »), `.item` sur iOS ; iMessage passe par `send POSIX file` | — | ✅ médias et fichiers partout | — |
+| Pièces jointes — affichage | Visionneuse (`Media viewer`, `Preview in Carousel`, `NEXT/PREVIOUS Carousel Item`), ⌘D `DOWNLOAD_ATTACHMENTS` | **Fait pour l'essentiel** : images inline, vidéo lue sur place (lecteur AppKit — le lecteur SwiftUI abattait l'app), audio joué dans la bulle (`AudioMessageView`). Pas de visionneuse plein écran type carrousel, pas de ⌘D « tout télécharger » | S | — | P2 |
+| Messages vocaux | ⌘⇧A `Message: Record Audio`, `AUTO_PLAY_NEXT_VOICE_NOTE`, `Mark as played`, transcription | **Partiel — lus partout, enregistrés sur iPhone seulement** : le micro du composer iOS enregistre et envoie (`sendVoiceMessage`, `VoiceNote`) ; le Mac joue les vocaux mais n'en enregistre pas. Pas de transcription | S (micro Mac) | ✅ voix supportée WhatsApp, Meta, Instagram, Signal | P1 (micro Mac) |
+| Aperçus de liens | `DISABLE_LINK_PREVIEWS`, `Remove Preview`, `Message: Open First Link` ⌘⇧H | **Fait** : `LinkPreviewStore` (LinkPresentation, cache disque avec vignette), rendu sous la bulle sur Mac et iPhone, réglage d'apparence pour couper | — | — | — |
+| Mentions | `%d unread mention`, `unreadMentionsCount` (API) | **Fait en composition** : `@` déclenche l'autocomplétion des membres (`Domain/Mention.swift` — candidats, requête accent-insensible, insertion). Pas de compteur « mentions non lues » dans la liste | S (badge) | ✅ Meta, Instagram, Signal, Telegram | P2 (badge) |
+| Sondages | `Create Poll`, `Hide results until end of poll`, `%d vote`, badge `Poll` ; blog 2026-08-10 | **Fait** : création (`sendPoll` → `sendPollStart`), vote (`votePoll` → `sendPollResponse`), dépouillement au rendu du fil (`PollEvent` — la voix arrive souvent avant la question), clôture | — | ⚠️ **WhatsApp uniquement** (polls + votes, bidirectionnel). Meta, Signal, Telegram : ❌ | — |
 | Transfert | `FORWARD_MESSAGES` ⌘⇧F, `Forwarding messages through Beeper will not include any attribution` | **Absent** | S | — | P2 |
 | Stickers / GIF | ⌘⇧G `Send GIF` (KLIPY), ⌘⌥⇧S `Send Sticker`, `AUTO_SEND_GIFS` | **Absent** | M | ✅ techniquement | ✗ (le GIF est l'anti-Focus incarné) |
-| Groupes | `CREATE_NEW_GROUP` ⌘⇧N, gestion de membres, `group_creation` (capabilities API) | **Partiel lecture** : détection de groupe (`MatrixRoomModel.isGroup`, préfixe `chat` iMessage, `-g` Signal). Pas de création, pas de fiche membres | M | ✅ | P2 |
+| Groupes | `CREATE_NEW_GROUP` ⌘⇧N, gestion de membres, `group_creation` (capabilities API) | **Partiel** : détection (`MatrixRoomModel.isGroup`, `com.beeper.room_type`), liste des membres et **ajout** depuis la fiche iPhone (`inviteMember`). Pas de création de groupe, pas de retrait, pas de renommage | M | ✅ | P2 |
 | Avatars par expéditeur | Avatars dans le fil + `AVATAR_READ_RECEIPTS` | **Fait** : la photo de l'auteur dans la marge gauche de chaque prise de parole en Inbox (`Features/Inbox/MessageAvatarView.swift`). Tête-à-tête : le visage du fil ; groupe : celui du membre — carnet d'adresses pour un handle iMessage, `m.room.member` → `avatar_url` pour un ghost mautrix (`SenderAvatarStore`, même cache disque que les portails) ; à défaut les initiales sur une couleur tirée de l'auteur. Réglages › Apparence › Fil coupe l'affichage. La page Focus reste sans visages — elle se lit comme une lettre | — | — | — |
-| Fiche conversation | `TOGGLE_THREAD_INFO` ⌘⇧I, `%s — Chat Info` | **Absent** (`ThreadView.header` = titre + réseau + Archiver) | M | — | P2 |
+| Fiche conversation | `TOGGLE_THREAD_INFO` ⌘⇧I, `%s — Chat Info` | **Partiel** : fiche sur iPhone (`ThreadInfoSheet` — membres, médias du fil, inviter cc), tiroir du « + » sur Mac. Pas de ⌘⇧I ni de fiche complète sur Mac | S | — | P2 |
 | Historique / backfill | `We're syncing your chats. This may take a while...` | **Fait Matrix** : `MatrixBridgeService.backfill(conversationID:limit:)` | — | — | — |
 
 ### 4. Composition
@@ -105,7 +107,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Réponses rapides / modèles | `Create New Quick Reply`, `QUICK_REPLIES` | **Absent** | S | ✗ (réponse mécanique — l'inverse du fil qu'on écrit) |
 | Texte enrichi | ⌘B / ⌘I / ⌘⇧X / \` , `SHOW_FORMATTING_MENU`, Markdown accepté par l'API | **Absent** : `TextField` brut, envoi `m.text` sans `formatted_body` | M | P2 (et **Matrix→Signal perd le formatage** — ROADMAP mautrix-signal) |
 | Emoji | `EMOJI_PICKER_OPEN_ON_HOVER`, `ENABLE_EMOJI_AUTOCOMPLETE`, `DISABLE_EMOTICON_REPLACEMENT` | **Absent** | S | P2 |
-| Rédaction assistée par IA | `Draft response with AI`, `AI Mentions System Prompt`, `Beeper AI` (ChatGPT / OpenAI-compatible) | **Absent** | — | ✗ (décision produit gelée dans `PRODUCT.md` : « Ne pas reconstruire des Writing Tools ») |
+| Rédaction assistée par IA | `Draft response with AI`, `AI Mentions System Prompt`, `Beeper AI` (ChatGPT / OpenAI-compatible) | **Autre chemin, volontairement** : pas de Writing Tools (décision gelée dans `PRODUCT.md`), mais l'agent « cc » vit *dans* les fils — invité sur MON invitation, ses propositions restent des brouillons à moi (`isAgentProposal` : jamais l'aperçu de la ligne, jamais la date du fil). Voir § « IA & écosystème » | — | — |
 
 ### 5. Notifications & Focus
 
@@ -113,7 +115,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 |---|---|---|---|---|
 | Notifications système | `Enable notifications`, `MESSAGE_NOTIFICATIONS`, `macOS Notifications`, `Open Notifications in System Preferences`, `notification replied` | **Fait** : `Services/NotificationService.swift` + `Domain/NotificationPolicy.swift`. Notification par message entrant, tous réseaux ; respecte `mutedIDs`, le fil ouvert et les messages sortants ; clic → sélection du fil. Autorisation au premier lancement + bouton dans Réglages | — | — |
 | Badge Dock | `Dock badge count`, `BADGE_COUNT` | **Fait** : `NotificationService.updateDockBadge`, total des non-lus hors archivés et muets | — | — |
-| Répondre depuis la notification | `notification replied`, `notification action button ⇒ Remind in 1 Hour / 8 Hours` | **Absent** | S | P1 |
+| Répondre depuis la notification | `notification replied`, `notification action button ⇒ Remind in 1 Hour / 8 Hours` | **Fait** : `UNTextInputNotificationAction` dans `NotificationService` — on répond sans ouvrir l'app. Pas d'action « Me le rappeler » sur la notification | — | — |
 | Regroupement / anti-spam | `DEBOUNCE_NOTIFICATIONS` (« delay and batch notifications for successive texts… OTP/2FA codes are always notified immediately »), `RENOTIFY_UNREAD_DELAY` | **Absent** | M | P1 — c'est la fonction la plus « Focus » de tout Beeper |
 | Sons | `NOTIFICATION_SOUND_NAME`, sons par réseau (help/desktop) | **Absent** | S | P2 |
 | Notifier quand l'app est au premier plan | `NOTIFY_IN_FOCUS` | **Absent** | S | ✗ (notifier ce qu'on regarde déjà) |
@@ -128,18 +130,18 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 |---|---|---|---|---|
 | Sync temps réel | WebSocket local `ws://localhost:23373/v1/ws` : `chat.upserted`, `message.upserted`, `message.deleted` (developers.beeper.com/desktop-api/websocket-experimental) | **Fait sur les trois réseaux** : Matrix en long-poll `/sync` 30 s avec backoff 2→60 s ; Signal en polling 10 s ; **iMessage par `Services/IMessageWatcher.swift`** — `DispatchSource` sur `chat.db-wal`, debounce 500 ms, rafraîchissement incrémental (conversations iMessage + fil ouvert, sans toucher aux autres réseaux). Le point de contrôle SQLite qui recrée le WAL est géré par un ré-armement | — | — |
 | Cache disque / démarrage instantané | `Storage by Chat`, `Clear storage older than` | **Fait** : `hydrateFromDiskCache()` sur 4 caches JSON (`imessage-`, `signal-`, `matrix-conversations.json`, `contacts-index.json`) | — | — |
-| Hors-ligne | `Offline`, `Queued` | **Partiel** : lecture hors-ligne OK, **envoi sans file d'attente** (échec immédiat, texte restauré) | M | P1 |
+| Hors-ligne | `Offline`, `Queued` | **Partiel** : lecture hors-ligne OK ; l'**état** (archive, épingle, rappel…) part dans une file persistée et rejouée dans l'ordre (`relayQueue`, `flushRelayWrites` — un échec arrête la passe sans rien perdre) ; les **messages** restent sans file (échec immédiat, texte restauré) | M | P1 (messages) |
 | Export | `Export all loaded messages to .txt file` | **Absent** | S | P2 |
 | Gestion du stockage | `Clear Storage`, `Storage by Chat`, `Calculating message storage...` | **Absent** | S | P2 |
 | Chiffrement / clé de récupération | `Recovery Key`, `On-device encryption`, `Emoji Verification` ; API `app/setup/recovery_key`, `verifications/sas` | **Hors sujet** : nos salons de bridge sont non chiffrés par choix (`encryption.allow: false`, `PLAN-matrix.md`) — homeserver privé sur Tailscale | — | — |
-| API locale / MCP | `A third-party app <app/> wants to access your chats through Beeper Desktop API.` ; `/v0/mcp` dans `build/main`, OpenAPI « Beeper Client API 5.0.0 » | **Absent** | L | P2 |
+| API locale / MCP | `A third-party app <app/> wants to access your chats through Beeper Desktop API.` ; `/v0/mcp` dans `build/main`, OpenAPI « Beeper Client API 5.0.0 ». Ré-audit 2026-08-31 : intégrations **prêtes à l'emploi** pour Claude Desktop, Claude Code, Cursor, Raycast, VS Code, Codex (`Copy Config` / `Copy Command`, transport `Streamable HTTP`) | **Absent** — voir § « IA & écosystème » | L | P2 |
 
 ### 7. Multi-appareils
 
 | Fonction | Beeper | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| iOS / Android | Apps natives, `UNNotificationServiceExtension` (blog 2025-10-01), CarPlay, swipe-to-archive, labels mobiles | **Absent** (it. 4 de `PLAN-matrix.md`) | L | P2 — mais le client Matrix REST pur (`MatrixClient`, `URLSession`, zéro binaire) a été choisi *pour* être portable |
-| Métadonnées synchronisées entre appareils | help : en On-Device, « metadata (including archive status) syncs between Beeper apps » | **Absent** (état local `UserDefaults`) — à prévoir via `m.tag` / account data Matrix si iOS arrive | M | P2 |
+| iOS / Android | Apps natives, `UNNotificationServiceExtension` (blog 2025-10-01), CarPlay, swipe-to-archive, labels mobiles | **Fait pour iOS** : app native complète (`CorrespondanceiOS` — Connexion, Inbox, Fil, Focus, Recherche, Réglages) + extension de notification (`CorrespondanceiOSNotificationService`), sur le pari gagné du client Matrix REST pur. Android hors-cible | — | — |
+| Métadonnées synchronisées entre appareils | help : en On-Device, « metadata (including archive status) syncs between Beeper apps » | **Fait** : l'état de conversation (archivée, épinglée, muette, fusionnée, rappel, brouillon) vit sur le Relais (`ConversationStateSnapshot`), adopté à chaque `/sync` (`adoptRelayState`) après une migration unique de l'état local — « cet état appartient à l'utilisateur, pas au réseau » (`CONTEXT.md`) | — | — |
 | Verrouillage biométrique | `REQUIRE_TOUCH_ID_AUTH` | **Absent** | S | P2 |
 
 ### 8. Accessibilité
@@ -154,7 +156,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 ### 9. Raccourcis clavier
 
 Beeper expose **73 raccourcis réassignables** (registre extrait de `build/renderer/App-UJt62Rak.js`, réglages → Hotkeys, ⌘/ pour la liste).
-Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧Entrée / Échap.
+Correspondance en a **19** (`App/CorrespondanceCommands.swift`, recompté 2026-08-31) + Entrée / ⇧Entrée / Échap.
 
 | Beeper | Correspondance | Prio |
 |---|---|---|
@@ -179,6 +181,33 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 
 ---
 
+## IA & écosystème — le vrai delta du ré-audit 2026-08-31
+
+Le bundle 4.3.73 révèle une couche IA bien plus large que « Draft with AI » : c'est là que Beeper
+investit, et c'est le seul terrain où l'écart se creuse au lieu de se refermer.
+
+**Ce que le bundle montre** (chaînes d'UI, ré-extraction du 2026-08-31) :
+- **Chats IA de plein droit** : `New AI Chat`, `Start a new AI chat`, sélecteur `All models`,
+  `Apple Intelligence`, `On-Device` — la conversation avec un modèle est un fil comme un autre.
+- **Un agent outillé, pas un complèteur** : `Running agent`, `Calling LLM`, `Run command`,
+  `Web search`, `Fetch web`, `Read file`, `Find files`, `Write`, `Generate image`,
+  `Code interpreter`, `Update todos`, `Read chat context` — l'IA de Beeper lit les fils et agit.
+- **Serveur MCP local + intégrations prêtes** : tuiles `Claude Desktop`, `Claude Code`, `Cursor`,
+  `Raycast`, `VS Code`, `Codex`, transport `Streamable HTTP`, boutons `Copy Config` / `Copy Command` —
+  n'importe quel agent extérieur peut piloter Beeper en deux clics.
+- **Voix** : `Talk to Type` (dictée via serveurs Beeper) et `Transcribe` sur les vocaux.
+
+**Notre position.** L'agent « cc » est l'inverse structurel de leur approche : il vit *dans* les
+fils (un utilisateur Matrix invité par moi, salon par salon) plutôt que dans un panneau latéral,
+et ses propositions restent des brouillons à moi. C'est plus radical — et invisible depuis
+l'extérieur. Les deux manques réels par rapport à leur couche : **une API locale/MCP** pour que
+nos fils soient pilotables par un agent extérieur (P2, tableau § 6), et la **transcription des
+vocaux** (`SFSpeechRecognizer` ferait ça on-device, cohérent avec la dictée existante).
+« Draft with AI » et « AI Mentions » restent hors-cible (`PRODUCT.md`) ; leur dictée passe par
+les serveurs de Beeper, la nôtre reste sur la machine.
+
+---
+
 ## Ce que Beeper fait et qu'on ne doit pas copier
 
 | Fonction | Pourquoi c'est hors-cible |
@@ -198,29 +227,42 @@ Correspondance en a **8** (`App/CorrespondanceCommands.swift`) + Entrée / ⇧En
 
 ---
 
-## Feuille de route proposée
+## Feuille de route — reste à faire (revue 2026-08-31)
 
-### Lot 1 — P0 : « l'inbox devient utilisable » (≈ 3 S + 5 M ≈ 3 semaines)
+Les lots 1 et 2 de la feuille de route initiale sont **faits** (à trois exceptions près, reprises
+ci-dessous), ainsi qu'une bonne moitié du lot 3 (Instagram, sondages, mentions, aperçus de liens,
+demandes, envoi planifié, fiche iPhone, sync des métadonnées, iOS lui-même). Voici ce qui reste,
+par paquet et par ordre d'importance.
 
-| # | Chantier | Effort | Note bridge |
-|---|---|---|---|
-| 1 | **Notifications système + badge Dock** : `UNUserNotificationCenter`, autorisation, catégorie avec action « Répondre », branchement de `mutedIDs` (aujourd'hui décoratif), regroupement anti-rafale | M + S | indépendant du transport |
-| 2 | **Archivage durable** : persister `isArchived` dans les 3 caches (retirer le `isArchived: false` forcé de `MatrixConversationCache.load()`), vue « Archivés », désarchivage, ⌘⇧E « archiver tout ce qui est lu » | M | `m.tag` Matrix si sync inter-appareils plus tard |
-| 3 | **Recherche** : ⌘F dans le fil + ⌘K global sur les caches disque (titres, participants, corps) | M | purement local |
-| 4 | **Réactions** : parser `m.reaction` dans `MatrixSyncParser`, corriger le faux message texte de `SignalBridge.parseReceive`, affichage sous la bulle, envoi (picker) | M | ✅ WhatsApp, Signal, Meta (bidirectionnel) |
-| 5 | **Réponses citées** : `m.in_reply_to` à l'envoi, résolution + rendu de la citation à la réception, ⌘R (arbitrer la collision avec Actualiser → déplacer Actualiser sur ⌘⇧R) | M | ✅ WhatsApp, Meta, Telegram ; ⚠️ non listé au ROADMAP mautrix-signal — dégrader proprement |
-| 6 | **Accusés de lecture** : envoyer `POST /rooms/{id}/receipt/m.read` à la sélection, brancher `Conversation.lastDelivery` (déjà alimenté par `IMessageDatabase.delivery`) dans `ConversationRowView` et `MessageBubbleView` | M | ✅ WhatsApp/Meta ; ⚠️ Signal Matrix→réseau ne marque que le dernier message |
-| 7 | **Brouillons par conversation, persistés** : remplacer le `draftText` global par un dictionnaire sauvé sur disque, filtre « Brouillons » plus tard | M | — |
-| 8 | **iMessage en temps réel** : `FSEvents`/`DispatchSource` sur `chat.db` + relecture incrémentale (aujourd'hui ⌘R uniquement) | M | — |
-| 9 | **⌘Entrée « Envoyer et archiver »** — le geste Focus par excellence, trivial une fois (2) fait | S | — |
+### Lot A — le cycle de vie d'un message (P1, ≈ 4 S + 2 M)
 
-### Lot 2 — P1 : « le fil devient un vrai fil » (≈ 4 S + 7 M ≈ 4 semaines)
+Édition de mes messages, ⌘T (`m.replace` à l'envoi — ✅ Meta/Telegram, ❌ WhatsApp/Signal : table de
+capacités par réseau pour masquer le bouton) · Transfert ⌘⇧F · Annuler l'envoi (délai réglable) ·
+Enregistrement vocal sur Mac (le micro iOS existe, `AudioMessageView` aussi — il manque la capture) ·
+File d'envoi hors-ligne pour les **messages** + badge d'échec + renvoi (l'état a déjà sa file).
 
-Suppression de message (`m.redaction`, ✅ tous bridges) · Édition (`m.replace` — ✅ Meta/Telegram, ❌ WhatsApp et Signal : masquer le bouton via une table de capacités par réseau) · Indicateurs de frappe (`m.typing`, ✅ tous bridges, envoi + réception) · Pièces jointes non-images à l'envoi + **envoi iMessage de fichiers** (aujourd'hui bloqué) · Lecteur audio/vidéo intégré + messages vocaux · Filtres (non-lus / brouillons / sans réponse / groupes) + filtre par réseau + ⌥⇥ · Marquer lu-non lu et ⌘U « prochain non lu » · Rappels « Remind Me » (⌘L, `remindAt`, `dismissOnIncomingMessage`) · File d'envoi hors-ligne + badge d'échec + renvoi · Annuler l'envoi (délai réglable) · Accessibilité : labels composites sur `ConversationRowView` et les bulles, `ScaledMetric`/`Font.TextStyle` dans `Design/Typography.swift`, `accessibilityReduceTransparency` · Extension du jeu de raccourcis (⌘P, ⌘⇧U, ⌘⇧M, ⌘O, ⌘D, ↑/↓).
+### Lot B — filtres & gestes d'inbox (P1, ≈ 4 S + 1 M)
 
-### Lot 3 — P2 : « on élargit » (≈ 3 S + 5 M + 3 L ≈ 6 semaines)
+Filtres non-lus / sans réponse / brouillons + filtre par réseau (⌥⇥, ⌘⌥A) · « Archiver tout ce qui
+est lu » · ⌘U « prochain non lu » · Regroupement anti-rafale des notifications (`DEBOUNCE_NOTIFICATIONS`
+— OTP immédiats ; la fonction la plus « Focus » de tout Beeper) · Sélection multiple (P2).
 
-Instagram + Messenger via `mautrix-meta` (it. 2 de `PLAN-matrix.md`) · Multi-comptes (sortir `account = "default"` du `MatrixCredentialStore`) · Création de groupe et fiche conversation (⌘⇧I) · Mentions (✅ Meta/Signal/Telegram) · Aperçus de liens · Texte enrichi Markdown → `formatted_body` (⚠️ **perdu à l'envoi vers Signal**, le bridge ne porte pas le formatage) · Sondages (⚠️ **WhatsApp seulement** — ne pas promettre le sondage comme fonction générale) · Transfert de message · Envoi planifié · Sélection multiple · Export `.txt` · Demandes de message / inconnus · Sync des métadonnées via account data Matrix, en préparation d'iOS · Verrouillage biométrique.
+### Lot C — groupes (P2, ≈ 2 M)
+
+Création de groupe · Retrait de membre et renommage (l'ajout existe sur iPhone) · Fiche ⌘⇧I sur Mac.
+
+### Lot D — réseaux (P1/P2, ≈ 2 L)
+
+**Telegram** (`mautrix-telegram`) puis **Messenger** (`mautrix-meta`, le pont est déjà en place pour
+Instagram) · Multi-comptes par réseau (sortir `account = "default"` de `MatrixCredentialStore`).
+
+### Lot E — écosystème & finitions (P2)
+
+API locale/MCP (nos fils pilotables par un agent extérieur — voir § « IA & écosystème ») ·
+Transcription des vocaux on-device · Texte enrichi Markdown → `formatted_body` (⚠️ perdu vers Signal) ·
+Incognito (interrupteur des accusés) · Zoom ⌘+/⌘-/⌘0 et accessibilité (`ScaledMetric`, labels
+composites VoiceOver, `accessibilityReduceTransparency`) · Verrouillage biométrique · Export `.txt` ·
+Gestion du stockage · Sons de notification.
 
 ---
 
@@ -230,6 +272,13 @@ Instagram + Messenger via `mautrix-meta` (it. 2 de `PLAN-matrix.md`) · Multi-co
 `Beeper Desktop 4.3.73`, `com.automattic.beeper.desktop`, Mach-O thin arm64, signature runtime durcie.
 `package.json` : `"name": "BeeperTexts"`, `"author": "Automattic, Inc."`, dépendances `@beeper/beeper-client-sdk@3.0.0-latest`, `better-sqlite3`, `keytar`, `node-mac-contacts`, `node-mac-permissions`.
 Analysé le 2026-08-29. Bundle **jamais modifié** ; extraction en scratchpad, supprimée à la fin.
+
+**Ré-audit du 2026-08-31** (même version 4.3.73, toujours sans exécution) : ré-extraction de l'asar,
+inventaire par les littéraux des bundles `build-browser/*.js` (labels `label:`/`title:`, chaînes
+localisées inline — il n'y a pas de catalogue i18n séparé dans `build-browser`). C'est ce ré-audit
+qui a mis au jour la surface IA/MCP du § « IA & écosystème » (tuiles `Claude Desktop`, `Claude Code`,
+`Cursor`, `Raycast`, `VS Code`, `Codex`, `Streamable HTTP`, outils d'agent). Côté Correspondance,
+chaque statut modifié ce jour-là a été revérifié dans le code (fichier cité dans la cellule).
 
 ### Commandes exactes
 
