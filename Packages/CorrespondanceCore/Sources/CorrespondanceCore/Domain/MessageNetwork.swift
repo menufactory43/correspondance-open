@@ -41,17 +41,6 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// `isMatrixBridged`, qui répond « ce réseau a-t-il un bot à connecter ».
   public var livesOnRelay: Bool { isMatrixBridged || self == .selfNote }
 
-  /// Peut-on modifier un message déjà envoyé sur ce réseau ?
-  ///
-  /// La capacité vient du descripteur de pont — c'est lui qui sait ce que le
-  /// réseau accepte. iMessage l'a aussi, mais par un tout autre chemin
-  /// (l'automatisation Messages) : le store le traite à part. La note à soi
-  /// est un salon à nous, rien ne s'y oppose.
-  public var supportsEditing: Bool {
-    if self == .selfNote { return true }
-    return bridge?.supportsEditing ?? false
-  }
-
   /// Réseaux bridgés, dans l'ordre de l'enum — ce qui pilote les boutons de Réglages.
   public static var matrixBridged: [MessageNetwork] { allCases.filter(\.isMatrixBridged) }
 

@@ -111,6 +111,7 @@ struct SettingsView: View {
         switch section {
         case .comptes: SettingsAccountsPane()
         case .matrix: SettingsMatrixPane()
+        case .envoi: SettingsSendingPane()
         case .automatisation: SettingsAutomationPane()
         case .agent: SettingsAgentPane()
         case .autorisations: SettingsPermissionsPane()
@@ -131,6 +132,7 @@ struct SettingsView: View {
 enum SettingsSection: String, CaseIterable, Identifiable {
   case comptes
   case matrix
+  case envoi
   case automatisation
   case agent
   case autorisations
@@ -143,6 +145,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .comptes: "Comptes"
     case .matrix: "Serveur Matrix"
+    case .envoi: "Envoi"
     case .automatisation: "Automatisation"
     case .agent: "Agent"
     case .autorisations: "Autorisations"
@@ -155,6 +158,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .comptes: "Les réseaux branchés sur Correspondance et l’état de chaque lien."
     case .matrix: "Le homeserver qui porte les ponts WhatsApp et Instagram."
+    case .envoi: "Le temps qu’un message reste rattrapable avant de partir."
     case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
     case .agent: "Comment « cc » répond quand on l’appelle dans une conversation."
     case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."
@@ -167,6 +171,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .comptes: "person.2.fill"
     case .matrix: "server.rack"
+    case .envoi: "paperplane"
     case .automatisation: "wand.and.stars"
     case .agent: "pencil.line"
     case .autorisations: "lock.shield"

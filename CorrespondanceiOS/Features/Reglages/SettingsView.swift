@@ -28,6 +28,7 @@ struct SettingsView: View {
         relaySection
         bridgesSection
         themeSection
+        sendingSection
         agentSection
         notificationsSection
         signOutSection
@@ -147,6 +148,28 @@ struct SettingsView: View {
       Text("Écriture")
     } footer: {
       Text("Les six thèmes du Mac, et les mêmes fontes : les deux appareils écrivent de la même main.")
+        .font(Typography.meta(typeface))
+    }
+  }
+
+  // MARK: - Envoi
+
+  /// Le délai de grâce : le temps pendant lequel la bulle est là mais rien
+  /// n'a encore quitté l'appareil.
+  private var sendingSection: some View {
+    Section {
+      Picker("Annuler l'envoi", selection: Binding(
+        get: { store.undoSendDelay },
+        set: { store.undoSendDelay = $0 }
+      )) {
+        ForEach(UndoSendDelay.allCases) { choice in
+          Text(choice.labelFR).tag(choice)
+        }
+      }
+    } header: {
+      Text("Envoi")
+    } footer: {
+      Text("La bulle paraît tout de suite, mais le message ne part qu'au bout de ce délai : d'ici là, « Annuler » sous la bulle rend le texte au composer.")
         .font(Typography.meta(typeface))
     }
   }

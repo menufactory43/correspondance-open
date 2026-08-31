@@ -50,7 +50,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Correspondance utilise le micro pour dicter vos messages.</string>
+	<string>Correspondance utilise le micro pour dicter vos messages et enregistrer vos messages vocaux.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Correspondance convertit votre dictée en texte dans le composer.</string>
 </dict>

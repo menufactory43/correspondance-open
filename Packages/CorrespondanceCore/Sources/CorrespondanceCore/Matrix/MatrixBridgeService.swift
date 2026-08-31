@@ -743,9 +743,9 @@ public actor MatrixBridgeService {
   /// `remote delete` Signal, `unsend` Meta) — c'est la même suppression que celle
   /// du téléphone. Le `/sync` la confirmera ; on retire l'event du modèle tout de
   /// suite pour que le fil ne le montre plus le temps du long-poll.
-  /// Modifier un de mes messages. Refuse là où le réseau ne le sait pas faire
-  /// (Instagram) : mieux vaut un geste absent qu'une correction qui n'arrive
-  /// que chez soi.
+  /// Modifier un de mes messages. Refuse là où le pont ne remonte pas le
+  /// `m.replace` jusqu'au réseau (cf. `NetworkCapabilities`) : mieux vaut un
+  /// geste absent qu'une correction qui n'arrive que chez soi.
   public func editMessage(conversationID: String, messageID: String, newText: String) async throws {
     guard let roomID = roomID(forConversation: conversationID),
           let message = rooms[roomID]?.messagesByID[messageID]

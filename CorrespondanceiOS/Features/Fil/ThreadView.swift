@@ -72,6 +72,16 @@ struct ThreadView: View {
           .environment(store)
           .environment(themes)
       }
+      .sheet(isPresented: Binding(
+        get: { store.forwardingMessage != nil },
+        set: { if !$0 { store.cancelForwarding() } }
+      )) {
+        if let message = store.forwardingMessage {
+          ForwardSheet(message: message)
+            .environment(store)
+            .environment(themes)
+        }
+      }
       .task(id: conversationID) { await store.open(conversationID: conversationID) }
   }
 
@@ -173,6 +183,9 @@ struct ThreadView: View {
                     onQuoteTap: message.replyTo?.messageID.map { targetID in
                       { jumpTo(targetID) }
                     },
+                    onCancelPending: store.canUndoSend(message.id)
+                      ? { store.undoSend(message.id) }
+                      : nil,
                     onSendProposal: {
                       Task { await store.sendAgentProposal(message, conversationID: conversationID) }
                     },

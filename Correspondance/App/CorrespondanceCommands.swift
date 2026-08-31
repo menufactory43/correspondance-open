@@ -51,10 +51,11 @@ struct CorrespondanceCommands: Commands {
     }
 
     CommandMenu("Inbox") {
+      // ⌘⇧F revient au transfert (comme Beeper) : le mode Focus passe en ⌘⇧O.
       Button("Mode Focus") {
         store.setMode(store.mode == .focus ? .inbox : .focus)
       }
-      .keyboardShortcut("f", modifiers: [.command, .shift])
+      .keyboardShortcut("o", modifiers: [.command, .shift])
 
       Divider()
 
@@ -75,6 +76,19 @@ struct CorrespondanceCommands: Commands {
         Task { @MainActor in await store.quickReactToSelectedMessage() }
       }
       .keyboardShortcut("r", modifiers: [.command, .option])
+
+      // Même touche que Beeper (EDIT_MESSAGE ⌘T) : le composer passe en mode
+      // correction sur la bulle visée, là où le réseau sait modifier.
+      Button("Modifier le message") {
+        store.editSelectedMessage()
+      }
+      .keyboardShortcut("t", modifiers: [.command])
+
+      // FORWARD_MESSAGES ⌘⇧F chez Beeper.
+      Button("Transférer…") {
+        store.forwardSelectedMessage()
+      }
+      .keyboardShortcut("f", modifiers: [.command, .shift])
 
       Button("Rechercher dans le fil") {
         store.toggleThreadSearch()

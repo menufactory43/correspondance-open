@@ -130,14 +130,15 @@ final class MessageEditTests: XCTestCase {
 
   // MARK: - La capacité, réseau par réseau
 
-  func testSeulsLesReseauxQuiSaventLeFaireLeProposent() {
-    XCTAssertTrue(MessageNetwork.whatsapp.supportsEditing)
-    XCTAssertTrue(MessageNetwork.signal.supportsEditing)
-    // Meta n'expose aucune modification de DM Instagram : le pont n'a rien à
-    // relayer, et une correction ne se verrait que chez nous.
-    XCTAssertFalse(MessageNetwork.instagram.supportsEditing)
-    XCTAssertTrue(MessageNetwork.selfNote.supportsEditing)
-    // iMessage sait le faire, mais par l'automatisation Messages, pas ici.
-    XCTAssertFalse(MessageNetwork.iMessage.supportsEditing)
+  /// La RÉCEPTION d'un `m.replace` vaut partout — un correspondant qui corrige
+  /// son message le corrige chez nous, quel que soit le réseau. C'est l'ENVOI
+  /// qui se restreint, et c'est `NetworkCapabilities` qui en décide seul :
+  /// seul mautrix-meta remonte notre correction jusqu'au réseau. Le détail
+  /// réseau par réseau se lit dans `NetworkCapabilitiesTests`.
+  func testLEnvoiDUneCorrectionSuitLaTableDesCapacites() {
+    XCTAssertEqual(
+      MessageNetwork.allCases.filter(\.supportsEditing),
+      [.instagram, .selfNote]
+    )
   }
 }

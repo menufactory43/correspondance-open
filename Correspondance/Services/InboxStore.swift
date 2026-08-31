@@ -1106,6 +1106,59 @@ final class InboxStore {
     return conversation.network.supportsEditing && isMatrixConnected
   }
 
+  // MARK: - Corriger un message envoyé
+
+  /// La bulle que le composer de l'inbox est en train de corriger.
+  var editingMessage: ChatMessage? { primarySession?.editingMessage }
+
+  /// ⌘T : corriger la bulle visée (celle qu'on a désignée, sinon la dernière).
+  func editSelectedMessage() {
+    guard let session = primarySession, let message = session.actionableMessage,
+          canEditAnyway(message)
+    else { return }
+    beginEditing(message, in: session)
+  }
+
+  /// Le composer passe en mode correction sur cette bulle.
+  func beginEditing(_ message: ChatMessage, in session: ConversationSession? = nil) {
+    guard let session = session ?? primarySession, canEditAnyway(message) else { return }
+    session.beginEditing(message)
+    isComposerFocused = true
+  }
+
+  func cancelEditing(in session: ConversationSession? = nil) {
+    (session ?? primarySession)?.endEditing()
+  }
+
+  /// Envoie la correction en cours. Deux chemins pour un même geste :
+  /// l'automatisation Messages pour un iMessage, `m.replace` pour un fil du
+  /// Relais dont le réseau sait modifier.
+  func commitEdit(in session: ConversationSession) async {
+    guard let message = session.editingMessage else { return }
+    let corrected = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
+    session.endEditing()
+    guard !corrected.isEmpty, corrected != message.text else { return }
+    if canEditViaAutomation(message) {
+      await editMessageViaAutomation(messageID: message.id, newText: corrected)
+    } else {
+      await editMessage(messageID: message.id, newText: corrected)
+    }
+  }
+
+  /// « Modifier » sur un iMessage : c'est le menu de Messages que l'on
+  /// actionne, pas un `m.replace` — et il n'existe que 15 minutes.
+  func canEditViaAutomation(_ message: ChatMessage) -> Bool {
+    message.network == .iMessage && message.isFromMe && canAutomateMessages
+  }
+
+  /// Le geste est-il offert, par l'un OU l'autre chemin ?
+  func canEditAnyway(_ message: ChatMessage) -> Bool {
+    guard message.isFromMe, !message.isPending, !message.isRetracted, !message.isSystemEvent,
+          !message.isAgentProposal, !message.text.isEmpty
+    else { return false }
+    return canEditViaAutomation(message) || canEdit(message)
+  }
+
   /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
   func openSelfNote() async {
@@ -2217,6 +2270,9 @@ final class InboxStore {
           pendingAttachmentPaths.isEmpty
     else { return }
     await setArchived(true, conversationID: id)
+    // Le message est peut-être encore en sursis : l'annuler devra rendre le
+    // fil à la file, pas seulement le texte au composer.
+    noteArchivedPendingSend(conversationID: id)
   }
 
   func focusNext() async {
@@ -2257,6 +2313,12 @@ final class InboxStore {
   /// ici ne regarde la sélection : une fenêtre posée à côté d'un document envoie
   /// dans son fil, même si l'inbox en lit un autre.
   func send(session: ConversationSession) async {
+    // Le composer corrige une bulle : Entrée envoie la correction, pas un
+    // message de plus.
+    if session.editingMessageID != nil {
+      await commitEdit(in: session)
+      return
+    }
     let text = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
     let attachments = session.pendingAttachmentPaths
     // Le brouillon appartient à la ligne ouverte ; l'envoi, lui, part sur le
@@ -2313,21 +2375,284 @@ final class InboxStore {
     drafts.removeValue(forKey: row.id)
     persistDraftsNow()
 
+    // Délai de grâce : la bulle est là, le réseau attend. Rien ne quitte
+    // l'appareil avant l'échéance — d'ici là, « Annuler » rend tout.
+    if undoSendDelay.isOn {
+      armUndoSend(
+        session: session, text: text, attachments: attachments,
+        conversation: conversation, quoted: quoted, localID: optimistic.id
+      )
+      return
+    }
+
+    await deliverOrRestore(
+      session: session, text: text, attachments: attachments,
+      conversation: conversation, quoted: quoted, localID: optimistic.id
+    )
+  }
+
+  /// Le transport et ses suites : la bulle se pose, ou le brouillon revient.
+  private func deliverOrRestore(
+    session: ConversationSession, text: String, attachments: [String],
+    conversation: Conversation, quoted: ChatMessage?, localID: String
+  ) async {
     do {
       try await deliver(
         text: text, attachments: attachments, conversation: conversation,
-        quoted: quoted, localID: optimistic.id
+        quoted: quoted, localID: localID
       )
-      if let idx = session.messages.firstIndex(where: { $0.id == optimistic.id }) {
+      if let idx = session.messages.firstIndex(where: { $0.id == localID }) {
         session.messages[idx].isPending = false
       }
       applySidebarPreview(conversationID: conversation.id, from: session.messages)
     } catch {
-      session.messages.removeAll { $0.id == optimistic.id }
+      session.messages.removeAll { $0.id == localID }
       session.installDraft(DraftStore.Draft(text: text, attachmentPaths: attachments))
       session.replyingToMessageID = quoted?.id
       lastErrorMessage = error.localizedDescription
     }
+  }
+
+  // MARK: - Transférer
+
+  /// La bulle que le sélecteur de fil s'apprête à renvoyer ailleurs.
+  /// `nil` = le sélecteur est fermé.
+  var forwardingMessage: ChatMessage?
+
+  func beginForwarding(_ message: ChatMessage) {
+    guard canForward(message) else { return }
+    forwardingMessage = message
+  }
+
+  func cancelForwarding() { forwardingMessage = nil }
+
+  /// ⌘⇧F : transférer la bulle visée (celle qu'on a désignée, sinon la dernière).
+  func forwardSelectedMessage() {
+    guard let message = primarySession?.actionableMessage else { return }
+    beginForwarding(message)
+  }
+
+  /// Transférer, c'est réécrire : il faut du texte ou un fichier qu'on a
+  /// encore sur la machine. Un sondage, une bulle vide, un événement de
+  /// conversation ne se renvoient pas.
+  func canForward(_ message: ChatMessage) -> Bool {
+    guard !message.isSystemEvent, !message.isRetracted, !message.isAgentProposal,
+          message.poll == nil
+    else { return false }
+    return !message.text.isEmpty || !forwardablePaths(of: message).isEmpty
+  }
+
+  /// Les fils où l'on peut déposer un transfert, la recherche du sélecteur
+  /// appliquée. La file entière, épinglés compris — on transfère souvent vers
+  /// quelqu'un qu'on n'était pas en train de traiter.
+  func forwardTargets(_ query: String) -> [Conversation] {
+    let list = ConversationSearch.filter(
+      unfilteredQueue, query: query, index: mergedSearchIndex(query)
+    )
+    // Le fil d'origine reste dans la liste : renvoyer chez soi une phrase
+    // qu'on vient de lire est un usage, pas une erreur.
+    return Array(list.prefix(40))
+  }
+
+  /// Renvoie le message dans un autre fil, par les chemins d'envoi de CE
+  /// fil-là. Comme Beeper, rien n'annonce que c'est un transfert : le message
+  /// arrive comme si on l'avait écrit.
+  func forward(_ message: ChatMessage, to rowID: String) async {
+    defer { forwardingMessage = nil }
+    guard let row = conversationRow(rowID), let target = sendingConversation(for: row) else { return }
+    let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let paths = forwardablePaths(of: message)
+    guard !text.isEmpty || !paths.isEmpty else { return }
+    if let blocker = sendBlocker(for: target, attachments: paths, interactive: true) {
+      lastErrorMessage = blocker
+      return
+    }
+
+    let optimistic = Self.optimisticMessage(
+      text: text, attachments: paths, conversation: target, quoted: nil
+    )
+    let session = sessions[target.id]
+    session?.messages.append(optimistic)
+    do {
+      try await deliver(
+        text: text, attachments: paths, conversation: target, quoted: nil, localID: optimistic.id
+      )
+      var sent = optimistic
+      sent.isPending = false
+      if let session, let idx = session.messages.firstIndex(where: { $0.id == optimistic.id }) {
+        session.messages[idx].isPending = false
+        applySidebarPreview(conversationID: target.id, from: session.messages)
+      } else {
+        applySidebarPreview(conversationID: target.id, from: [sent])
+      }
+    } catch {
+      session?.messages.removeAll { $0.id == optimistic.id }
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  /// Les fichiers d'un message qu'on peut vraiment renvoyer : ceux qu'on a
+  /// encore sur le disque. Un média jamais téléchargé n'est pas transférable.
+  private func forwardablePaths(of message: ChatMessage) -> [String] {
+    message.attachments.compactMap { $0.resolvedFileURL?.path }
+  }
+
+  // MARK: - Message vocal
+
+  /// Le micro du composer. Un seul enregistreur pour l'app : on ne parle pas
+  /// dans deux fils à la fois, même avec trois fenêtres détachées ouvertes.
+  let recorder = VoiceRecorder()
+
+  /// Le micro a-t-il un sens dans ce fil ? Seulement là où le pont porte le
+  /// vocal — iMessage n'envoie aucune pièce jointe par notre chemin.
+  func canRecordVoice(in conversationID: String?) -> Bool {
+    guard let id = conversationID, let row = conversationRow(id),
+          let target = sendingConversation(for: row)
+    else { return false }
+    return target.network.supportsVoiceMessages && isMatrixConnected
+  }
+
+  /// Envoie ce qu'on vient d'enregistrer. La bulle paraît tout de suite, le
+  /// fichier part ensuite — la même discipline que le texte.
+  func sendVoiceMessage(_ url: URL, voice: VoiceNote, in session: ConversationSession? = nil) async {
+    guard let session = session ?? primarySession,
+          let row = conversationRow(session.conversationID),
+          let conversation = sendingConversation(for: row)
+    else { return }
+    if let blocker = sendBlocker(for: conversation, attachments: [url.path], interactive: true) {
+      lastErrorMessage = blocker
+      return
+    }
+
+    let localID = "local-\(UUID().uuidString)"
+    var piece = MessageAttachment(
+      id: url.path,
+      contentType: "audio/mp4",
+      filename: url.lastPathComponent,
+      localPath: url.path
+    )
+    piece.voice = voice
+    session.messages.append(
+      ChatMessage(
+        id: localID,
+        conversationID: conversation.id,
+        network: conversation.network,
+        text: "",
+        sentAt: Date(),
+        isFromMe: true,
+        isPending: true,
+        attachments: [piece]
+      )
+    )
+
+    session.isSending = true
+    defer { session.isSending = false }
+    do {
+      try await matrix.sendVoiceMessage(
+        conversationID: conversation.id,
+        fileURL: url,
+        voice: voice,
+        localID: localID
+      )
+      if let idx = session.messages.firstIndex(where: { $0.id == localID }) {
+        session.messages[idx].isPending = false
+      }
+      applySidebarPreview(conversationID: conversation.id, from: session.messages)
+    } catch {
+      session.messages.removeAll { $0.id == localID }
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  // MARK: - Annuler l'envoi
+
+  /// Un envoi en sursis : tout ce qu'il faut pour le faire partir à l'échéance,
+  /// ou pour le défaire comme s'il n'avait jamais eu lieu.
+  private struct PendingSend {
+    let session: ConversationSession
+    let text: String
+    let attachments: [String]
+    let conversation: Conversation
+    let quotedID: String?
+    var task: Task<Void, Never>?
+    /// ⌘Entrée a archivé le fil dans la foulée : annuler doit le désarchiver.
+    var archivedConversationID: String?
+  }
+
+  @ObservationIgnored private var pendingSends: [String: PendingSend] = [:]
+
+  /// Les bulles qui peuvent encore être rattrapées. Observable : c'est ce qui
+  /// met (et retire) le bouton « Annuler » sous la bulle.
+  private(set) var undoableSendIDs: Set<String> = []
+
+  /// Le délai de grâce choisi dans Réglages.
+  var undoSendDelay: UndoSendDelay = UndoSendDelay.fromStored(
+    UserDefaults.standard.object(forKey: Keys.undoSendDelay) as? Int
+  ) {
+    didSet {
+      guard undoSendDelay != oldValue else { return }
+      UserDefaults.standard.set(undoSendDelay.rawValue, forKey: Keys.undoSendDelay)
+    }
+  }
+
+  func canUndoSend(_ messageID: String) -> Bool { undoableSendIDs.contains(messageID) }
+
+  private func armUndoSend(
+    session: ConversationSession, text: String, attachments: [String],
+    conversation: Conversation, quoted: ChatMessage?, localID: String
+  ) {
+    var pending = PendingSend(
+      session: session, text: text, attachments: attachments,
+      conversation: conversation, quotedID: quoted?.id
+    )
+    pending.task = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(self?.undoSendDelay.seconds ?? 0))
+      guard !Task.isCancelled, let self else { return }
+      await self.releasePendingSend(localID)
+    }
+    pendingSends[localID] = pending
+    undoableSendIDs.insert(localID)
+  }
+
+  /// L'échéance est passée : le message part pour de bon.
+  private func releasePendingSend(_ localID: String) async {
+    guard let pending = pendingSends.removeValue(forKey: localID) else { return }
+    undoableSendIDs.remove(localID)
+    let quoted = pending.quotedID.flatMap { id in pending.session.messages.first { $0.id == id } }
+    await deliverOrRestore(
+      session: pending.session, text: pending.text, attachments: pending.attachments,
+      conversation: pending.conversation, quoted: quoted, localID: localID
+    )
+  }
+
+  /// « Annuler » sous la bulle : rien n'est parti, le texte revient au composer.
+  ///
+  /// Si ⌘Entrée avait archivé le fil dans la foulée, on le désarchive : la
+  /// décision d'archiver était celle d'un message envoyé, et il ne l'est plus.
+  /// Archiver TOUT DE SUITE plutôt qu'à l'échéance est délibéré — la boucle
+  /// « je réponds, je passe au suivant » ne peut pas attendre cinq secondes
+  /// pour rendre la main.
+  func undoSend(_ localID: String) {
+    guard let pending = pendingSends.removeValue(forKey: localID) else { return }
+    pending.task?.cancel()
+    undoableSendIDs.remove(localID)
+    pending.session.messages.removeAll { $0.id == localID }
+    pending.session.installDraft(
+      DraftStore.Draft(text: pending.text, attachmentPaths: pending.attachments)
+    )
+    pending.session.replyingToMessageID = pending.quotedID
+    captureDraft(from: pending.session)
+    if let archived = pending.archivedConversationID {
+      Task { await self.unarchive(conversationID: archived) }
+    }
+  }
+
+  /// Marque l'envoi en sursis de ce fil comme « archivé par ⌘Entrée », pour que
+  /// l'annulation sache aussi défaire l'archivage.
+  private func noteArchivedPendingSend(conversationID: String) {
+    guard let key = pendingSends.first(where: { $0.value.session.conversationID == conversationID })?.key
+    else { return }
+    pendingSends[key]?.archivedConversationID = conversationID
   }
 
   // MARK: - Propositions de l'agent
@@ -3224,6 +3549,7 @@ final class InboxStore {
     /// Cf. `InboxStore+Relay` : la file d'écritures et le drapeau de migration.
     static let relayQueue = "correspondance.relayWriteQueue"
     static let stateMigrated = "correspondance.stateMigratedToRelay.v1"
+    static let undoSendDelay = "correspondance.undoSendDelay"
   }
 
   private static func demoConversations() -> [Conversation] {

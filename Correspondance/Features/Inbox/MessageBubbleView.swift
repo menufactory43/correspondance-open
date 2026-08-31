@@ -18,10 +18,16 @@ struct MessageBubbleView: View {
   /// `nil` en aperçu : la bulle est alors purement décorative.
   var onReact: ((String) -> Void)?
   var onReply: (() -> Void)?
-  /// Lot M2 — modifier / annuler l'envoi d'un iMessage, via l'automatisation
-  /// Accessibilité. `nil` = le réseau (ou le réglage) ne le permet pas.
-  var onEdit: ((String) -> Void)?
+  /// « Modifier… » : la bulle descend dans le composer, qui passe en mode
+  /// correction. `nil` = le réseau (ou le réglage) ne le permet pas.
+  var onEdit: (() -> Void)?
+  /// « Annuler l'envoi » d'un iMessage (≤ 2 min), via l'automatisation.
   var onUndoSend: (() -> Void)?
+  /// « Transférer… » : le sélecteur de fil s'ouvre sur cette bulle.
+  var onForward: (() -> Void)?
+  /// Le délai de grâce court encore : la bulle porte un « Annuler » cliquable,
+  /// et rien n'est encore parti sur le réseau.
+  var onCancelPending: (() -> Void)?
   /// Supprimer la bulle — parité Beeper. « Ici » ne quitte pas la machine ;
   /// « pour tout le monde » part sur le réseau. `nil` = ce geste n'est pas offert.
   var onDeleteLocally: (() -> Void)?
@@ -36,9 +42,6 @@ struct MessageBubbleView: View {
   /// Le sélecteur de réactions est ouvert — la rangée reste alors visible,
   /// même si le curseur est parti dans le popover.
   @State private var isPickingReaction = false
-  /// Feuille « Modifier le message ».
-  @State private var isEditing = false
-  @State private var editedText = ""
   /// Suppression demandée, en attente de confirmation. Un message effacé ne
   /// revient pas : on le demande une fois, comme Beeper.
   @State private var pendingDeletion: Deletion?
@@ -117,6 +120,15 @@ struct MessageBubbleView: View {
           LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
         }
 
+        if let onCancelPending {
+          Button("Annuler", action: onCancelPending)
+            .buttonStyle(.plain)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.accent)
+            .help("Ce message n’est pas encore parti")
+            .accessibilityLabel("Annuler l’envoi de ce message")
+        }
+
         if let footnote = footnoteLabel {
           Text(footnote.text)
             .font(Typography.meta(typeface))
@@ -169,13 +181,6 @@ struct MessageBubbleView: View {
       } else {
         withAnimation(.easeOut(duration: 0.12)) { isHovered = hovering }
       }
-    }
-    .alert("Modifier le message", isPresented: $isEditing) {
-      TextField("Nouveau texte", text: $editedText)
-      Button("Annuler", role: .cancel) {}
-      Button("Modifier") { onEdit?(editedText) }
-    } message: {
-      Text("Messages n’autorise la modification que 15 minutes après l’envoi.")
     }
     .alert(
       pendingDeletion?.titleFR ?? "",
@@ -416,13 +421,13 @@ struct MessageBubbleView: View {
         }
       }
     }
-    if onEdit != nil || onUndoSend != nil {
+    if onEdit != nil || onUndoSend != nil || onForward != nil {
       Divider()
-      if onEdit != nil {
-        Button("Modifier…") {
-          editedText = message.text
-          isEditing = true
-        }
+      if let onEdit {
+        Button("Modifier…") { onEdit() }
+      }
+      if let onForward {
+        Button("Transférer…") { onForward() }
       }
       if let onUndoSend {
         Button("Annuler l’envoi") { onUndoSend() }
@@ -595,6 +600,8 @@ extension MessageBubbleView: Equatable {
       && (lhs.onReply == nil) == (rhs.onReply == nil)
       && (lhs.onEdit == nil) == (rhs.onEdit == nil)
       && (lhs.onUndoSend == nil) == (rhs.onUndoSend == nil)
+      && (lhs.onForward == nil) == (rhs.onForward == nil)
+      && (lhs.onCancelPending == nil) == (rhs.onCancelPending == nil)
       && (lhs.onDeleteLocally == nil) == (rhs.onDeleteLocally == nil)
       && (lhs.onDeleteEverywhere == nil) == (rhs.onDeleteEverywhere == nil)
       && (lhs.onVotePoll == nil) == (rhs.onVotePoll == nil)

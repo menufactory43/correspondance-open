@@ -19,8 +19,6 @@ struct MessageActionsOverlay: View {
 
   @State private var isPickingEmoji = false
   @State private var pendingDeletion = false
-  @State private var isEditing = false
-  @State private var editedText = ""
   @State private var hasAppeared = false
 
   private var theme: WritingTheme { themes.theme }
@@ -55,20 +53,6 @@ struct MessageActionsOverlay: View {
         react(emoji)
       }
       .environment(themes)
-    }
-    .alert("Modifier le message", isPresented: $isEditing) {
-      TextField("Message", text: $editedText)
-      Button("Enregistrer") {
-        let trimmed = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != message.text else { close(); return }
-        let fil = conversationID
-        let bulle = message.id
-        Task { @MainActor in await store.editMessage(messageID: bulle, newText: trimmed, conversationID: fil) }
-        close()
-      }
-      Button("Annuler", role: .cancel) { close() }
-    } message: {
-      Text("La correction remplace le message chez ton correspondant aussi.")
     }
     .alert("Supprimer ce message pour tout le monde ?", isPresented: $pendingDeletion) {
       Button("Supprimer", role: .destructive) {
@@ -151,8 +135,15 @@ struct MessageActionsOverlay: View {
       if store.canEdit(message) {
         divider
         action("Modifier…", systemImage: "pencil") {
-          editedText = message.text
-          isEditing = true
+          store.beginEditing(message, conversationID: conversationID)
+          close()
+        }
+      }
+      if store.canForward(message) {
+        divider
+        action("Transférer…", systemImage: "arrowshape.turn.up.right") {
+          store.beginForwarding(message)
+          close()
         }
       }
       if !message.text.isEmpty {

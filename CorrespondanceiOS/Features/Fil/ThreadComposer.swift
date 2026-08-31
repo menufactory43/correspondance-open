@@ -34,14 +34,20 @@ struct ThreadComposer: View {
   }
 
   private var placeholder: String {
+    if isEditing { return "Corriger le message" }
     guard let network = store.sendingNetwork(conversationID) else { return "Répondre" }
     return "Répondre sur \(network.labelFR)"
   }
+
+  /// Le composer corrige une bulle : le champ le dit, et le bouton d'envoi
+  /// envoie la correction (cf. `RelayStore.send`).
+  private var isEditing: Bool { store.editingMessage(conversationID) != nil }
 
   /// Quelque chose coiffe le champ : citation, pièces jointes, micro…
   private var hasStrips: Bool {
     if !store.scheduledMessages(for: conversationID).isEmpty { return true }
     if store.replyTarget(conversationID) != nil { return true }
+    if isEditing { return true }
     if !store.attachments(conversationID).isEmpty { return true }
     if store.recorder.isRecording { return true }
     if case .failed = store.recorder.state { return true }
@@ -60,6 +66,9 @@ struct ThreadComposer: View {
           }
           if let quoted = store.replyTarget(conversationID) {
             replyChip(quoted)
+          }
+          if let edited = store.editingMessage(conversationID) {
+            editChip(edited)
           }
           if !store.attachments(conversationID).isEmpty {
             attachmentStrip
@@ -310,6 +319,38 @@ struct ThreadComposer: View {
     // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
     // prend celle que l'encart de bas d'écran lui propose — tout l'écran —
     // et la citation recouvre le fil au lieu de coiffer le champ.
+    .fixedSize(horizontal: false, vertical: true)
+    .accessibilityElement(children: .combine)
+  }
+
+  /// Bandeau « correction en cours ». Même forme que la citation : c'est le
+  /// même geste, sur l'autre bord du temps — l'un désigne ce à quoi on répond,
+  /// l'autre ce qu'on réécrit.
+  private func editChip(_ message: ChatMessage) -> some View {
+    HStack(spacing: 6) {
+      Image(systemName: "pencil")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(theme.accent)
+      VStack(alignment: .leading, spacing: 1) {
+        Text("Modification du message")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.accent)
+        Text(message.text)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkSecondary)
+          .lineLimit(1)
+      }
+      Spacer(minLength: 0)
+      Button {
+        store.endEditing(conversationID)
+      } label: {
+        Image(systemName: "xmark.circle.fill")
+          .foregroundStyle(theme.inkTertiary)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Renoncer à la modification")
+    }
+    .padding(.horizontal, Spacing.xs)
     .fixedSize(horizontal: false, vertical: true)
     .accessibilityElement(children: .combine)
   }

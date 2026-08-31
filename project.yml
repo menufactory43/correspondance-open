@@ -95,7 +95,7 @@ targets:
         ATSApplicationFontsPath: Fonts
         NSAppleEventsUsageDescription: Correspondance envoie tes iMessages via l’app Messages (automatisation).
         NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
-        NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages.
+        NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages et enregistrer vos messages vocaux.
         NSSpeechRecognitionUsageDescription: Correspondance convertit votre dictée en texte dans le composer.
         # UserNotifications ne demande AUCUNE clé d'usage sur macOS : l'autorisation
         # se demande à l'exécution (NotificationService.requestAuthorization). Ne rien

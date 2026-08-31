@@ -27,6 +27,9 @@ struct MessageBubble: View {
   var onLongPress: (() -> Void)?
   /// Taper la citation : remonter au message cité dans le fil. `nil` = citation inerte.
   var onQuoteTap: (() -> Void)?
+  /// Le délai de grâce court encore : la bulle porte un « Annuler », et rien
+  /// n'est parti sur le réseau.
+  var onCancelPending: (() -> Void)?
   /// Les trois gestes d'une proposition de « cc ». `nil` = carte en lecture seule.
   var onSendProposal: (() -> Void)?
   var onEditProposal: (() -> Void)?
@@ -122,6 +125,14 @@ struct MessageBubble: View {
 
       if let link = previewedLink {
         LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
+      }
+
+      if let onCancelPending {
+        Button("Annuler", action: onCancelPending)
+          .buttonStyle(.plain)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.accent)
+          .accessibilityLabel("Annuler l'envoi de ce message")
       }
 
       if let footnote = footnoteLabel {

@@ -56,6 +56,13 @@ struct ThreadView: View {
     max(0, store.messages.count - thread.count)
   }
 
+  private var forwardSheetPresented: Binding<Bool> {
+    Binding(
+      get: { store.forwardingMessage != nil },
+      set: { if !$0 { store.cancelForwarding() } }
+    )
+  }
+
   private var sendLaterPickerPresented: Binding<Bool> {
     Binding(
       get: { store.sendLaterPicker != nil },
@@ -74,6 +81,9 @@ struct ThreadView: View {
           if let quoted = store.replyingToMessage {
             ReplyBanner(message: quoted, theme: theme, typeface: themes.typeface)
           }
+          if let edited = store.editingMessage {
+            EditBanner(message: edited, theme: theme, typeface: themes.typeface)
+          }
           if let config = store.sendLaterConfig {
             SendLaterBanner(config: config, theme: theme, typeface: themes.typeface)
           }
@@ -89,10 +99,18 @@ struct ThreadView: View {
               canInviteAgent = false
               Task { await store.inviteAgent() }
             } : nil,
+            voiceConversationID: store.canRecordVoice(in: store.selectedConversationID)
+              ? store.selectedConversationID
+              : nil,
             onSend: { Task { await store.sendDraft() } }
           )
           .popover(isPresented: sendLaterPickerPresented, arrowEdge: .top) {
             SendLaterPicker()
+          }
+        }
+        .sheet(isPresented: forwardSheetPresented) {
+          if let message = store.forwardingMessage {
+            ForwardSheet(message: message)
           }
         }
       } else {
@@ -342,20 +360,11 @@ struct ThreadView: View {
   /// c'est une `MessageBubbleView` pour se servir de son `==`.
   private func bubble(for message: ChatMessage) -> MessageBubbleView {
     let automatable = automationAvailable(for: message)
-    // Deux chemins pour un même geste : l'automatisation Messages pour un
-    // iMessage, `m.replace` pour un fil du Relais dont le réseau sait modifier.
-    let onEdit: ((String) -> Void)?
-    if automatable {
-      onEdit = { newText in
-        Task { await store.editMessageViaAutomation(messageID: message.id, newText: newText) }
-      }
-    } else if store.canEdit(message) {
-      onEdit = { newText in
-        Task { await store.editMessage(messageID: message.id, newText: newText) }
-      }
-    } else {
-      onEdit = nil
-    }
+    // « Modifier » ouvre le composer en mode correction ; c'est le magasin qui
+    // choisit ensuite le chemin — automatisation Messages ou `m.replace`.
+    let onEdit: (() -> Void)? = store.canEditAnyway(message)
+      ? { store.beginEditing(message) }
+      : nil
     let onUndoSend: (() -> Void)? = automatable
       ? { Task { await store.undoSendViaAutomation(messageID: message.id) } }
       : nil
@@ -376,6 +385,8 @@ struct ThreadView: View {
       },
       onEdit: onEdit,
       onUndoSend: onUndoSend,
+      onForward: store.canForward(message) ? { store.beginForwarding(message) } : nil,
+      onCancelPending: store.canUndoSend(message.id) ? { store.undoSend(message.id) } : nil,
       onDeleteLocally: { store.deleteLocally(messageID: message.id) },
       onDeleteEverywhere: store.canDeleteEverywhere(message)
         ? { Task { await store.deleteEverywhere(messageID: message.id) } }
@@ -669,6 +680,43 @@ private struct ReplyBanner: View {
       }
       .buttonStyle(.borderless)
       .accessibilityLabel("Annuler la citation")
+    }
+    .padding(.horizontal, Spacing.md)
+    .padding(.vertical, 6)
+    .background(theme.paperSecondary)
+  }
+}
+
+/// Bandeau « correction en cours » au-dessus du composer, avec sa croix.
+/// Même forme que la citation (⌘R) : c'est le même geste, sur l'autre bord du
+/// temps — l'un désigne ce à quoi on répond, l'autre ce qu'on réécrit.
+private struct EditBanner: View {
+  @Environment(InboxStore.self) private var store
+  let message: ChatMessage
+  let theme: WritingTheme
+  let typeface: WritingTypeface
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "pencil")
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(theme.accent)
+      VStack(alignment: .leading, spacing: 1) {
+        Text("Modification du message")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.accent)
+        Text(message.text)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkSecondary)
+          .lineLimit(1)
+      }
+      Spacer(minLength: 8)
+      Button { store.cancelEditing() } label: {
+        Image(systemName: "xmark")
+          .font(.system(size: 10, weight: .semibold))
+      }
+      .buttonStyle(.borderless)
+      .accessibilityLabel("Renoncer à la modification")
     }
     .padding(.horizontal, Spacing.md)
     .padding(.vertical, 6)

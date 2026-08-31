@@ -42,13 +42,6 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// pas vérifié : proposer le geste sans qu'il porte, c'est promettre un départ
   /// qui n'a pas lieu, et voir le salon renaître au message suivant.
   public let relaysGroupLeave: Bool
-  /// Le réseau accepte-t-il qu'on modifie un message déjà envoyé, et le pont
-  /// le relaie-t-il ? WhatsApp oui (fenêtre de 15 minutes côté réseau), Signal
-  /// oui (24 heures), Instagram **non** : Meta n'expose aucune modification de
-  /// DM, et mautrix-instagram n'a donc rien à relayer. Un `m.replace` envoyé
-  /// là-bas resterait visible chez nous et nulle part ailleurs — d'où l'action
-  /// masquée plutôt qu'une modification qui n'arrive pas.
-  public let supportsEditing: Bool
 
   public static let whatsapp = MatrixBridgeDescriptor(
     network: .whatsapp,
@@ -60,8 +53,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (WA)", " (WhatsApp)"],
     supportsPhonePairing: true,
-    relaysGroupLeave: true,
-    supportsEditing: true
+    relaysGroupLeave: true
   )
 
   public static let instagram = MatrixBridgeDescriptor(
@@ -76,8 +68,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     // formes qu'on croise chez les instances qui l'ont configuré autrement.
     displayNameSuffixes: [" (IG)", " (Instagram)"],
     supportsPhonePairing: false,
-    relaysGroupLeave: false,
-    supportsEditing: false
+    relaysGroupLeave: false
   )
 
   /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
@@ -98,8 +89,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (Signal)"],
     supportsPhonePairing: false,
-    relaysGroupLeave: true,
-    supportsEditing: true
+    relaysGroupLeave: true
   )
 
   public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .signal]
@@ -134,7 +124,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// Instagram l'identifiant numérique Meta (les pseudos passent d'abord par `search`).
   public func startChatCommand(identifier: String) -> String { "pm \(identifier)" }
 
-  public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, relaysGroupLeave: Bool, supportsEditing: Bool) {
+  public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, relaysGroupLeave: Bool) {
     self.network = network
     self.botLocalpart = botLocalpart
     self.commandPrefix = commandPrefix
@@ -145,7 +135,6 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     self.displayNameSuffixes = displayNameSuffixes
     self.supportsPhonePairing = supportsPhonePairing
     self.relaysGroupLeave = relaysGroupLeave
-    self.supportsEditing = supportsEditing
   }
 }
 

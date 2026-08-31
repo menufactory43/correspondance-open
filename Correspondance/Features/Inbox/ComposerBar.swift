@@ -12,6 +12,9 @@ struct ComposerBar: View {
   var onAttach: () -> Void
   var onSendLater: () -> Void = {}
   var onInviteAgent: (() -> Void)?
+  /// Le fil qui portera le vocal. `nil` = le réseau ne les porte pas, et le
+  /// micro n'a rien à faire là.
+  var voiceConversationID: String?
   var onSend: () -> Void
 
   @Environment(InboxStore.self) private var store
@@ -26,12 +29,29 @@ struct ComposerBar: View {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
   }
 
+  /// Le composer corrige une bulle : le champ le dit, et Entrée envoie la
+  /// correction (cf. `InboxStore.commitEdit`).
+  private var isEditing: Bool { store.editingMessage != nil }
+
+  private var isRecording: Bool { store.recorder.isRecording }
+
+  /// Le micro du VOCAL — pas celui de la dictée, qui écrit dans le champ.
+  /// Il n'apparaît que sur un fil dont le réseau porte les vocaux, et
+  /// seulement quand il n'y a rien à envoyer d'autre, comme sur l'iPhone.
+  private var showsVoiceButton: Bool {
+    voiceConversationID != nil && !canSend && !isEditing && !dictation.isListening
+  }
+
   private var trailingAction: ComposerTrailingAction {
-    .resolve(canSend: canSend, isListening: dictation.isListening, isScheduling: isScheduling)
+    // Un vocal en cours : le bouton d'envoi l'envoie, lui.
+    if isRecording { return .send }
+    return .resolve(canSend: canSend, isListening: dictation.isListening, isScheduling: isScheduling)
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      if isRecording { recordingStrip }
+      if case .failed(let raison) = store.recorder.state { micError(raison) }
       if !attachmentPaths.isEmpty {
         ComposerAttachmentStrip(
           paths: $attachmentPaths,
@@ -77,6 +97,7 @@ struct ComposerBar: View {
   }
 
   private var placeholder: String {
+    if isEditing { return "Corriger le message" }
     guard let member = activeMember, let merged = mergedID,
           let contact = store.mergedContact(for: merged)
     else { return "Message" }
@@ -129,6 +150,11 @@ struct ComposerBar: View {
         theme: theme,
         font: composerFont
       )
+      .onKeyPress(.escape) {
+        guard isEditing else { return .ignored }
+        store.cancelEditing()
+        return .handled
+      }
       .onKeyPress(.return) {
         if NSEvent.modifierFlags.contains(.shift) { return .ignored }
         guard canSend, !isSending else { return .handled }
@@ -136,11 +162,22 @@ struct ComposerBar: View {
         return .handled
       }
 
+      if showsVoiceButton {
+        ComposerCircleButton(
+          systemImage: "waveform",
+          helpText: "Enregistrer un message vocal",
+          theme: theme,
+          size: ComposerMetrics.innerControl,
+          iconSize: 14,
+          action: startRecording
+        )
+      }
+
       ComposerTrailingControl(
         action: trailingAction,
         theme: theme,
         isSending: isSending,
-        canSend: canSend,
+        canSend: canSend || isRecording,
         isListening: dictation.isListening,
         onSend: send,
         onDictate: startOrStopDictation
@@ -192,9 +229,71 @@ struct ComposerBar: View {
   }
 
   private func send() {
+    if isRecording {
+      sendRecording()
+      return
+    }
     dictation.stop()
     store.confirmSelectionAsRead()
     onSend()
+  }
+
+  private func startRecording() {
+    guard voiceConversationID != nil else { return }
+    dictation.stop()
+    store.confirmSelectionAsRead()
+    Task { await store.recorder.start() }
+  }
+
+  private func sendRecording() {
+    guard let taken = store.recorder.stop() else { return }
+    Task { await store.sendVoiceMessage(taken.url, voice: taken.voice) }
+  }
+
+  /// Ce qu'on est en train de dire : la durée qui court, le niveau du micro, et
+  /// le geste pour renoncer. Le bouton d'envoi, lui, reste à sa place.
+  private var recordingStrip: some View {
+    HStack(spacing: 8) {
+      Button { store.recorder.cancel() } label: {
+        Image(systemName: "trash")
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(theme.inkTertiary)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Abandonner le message vocal")
+
+      Circle()
+        .fill(theme.accent)
+        .frame(width: 8, height: 8)
+        .opacity(0.4 + 0.6 * store.recorder.level)
+
+      Text(VoiceNote(duration: store.recorder.duration).durationLabel)
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(theme.ink)
+        .monospacedDigit()
+
+      HStack(alignment: .center, spacing: 1.5) {
+        ForEach(Array(store.recorder.samples.suffix(48).enumerated()), id: \.offset) { _, value in
+          Capsule()
+            .fill(theme.accent.opacity(0.7))
+            .frame(width: 2, height: max(3, value * 18))
+        }
+      }
+      .frame(height: 18, alignment: .trailing)
+      .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    .padding(.horizontal, Spacing.md)
+    .padding(.top, 8)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Enregistrement en cours")
+  }
+
+  private func micError(_ raison: String) -> some View {
+    Text(raison)
+      .font(Typography.meta(themes.typeface))
+      .foregroundStyle(theme.inkSecondary)
+      .padding(.horizontal, Spacing.md)
+      .padding(.top, 8)
   }
 
   private func startOrStopDictation() {
