@@ -414,6 +414,116 @@ public actor MatrixClient {
     }
   }
 
+  // MARK: - Push (Sygnal → APNs)
+
+  public static let pushersSetPath = "/_matrix/client/v3/pushers/set"
+
+  /// L'`app_id` de l'iPhone. Il doit coïncider au caractère près avec la clé
+  /// déclarée sous `apps:` dans `sygnal.yaml`, sinon Synapse appelle Sygnal
+  /// pour rien (« no app configured »).
+  public static let iOSPusherAppID = "com.correspondance.ios"
+
+  /// `format: event_id_only` : la charge utile ne porte que `room_id` et
+  /// `event_id`, jamais le texte. Le push RÉVEILLE, l'appareil lit — c'est la
+  /// seule forme qui survivra à l'E2EE (décision 7 de PRODUCT.md).
+  public static let eventIDOnlyFormat = "event_id_only"
+
+  /// Corps d'un `POST /pushers/set`.
+  ///
+  /// `url` est celle que **Synapse** voit — `http://sygnal:5000/…`, un nom de
+  /// service Docker qui ne résout que sur son réseau. Jamais une adresse que
+  /// l'iPhone saurait joindre : il n'a rien à y faire.
+  ///
+  /// `append: false` : déclarer le pusher remplace celui du même couple
+  /// (`app_id`, `pushkey`) au lieu de l'empiler. Un jeton APNs qui tourne
+  /// laisserait sinon derrière lui autant de pushers morts que de rotations.
+  public static func pusherBody(
+    pushkey: String,
+    sygnalURL: URL,
+    appID: String = iOSPusherAppID,
+    appDisplayName: String = "Correspondance",
+    deviceDisplayName: String,
+    lang: String = "fr"
+  ) -> MatrixJSON {
+    .object([
+      "app_id": .string(appID),
+      "app_display_name": .string(appDisplayName),
+      "device_display_name": .string(deviceDisplayName),
+      "pushkey": .string(pushkey),
+      "kind": .string("http"),
+      "lang": .string(lang),
+      "append": .bool(false),
+      "data": .object([
+        "url": .string(sygnalURL.absoluteString),
+        "format": .string(Self.eventIDOnlyFormat),
+      ]),
+    ])
+  }
+
+  /// Corps de suppression : le même couple (`app_id`, `pushkey`), `kind: null`.
+  /// C'est ce que la déconnexion envoie — sans quoi le Relais continuerait de
+  /// réveiller un téléphone qui n'a plus de session.
+  public static func pusherRemovalBody(
+    pushkey: String,
+    appID: String = iOSPusherAppID
+  ) -> MatrixJSON {
+    .object([
+      "app_id": .string(appID),
+      "pushkey": .string(pushkey),
+      "kind": .null,
+    ])
+  }
+
+  /// Le jeton APNs tel que Sygnal l'attend : de l'hexadécimal minuscule, nu.
+  public static func pushkey(fromAPNSToken token: Data) -> String {
+    token.map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// `POST /pushers/set` — déclare (ou remplace) le pusher de cet appareil.
+  public func setPusher(
+    pushkey: String,
+    sygnalURL: URL,
+    deviceDisplayName: String,
+    appID: String = MatrixClient.iOSPusherAppID
+  ) async throws {
+    _ = try await request(
+      method: "POST",
+      path: Self.pushersSetPath,
+      body: Self.pusherBody(
+        pushkey: pushkey,
+        sygnalURL: sygnalURL,
+        appID: appID,
+        deviceDisplayName: deviceDisplayName
+      )
+    )
+  }
+
+  /// `POST /pushers/set` avec `kind: null` — le Relais oublie cet appareil.
+  public func removePusher(
+    pushkey: String,
+    appID: String = MatrixClient.iOSPusherAppID
+  ) async throws {
+    _ = try await request(
+      method: "POST",
+      path: Self.pushersSetPath,
+      body: Self.pusherRemovalBody(pushkey: pushkey, appID: appID)
+    )
+  }
+
+  public static func roomEventPath(roomID: String, eventID: String) -> String {
+    "/_matrix/client/v3/rooms/\(escape(roomID))/event/\(escape(eventID))"
+  }
+
+  /// `GET /rooms/{r}/event/{e}` — un seul événement, par son identifiant.
+  /// C'est tout ce dont l'extension de notification a besoin : le push lui
+  /// donne le couple, elle va chercher le reste.
+  public func roomEvent(roomID: String, eventID: String) async throws -> MatrixJSON {
+    try await request(
+      method: "GET",
+      path: Self.roomEventPath(roomID: roomID, eventID: eventID)
+    )
+  }
+
   // MARK: - Média
 
   /// Télécharge un `mxc://` via l'endpoint authentifié (obligatoire depuis Matrix 1.11).
