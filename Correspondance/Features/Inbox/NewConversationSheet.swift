@@ -13,6 +13,7 @@ struct NewConversationSheet: View {
   @State private var query = ""
   @State private var hits: [ContactDirectory.DirectoryHit] = []
   @State private var isSearching = false
+  @State private var isCreatingGroup = false
 
   private var theme: WritingTheme { themes.theme }
 
@@ -116,6 +117,11 @@ struct NewConversationSheet: View {
     .frame(minWidth: 420, minHeight: 460)
     .background(theme.paper)
     .task { await refreshHits() }
+    .sheet(isPresented: $isCreatingGroup) {
+      NewGroupSheet()
+        .environment(store)
+        .environment(themes)
+    }
   }
 
   private var header: some View {
@@ -123,6 +129,12 @@ struct NewConversationSheet: View {
       Text("Nouvelle conversation")
         .font(.headline)
       Spacer()
+      // Le geste vit aussi dans le menu (⌥⌘N), mais c'est ICI qu'on le
+      // cherche : « écrire à quelqu'un » et « écrire à plusieurs » sont la
+      // même intention. Absent si aucun pont branché ne sait le faire.
+      if store.canCreateGroup {
+        Button("Nouveau groupe…") { isCreatingGroup = true }
+      }
       Button("Fermer") { dismiss() }
         .keyboardShortcut(.cancelAction)
     }

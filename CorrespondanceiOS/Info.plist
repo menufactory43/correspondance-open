@@ -37,6 +37,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Correspondance prend une photo pour la joindre à un message.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Correspondance retrouve vos contacts pour écrire à quelqu’un qui n’a pas encore de conversation.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Correspondance utilise le micro pour vos messages vocaux.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

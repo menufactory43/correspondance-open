@@ -15,6 +15,17 @@ actor ContactDirectory {
   private var nameByKey: [String: String] = [:]
   /// Chemins relatifs sous `avatarsDirectory` (pas les Data en RAM pour tout l’annuaire).
   private var imagePathByKey: [String: String] = [:]
+  /// Une fiche par personne du carnet — les numéros tels qu'ils y sont écrits,
+  /// pas les variantes de recherche de `nameByKey` (qui démultiplient un même
+  /// numéro en 33…, 0…, suffixes). C'est là-dessus que la recherche itère :
+  /// une personne, une ligne par vrai identifiant.
+  private var people: [PersonEntry] = []
+
+  struct PersonEntry: Codable, Sendable {
+    var name: String
+    var phones: [String]
+    var emails: [String]
+  }
 
   struct ResolvedContact: Sendable {
     var name: String?
@@ -42,6 +53,8 @@ actor ContactDirectory {
   private struct DiskIndex: Codable {
     var names: [String: String]
     var imageFiles: [String: String]
+    /// Absent d'un cache d'avant les fiches : optionnel, et reconstruit alors.
+    var people: [PersonEntry]?
     var savedAt: Date
   }
 
@@ -52,6 +65,7 @@ actor ContactDirectory {
     {
       nameByKey = disk.names
       imagePathByKey = disk.imageFiles
+      people = disk.people ?? []
     }
   }
 
@@ -94,32 +108,36 @@ actor ContactDirectory {
 
   func searchPeople(query: String, limit: Int = 40) async -> [DirectoryHit] {
     await ensureIndex()
+    // Cache d'avant les fiches par personne : le reconstruire une fois suffit.
+    if people.isEmpty { await refreshIndexIfNeeded() }
+
     let needle = query
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-    var unique: [String: DirectoryHit] = [:]
-    for (handle, name) in nameByKey {
-      guard Self.isCanonicalHandle(handle) else { continue }
+    var hits: [DirectoryHit] = []
+    var seen: Set<String> = []
+    for person in people {
       if !needle.isEmpty {
-        let hay = (name + " " + handle)
+        let hay = ([person.name] + person.phones + person.emails)
+          .joined(separator: " ")
           .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
         guard hay.contains(needle) else { continue }
       }
-      if unique[handle] == nil {
-        unique[handle] = DirectoryHit(name: name, handle: handle)
+      for phone in person.phones {
+        // Deux graphies d'un même numéro (+33 6… / 06…) sont le même identifiant.
+        let key = person.name + "|" + String(phone.filter(\.isNumber).suffix(9))
+        guard seen.insert(key).inserted else { continue }
+        hits.append(DirectoryHit(name: person.name, handle: phone))
+      }
+      for email in person.emails {
+        guard seen.insert(person.name + "|" + email).inserted else { continue }
+        hits.append(DirectoryHit(name: person.name, handle: email))
       }
     }
-    return unique.values
+    return hits
       .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
       .prefix(limit)
       .map { $0 }
-  }
-
-  private static func isCanonicalHandle(_ handle: String) -> Bool {
-    if handle.contains("@") { return handle.contains(".") }
-    if handle.hasPrefix("+") { return handle.filter(\.isNumber).count >= 10 }
-    let digits = handle.filter(\.isNumber)
-    return digits.count >= 10 && handle.filter { !$0.isNumber && $0 != "+" && !$0.isWhitespace }.isEmpty
   }
 
   /// Ce numéro est-il dans le carnet d'adresses ? Sert à reconnaître un
@@ -280,6 +298,7 @@ actor ContactDirectory {
 
     var nextNames: [String: String] = [:]
     var nextImages: [String: String] = [:]
+    var nextPeople: [PersonEntry] = []
 
     try? store.enumerateContacts(with: request) { contact, _ in
       let name = self.formattedName(contact)
@@ -297,32 +316,46 @@ actor ContactDirectory {
         imageFile = file
       }
 
+      var phones: [String] = []
+      var phoneDigits: Set<String> = []
       for numbered in contact.phoneNumbers {
         let raw = numbered.value.stringValue
         for key in self.lookupKeys(for: raw) {
           if let name, nextNames[key] == nil { nextNames[key] = name }
           if let imageFile, nextImages[key] == nil { nextImages[key] = imageFile }
         }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              phoneDigits.insert(String(trimmed.filter(\.isNumber).suffix(9))).inserted
+        else { continue }
+        phones.append(trimmed)
       }
 
+      var emails: [String] = []
       for email in contact.emailAddresses {
         let raw = (email.value as String).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !raw.isEmpty else { continue }
         if let name, nextNames[raw] == nil { nextNames[raw] = name }
         if let imageFile, nextImages[raw] == nil { nextImages[raw] = imageFile }
+        if !emails.contains(raw) { emails.append(raw) }
+      }
+
+      if let name, !(phones.isEmpty && emails.isEmpty) {
+        nextPeople.append(PersonEntry(name: name, phones: phones, emails: emails))
       }
     }
 
     if !nextNames.isEmpty || !nextImages.isEmpty {
       nameByKey = nextNames
       imagePathByKey = nextImages
+      people = nextPeople
       persistIndex()
     }
     didIndex = true
   }
 
   private func persistIndex() {
-    let disk = DiskIndex(names: nameByKey, imageFiles: imagePathByKey, savedAt: Date())
+    let disk = DiskIndex(names: nameByKey, imageFiles: imagePathByKey, people: people, savedAt: Date())
     guard let data = try? JSONEncoder().encode(disk) else { return }
     try? data.write(to: Self.indexURL, options: [.atomic])
   }

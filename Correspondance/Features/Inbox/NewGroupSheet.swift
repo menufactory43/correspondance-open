@@ -123,6 +123,9 @@ struct NewGroupSheet: View {
     Task {
       await store.createGroup(network: target, name: title, identifiers: people)
       isCreating = false
+      // Ouverte depuis la feuille « Nouvelle conversation », celle-ci n'a plus
+      // de raison de rester derrière : le groupe est la conversation.
+      store.isPresentingNewConversation = false
       dismiss()
     }
   }

@@ -9,10 +9,10 @@ import SwiftUI
 /// l'inverse du Mac (`NewConversationSheet`), et pour une raison de main : sur
 /// un téléphone, ce qui se tape se met près de ce qui tape.
 ///
-/// Deux façons d'arriver à quelqu'un : le retrouver parmi les gens que le
-/// Relais connaît déjà, ou composer un numéro. Pas de troisième — et pas de
-/// groupe : ceux-là se créent dans l'app d'origine, où vivent les règles
-/// d'admission de chaque réseau.
+/// Trois façons d'arriver à quelqu'un : le retrouver parmi les gens que le
+/// Relais connaît déjà, le retrouver dans le carnet d'adresses de l'iPhone,
+/// ou composer un numéro. Et un groupe se crée d'ici quand un pont branché
+/// sait le faire (`NewGroupSheet`) — sinon, dans l'app d'origine.
 struct NewConversationSheet: View {
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -22,6 +22,8 @@ struct NewConversationSheet: View {
   @State private var query = ""
   @State private var isOpening = false
   @State private var failure: String?
+  @State private var isCreatingGroup = false
+  @State private var bookHits: [ContactBook.Person] = []
   @FocusState private var isFocused: Bool
 
   private var theme: WritingTheme { themes.theme }
@@ -49,6 +51,14 @@ struct NewConversationSheet: View {
     }
     .tint(theme.accent)
     .task { isFocused = !store.isDemo }
+    .sheet(isPresented: $isCreatingGroup) {
+      NewGroupSheet()
+        .environment(store)
+        .environment(themes)
+    }
+    .onChange(of: query) { _, _ in
+      Task { await refreshBookHits() }
+    }
   }
 
   // MARK: - Puces de réseau
@@ -110,6 +120,25 @@ struct NewConversationSheet: View {
 
   private var results: some View {
     List {
+      // « Écrire à plusieurs » est la même intention qu'« écrire à quelqu'un » :
+      // le geste vit ici. Absent si aucun pont branché ne sait le faire.
+      if store.canCreateGroup {
+        Section {
+          Button {
+            isCreatingGroup = true
+          } label: {
+            Label {
+              Text("Nouveau groupe…")
+                .foregroundStyle(theme.ink)
+            } icon: {
+              Image(systemName: "person.2.badge.plus")
+                .foregroundStyle(theme.accent)
+            }
+          }
+        }
+        .listRowBackground(theme.paperSecondary.opacity(0.5))
+      }
+
       if let composable {
         Section {
           Button {
@@ -164,10 +193,78 @@ struct NewConversationSheet: View {
             .foregroundStyle(theme.inkTertiary)
         }
       }
+
+      // Le carnet d'adresses de l'iPhone : les gens qu'on connaît mais que le
+      // Relais n'a pas encore vus. Une ligne par numéro composable — un fil
+      // déjà ouvert avec ce numéro reste dans « Déjà sur le Relais ».
+      if let bookNetwork {
+        Section {
+          ForEach(bookHits) { person in
+            ForEach(composablePhones(of: person), id: \.self) { phone in
+              Button {
+                guard let e164 = PhoneNormalizer.e164(phone) else { return }
+                open(freeform: Freeform(network: bookNetwork, identifier: e164))
+              } label: {
+                Label {
+                  VStack(alignment: .leading, spacing: 2) {
+                    Text(person.name)
+                      .foregroundStyle(theme.ink)
+                    Text("\(phone) — nouveau fil \(bookNetwork.labelFR)")
+                      .font(Typography.meta(typeface))
+                      .foregroundStyle(theme.inkTertiary)
+                  }
+                } icon: {
+                  Image(systemName: bookNetwork.systemImage)
+                    .foregroundStyle(theme.accent)
+                }
+              }
+              .disabled(isOpening)
+              .listRowBackground(Color.clear)
+            }
+          }
+        } header: {
+          if bookHits.contains(where: { !composablePhones(of: $0).isEmpty }) {
+            Text("Dans vos contacts")
+              .font(Typography.sidebarSection(typeface))
+              .foregroundStyle(theme.inkTertiary)
+          }
+        }
+      }
     }
     .listStyle(.plain)
     .scrollContentBackground(.hidden)
     .scrollDismissesKeyboard(.interactively)
+  }
+
+  // MARK: - Le carnet d'adresses
+
+  /// Le réseau qui recevra un numéro du carnet : celui choisi s'il se compose
+  /// (WhatsApp, Signal) ; « Tous » prend celui qu'on utilise déjà. Instagram
+  /// ne connaît pas les numéros — pas de section.
+  private var bookNetwork: MessageNetwork? {
+    if let network {
+      return (network == .whatsapp || network == .signal) ? network : nil
+    }
+    if networks.contains(.whatsapp) { return .whatsapp }
+    return networks.contains(.signal) ? .signal : nil
+  }
+
+  /// Les numéros d'une personne qui ouvrent vraiment un fil neuf : composables
+  /// en E.164, et pas déjà une conversation du Relais.
+  private func composablePhones(of person: ContactBook.Person) -> [String] {
+    person.phones.filter { phone in
+      guard let e164 = PhoneNormalizer.e164(phone) else { return false }
+      let suffix = String(e164.filter(\.isNumber).suffix(9))
+      return !store.conversations.contains { conversation in
+        !conversation.isGroup
+          && String(conversation.address.filter(\.isNumber).suffix(9)) == suffix
+      }
+    }
+  }
+
+  private func refreshBookHits() async {
+    guard !store.isDemo else { return }
+    bookHits = await ContactBook.shared.search(query: trimmed)
   }
 
   // MARK: - Composer un numéro
@@ -231,14 +328,16 @@ struct NewConversationSheet: View {
   private var searchField: some View {
     VStack(spacing: 0) {
       Divider().overlay(theme.edge)
-      // Dit une fois, juste au-dessus du champ : les groupes se créent là où
-      // vivent leurs règles d'admission, pas ici.
-      Text("Les groupes se créent depuis l'app d'origine.")
-        .font(Typography.meta(typeface))
-        .foregroundStyle(theme.inkTertiary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Spacing.md)
-        .padding(.top, 8)
+      // Dit une fois, juste au-dessus du champ — seulement quand aucun pont
+      // branché ne sait créer de groupe : sinon le geste est dans la liste.
+      if !store.canCreateGroup {
+        Text("Les groupes se créent depuis l'app d'origine.")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkTertiary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, Spacing.md)
+          .padding(.top, 8)
+      }
       HStack(spacing: 8) {
         Image(systemName: "magnifyingglass")
           .foregroundStyle(theme.inkTertiary)
