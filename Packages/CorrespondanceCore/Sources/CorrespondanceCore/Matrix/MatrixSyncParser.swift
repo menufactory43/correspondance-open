@@ -109,6 +109,7 @@ public struct MatrixSyncParser: Sendable {
       {
         alreadyKnown += 1
       }
+      applyMembershipNotice(event, roomID: roomID, to: &model)
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
@@ -286,6 +287,52 @@ public struct MatrixSyncParser: Sendable {
         }
       }
     }
+  }
+
+  // MARK: - Arrivées et départs
+
+  /// « cc a rejoint la conversation » : une ligne d'événement quand un
+  /// utilisateur du Relais — un agent, pas un ghost ni un bot de pont — entre
+  /// ou sort d'un salon. Les ghosts vont et viennent au rythme du réseau
+  /// distant et n'ont rien à annoncer ici ; moi non plus.
+  ///
+  /// À jouer **avant** `applyState` : c'est l'adhésion précédente, encore en
+  /// mémoire, qui dit si quelque chose a changé. Un `join` qui suit un `join`
+  /// n'est qu'un changement de nom ou de photo.
+  private func applyMembershipNotice(_ event: MatrixEvent, roomID: String, to model: inout MatrixRoomModel) {
+    guard event.type == "m.room.member",
+          let eventID = event.eventID,
+          let userID = event.stateKey,
+          userID != selfUserID,
+          !MatrixIdentity.isGhost(userID),
+          !MatrixIdentity.isBridgeBot(userID),
+          let content = event.content
+    else { return }
+    let membership = content.string(at: "membership") ?? "leave"
+    let wasJoined = model.members[userID]?.membership == "join"
+    let verb: String
+    switch (wasJoined, membership) {
+    case (false, "join"): verb = "a rejoint la conversation"
+    case (true, "leave"), (true, "ban"): verb = "a quitté la conversation"
+    default: return
+    }
+    let name = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
+      ?? model.members[userID]?.displayName
+      ?? MatrixIdentity.localpart(of: userID)
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      isFromMe: false,
+      senderID: userID,
+      senderName: name,
+      systemEventText: "\(name) \(verb)"
+    )
+    model.markWritten(eventID)
+    if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
   }
 
   // MARK: - Messages

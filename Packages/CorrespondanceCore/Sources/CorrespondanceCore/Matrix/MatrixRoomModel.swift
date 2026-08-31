@@ -373,6 +373,12 @@ public enum MatrixIdentity {
     return trimmed
   }
 
+  /// `@cc:correspondance.local` → `cc`.
+  public static func localpart(of userID: String) -> String {
+    let withoutSigil = userID.hasPrefix("@") ? String(userID.dropFirst()) : userID
+    return String(withoutSigil.prefix { $0 != ":" })
+  }
+
   public static func isGhost(_ userID: String) -> Bool {
     network(ofGhost: userID) != nil
   }

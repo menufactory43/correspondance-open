@@ -101,6 +101,10 @@ struct MessageBubbleView: View {
             // de la fonte. Dérivé du thème et du corps effectif — cf. `WritingTheme`.
             .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
             .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+            // Un mot plus long que la bulle — un chemin, une URL — : sans
+            // ceci, `Text` tronque la ligne d'une ellipse au lieu de couper
+            // le mot. On lui rend sa hauteur libre, il replie.
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(

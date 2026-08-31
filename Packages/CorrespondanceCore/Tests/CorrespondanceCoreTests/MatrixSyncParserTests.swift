@@ -220,4 +220,39 @@ extension MatrixSyncParserTests {
     let message = try XCTUnwrap(rooms[groupRoomID]?.sortedMessages.first)
     XCTAssertEqual(message.reactions.first { $0.emoji == "🎉" }?.count, 2)
   }
+
+
+  // MARK: - Arrivées et départs d'utilisateurs du Relais
+
+  private func memberEvent(_ userID: String, membership: String, id: String, displayName: String? = nil, at: Double = 1_700_000_000_000) -> MatrixEvent {
+    var content: [String: MatrixJSON] = ["membership": .string(membership)]
+    if let displayName { content["displayname"] = .string(displayName) }
+    return MatrixEvent(type: "m.room.member", eventID: id, sender: userID, stateKey: userID, originServerTS: at, content: .object(content))
+  }
+
+  func testAgentJoinBecomesASystemLine() {
+    var model = MatrixRoomModel(roomID: "!note:correspondance.local")
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    _ = parser.applyMessages([memberEvent("@cc:correspondance.local", membership: "join", id: "$join", displayName: "cc")], roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.messagesByID["$join"]?.systemEventText, "cc a rejoint la conversation")
+    XCTAssertEqual(model.members["@cc:correspondance.local"]?.membership, "join")
+
+    // Un second `join` (changement de nom) n'annonce rien de plus.
+    _ = parser.applyMessages([memberEvent("@cc:correspondance.local", membership: "join", id: "$rename", displayName: "cc bot")], roomID: model.roomID, to: &model)
+    XCTAssertNil(model.messagesByID["$rename"])
+
+    _ = parser.applyMessages([memberEvent("@cc:correspondance.local", membership: "leave", id: "$leave")], roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.messagesByID["$leave"]?.systemEventText, "cc bot a quitté la conversation")
+  }
+
+  func testGhostsBotsAndSelfStaySilent() {
+    var model = MatrixRoomModel(roomID: "!dm:correspondance.local")
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    _ = parser.applyMessages([
+      memberEvent("@whatsapp_33612345678:correspondance.local", membership: "join", id: "$ghost"),
+      memberEvent("@whatsappbot:correspondance.local", membership: "join", id: "$bot"),
+      memberEvent(selfUserID, membership: "join", id: "$me"),
+    ], roomID: model.roomID, to: &model)
+    XCTAssertTrue(model.messagesByID.isEmpty, "\(model.messagesByID.keys)")
+  }
 }
