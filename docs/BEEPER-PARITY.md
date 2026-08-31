@@ -186,15 +186,27 @@ Correspondance en a **19** (`App/CorrespondanceCommands.swift`, recompté 2026-0
 Le bundle 4.3.73 révèle une couche IA bien plus large que « Draft with AI » : c'est là que Beeper
 investit, et c'est le seul terrain où l'écart se creuse au lieu de se refermer.
 
+**Mais elle est verrouillée, à trois niveaux** (vérifié le 2026-08-31 sur un compte réel **Free** :
+le panneau IA ne montre que traduction, transcription Whisper et Mentions IA, tous « + Plus ») :
+les chats IA sont derrière un drapeau **serveur** `ai-in-beeper-chats` (`features[AI_IN_BEEPER_CHATS]?.use`
+— déploiement progressif, pas un réglage local) ; le panneau « Integrations » (Desktop API / MCP)
+n'apparaît que si le drapeau **Labs** `DESKTOP_LABS_BEEPER_CONNECT` est actif ; et la transcription
+comme les Mentions IA exigent **Beeper Plus**. C'est l'illustration de la limite n° 2 de l'annexe :
+une chaîne prouve une intention, pas une disponibilité. La couche décrite ci-dessous est donc
+l'endroit où Beeper *va*, pas ce que voit un compte gratuit aujourd'hui — la doc publique de
+`developers.beeper.com` (Desktop API, MCP) confirme que c'est un produit réel, en rollout.
+
 **Ce que le bundle montre** (chaînes d'UI, ré-extraction du 2026-08-31) :
 - **Chats IA de plein droit** : `New AI Chat`, `Start a new AI chat`, sélecteur `All models`,
   `Apple Intelligence`, `On-Device` — la conversation avec un modèle est un fil comme un autre.
 - **Un agent outillé, pas un complèteur** : `Running agent`, `Calling LLM`, `Run command`,
   `Web search`, `Fetch web`, `Read file`, `Find files`, `Write`, `Generate image`,
   `Code interpreter`, `Update todos`, `Read chat context` — l'IA de Beeper lit les fils et agit.
-- **Serveur MCP local + intégrations prêtes** : tuiles `Claude Desktop`, `Claude Code`, `Cursor`,
-  `Raycast`, `VS Code`, `Codex`, transport `Streamable HTTP`, boutons `Copy Config` / `Copy Command` —
-  n'importe quel agent extérieur peut piloter Beeper en deux clics.
+- **Serveur MCP local + intégrations prêtes** (panneau « Integrations », Labs) : tuiles
+  `Claude Desktop` (extension `.dxt` téléchargée), `Claude Code`, `Cursor`, `Raycast`, `VS Code`,
+  `Codex`, transport `Streamable HTTP`, boutons `Copy Config` / `Copy Command`, flux OAuth
+  d'approbation par app tierce, jetons révocables, option « Remote Access » (API exposée
+  au-delà de la machine) — une fois le Labs actif, un agent extérieur se branche en deux clics.
 - **Voix** : `Talk to Type` (dictée via serveurs Beeper) et `Transcribe` sur les vocaux.
 
 **Notre position.** L'agent « cc » est l'inverse structurel de leur approche : il vit *dans* les
