@@ -225,6 +225,25 @@ targets:
               NSIncludesSubdomains: true
               NSExceptionAllowsInsecureHTTPLoads: true
 
+  CorrespondanceiOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: CorrespondanceiOSUITests
+    dependencies:
+      - target: Correspondance iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.correspondance.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: Correspondance iOS
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+
 schemes:
   Correspondance:
     build:
@@ -240,5 +259,10 @@ schemes:
     build:
       targets:
         Correspondance iOS: all
+        CorrespondanceiOSUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - CorrespondanceiOSUITests
