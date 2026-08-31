@@ -30,7 +30,7 @@ public struct LinkedText: View {
   /// La première adresse web du message, via le même mémo que le rendu : la
   /// carte d'aperçu ne relance pas le détecteur que la bulle vient de payer.
   @MainActor
-  static func firstWebURL(in text: String) -> URL? {
+  public static func firstWebURL(in text: String) -> URL? {
     detected(in: text).first { link in
       let scheme = link.url.scheme?.lowercased()
       return scheme == "http" || scheme == "https"
