@@ -249,6 +249,12 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
+  /// pont ne l'annonce (voir `MatrixRoomModel.isNetworkFlaggedRequest`).
+  public func networkFlaggedRequestIDs() -> Set<String> {
+    Set(rooms.values.filter(\.isNetworkFlaggedRequest).map(\.conversationID))
+  }
+
   public func messages(conversationID: String) -> [ChatMessage] {
     hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return [] }
@@ -521,6 +527,12 @@ public actor MatrixBridgeService {
         roomID: roomID,
         type: ConversationStateKeys.reminderType,
         content: ConversationStateCodec.reminderContent(value)
+      )
+    case .request(let roomID, let value):
+      try await client.setRoomAccountData(
+        roomID: roomID,
+        type: ConversationStateKeys.requestType,
+        content: ConversationStateCodec.requestContent(value)
       )
     case .mergedContacts(let stored):
       guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }

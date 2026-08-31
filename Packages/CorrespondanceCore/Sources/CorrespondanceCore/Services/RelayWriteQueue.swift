@@ -15,13 +15,15 @@ public enum RelayWrite: Codable, Sendable, Equatable {
   case hidden(roomID: String, eventIDs: Set<String>)
   /// Un rappel posé (`value`) ou levé (`nil`).
   case reminder(roomID: String, value: ConversationReminder?)
+  /// Une demande acceptée, refusée, ou remise en attente (`nil`).
+  case request(roomID: String, value: ConversationRequest.Decision?)
   case mergedContacts(MergedContactStore.Stored)
 
   /// Le salon visé, `nil` pour une écriture globale (les fusions).
   public var roomID: String? {
     switch self {
     case .archived(let roomID, _), .pinned(let roomID, _), .muted(let roomID, _),
-         .draft(let roomID, _), .hidden(let roomID, _), .reminder(let roomID, _):
+         .draft(let roomID, _), .hidden(let roomID, _), .reminder(let roomID, _), .request(let roomID, _):
       roomID
     case .mergedContacts:
       nil
@@ -38,6 +40,7 @@ public enum RelayWrite: Codable, Sendable, Equatable {
     case .draft(let roomID, _): "draft:\(roomID)"
     case .hidden(let roomID, _): "hidden:\(roomID)"
     case .reminder(let roomID, _): "reminder:\(roomID)"
+    case .request(let roomID, _): "request:\(roomID)"
     case .mergedContacts: "merged"
     }
   }
@@ -58,6 +61,8 @@ public enum RelayWrite: Codable, Sendable, Equatable {
       if eventIDs.isEmpty { snapshot.hidden.removeValue(forKey: roomID) } else { snapshot.hidden[roomID] = eventIDs }
     case .reminder(let roomID, let value):
       if let value { snapshot.reminders[roomID] = value } else { snapshot.reminders.removeValue(forKey: roomID) }
+    case .request(let roomID, let value):
+      if let value { snapshot.requests[roomID] = value } else { snapshot.requests.removeValue(forKey: roomID) }
     case .mergedContacts(let stored):
       snapshot.mergedContacts = stored
     }

@@ -53,6 +53,17 @@ extension RelayStore {
     startRelayFlush()
   }
 
+  /// Ce que j'ai décidé d'une demande : acceptée, refusée, ou remise en
+  /// attente (`nil`).
+  func relayNoteRequest(_ decision: ConversationRequest.Decision?, conversationIDs: [String]) {
+    for id in conversationIDs {
+      guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
+      relayQueue.enqueue(.request(roomID: roomID, value: decision))
+    }
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   /// Les messages masqués d'un salon. L'ensemble local est global ; celui du
   /// Relais est par salon, et c'est lui qui fait autorité — on lui ajoute
   /// simplement ce qu'on vient de masquer.
@@ -164,6 +175,9 @@ extension RelayStore {
     for id in state.archived where !known.contains(id) { next.archived.insert(id) }
     for (id, text) in state.drafts where !known.contains(id) { next.drafts[id] = text }
     for (id, reminder) in state.reminders where !known.contains(id) { next.reminders[id] = reminder }
+    for (id, decision) in state.requestDecisions where !known.contains(id) { next.requestDecisions[id] = decision }
+    // Recalculé juste après par `refreshPendingRequests` : on ne le perd pas ici.
+    next.pendingRequests = state.pendingRequests
 
     // Une ligne de fusion porte l'état de ses membres : archivée si tous le sont.
     for contact in mergedContacts {
@@ -184,6 +198,7 @@ extension RelayStore {
     }
 
     if next != state { state = next }
+    refreshPendingRequests()
 
     // Le masquage s'ajoute, il ne se retire jamais : rien dans l'app ne démasque
     // un message, et un identifiant qu'on ne sait pas rattacher serait perdu.

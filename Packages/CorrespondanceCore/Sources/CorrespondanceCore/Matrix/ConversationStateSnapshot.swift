@@ -17,6 +17,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
   public var hidden: [String: Set<String>]
   /// Rappels posés : le salon revient dans la file à l'heure dite.
   public var reminders: [String: ConversationReminder]
+  /// Demandes tranchées : un salon absent d'ici attend encore une décision.
+  public var requests: [String: ConversationRequest.Decision]
   /// Fusions de contacts — un seul objet global, tel que `MergedContactStore` l'écrit.
   public var mergedContacts: MergedContactStore.Stored?
 
@@ -27,6 +29,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     drafts: [String: String] = [:],
     hidden: [String: Set<String>] = [:],
     reminders: [String: ConversationReminder] = [:],
+    requests: [String: ConversationRequest.Decision] = [:],
     mergedContacts: MergedContactStore.Stored? = nil
   ) {
     self.archived = archived
@@ -35,12 +38,14 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     self.drafts = drafts
     self.hidden = hidden
     self.reminders = reminders
+    self.requests = requests
     self.mergedContacts = mergedContacts
   }
 
   public var isEmpty: Bool {
     archived.isEmpty && pinned.isEmpty && muted.isEmpty
-      && drafts.isEmpty && hidden.isEmpty && reminders.isEmpty && mergedContacts == nil
+      && drafts.isEmpty && hidden.isEmpty && reminders.isEmpty && requests.isEmpty
+      && mergedContacts == nil
   }
 
   /// Fusionne un payload `/sync`. Chaque event reçu **remplace** ce qu'il décrit :
@@ -68,6 +73,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     drafts.removeValue(forKey: roomID)
     hidden.removeValue(forKey: roomID)
     reminders.removeValue(forKey: roomID)
+    requests.removeValue(forKey: roomID)
   }
 
   private mutating func applyGlobal(_ event: MatrixEvent) {
@@ -102,6 +108,12 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
         reminders[roomID] = reminder
       } else {
         reminders.removeValue(forKey: roomID)
+      }
+    case ConversationStateKeys.requestType:
+      if let decision = ConversationStateCodec.requestDecision(in: content) {
+        requests[roomID] = decision
+      } else {
+        requests.removeValue(forKey: roomID)
       }
     default:
       break
@@ -160,6 +172,17 @@ public enum ConversationStateCodec {
       wakeAt: Date(timeIntervalSince1970: wake / 1000),
       setAt: Date(timeIntervalSince1970: set / 1000)
     )
+  }
+
+  /// `fr.correspondance.request` → `{ "decision": "accepted" | "declined" }`.
+  public static func requestContent(_ decision: ConversationRequest.Decision?) -> MatrixJSON {
+    guard let decision else { return .object([:]) }
+    return .object(["decision": .string(decision.rawValue)])
+  }
+
+  public static func requestDecision(in content: MatrixJSON) -> ConversationRequest.Decision? {
+    guard let raw = content.string(at: "decision") else { return nil }
+    return ConversationRequest.Decision(rawValue: raw)
   }
 
   /// `fr.correspondance.hidden` → `{ "event_ids": ["…"] }`, trié pour que deux

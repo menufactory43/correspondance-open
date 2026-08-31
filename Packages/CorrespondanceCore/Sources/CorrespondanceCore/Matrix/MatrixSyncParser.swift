@@ -236,6 +236,14 @@ public struct MatrixSyncParser: Sendable {
       model.bridgeRoomType = roomType
     }
     if let channelID = content.string(at: "channel.id") { model.bridgeChannelID = channelID }
+    // Les formes qu'un pont emploierait pour dire « demande ». Aucune n'est
+    // émise par mautrix v26.08 ; les lire ne coûte rien et le jour où l'une
+    // arrive, l'écran Demandes se remplit tout seul.
+    let pending = content.bool(at: "com.beeper.pending")
+      ?? content.bool(at: "fi.mau.pending")
+      ?? (content.string(at: "com.beeper.chat_type").map { $0 == "request" })
+      ?? (content.string(at: "channel.type").map { $0 == "request" })
+    if let pending { model.isNetworkFlaggedRequest = pending }
     // Le bridge peut exposer le numéro (`channel.id` en JID, ou un extra explicite).
     // On ne prend que ce qui ressemble vraiment à un numéro ; sinon on s'en passe.
     if model.bridgePhoneNumber == nil {

@@ -154,7 +154,30 @@ struct InboxListView: View {
       }
       .tint(theme.inkTertiary)
     }
-    .contextMenu { reminderMenu(conversation) }
+    .contextMenu {
+      reminderMenu(conversation)
+      requestMenu(conversation)
+    }
+  }
+
+  /// Accepter ou refuser une demande. Accepter la fait entrer dans la file ;
+  /// refuser la range, et elle ne redemandera plus.
+  @ViewBuilder
+  private func requestMenu(_ conversation: Conversation) -> some View {
+    if store.isRequest(conversation.id) {
+      Section("Demande") {
+        Button {
+          store.decideRequest(.accepted, conversationID: conversation.id)
+        } label: {
+          Label("Accepter", systemImage: "checkmark.circle")
+        }
+        Button(role: .destructive) {
+          store.decideRequest(.declined, conversationID: conversation.id)
+        } label: {
+          Label("Refuser", systemImage: "xmark.circle")
+        }
+      }
+    }
   }
 
   /// « Me le rappeler » : la conversation quitte la file jusqu'à l'heure dite,

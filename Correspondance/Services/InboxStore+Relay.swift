@@ -55,6 +55,16 @@ extension InboxStore {
     startRelayFlush()
   }
 
+  /// Ce que j'ai décidé d'une demande.
+  func relayNoteRequest(_ decision: ConversationRequest.Decision?, conversationIDs: [String]) {
+    for id in conversationIDs {
+      guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
+      relayQueue.enqueue(.request(roomID: roomID, value: decision))
+    }
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   func relayNoteMergedContacts(_ stored: MergedContactStore.Stored) {
     relayQueue.enqueue(.mergedContacts(stored))
     saveRelayQueue()
@@ -170,6 +180,10 @@ extension InboxStore {
         relayQueue.enqueue(.reminder(roomID: roomID, value: reminder))
         pushed += 1
       }
+      if let decision = requestDecisions[id], relay.requests[roomID] == nil {
+        relayQueue.enqueue(.request(roomID: roomID, value: decision))
+        pushed += 1
+      }
       let text = draftSnapshot[id]?.text ?? ""
       if !text.isEmpty, relay.drafts[roomID] == nil {
         relayQueue.enqueue(.draft(roomID: roomID, text: text))
@@ -239,6 +253,10 @@ extension InboxStore {
     for (roomID, reminder) in snapshot.reminders {
       if let id = roomToConversation[roomID] { reminders[id] = reminder }
     }
+    var requests: [String: ConversationRequest.Decision] = [:]
+    for (roomID, decision) in snapshot.requests {
+      if let id = roomToConversation[roomID] { requests[id] = decision }
+    }
     // Le masquage s'ajoute, il ne se retire jamais : rien dans l'app ne
     // démasque un message, et un identifiant qu'on ne sait pas rattacher à un
     // salon (message pas encore chargé) serait perdu pour de bon.
@@ -254,6 +272,7 @@ extension InboxStore {
       known: known,
       drafts: drafts,
       reminders: reminders,
+      requests: requests,
       hidden: hidden,
       merged: snapshot.mergedContacts
     )

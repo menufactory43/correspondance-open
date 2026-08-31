@@ -43,6 +43,9 @@ struct InboxListPane: View {
         } else if store.isShowingArchived {
           section(title: "Archivés", items: store.archivedQueue)
         } else {
+          // Les inconnus qui ont écrit les premiers : rien n'entre dans la
+          // file avant qu'on l'ait accepté.
+          section(title: "Demandes", items: store.requestsQueue)
           section(title: "Récents", items: store.inboxRecents)
           section(title: "Groupes", items: store.inboxGroups)
           section(title: "Contacts", items: store.inboxContacts)
@@ -89,7 +92,7 @@ struct InboxListPane: View {
   private var currentQueue: [Conversation] {
     if store.isShowingScheduled { return store.scheduledQueue }
     if store.isShowingArchived { return store.archivedQueue }
-    return store.activeQueue + store.remindersQueue
+    return store.activeQueue + store.remindersQueue + store.requestsQueue
   }
 
   /// Vue « Programmés » (bouton du rail) : un fil par ligne, son prochain départ.
@@ -252,6 +255,16 @@ struct InboxListPane: View {
     }
 
     reminderMenu(conversation)
+
+    if store.isRequest(conversation.id) {
+      Divider()
+      Button("Accepter la demande") {
+        Task { await store.decideRequest(.accepted, conversationID: conversation.id) }
+      }
+      Button("Refuser la demande", role: .destructive) {
+        Task { await store.decideRequest(.declined, conversationID: conversation.id) }
+      }
+    }
 
     Divider()
 

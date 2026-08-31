@@ -118,6 +118,7 @@ final class RelayStore {
     session = .connected
     conversations = mergedRows(await matrix.conversations())
     await reloadRelayState()
+    refreshPendingRequests()
     startSyncLoop()
   }
 
@@ -225,7 +226,9 @@ final class RelayStore {
       let fresh = try await matrix.syncOnce()
       syncError = nil
       conversations = mergedRows(fresh)
+      networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
       await adoptRelayState()
+      refreshPendingRequests()
       await flushRelayWrites()
       await refreshOpenThreads()
     } catch MatrixError.http(let status, let code, _) where status == 401 || code == "M_UNKNOWN_TOKEN" {
@@ -291,6 +294,64 @@ final class RelayStore {
     var merged = state
     for (id, text) in localDrafts { merged.drafts[id] = text }
     return merged
+  }
+
+  // MARK: - Demandes
+
+  /// Ce fil attend-il d'être accepté ? Une demande reste hors de la file
+  /// jusque-là — c'est le seul état qui la retienne.
+  func isRequest(_ id: String) -> Bool { state.isRequest(id) }
+
+  /// Les signaux que l'iPhone sait donner sur un fil. Écart assumé de la v1 :
+  /// pas de carnet d'adresses ici (décision 2 — client Matrix pur), donc
+  /// `isKnownCorrespondent` reste faux et seule la fusion, décidée sur le Mac,
+  /// vaut reconnaissance.
+  func requestSignals(_ conversation: Conversation) -> RequestSignals {
+    // `nil` tant que le fil n'est pas chargé : on ne range personne sur un
+    // soupçon. Un brouillon ou un dernier mot de moi suffisent, eux, à trancher.
+    var ecrit: Bool?
+    if conversation.lastMessageIsFromMe
+      || !draftText(conversation.id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      ecrit = true
+    } else if let fil = messages[conversation.id], !fil.isEmpty {
+      ecrit = fil.contains(where: \.isFromMe)
+    }
+    let connu = mergedContacts.contains { $0.memberIDs.contains(conversation.id) }
+    return RequestSignals(
+      hasWrittenBack: ecrit,
+      isKnownCorrespondent: connu,
+      isFlaggedByNetwork: networkFlaggedRequestIDs.contains(conversation.id)
+    )
+  }
+
+  /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
+  /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
+  private(set) var networkFlaggedRequestIDs: Set<String> = []
+
+  /// Accepter, c'est faire entrer la conversation dans la file. Refuser, c'est
+  /// la ranger : elle n'y entrera pas, et ne redemandera plus.
+  func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) {
+    for id in Set(relayTargets(of: conversationID) + [conversationID]) {
+      if let decision { state.requestDecisions[id] = decision }
+      else { state.requestDecisions.removeValue(forKey: id) }
+    }
+    refreshPendingRequests()
+    relayNoteRequest(decision, conversationIDs: relayTargets(of: conversationID))
+    if decision == .declined { setArchived(true, conversationID: conversationID) }
+  }
+
+  /// Recalcule qui attend encore d'être accepté. À rejouer dès que la liste ou
+  /// les décisions bougent : le tri, lui, ne fait que lire `pendingRequests`.
+  func refreshPendingRequests() {
+    let pending = Set(
+      conversations
+        .filter {
+          RequestPolicy.isRequest($0, signals: requestSignals($0), decision: state.requestDecisions[$0.id])
+        }
+        .map(\.id)
+    )
+    if pending != state.pendingRequests { state.pendingRequests = pending }
   }
 
   /// Le rappel posé sur ce fil, s'il en porte un.

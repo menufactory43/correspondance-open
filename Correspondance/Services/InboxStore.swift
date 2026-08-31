@@ -144,6 +144,12 @@ final class InboxStore {
   /// L'état vit dans le Relais (`fr.correspondance.reminder`) — `UserDefaults`
   /// n'est que le cache qui permet d'afficher la file avant le premier `/sync`.
   private(set) var remindersByID: [String: ConversationReminder] = [:]
+  /// Ce que j'ai décidé des demandes — acceptée, refusée. L'état vit dans le
+  /// Relais (`fr.correspondance.request`), `UserDefaults` n'est que le cache.
+  private(set) var requestDecisions: [String: ConversationRequest.Decision] = [:]
+  /// Les numéros du carnet d'adresses rencontrés : ce qui distingue un inconnu.
+  /// Rempli au fil des `/sync`, jamais demandé à Contacts pour l'occasion.
+  private var knownCorrespondentIDs: Set<String> = []
   private(set) var disappearingSecondsByID: [String: Int] = [:]
   /// Messages supprimés « ici » (`HiddenMessageStore`) : le réseau les garde,
   /// le fil ne les montre plus. `private(set)` — la suppression passe par
@@ -316,21 +322,21 @@ final class InboxStore {
 
   var activeQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived && !isAsleep($0) && matchesNetworkFilter($0) }
+      .filter { !$0.isArchived && !isAsleep($0) && !isRequest($0) && matchesNetworkFilter($0) }
       .sorted(by: { sortForInbox($0, $1) })
   }
 
   /// File complète, rail ignoré — pour les compteurs et le repli de sélection.
   var unfilteredQueue: [Conversation] {
     conversations
-      .filter { !$0.isArchived && !isAsleep($0) }
+      .filter { !$0.isArchived && !isAsleep($0) && !isRequest($0) }
       .sorted(by: { sortForInbox($0, $1) })
   }
 
   /// Les conversations mises de côté, dans l'ordre où leurs rappels sonnent.
   var remindersQueue: [Conversation] {
     conversations
-      .filter { isAsleep($0) && matchesNetworkFilter($0) }
+      .filter { isAsleep($0) && !isRequest($0) && matchesNetworkFilter($0) }
       .sorted { lhs, rhs in
         let l = remindersByID[lhs.id]?.wakeAt ?? .distantFuture
         let r = remindersByID[rhs.id]?.wakeAt ?? .distantFuture
@@ -350,6 +356,78 @@ final class InboxStore {
   }
 
   func reminder(_ id: String) -> ConversationReminder? { remindersByID[id] }
+
+  // MARK: - Demandes
+
+  /// Les conversations d'inconnus qui attendent une décision. Elles ne sont
+  /// dans aucune file — c'est tout ce qu'une demande a de particulier.
+  var requestsQueue: [Conversation] {
+    conversations
+      .filter { isRequest($0) && matchesNetworkFilter($0) }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  func isRequest(_ conversation: Conversation) -> Bool {
+    RequestPolicy.isRequest(
+      conversation,
+      signals: requestSignals(conversation),
+      decision: requestDecisions[conversation.id]
+    )
+  }
+
+  func isRequest(_ id: String) -> Bool {
+    guard let conversation = conversations.first(where: { $0.id == id }) else { return false }
+    return isRequest(conversation)
+  }
+
+  /// Ce que le Mac sait dire d'un fil : ai-je écrit, et est-ce quelqu'un que
+  /// je connais (carnet d'adresses, ou contact fusionné) ?
+  private func requestSignals(_ conversation: Conversation) -> RequestSignals {
+    // `nil` tant qu'on n'a pas le fil sous les yeux : on ne range jamais une
+    // conversation sur un soupçon. Un dernier mot de moi, ou un brouillon,
+    // suffisent en revanche à trancher sans rien charger.
+    var wrote: Bool?
+    if conversation.lastMessageIsFromMe
+      || !(drafts[conversation.id]?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      wrote = true
+    } else if selectedConversationID == conversation.id, !messages.isEmpty {
+      wrote = messages.contains(where: \.isFromMe)
+    }
+    let known = knownCorrespondentIDs.contains(conversation.id)
+      || mergedContacts.contains { $0.memberIDs.contains(conversation.id) }
+    return RequestSignals(
+      hasWrittenBack: wrote,
+      isKnownCorrespondent: known,
+      isFlaggedByNetwork: networkFlaggedRequestIDs.contains(conversation.id)
+    )
+  }
+
+  /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
+  /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
+  private(set) var networkFlaggedRequestIDs: Set<String> = []
+
+  /// Note qui, dans cette liste, est déjà au carnet d'adresses. Appelé au même
+  /// endroit que l'enrichissement des titres : le carnet est alors chaud.
+  func noteKnownCorrespondents(in list: [Conversation]) async {
+    for conversation in list where !conversation.isGroup && conversation.address.hasPrefix("+") {
+      if await ContactDirectory.shared.isKnown(handle: conversation.address) {
+        knownCorrespondentIDs.insert(conversation.id)
+      }
+    }
+  }
+
+  /// Accepter fait entrer la conversation dans la file ; refuser la range.
+  func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) async {
+    let ids = expandedIDs(for: conversationID)
+    for id in ids {
+      if let decision { requestDecisions[id] = decision }
+      else { requestDecisions.removeValue(forKey: id) }
+    }
+    persistFlags()
+    relayNoteRequest(decision, conversationIDs: ids)
+    if decision == .declined { await setArchived(true, conversationID: conversationID) }
+  }
 
   /// Met une conversation de côté jusqu'à une heure — ou la ramène (`nil`).
   /// Le geste est immédiat ; l'écriture vers le Relais suit.
@@ -516,6 +594,11 @@ final class InboxStore {
     {
       remindersByID = stored
     }
+    if let data = UserDefaults.standard.data(forKey: Keys.requests),
+       let stored = try? JSONDecoder().decode([String: ConversationRequest.Decision].self, from: data)
+    {
+      requestDecisions = stored
+    }
     manuallyUnreadIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.manuallyUnread) ?? [])
     drafts = DraftStore.load()
     relayQueue = RelayWriteQueue.load(from: .standard, key: Keys.relayQueue)
@@ -556,6 +639,7 @@ final class InboxStore {
     mutedIDs = mutedIDs.filter { !isLegacySignalID($0) }
     archivedIDs = archivedIDs.filter { !isLegacySignalID($0) }
     remindersByID = remindersByID.filter { !isLegacySignalID($0.key) }
+    requestDecisions = requestDecisions.filter { !isLegacySignalID($0.key) }
     disappearingSecondsByID = disappearingSecondsByID.filter { !isLegacySignalID($0.key) }
     persistFlags()
 
@@ -1576,6 +1660,8 @@ final class InboxStore {
           self.isLiveSyncing = true
           defer { self.isLiveSyncing = false }
           await ContactDirectory.shared.enrichBridgedTitles(&updated)
+          await self.noteKnownCorrespondents(in: updated)
+          self.networkFlaggedRequestIDs = await self.matrix.networkFlaggedRequestIDs()
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
@@ -1794,6 +1880,7 @@ final class InboxStore {
       mutedIDs.remove(conversationID)
       archivedIDs.remove(conversationID)
       remindersByID.removeValue(forKey: conversationID)
+      requestDecisions.removeValue(forKey: conversationID)
       disappearingSecondsByID.removeValue(forKey: conversationID)
       persistFlags()
       relayForget(conversationID: conversationID)
@@ -2731,6 +2818,7 @@ final class InboxStore {
     known: Set<String>,
     drafts newDrafts: [String: String],
     reminders newReminders: [String: ConversationReminder],
+    requests newRequests: [String: ConversationRequest.Decision],
     hidden: Set<String>,
     merged: MergedContactStore.Stored?
   ) {
@@ -2745,6 +2833,7 @@ final class InboxStore {
       mergedMemberCache[id]?.isArchived = archived.contains(id)
       let wasAsleep = remindersByID[id]
       remindersByID[id] = newReminders[id]
+      requestDecisions[id] = newRequests[id]
       if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
         || wasArchived != archived.contains(id) || wasAsleep != newReminders[id] { changedFlags = true }
     }
@@ -2788,6 +2877,9 @@ final class InboxStore {
     if let data = try? JSONEncoder().encode(remindersByID) {
       UserDefaults.standard.set(data, forKey: Keys.reminders)
     }
+    if let data = try? JSONEncoder().encode(requestDecisions) {
+      UserDefaults.standard.set(data, forKey: Keys.requests)
+    }
     UserDefaults.standard.set(Array(manuallyUnreadIDs), forKey: Keys.manuallyUnread)
     if let data = try? JSONEncoder().encode(disappearingSecondsByID) {
       UserDefaults.standard.set(data, forKey: Keys.disappearing)
@@ -2801,6 +2893,7 @@ final class InboxStore {
     static let mutedIDs = "correspondance.mutedConversationIDs"
     static let archivedIDs = "correspondance.archivedConversationIDs"
     static let reminders = "correspondance.conversationReminders"
+    static let requests = "correspondance.conversationRequests"
     static let disappearing = "correspondance.disappearingSeconds"
     static let signalCLIMigration = "correspondance.signalCLIMigrationDone"
     static let manuallyUnread = "correspondance.manuallyUnreadConversationIDs"

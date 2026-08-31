@@ -33,6 +33,15 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Le pont annonce-t-il un fil « en attente » — une demande côté réseau ?
+  ///
+  /// Instagram et Messenger ont bien une boîte de demandes, et Signal une
+  /// « invitation de message ». Aucun pont mautrix v26.08 ne l'expose dans
+  /// `m.bridge` à ce jour : on lit les clés que Beeper et mautrix emploieraient
+  /// s'ils s'y mettaient, et en attendant ce drapeau reste faux — la demande se
+  /// prouve alors autrement (`RequestPolicy`).
+  public var isNetworkFlaggedRequest = false
+
   /// `channel.id` de l'état de bridge (`81540071608362@lid`, `33612345678@s.whatsapp.net`, `…@g.us`).
   /// Dans un DM, c'est la clé qui distingue le correspondant de notre propre ghost.
   public var bridgeChannelID: String?
