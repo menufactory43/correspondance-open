@@ -169,9 +169,15 @@ targets:
         # partagé, donc une extension de notification muette. Le simulateur
         # accepte l'ad-hoc sans profil d'approvisionnement ; l'appareil, lui,
         # reprendra la signature automatique de l'équipe.
-        CODE_SIGN_STYLE: Automatic
+        # Signature manuelle : Xcode n'est pas connecté au compte de l'équipe sur
+        # cette machine, l'automatique échoue (« No Account for Team »). Les
+        # profils ont été créés via `asc profiles create` (certificat de
+        # développement UK59778D9M, iPhone 16 Pro) et installés dans
+        # ~/Library/Developer/Xcode/UserData/Provisioning Profiles.
+        CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: AKMNXGVVGX
         CODE_SIGN_IDENTITY: "Apple Development"
+        "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Correspondance iOS Dev"
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGN_ENTITLEMENTS: CorrespondanceiOS/CorrespondanceiOS.entitlements
@@ -261,9 +267,10 @@ targets:
         INFOPLIST_FILE: CorrespondanceiOSNotificationService/Info.plist
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_STYLE: Manual
         DEVELOPMENT_TEAM: AKMNXGVVGX
         CODE_SIGN_IDENTITY: "Apple Development"
+        "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]": "Correspondance iOS NSE Dev"
         CODE_SIGNING_REQUIRED: YES
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGN_ENTITLEMENTS: CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements

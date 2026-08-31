@@ -801,7 +801,7 @@
 					};
 					229993EFEA923BC16541D93C = {
 						DevelopmentTeam = AKMNXGVVGX;
-						ProvisioningStyle = Automatic;
+						ProvisioningStyle = Manual;
 					};
 					35DB61E2F937BA38195B4EEE = {
 						DevelopmentTeam = AKMNXGVVGX;
@@ -813,7 +813,7 @@
 					};
 					9F5299C2F5F8873F7C1C7467 = {
 						DevelopmentTeam = AKMNXGVVGX;
-						ProvisioningStyle = Automatic;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -1195,7 +1195,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENTITLEMENTS_REQUIRED = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -1208,6 +1208,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios.NotificationService;
 				PRODUCT_NAME = CorrespondanceiOSNotificationService;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Correspondance iOS NSE Dev";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -1311,7 +1312,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENTITLEMENTS_REQUIRED = YES;
@@ -1326,6 +1327,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
 				PRODUCT_NAME = Correspondance;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Correspondance iOS Dev";
 				SDKROOT = iphoneos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1340,7 +1342,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENTITLEMENTS_REQUIRED = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -1353,6 +1355,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios.NotificationService;
 				PRODUCT_NAME = CorrespondanceiOSNotificationService;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Correspondance iOS NSE Dev";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -1391,7 +1394,7 @@
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENTITLEMENTS_REQUIRED = YES;
@@ -1406,6 +1409,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
 				PRODUCT_NAME = Correspondance;
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Correspondance iOS Dev";
 				SDKROOT = iphoneos;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = "1,2";
