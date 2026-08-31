@@ -138,7 +138,11 @@ public actor Agent {
       for event in (room.state?.events ?? []) + (room.timeline?.events ?? []) where event.type == "m.room.member" {
         guard let user = event.stateKey else { continue }
         var set = members[roomID] ?? []
-        if event.content?.string(at: "membership") == "join" { set.insert(user) } else { set.remove(user) }
+        // Un invité compte comme présent : il lira le fil dès qu'il entrera.
+        // Ne pas le compter ferait répondre l'agent en clair dans une room
+        // qu'on vient d'ouvrir à un humain.
+        let membership = event.content?.string(at: "membership")
+        if membership == "join" || membership == "invite" { set.insert(user) } else { set.remove(user) }
         members[roomID] = set
       }
     }
@@ -148,8 +152,9 @@ public actor Agent {
   private func isPrivateWithOwners(_ roomID: String) async -> Bool {
     if members[roomID] == nil, let events = try? await client.roomStateEvents(roomID: roomID) {
       var set: Set<String> = []
-      for event in events where event.type == "m.room.member" && event.content?.string(at: "membership") == "join" {
-        if let user = event.stateKey { set.insert(user) }
+      for event in events where event.type == "m.room.member" {
+        let membership = event.content?.string(at: "membership")
+        if membership == "join" || membership == "invite", let user = event.stateKey { set.insert(user) }
       }
       members[roomID] = set
     }
