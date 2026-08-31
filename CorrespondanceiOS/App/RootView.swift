@@ -48,7 +48,10 @@ struct RootView: View {
   @Environment(ThemePreferences.self) private var themes
 
   @State private var mode: PhoneMode = .inbox
-  @State private var columns = NavigationSplitViewVisibility.automatic
+  // `.automatic` replie la liste sur un iPad en portrait : les deux colonnes
+  // sont justement ce qu'on veut en regular (décision 9). En compact, cette
+  // valeur n'a aucun effet — la pile reste une pile.
+  @State private var columns = NavigationSplitViewVisibility.doubleColumn
 
   private var theme: WritingTheme { themes.theme }
 

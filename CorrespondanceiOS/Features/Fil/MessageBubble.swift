@@ -106,6 +106,14 @@ struct MessageBubble: View {
     .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLine)
+    // LA LONGUEUR DE LIGNE, comme sur le Mac : sans plafond, une phrase
+    // traverserait tout un iPad et l'œil ne retrouverait plus le début de la
+    // ligne suivante. Le cadre borne la largeur PROPOSÉE, la pile continue
+    // d'épouser son contenu — les pastilles ne s'étirent donc pas.
+    .frame(
+      maxWidth: 520,
+      alignment: message.isFromMe ? .trailing : .leading
+    )
     .contextMenu { bubbleMenu }
     .popover(isPresented: $isPickingReaction, arrowEdge: .top) {
       reactionPicker
