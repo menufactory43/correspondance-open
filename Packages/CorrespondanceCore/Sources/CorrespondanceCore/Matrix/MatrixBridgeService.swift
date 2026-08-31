@@ -397,6 +397,53 @@ public actor MatrixBridgeService {
     )
   }
 
+  /// Vote sur un sondage. Le geste bascule : retoucher la réponse qu'on avait
+  /// choisie la retire (`answers: []` — une abstention explicite, ce que
+  /// MSC3381 prévoit).
+  public func votePoll(conversationID: String, pollMessageID: String, answerID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let entry = rooms[roomID]?.pollsByEventID[pollMessageID]
+    else { throw MatrixError.decoding("sondage introuvable") }
+    guard !entry.poll.isClosed else { return }
+    let next = entry.poll.toggling(answerID)
+
+    // La voix se voit tout de suite : le `/sync` la confirmera.
+    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.myAnswerIDs = next
+    rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter[selfUserID] = next
+    if next.isEmpty {
+      rooms[roomID]?.pollsByEventID[pollMessageID]?.poll.votesByVoter.removeValue(forKey: selfUserID)
+    }
+    if var message = rooms[roomID]?.messagesByID[pollMessageID] {
+      message.poll = rooms[roomID]?.pollsByEventID[pollMessageID]?.poll
+      rooms[roomID]?.messagesByID[pollMessageID] = message
+    }
+
+    try await client.sendPollResponse(
+      roomID: roomID,
+      pollEventID: pollMessageID,
+      answerIDs: next,
+      responseType: PollEventTypes.responseType(forStart: entry.startType)
+    )
+  }
+
+  /// Pose un sondage dans ce fil.
+  public func sendPoll(
+    conversationID: String,
+    question: String,
+    answers: [String],
+    maxSelections: Int = 1
+  ) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.sendPollStart(
+      roomID: roomID,
+      question: question,
+      answers: answers,
+      maxSelections: maxSelections
+    )
+  }
+
   public func toggleReaction(conversationID: String, messageID: String, emoji: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")

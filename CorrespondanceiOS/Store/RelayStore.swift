@@ -640,6 +640,19 @@ final class RelayStore {
     await loadMessages(conversationID: conversationID, backfill: false)
   }
 
+  /// Voter sur un sondage. Le geste bascule : retoucher sa réponse la retire.
+  func votePoll(conversationID: String, messageID: String, answerID: String) async {
+    guard !isDemo,
+          let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
+    else { return }
+    do {
+      try await matrix.votePoll(conversationID: target, pollMessageID: messageID, answerID: answerID)
+    } catch {
+      syncError = Self.readable(error)
+    }
+    await loadMessages(conversationID: conversationID, backfill: false)
+  }
+
   func hide(messageID: String, conversationID: String) {
     hiddenMessageIDs.insert(messageID)
     HiddenMessageStore.save(hiddenMessageIDs)

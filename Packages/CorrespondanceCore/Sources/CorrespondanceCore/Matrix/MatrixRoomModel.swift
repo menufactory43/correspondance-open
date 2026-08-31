@@ -33,6 +33,30 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Les sondages du salon, par event de départ. Séparés des messages : trois
+  /// events les composent, et une voix arrive souvent avant qu'on ait la
+  /// question sous la main.
+  public var pollsByEventID: [String: PollEvent] = [:]
+
+  /// Un sondage en cours de dépouillement : la question, les voix reçues, la
+  /// clôture. Le `Poll` du message s'en déduit à chaque lecture du fil.
+  public struct PollEvent: Sendable, Hashable {
+    public var poll: Poll
+    /// La forme sous laquelle le sondage est arrivé — c'est celle sous
+    /// laquelle il faudra répondre.
+    public var startType: String
+    /// La dernière voix de chaque personne, et quand elle l'a émise : une voix
+    /// plus ancienne qui arrive après (page remontée) ne doit rien écraser.
+    public var voteTimes: [String: Date] = [:]
+    /// L'heure de clôture, s'il y en a une. Une voix postérieure ne compte pas.
+    public var closedAt: Date?
+
+    public init(poll: Poll, startType: String) {
+      self.poll = poll
+      self.startType = startType
+    }
+  }
+
   /// Le pont annonce-t-il un fil « en attente » — une demande côté réseau ?
   ///
   /// Instagram et Messenger ont bien une boîte de demandes, et Signal une
@@ -165,9 +189,13 @@ public struct MatrixRoomModel: Sendable {
     }
     return messagesByID.values
       .map { message in
-        guard let raw = byTarget[message.id] else { return message }
         var updated = message
-        updated.reactions = MessageReaction.aggregate(raw)
+        if let raw = byTarget[message.id] {
+          updated.reactions = MessageReaction.aggregate(raw)
+        }
+        // Le sondage est dépouillé au moment de rendre le fil : les voix ont
+        // pu arriver bien après la question.
+        if let poll = pollsByEventID[message.id]?.poll { updated.poll = poll }
         return updated
       }
       .sorted { $0.sentAt < $1.sentAt }

@@ -293,6 +293,75 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  // MARK: - Sondages (MSC3381)
+
+  /// Ma voix sur un sondage. Une réponse **remplace** la précédente : c'est le
+  /// dernier `poll.response` de chacun qui compte, pas leur somme.
+  ///
+  /// Le type d'event est celui sous lequel le sondage est arrivé — répondre en
+  /// `m.poll.response` à un sondage `org.matrix.msc3381.poll.start` produirait
+  /// une voix que personne ne rattacherait à rien.
+  @discardableResult
+  public func sendPollResponse(
+    roomID: String,
+    pollEventID: String,
+    answerIDs: [String],
+    responseType: String = PollEventTypes.responseUnstable,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(responseType))/\(Self.escape(transactionID))",
+      body: .object([
+        "m.relates_to": .object([
+          "rel_type": .string("m.reference"),
+          "event_id": .string(pollEventID),
+        ]),
+        responseType: .object(["answers": .array(answerIDs.map { .string($0) })]),
+      ])
+    )
+    return json.string(at: "event_id")
+  }
+
+  /// Poser un sondage. Le repli texte (`body`) est obligatoire : c'est ce que
+  /// lisent les clients — et les réseaux — qui ne connaissent pas MSC3381.
+  @discardableResult
+  public func sendPollStart(
+    roomID: String,
+    question: String,
+    answers: [String],
+    maxSelections: Int = 1,
+    startType: String = PollEventTypes.startUnstable,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    guard !ledger.isUsed(transactionID) else { return nil }
+    let cleaned = answers.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+    guard !cleaned.isEmpty else { throw MatrixError.decoding("un sondage sans réponse") }
+    let textKey = startType == PollEventTypes.startStable
+      ? PollEventTypes.textStable
+      : PollEventTypes.textUnstable
+    let fallback = ([question] + cleaned.enumerated().map { "\($0.offset + 1). \($0.element)" })
+      .joined(separator: "\n")
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(startType))/\(Self.escape(transactionID))",
+      body: .object([
+        startType: .object([
+          "kind": .string("org.matrix.msc3381.poll.disclosed"),
+          "max_selections": .number(Double(max(maxSelections, 1))),
+          "question": .object([textKey: .string(question)]),
+          "answers": .array(cleaned.enumerated().map { index, text in
+            .object(["id": .string("r\(index)"), textKey: .string(text)])
+          }),
+        ]),
+        textKey: .string(fallback),
+        "body": .string(fallback),
+      ])
+    )
+    ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
   /// Un **message vocal** : le même `m.audio` qu'un fichier audio, plus les
   /// deux clés qui disent « quelqu'un a parlé » (MSC3245) et à quoi ça
   /// ressemble (MSC1767). C'est ce que les ponts mautrix attendent pour

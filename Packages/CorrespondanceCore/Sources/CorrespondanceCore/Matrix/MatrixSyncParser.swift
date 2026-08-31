@@ -21,6 +21,7 @@ public struct MatrixSyncParser: Sendable {
         applyState(event, to: &model)
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
+        applyPoll(event, roomID: roomID, to: &model)
         applyRedaction(event, to: &model)
       }
       for event in (room.ephemeral?.events ?? []) { applyReceipt(event, to: &model) }
@@ -99,6 +100,7 @@ public struct MatrixSyncParser: Sendable {
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
+      applyPoll(event, roomID: roomID, to: &model)
       applyRedaction(event, to: &model)
     }
     resolveQuotes(in: &model)
@@ -420,6 +422,147 @@ public struct MatrixSyncParser: Sendable {
     )
   }
 
+  // MARK: - Sondages (MSC3381)
+
+  /// Les trois events d'un sondage. `poll.start` pose la question et devient un
+  /// message ; `poll.response` est une voix ; `poll.end` ferme les votes.
+  ///
+  /// L'ordre d'arrivée n'a aucune importance : une voix reçue avant sa question
+  /// (page remontée à l'envers) attend dans le dépouillement, et la question
+  /// la retrouve. Une voix postérieure à la clôture ne compte jamais.
+  private func applyPoll(_ event: MatrixEvent, roomID: String, to model: inout MatrixRoomModel) {
+    guard let eventID = event.eventID, let content = event.content else { return }
+
+    if PollEventTypes.isStart(event.type) {
+      guard let poll = Self.poll(inStart: content, type: event.type) else { return }
+      var entry = model.pollsByEventID[eventID] ?? MatrixRoomModel.PollEvent(poll: poll, startType: event.type)
+      // La question remplace ce qu'on avait ; les voix déjà reçues restent.
+      entry.poll.question = poll.question
+      entry.poll.answers = poll.answers
+      entry.poll.kind = poll.kind
+      entry.poll.maxSelections = poll.maxSelections
+      entry.startType = event.type
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[eventID] = entry
+
+      let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+      let message = ChatMessage(
+        id: eventID,
+        conversationID: model.conversationID,
+        network: network,
+        text: "",
+        sentAt: event.sentAt,
+        isFromMe: event.sender == selfUserID,
+        senderID: event.sender,
+        senderName: event.sender.map { displayName(of: $0, in: model) },
+        poll: entry.poll
+      )
+      model.messagesByID[eventID] = message
+      if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+      return
+    }
+
+    guard let target = content.string(at: "m.relates_to.event_id"),
+          content.string(at: "m.relates_to.rel_type") == "m.reference",
+          let sender = event.sender
+    else { return }
+
+    if PollEventTypes.isResponse(event.type) {
+      let answers = Self.answerIDs(inResponse: content, type: event.type)
+      var entry = model.pollsByEventID[target]
+        ?? MatrixRoomModel.PollEvent(poll: Poll(question: "", answers: []), startType: event.type)
+      // Une voix plus ancienne qui arrive après ne remplace pas la dernière.
+      if let known = entry.voteTimes[sender], known > event.sentAt { return }
+      if let closedAt = entry.closedAt, event.sentAt > closedAt { return }
+      entry.voteTimes[sender] = event.sentAt
+      entry.poll.votesByVoter[sender] = answers
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[target] = entry
+      refreshPollMessage(target, in: &model)
+      return
+    }
+
+    if PollEventTypes.isEnd(event.type) {
+      // Seul l'auteur du sondage — ou un modérateur — peut le clore. On s'en
+      // tient à l'auteur : c'est tout ce que les ponts produisent.
+      guard model.messagesByID[target] == nil || model.messagesByID[target]?.senderID == sender
+        || sender == selfUserID
+      else { return }
+      var entry = model.pollsByEventID[target]
+        ?? MatrixRoomModel.PollEvent(poll: Poll(question: "", answers: []), startType: PollEventTypes.startUnstable)
+      entry.closedAt = event.sentAt
+      entry.poll.isClosed = true
+      // Les voix arrivées après la clôture n'auraient jamais dû compter.
+      for (voter, when) in entry.voteTimes where when > event.sentAt {
+        entry.voteTimes.removeValue(forKey: voter)
+        entry.poll.votesByVoter.removeValue(forKey: voter)
+      }
+      Self.retally(&entry, selfUserID: selfUserID)
+      model.pollsByEventID[target] = entry
+      refreshPollMessage(target, in: &model)
+    }
+  }
+
+  private func refreshPollMessage(_ eventID: String, in model: inout MatrixRoomModel) {
+    guard var message = model.messagesByID[eventID],
+          let poll = model.pollsByEventID[eventID]?.poll
+    else { return }
+    message.poll = poll
+    model.messagesByID[eventID] = message
+  }
+
+  /// Ne retient que les voix portant sur des réponses qui existent, et relit
+  /// les miennes. Rejoué après chaque event : c'est le dépouillement.
+  private static func retally(_ entry: inout MatrixRoomModel.PollEvent, selfUserID: String) {
+    let valid = Set(entry.poll.answers.map(\.id))
+    if !valid.isEmpty {
+      for (voter, answers) in entry.poll.votesByVoter {
+        let kept = answers.filter { valid.contains($0) }
+        // Une voix pour une réponse inconnue est une voix perdue, pas une
+        // abstention : la personne a bien voté, on ne sait juste pas pour quoi.
+        if kept.isEmpty { entry.poll.votesByVoter.removeValue(forKey: voter) }
+        else { entry.poll.votesByVoter[voter] = Array(kept.prefix(max(entry.poll.maxSelections, 1))) }
+      }
+    }
+    entry.poll.myAnswerIDs = entry.poll.votesByVoter[selfUserID] ?? []
+  }
+
+  /// La question et ses réponses. MSC3381 range tout sous une clé qui porte le
+  /// même nom que l'event ; la forme stable, elle, le pose à plat.
+  public static func poll(inStart content: MatrixJSON, type: String) -> Poll? {
+    let body = content.value(at: type) ?? content
+    guard let answersJSON = body["answers"]?.arrayValue, !answersJSON.isEmpty else { return nil }
+    let question = text(in: body["question"]) ?? ""
+    let answers = answersJSON.compactMap { entry -> Poll.Answer? in
+      guard let id = entry["id"]?.stringValue, !id.isEmpty else { return nil }
+      return Poll.Answer(id: id, text: text(in: entry) ?? id)
+    }
+    guard !answers.isEmpty else { return nil }
+    let kindRaw = body["kind"]?.stringValue ?? ""
+    return Poll(
+      question: question,
+      answers: answers,
+      kind: kindRaw.hasSuffix("undisclosed") ? .undisclosed : .disclosed,
+      maxSelections: max(body["max_selections"]?.intValue ?? 1, 1)
+    )
+  }
+
+  public static func answerIDs(inResponse content: MatrixJSON, type: String) -> [String] {
+    let body = content.value(at: type) ?? content
+    return (body["answers"]?.arrayValue ?? []).compactMap(\.stringValue)
+  }
+
+  /// Le texte d'un morceau MSC1767 : `m.text`, `org.matrix.msc1767.text`, ou
+  /// `body` chez les ponts qui n'ont retenu que la forme la plus ancienne.
+  private static func text(in node: MatrixJSON?) -> String? {
+    guard let node else { return nil }
+    if let value = node[PollEventTypes.textStable]?.stringValue, !value.isEmpty { return value }
+    if let value = node[PollEventTypes.textUnstable]?.stringValue, !value.isEmpty { return value }
+    if let value = node["body"]?.stringValue, !value.isEmpty { return value }
+    if let value = node.stringValue, !value.isEmpty { return value }
+    return nil
+  }
+
   /// `m.receipt` : `{ "$event": { "m.read": { "@user": { "ts": … } } } }`.
   /// C'est ce que mautrix-whatsapp pose quand le correspondant lit sur son téléphone.
   private func applyReceipt(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
@@ -440,6 +583,7 @@ public struct MatrixSyncParser: Sendable {
     guard event.type == "m.room.redaction", let target = event.redactedEventID else { return }
     model.reactionsByEventID.removeValue(forKey: target)
     model.messagesByID.removeValue(forKey: target)
+    model.pollsByEventID.removeValue(forKey: target)
     // Une réaction dont la cible disparaît n'a plus de sens.
     for (id, reaction) in model.reactionsByEventID where reaction.targetEventID == target {
       model.reactionsByEventID.removeValue(forKey: id)

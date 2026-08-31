@@ -960,6 +960,25 @@ final class InboxStore {
 
   /// Pose, remplace ou retire ma réaction. Reposer le même emoji le retire :
   /// les trois réseaux n'en acceptent qu'un par personne et par message.
+  /// Voter sur un sondage. Le geste bascule ; seuls les fils bridgés en ont —
+  /// iMessage ne connaît pas les sondages.
+  func votePoll(messageID: String, answerID: String) async {
+    guard let message = messages.first(where: { $0.id == messageID }),
+          let conversation = conversation(ofMessage: message),
+          conversation.network.isMatrixBridged, isMatrixConnected
+    else { return }
+    do {
+      try await matrix.votePoll(
+        conversationID: conversation.id,
+        pollMessageID: messageID,
+        answerID: answerID
+      )
+      await loadMessagesForSelection()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
   func react(messageID: String, emoji: String) async {
     guard let message = messages.first(where: { $0.id == messageID }),
           // Sur un fil fusionné, la réaction part sur le réseau de la bulle

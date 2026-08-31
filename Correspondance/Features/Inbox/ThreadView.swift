@@ -278,7 +278,10 @@ struct ThreadView: View {
       onDeleteLocally: { store.deleteLocally(messageID: message.id) },
       onDeleteEverywhere: store.canDeleteEverywhere(message)
         ? { Task { await store.deleteEverywhere(messageID: message.id) } }
-        : nil
+        : nil,
+      onVotePoll: message.poll == nil ? nil : { answerID in
+        Task { await store.votePoll(messageID: message.id, answerID: answerID) }
+      }
     )
   }
 

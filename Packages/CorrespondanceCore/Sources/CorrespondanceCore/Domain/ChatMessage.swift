@@ -221,6 +221,9 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   public var isRetracted: Bool
   /// Effet d'envoi reçu (`expressive_send_style_id`), déjà traduit — « Confettis ».
   public var expressiveEffectName: String?
+  /// Le sondage que ce message pose, dépouillé (MSC3381). La bulle montre
+  /// alors la question et ses réponses, pas du texte.
+  public var poll: Poll?
   /// Événement de conversation (« X a ajouté Y ») plutôt qu'un message :
   /// le fil l'affiche en séparateur discret, sans bulle ni auteur.
   public var systemEventText: String?
@@ -246,6 +249,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     editHistory: [String] = [],
     isRetracted: Bool = false,
     expressiveEffectName: String? = nil,
+    poll: Poll? = nil,
     systemEventText: String? = nil
   ) {
     self.id = id
@@ -265,12 +269,14 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     self.editHistory = editHistory
     self.isRetracted = isRetracted
     self.expressiveEffectName = expressiveEffectName
+    self.poll = poll
     self.systemEventText = systemEventText
   }
 
   public var sidebarPreviewText: String {
     if let systemEventText { return systemEventText }
     if isRetracted { return "Message annulé" }
+    if let poll { return "📊 \(poll.question)" }
     if !text.isEmpty { return text }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
     if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
@@ -290,7 +296,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   }
 
   public var hasVisibleBody: Bool {
-    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent
+    !text.isEmpty || !attachments.isEmpty || isRetracted || isSystemEvent || poll != nil
   }
 
   /// Ce message n'est qu'un geste : 1 à 3 emoji, rien d'autre.
@@ -299,7 +305,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
   /// (une réponse a un contexte à porter), ni annulation, ni événement de
   /// conversation. La bulle le montre alors nu et grand — cf. `MessageBubbleView`.
   public var isEmojiOnly: Bool {
-    guard attachments.isEmpty else { return false }
+    guard attachments.isEmpty, poll == nil else { return false }
     guard replyTo?.isEmpty != false else { return false }
     guard !isRetracted, !isSystemEvent else { return false }
     return EmojiText.isEmojiOnly(text)

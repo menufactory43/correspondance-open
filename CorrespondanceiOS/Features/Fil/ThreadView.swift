@@ -109,7 +109,14 @@ struct ThreadView: View {
                     onHide: { store.hide(messageID: message.id, conversationID: conversationID) },
                     onDeleteEverywhere: message.isFromMe ? {
                       Task { await store.deleteEverywhere(messageID: message.id, conversationID: conversationID) }
-                    } : nil
+                    } : nil,
+                    onVotePoll: message.poll == nil ? nil : { (answerID: String) in
+                      let fil = conversationID
+                      let bulle = message.id
+                      Task { @MainActor in
+                        await store.votePoll(conversationID: fil, messageID: bulle, answerID: answerID)
+                      }
+                    }
                   )
                   .id(message.id)
                 }

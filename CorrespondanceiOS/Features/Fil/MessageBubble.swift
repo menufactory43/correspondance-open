@@ -21,6 +21,8 @@ struct MessageBubble: View {
   var onReply: (() -> Void)?
   var onHide: (() -> Void)?
   var onDeleteEverywhere: (() -> Void)?
+  /// Voter sur le sondage de cette bulle. `nil` = sondage en lecture seule.
+  var onVotePoll: ((String) -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isPickingReaction = false
@@ -67,7 +69,15 @@ struct MessageBubble: View {
         attachmentView(attachment)
       }
 
-      if message.isRetracted {
+      if let poll = message.poll {
+        PollView(
+          poll: poll,
+          theme: theme,
+          typeface: typeface,
+          isFromMe: message.isFromMe,
+          onVote: onVotePoll
+        )
+      } else if message.isRetracted {
         retractedBubble
       } else if message.isEmojiOnly {
         Text(displayText)
