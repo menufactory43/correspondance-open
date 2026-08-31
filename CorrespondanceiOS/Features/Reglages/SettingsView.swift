@@ -205,6 +205,7 @@ struct SettingsView: View {
     Section {
       row("Autorisation", push.authorizationLabelFR)
       row("Inscription au Relais", push.isRegistered ? "Faite" : "Pas encore")
+      row("Passerelle", PushRegistration.sygnalURL.absoluteString)
       if push.authorization == .notDetermined {
         Button("Autoriser les notifications") {
           Task { await push.requestAuthorizationIfNeeded() }
@@ -215,13 +216,22 @@ struct SettingsView: View {
           UIApplication.shared.open(url)
         }
       }
+      // Le jeton tourne, et la passerelle peut avoir été installée après coup :
+      // redéclarer est le seul geste que l'iPhone puisse tenter tout seul.
+      Button("Redéclarer cet appareil au Relais") {
+        Task { await push.declareToRelay() }
+      }
+      .disabled(!push.isAuthorizedForPush)
     } header: {
       Text("Notifications")
     } footer: {
       if let error = push.lastError {
         Text(error).font(Typography.meta(typeface)).foregroundStyle(theme.accent)
       } else {
-        Text("Une conversation en muet ne notifie pas : le Relais ne l'envoie même pas.")
+        Text("""
+          Une conversation en muet ne notifie pas : le Relais ne l'envoie même pas.
+          Le réveil d'un iPhone endormi passe par le Relais et sa passerelle (Sygnal) :           sans elle, cet iPhone n'est notifié que pendant que l'app tourne.
+          """)
           .font(Typography.meta(typeface))
       }
     }

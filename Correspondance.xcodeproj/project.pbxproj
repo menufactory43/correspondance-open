@@ -106,6 +106,7 @@
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
+		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
 		D099FC98DF3CFFDF4196D6BA /* InboxFloatingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D0AE563D1722592CC227A3 /* InboxFloatingBar.swift */; };
 		D15D7A95318463E9AB25D6BD /* ConversationPillHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */; };
 		D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */; };
@@ -183,6 +184,7 @@
 		0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+IMessageAutomation.swift"; sourceTree = "<group>"; };
 		0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */ = {isa = PBXFileReference; path = "imessage-macos26.db"; sourceTree = "<group>"; };
 		0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Correspondance iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Notifications.swift"; sourceTree = "<group>"; };
 		0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CorrespondanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F2AFCEFE15D88844C9879FE /* LaunchExperiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperiment.swift; sourceTree = "<group>"; };
 		1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowState.swift; sourceTree = "<group>"; };
@@ -631,6 +633,7 @@
 				90E28665C56283D03F52E170 /* DemoRelay.swift */,
 				94D422F39E0A48F41C38E6CD /* PushRegistration.swift */,
 				503F3F88679B6D47523DF6E9 /* RelayStore.swift */,
+				0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */,
 				F7E8B4040804E0B8928CA910 /* RelayStore+Relay.swift */,
 				F4B0C9C36993CDABC57044E2 /* RelayStore+Scheduled.swift */,
 			);
@@ -976,6 +979,7 @@
 				B844FE3D594D5B5ADC44DAAA /* NewConversationSheet.swift in Sources */,
 				EBFB2C2602F26B5C3AD242F9 /* PushRegistration.swift in Sources */,
 				09407B8BC2003E1E1793E51D /* RelayLoginView.swift in Sources */,
+				CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */,
 				5DB60D713DFC2D4CA8B139D3 /* RelayStore+Relay.swift in Sources */,
 				15C8828B50F32EC031BA25E8 /* RelayStore+Scheduled.swift in Sources */,
 				2ABA6E026D46714A83FDDAB2 /* RelayStore.swift in Sources */,

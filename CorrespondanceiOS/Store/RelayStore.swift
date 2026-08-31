@@ -91,6 +91,18 @@ final class RelayStore {
   var isFlushingRelay = false
   static let relayQueueKey = "correspondance.ios.relayWriteQueue"
 
+  // MARK: - Notifications locales (cf. `RelayStore+Notifications`)
+
+  /// L'état des fils au dernier passage : c'est la comparaison qui dit ce qui
+  /// vient d'arriver.
+  var notificationBaseline: [String: Conversation] = [:]
+  var lastNotifiedAt: [String: Date] = [:]
+  var notificationBursts: [String: NotificationBurst] = [:]
+  var notificationSequence = 0
+  /// Faux tant que la ligne de flottaison n'est pas posée : un rattrapage de
+  /// trente messages au lancement n'est pas trente arrivées.
+  var isNotificationPrimed = false
+
   private var syncTask: Task<Void, Never>?
   /// Les fils dont on a déjà demandé l'historique cette session.
   private var openedConversationIDs: Set<String> = []
@@ -274,6 +286,9 @@ final class RelayStore {
       conversations = mergedRows(fresh)
       networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
       await adoptRelayState()
+      // Après l'adoption : l'état du Relais dit ce qui est muet, et un fil
+      // muet ne doit pas sonner le temps d'un aller-retour.
+      postLocalNotificationsForNewMessages()
       refreshPendingRequests()
       await flushRelayWrites()
       await refreshOpenThreads()

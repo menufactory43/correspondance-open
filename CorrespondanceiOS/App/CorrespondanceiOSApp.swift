@@ -1,6 +1,7 @@
 import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
+import UserNotifications
 
 @main
 struct CorrespondanceiOSApp: App {
@@ -28,6 +29,13 @@ struct CorrespondanceiOSApp: App {
         .task {
           push.attach(to: store)
           AppDelegate.push = push
+          AppDelegate.store = store
+          // Sans délégué, une notification touchée n'ouvre que l'app, et
+          // aucune bannière ne paraît pendant qu'on s'en sert. Il se pose ici
+          // et pas dans le délégué d'application : il lui faut le magasin.
+          UNUserNotificationCenter.current().delegate = AppDelegate.notificationHandler
+        }
+        .task {
           await store.start()
           // L'autorisation se demande une fois CONNECTÉ, jamais devant l'écran
           // de connexion : réclamer les notifications avant de savoir s'il y a
@@ -63,6 +71,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
   /// Posée au lancement de la scène. Le délégué naît avant elle : sans ce
   /// détour, le premier jeton arriverait à personne.
   @MainActor static var push: PushRegistration?
+  @MainActor static var store: RelayStore?
+  /// Le destinataire des notifications touchées. Un objet à part : le délégué
+  /// d'application naît avant la scène, et `UNUserNotificationCenterDelegate`
+  /// n'est pas isolé au processus principal.
+  static let notificationHandler = NotificationHandler()
 
   func application(
     _ application: UIApplication,
@@ -76,5 +89,37 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     didFailToRegisterForRemoteNotificationsWithError error: Error
   ) {
     Task { @MainActor in Self.push?.didFailToRegister(error) }
+  }
+}
+
+/// Ce qu'on fait d'une notification : la montrer même au premier plan (sauf
+/// sur le fil qu'on lit — la politique l'a déjà écartée), et ouvrir le fil
+/// qu'elle désigne quand on la touche.
+///
+/// Le push distant et la notification locale portent la même clé : l'un vient
+/// de l'extension (`room_id`), l'autre du magasin (`conversationID`). On lit
+/// les deux, faute de quoi la moitié des notifications n'ouvriraient rien.
+final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification
+  ) async -> UNNotificationPresentationOptions {
+    [.banner, .sound, .list]
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse
+  ) async {
+    let info = response.notification.request.content.userInfo
+    let direct = info[RelayStore.notificationConversationKey] as? String
+    // Le push ne nomme qu'un salon ; le magasin, lui, parle en fils.
+    let roomID = info["room_id"] as? String
+    await MainActor.run {
+      guard let store = AppDelegate.store else { return }
+      guard let conversationID = direct ?? roomID.flatMap({ store.conversationID(ofRoom: $0) })
+      else { return }
+      store.openConversationFromNotification(conversationID)
+    }
   }
 }

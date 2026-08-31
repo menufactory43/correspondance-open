@@ -161,6 +161,14 @@ final class PushRegistration {
     )
   }
 
+  /// L'autorisation permet-elle un push ? (Refusée ou pas encore demandée : non.)
+  var isAuthorizedForPush: Bool {
+    switch authorization {
+    case .authorized, .provisional, .ephemeral: true
+    default: false
+    }
+  }
+
   var authorizationLabelFR: String {
     switch authorization {
     case .authorized: "Autorisées"
