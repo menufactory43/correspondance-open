@@ -12,7 +12,7 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
 | 24/7 sur le NUC, Mac fermé | ✅ (`systemctl --user status correspondance-agent`) |
 | Tête-à-tête (membres ⊆ propriétaires + cc) → réponse **directe** | ✅ |
 | Room avec un tiers (joint **ou invité**) → **brouillon** : event `fr.correspondance.agent.proposal`, rien de visible | ✅ |
-| Mode relais des ponts (réponse en ton nom, préfixe « 🤖 cc : ») | armé sur les 3 ponts, **pas encore testé de bout en bout** — il faut un portail (ex. s'écrire à soi-même sur WhatsApp), inviter cc, `!wa set-relay` dans la room |
+| Mode relais des ponts (réponse en ton nom, le pont préfixe « 🤖 cc : ») | ✅ testé sur le chat WhatsApp « Vous » : inviter cc, `!wa set-relay`, `@cc …` → réponse relayée en ~5 s |
 | Rendu des brouillons dans Correspondance | ❌ pas encore — l'app ignore `agent.proposal` |
 | Approbations d'outils depuis la conversation (`--permission-prompt-tool`) | ❌ pas encore — `allowedTools` en liste blanche en attendant |
 

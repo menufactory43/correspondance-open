@@ -83,6 +83,9 @@ struct MessageBubble: View {
           .font(Typography.bubble(typeface))
           .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
           .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+          // Un mot plus long que la bulle — un chemin, une URL — : sans ceci,
+          // `Text` tronque la ligne d'une ellipse au lieu de couper le mot.
+          .fixedSize(horizontal: false, vertical: true)
           // Pas de sélection de texte : elle prendrait l'appui long, qui
           // ouvre les actions — et « Copier le texte » y est.
           .padding(.horizontal, 13)
@@ -173,11 +176,13 @@ struct MessageBubble: View {
         Text(quote.text)
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkSecondary)
-          .lineLimit(2)
+          // Quatre lignes : assez pour relire ce à quoi on répond — un ordre
+          // à @cc, une phrase entière — sans transformer la citation en fil.
+          .lineLimit(4)
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 260, alignment: .leading)
+    .frame(maxWidth: 420, alignment: .leading)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
   }
 

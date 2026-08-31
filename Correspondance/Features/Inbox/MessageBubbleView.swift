@@ -358,11 +358,13 @@ struct MessageBubbleView: View {
         Text(quote.text)
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkSecondary)
-          .lineLimit(2)
+          // Quatre lignes : assez pour relire ce à quoi on répond — un ordre
+          // à @cc, une phrase entière — sans transformer la citation en fil.
+          .lineLimit(4)
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 260, alignment: .leading)
+    .frame(maxWidth: 420, alignment: .leading)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
   }
 

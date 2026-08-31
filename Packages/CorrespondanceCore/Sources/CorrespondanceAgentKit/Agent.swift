@@ -222,9 +222,10 @@ public actor Agent {
     do {
       switch mode {
       case .direct:
-        // Devant des humains, on signe : ce message part au nom du propriétaire.
-        let prefixed = await isPrivateWithOwners(request.roomID) ? text : AgentEvents.directPrefix(agent: config.user) + text
-        try await client.sendText(roomID: request.roomID, body: prefixed, replyToEventID: request.eventID)
+        // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un
+        // portail en relais c'est le pont qui signe (`message_formats`) — en
+        // préfixer un ici doublerait la signature chez le correspondant.
+        try await client.sendText(roomID: request.roomID, body: text, replyToEventID: request.eventID)
       case .draft:
         try await client.sendEvent(
           roomID: request.roomID,

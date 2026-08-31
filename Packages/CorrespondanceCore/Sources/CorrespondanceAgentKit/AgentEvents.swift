@@ -18,7 +18,4 @@ public enum AgentEvents {
     ])
   }
 
-  /// Le préfixe quand l'agent parle **au nom du propriétaire** (mode direct sur
-  /// un portail en relais) : les humains doivent savoir que ce n'est pas lui.
-  public static func directPrefix(agent: String) -> String { "🤖 \(agent) : " }
 }

@@ -51,6 +51,5 @@ final class AgentConfigTests: XCTestCase {
     XCTAssertEqual(content.string(at: "body"), "Voilà.")
     XCTAssertEqual(content.string(at: "agent"), "cc")
     XCTAssertEqual(content.string(at: "m.relates_to.m.in_reply_to.event_id"), "$e1")
-    XCTAssertEqual(AgentEvents.directPrefix(agent: "cc"), "🤖 cc : ")
   }
 }
