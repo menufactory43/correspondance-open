@@ -25,6 +25,8 @@ struct MessageBubble: View {
   var onReact: ((String) -> Void)?
   /// L'appui long. `nil` = bulle inerte (résultat de recherche, aperçu).
   var onLongPress: (() -> Void)?
+  /// Taper la citation : remonter au message cité dans le fil. `nil` = citation inerte.
+  var onQuoteTap: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var dragOffset: CGFloat = 0
@@ -159,8 +161,9 @@ struct MessageBubble: View {
       .accessibilityLabel("Message annulé par son auteur")
   }
 
+  @ViewBuilder
   private func quoteChip(_ quote: QuotedMessage) -> some View {
-    HStack(spacing: 6) {
+    let content = HStack(spacing: 6) {
       RoundedRectangle(cornerRadius: 1, style: .continuous)
         .fill(theme.accent.opacity(0.6))
         .frame(width: 2)
@@ -178,7 +181,20 @@ struct MessageBubble: View {
     }
     .padding(.leading, 2)
     .frame(maxWidth: 260, alignment: .leading)
+    // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
+    // prend toute celle qu'on lui propose et la citation avale la bulle —
+    // le texte du message se tronquait derrière elle. Même parade que le
+    // composer.
+    .fixedSize(horizontal: false, vertical: true)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
+
+    if let onQuoteTap {
+      Button(action: onQuoteTap) { content }
+        .buttonStyle(.plain)
+        .accessibilityHint("Va au message cité")
+    } else {
+      content
+    }
   }
 
   private var reactionRow: some View {

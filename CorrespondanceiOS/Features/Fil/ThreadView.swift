@@ -1,6 +1,7 @@
 import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
+import UIKit
 
 /// Le fil d'une conversation.
 ///
@@ -20,6 +21,16 @@ struct ThreadView: View {
   @State private var isShowingInfo = false
   /// La bulle sous appui long, et le nom qu'elle portait dans le fil.
   @State private var focused: FocusedMessage?
+  /// Vrai tant que le bas du fil est à l'écran : le chevron n'a alors rien à faire.
+  @State private var isNearBottom = true
+  /// La position pilotable du fil, pour compenser le clavier qui pousse par le bas.
+  @State private var scrollPosition = ScrollPosition()
+  /// Le dernier relevé de géométrie : de quoi calculer le bas du fil en points.
+  /// `scrollTo(edge: .bottom)` ne bouge pas avec une pile paresseuse — on vise
+  /// un décalage concret à la place.
+  @State private var metrics = ScrollMetrics()
+  /// La bulle vers laquelle on vient de sauter depuis une citation — surlignée un instant.
+  @State private var flashedMessageID: String?
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -113,14 +124,25 @@ struct ThreadView: View {
   // MARK: - Le fil
 
   private var thread: some View {
-    ScrollViewReader { proxy in
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 10) {
-          Color.clear.frame(height: 4)
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 10) {
+        Color.clear.frame(height: 4)
 
-          ForEach(groups) { group in
-            if let separator = group.timeSeparator {
-              timeSeparator(separator, network: group.networkOrigin)
+        ForEach(groups) { group in
+          if let separator = group.timeSeparator {
+            timeSeparator(separator, network: group.networkOrigin)
+          }
+          // La photo de l'auteur dans la marge d'une prise de parole reçue,
+          // comme sur le Mac. Alignée sur la première bulle, pas sur le nom.
+          HStack(alignment: .top, spacing: 8) {
+            if !group.isFromMe, let first = group.messages.first, !first.isSystemEvent {
+              MessageAvatarView(
+                message: first,
+                conversation: conversation,
+                size: 26,
+                theme: theme
+              )
+              .padding(.top, group.senderLabel == nil ? 2 : 18)
             }
             VStack(alignment: group.isFromMe ? .trailing : .leading, spacing: 3) {
               ForEach(Array(group.messages.enumerated()), id: \.element.id) { index, message in
@@ -147,48 +169,171 @@ struct ThreadView: View {
                       withAnimation(.easeOut(duration: 0.18)) {
                         focused = FocusedMessage(message: message, senderLabel: group.senderLabel)
                       }
+                    },
+                    onQuoteTap: message.replyTo?.messageID.map { targetID in
+                      { jumpTo(targetID) }
                     }
                   )
                   .id(message.id)
+                  // Le surlignage d'arrivée après un saut de citation : toute
+                  // la rangée s'éclaire puis s'éteint, le temps que l'œil trouve.
+                  .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                      .fill(theme.accent.opacity(flashedMessageID == message.id ? 0.14 : 0))
+                      .padding(-3)
+                  )
                 }
               }
             }
-            .frame(maxWidth: .infinity, alignment: group.isFromMe ? .trailing : .leading)
           }
-
-          // « Alice écrit… », au bas du fil, là où sa bulle apparaîtra.
-          if let typing = store.typingLabel(conversationID) {
-            Text(typing)
-              .font(Typography.meta(typeface))
-              .foregroundStyle(theme.inkTertiary)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.leading, 6)
-              .transition(.opacity)
-              .accessibilityLabel(typing)
-          }
-
-          if let receipt = readReceiptLabel {
-            Text(receipt)
-              .font(Typography.meta(typeface))
-              .foregroundStyle(theme.inkTertiary)
-              .frame(maxWidth: .infinity, alignment: .trailing)
-              .padding(.trailing, 6)
-              .accessibilityLabel("Dernier message \(receipt)")
-          }
-
-          Color.clear.frame(height: 8).id(Self.bottomAnchor)
+          .frame(maxWidth: .infinity, alignment: group.isFromMe ? .trailing : .leading)
         }
-        .padding(.horizontal, Spacing.sm)
+
+        // « Alice écrit… », au bas du fil, là où sa bulle apparaîtra.
+        if let typing = store.typingLabel(conversationID) {
+          Text(typing)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.inkTertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 6)
+            .transition(.opacity)
+            .accessibilityLabel(typing)
+        }
+
+        if let receipt = readReceiptLabel {
+          Text(receipt)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.inkTertiary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.trailing, 6)
+            .accessibilityLabel("Dernier message \(receipt)")
+        }
+
+        Color.clear.frame(height: 8)
       }
-      .scrollDismissesKeyboard(.interactively)
-      .defaultScrollAnchor(.bottom)
-      .onChange(of: messages.last?.id) { _, _ in
-        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(Self.bottomAnchor, anchor: .bottom) }
+      .padding(.horizontal, Spacing.sm)
+    }
+    .scrollDismissesKeyboard(.interactively)
+    .defaultScrollAnchor(.bottom)
+    .scrollPosition($scrollPosition)
+    // Quand le bas se rétrécit — clavier qui s'ouvre, citation ou pièces
+    // jointes qui coiffent le champ — le fil remonte d'autant : ce qu'on
+    // lisait reste sous les yeux au lieu de passer sous le composer.
+    // (Près du bas, c'est l'autre chemin : on recolle à l'ancre.)
+    .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
+      ScrollMetrics(
+        offsetY: geometry.contentOffset.y,
+        insetTop: geometry.contentInsets.top,
+        insetBottom: geometry.contentInsets.bottom,
+        contentHeight: geometry.contentSize.height,
+        visibleHeight: geometry.visibleRect.height,
+        visibleMaxY: geometry.visibleRect.maxY
+      )
+    } action: { old, new in
+      metrics = new
+      let delta = new.insetBottom - old.insetBottom
+      if delta > 0, !isNearBottom {
+        scrollPosition.scrollTo(y: new.offsetY + delta + new.insetTop)
+      }
+      let nearBottom = !new.isScrollable || new.distanceToBottom <= 60
+      if nearBottom != isNearBottom {
+        withAnimation(.easeOut(duration: 0.2)) { isNearBottom = nearBottom }
+      }
+    }
+    // Le chevron au-dessus du bouton d'envoi : il n'apparaît que lorsqu'on
+    // a quitté le bas du fil, et un appui y ramène.
+    .overlay(alignment: .bottomTrailing) {
+      if !isNearBottom {
+        Button {
+          scrollToBottom(duration: 0.3)
+        } label: {
+          Image(systemName: "chevron.down")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(theme.ink)
+            .frame(width: 38, height: 38)
+            // Verre NON interactif : le mode interactif héberge la vue dans
+            // une couche de verre qui avale les touches en overlay — vérifié
+            // au test d'interface, le bouton devenait intouchable.
+            .glassSurface(cornerRadius: 19, fallbackFill: theme.paperSecondary, border: theme.edge)
+        }
+        .padding(.trailing, Spacing.sm)
+        .padding(.bottom, 10)
+        .accessibilityLabel("Aller au dernier message")
+      }
+    }
+    .onChange(of: messages.last?.id) { _, _ in
+      // Un souffle : la bulle qui vient d'arriver doit être mesurée avant
+      // qu'on sache où est le nouveau bas.
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(80))
+        scrollToBottom()
+      }
+    }
+    // Le clavier qui s'ouvre masque le bas du fil : si l'on y était, on y
+    // reste — le dernier message vient se poser au-dessus du composer.
+    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+      guard isNearBottom else { return }
+      Task { @MainActor in
+        try? await Task.sleep(for: .milliseconds(80))
+        scrollToBottom()
       }
     }
   }
 
-  private static let bottomAnchor = "fil.bas"
+  /// Ramène au dernier message, en visant le décalage réel du bas du fil.
+  ///
+  /// La pile paresseuse ESTIME la hauteur des rangées pas encore mesurées :
+  /// la première visée peut atterrir court quand une grande bulle se
+  /// matérialise en route. On recolle donc jusqu'à toucher le bas.
+  private func scrollToBottom(duration: Double = 0.25) {
+    withAnimation(.easeOut(duration: duration)) {
+      scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
+    }
+    Task { @MainActor in
+      for _ in 0..<3 {
+        try? await Task.sleep(for: .milliseconds(Int(duration * 1000) + 80))
+        guard metrics.distanceToBottom > 60 else { return }
+        withAnimation(.easeOut(duration: 0.15)) {
+          scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
+        }
+      }
+    }
+  }
+
+  /// Le saut vers un message cité : on y va, on le surligne, l'éclat s'éteint.
+  private func jumpTo(_ messageID: String) {
+    guard messages.contains(where: { $0.id == messageID }) else { return }
+    withAnimation(.easeInOut(duration: 0.3)) { scrollPosition.scrollTo(id: messageID, anchor: .center) }
+    withAnimation(.easeOut(duration: 0.2)) { flashedMessageID = messageID }
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(1.2))
+      guard flashedMessageID == messageID else { return }
+      withAnimation(.easeOut(duration: 0.5)) { flashedMessageID = nil }
+    }
+  }
+
+  /// Ce qu'on relève du défilement, via `visibleRect` — exprimé dans les
+  /// coordonnées du contenu, donc sans décoder la composition des encarts.
+  ///
+  /// Calibré au simulateur (test d'interface du chevron) :
+  /// - au repos en bas du fil, `visibleRect.maxY = contentHeight + insetBottom` ;
+  /// - `scrollTo(y: X)` pose `contentOffset.y` à `X - insetTop` — sa cible se
+  ///   donne donc dans un repère décalé de l'encart du haut.
+  private struct ScrollMetrics: Equatable {
+    var offsetY: CGFloat = 0
+    var insetTop: CGFloat = 0
+    var insetBottom: CGFloat = 0
+    var contentHeight: CGFloat = 0
+    var visibleHeight: CGFloat = 0
+    var visibleMaxY: CGFloat = 0
+
+    /// Ce qui reste à descendre. Zéro quand on est posé en bas.
+    var distanceToBottom: CGFloat { contentHeight - visibleMaxY + insetBottom }
+    /// La cible `scrollTo(y:)` qui repose le dernier message sur le composer.
+    var bottomScrollTarget: CGFloat { offsetY + distanceToBottom + insetTop }
+    /// Un fil qui tient à l'écran n'a pas de bas où descendre.
+    var isScrollable: Bool { contentHeight > visibleHeight - insetTop - insetBottom }
+  }
 
   private var messages: [ChatMessage] { store.visibleMessages(conversationID) }
   private var groups: [MessageGroup] { store.groups(conversationID) }

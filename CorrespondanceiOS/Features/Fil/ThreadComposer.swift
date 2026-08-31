@@ -38,19 +38,38 @@ struct ThreadComposer: View {
     return "Répondre sur \(network.labelFR)"
   }
 
+  /// Quelque chose coiffe le champ : citation, pièces jointes, micro…
+  private var hasStrips: Bool {
+    if !store.scheduledMessages(for: conversationID).isEmpty { return true }
+    if store.replyTarget(conversationID) != nil { return true }
+    if !store.attachments(conversationID).isEmpty { return true }
+    if store.recorder.isRecording { return true }
+    if case .failed = store.recorder.state { return true }
+    return false
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
-      if !store.scheduledMessages(for: conversationID).isEmpty {
-        scheduledStrip
+      // Pas de barre pleine largeur : le composer flotte, comme Signal. Ce qui
+      // coiffe le champ (citation, pièces jointes, micro) prend sa propre
+      // carte de verre plutôt que de s'appuyer sur un fond de fenêtre.
+      if hasStrips {
+        VStack(alignment: .leading, spacing: 8) {
+          if !store.scheduledMessages(for: conversationID).isEmpty {
+            scheduledStrip
+          }
+          if let quoted = store.replyTarget(conversationID) {
+            replyChip(quoted)
+          }
+          if !store.attachments(conversationID).isEmpty {
+            attachmentStrip
+          }
+          if store.recorder.isRecording { recordingStrip }
+          if case .failed(let raison) = store.recorder.state { micError(raison) }
+        }
+        .padding(.vertical, 10)
+        .glassSurface(cornerRadius: 18, fallbackFill: theme.paperSecondary, border: theme.edge)
       }
-      if let quoted = store.replyTarget(conversationID) {
-        replyChip(quoted)
-      }
-      if !store.attachments(conversationID).isEmpty {
-        attachmentStrip
-      }
-      if store.recorder.isRecording { recordingStrip }
-      if case .failed(let raison) = store.recorder.state { micError(raison) }
       HStack(alignment: .bottom, spacing: 8) {
         plusTray
         bubble
@@ -59,7 +78,6 @@ struct ThreadComposer: View {
     .padding(.horizontal, Spacing.sm)
     .padding(.top, 8)
     .padding(.bottom, 8)
-    .background(.bar)
     .onChange(of: photoItems) { _, items in
       guard !items.isEmpty else { return }
       Task { await importPhotos(items) }
@@ -110,7 +128,9 @@ struct ThreadComposer: View {
         .font(.system(size: 17, weight: .medium))
         .foregroundStyle(theme.inkSecondary)
         .frame(width: 34, height: 34)
-        .background(Circle().fill(theme.paperSecondary))
+        // Verre non interactif, comme le chevron : la variante interactive
+        // avale les touches hors barre d'outils.
+        .glassSurface(cornerRadius: 17, fallbackFill: theme.paperSecondary, border: theme.edge)
     }
     .accessibilityLabel("Joindre une photo, une prise de vue ou un fichier")
   }
