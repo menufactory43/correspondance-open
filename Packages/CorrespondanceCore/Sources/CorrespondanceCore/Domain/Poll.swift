@@ -7,8 +7,8 @@ import Foundation
 /// `poll.response` est une voix, `poll.end` ferme les votes et fige le résultat.
 /// Le dépouillement est ici, pur : une voix par personne (la **dernière** qu'elle
 /// a émise), les réponses qui n'existent pas ignorées, rien après la clôture.
-public struct Poll: Hashable, Sendable {
-  public struct Answer: Hashable, Identifiable, Sendable {
+public struct Poll: Hashable, Codable, Sendable {
+  public struct Answer: Hashable, Identifiable, Codable, Sendable {
     public let id: String
     public let text: String
 
@@ -19,7 +19,7 @@ public struct Poll: Hashable, Sendable {
   }
 
   /// Voit-on qui a voté quoi avant la clôture ?
-  public enum Kind: String, Hashable, Sendable {
+  public enum Kind: String, Hashable, Codable, Sendable {
     /// Les résultats sont visibles au fil des votes.
     case disclosed
     /// Rien ne se voit avant la clôture — c'est un vote à bulletin secret.

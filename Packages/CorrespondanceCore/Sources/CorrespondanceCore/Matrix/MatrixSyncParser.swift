@@ -71,6 +71,37 @@ public struct MatrixSyncParser: Sendable {
     }
   }
 
+  /// Installe dans un salon une page relue du magasin local : les messages,
+  /// leurs réactions, et les modifications qui attendaient leur cible.
+  ///
+  /// Rien n'est marqué à réécrire — tout cela **vient** du magasin. Un envoi
+  /// encore en vol reste tel quel : il n'a pas de version sur disque.
+  public func hydrate(
+    messages: [ChatMessage],
+    reactions: [String: MatrixRoomModel.ReactionEvent],
+    into model: inout MatrixRoomModel
+  ) {
+    for message in messages where model.messagesByID[message.id] == nil {
+      var restored = message
+      // Une correction reçue pendant que le fil dormait s'applique à l'ouverture.
+      if let waiting = model.pendingEdits.removeValue(forKey: message.id) {
+        restored = Self.edited(restored, text: waiting.text, at: waiting.at)
+        model.markWritten(restored.id)
+      }
+      model.messagesByID[restored.id] = restored
+      model.lastEventAt = max(model.lastEventAt, restored.sentAt)
+      if restored.replyTo?.awaitsTarget == true {
+        model.unresolvedQuoteMessageIDs.insert(restored.id)
+      }
+    }
+    for (eventID, reaction) in reactions where model.reactionsByEventID[eventID] == nil {
+      model.reactionsByEventID[eventID] = reaction
+    }
+    // Une citation qui se résout ici gagne son texte : ça, ça vaut d'être
+    // réécrit, et `resolveQuotes` le marque de lui-même.
+    resolveQuotes(in: &model)
+  }
+
   /// Inverse de `MatrixRoomModel.conversationID` (`réseau:!salon:serveur`) : le
   /// salon commence au premier `:`, ce qui suit en contient d'autres.
   public static func roomID(inConversationID conversationID: String) -> String? {
@@ -126,6 +157,7 @@ public struct MatrixSyncParser: Sendable {
         text: quoted.sidebarPreviewText
       )
       model.messagesByID[messageID] = message
+      model.markWritten(messageID)
       model.unresolvedQuoteMessageIDs.remove(messageID)
     }
   }
@@ -369,6 +401,7 @@ public struct MatrixSyncParser: Sendable {
       message = Self.edited(message, text: waiting.text, at: waiting.at)
     }
     model.messagesByID[eventID] = message
+    model.markWritten(eventID)
     if replyTo?.awaitsTarget == true {
       model.unresolvedQuoteMessageIDs.insert(eventID)
     } else {
@@ -412,6 +445,7 @@ public struct MatrixSyncParser: Sendable {
     // Une modification plus ancienne qui arrive après ne défait pas la dernière.
     if let editedAt = existing.editedAt, editedAt > event.sentAt { return }
     model.messagesByID[target] = Self.edited(existing, text: text, at: event.sentAt)
+    model.markWritten(target)
   }
 
   /// Le message corrigé : le nouveau texte, la date, et l'ancien rangé dans
@@ -477,6 +511,7 @@ public struct MatrixSyncParser: Sendable {
       senderName: displayName(of: sender, in: model),
       isMine: sender == selfUserID
     )
+    model.markWritten(eventID)
   }
 
   // MARK: - Sondages (MSC3381)
@@ -566,6 +601,7 @@ public struct MatrixSyncParser: Sendable {
     else { return }
     message.poll = poll
     model.messagesByID[eventID] = message
+    model.markWritten(eventID)
   }
 
   /// Ne retient que les voix portant sur des réponses qui existent, et relit
@@ -656,9 +692,11 @@ public struct MatrixSyncParser: Sendable {
     model.reactionsByEventID.removeValue(forKey: target)
     model.messagesByID.removeValue(forKey: target)
     model.pollsByEventID.removeValue(forKey: target)
+    model.markDeleted(target)
     // Une réaction dont la cible disparaît n'a plus de sens.
     for (id, reaction) in model.reactionsByEventID where reaction.targetEventID == target {
       model.reactionsByEventID.removeValue(forKey: id)
+      model.markDeleted(id)
     }
   }
 

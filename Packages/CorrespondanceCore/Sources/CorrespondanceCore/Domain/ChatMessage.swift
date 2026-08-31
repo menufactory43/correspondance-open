@@ -203,7 +203,7 @@ public struct BridgedLinkPreview: Hashable, Codable, Sendable {
   }
 }
 
-public struct ChatMessage: Identifiable, Hashable, Sendable {
+public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   public let id: String
   public let conversationID: String
   public let network: MessageNetwork

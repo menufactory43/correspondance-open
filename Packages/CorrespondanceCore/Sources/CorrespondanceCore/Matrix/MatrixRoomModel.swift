@@ -38,8 +38,33 @@ public struct MatrixRoomModel: Sendable {
   /// elle qui fait foi, les intermédiaires n'ont plus rien à dire.
   public var pendingEdits: [String: PendingEdit] = [:]
 
+  /// Ce que le magasin local n'a pas encore vu : messages et réactions posés ou
+  /// corrigés depuis la dernière écriture. C'est ce qui permet d'écrire un
+  /// **lot** plutôt que de réécrire tout le fil à chaque passe de `/sync`.
+  public var pendingWrites: Set<String> = []
+  /// Ce que le magasin doit oublier : rédactions reçues depuis.
+  public var pendingDeletions: Set<String> = []
+
+  /// Après écriture : on repart d'une ardoise propre.
+  public mutating func clearPendingWrites() {
+    pendingWrites.removeAll()
+    pendingDeletions.removeAll()
+  }
+
+  /// Un event qu'on vient de poser ou de corriger.
+  mutating func markWritten(_ eventID: String) {
+    pendingDeletions.remove(eventID)
+    pendingWrites.insert(eventID)
+  }
+
+  /// Un event qui vient de disparaître.
+  mutating func markDeleted(_ eventID: String) {
+    pendingWrites.remove(eventID)
+    pendingDeletions.insert(eventID)
+  }
+
   /// Une modification en attente de sa cible.
-  public struct PendingEdit: Sendable, Hashable {
+  public struct PendingEdit: Sendable, Hashable, Codable {
     public var text: String
     public var at: Date
 
@@ -89,7 +114,7 @@ public struct MatrixRoomModel: Sendable {
 
   /// Un sondage en cours de dépouillement : la question, les voix reçues, la
   /// clôture. Le `Poll` du message s'en déduit à chaque lecture du fil.
-  public struct PollEvent: Sendable, Hashable {
+  public struct PollEvent: Sendable, Hashable, Codable {
     public var poll: Poll
     /// La forme sous laquelle le sondage est arrivé — c'est celle sous
     /// laquelle il faudra répondre.
@@ -121,7 +146,7 @@ public struct MatrixRoomModel: Sendable {
 
   /// Une `m.reaction` reçue. `isMine` est figé à l'analyse : le modèle n'a pas
   /// besoin de reconnaître notre identité pour rendre les pastilles.
-  public struct ReactionEvent: Sendable, Hashable {
+  public struct ReactionEvent: Sendable, Hashable, Codable {
     public var targetEventID: String
     public var emoji: String
     public var senderID: String
@@ -129,7 +154,7 @@ public struct MatrixRoomModel: Sendable {
     public var isMine: Bool
   }
 
-  public struct Member: Sendable, Hashable {
+  public struct Member: Sendable, Hashable, Codable {
     public var displayName: String?
     public var membership: String
     /// `content.avatar_url` du `m.room.member` : la photo du ghost. C'est la seule
