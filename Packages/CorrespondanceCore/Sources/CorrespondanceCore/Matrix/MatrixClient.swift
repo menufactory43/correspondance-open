@@ -223,6 +223,40 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Modifier un message déjà envoyé (MSC2676, `m.replace`).
+  ///
+  /// Trois morceaux obligatoires : le `body` de repli, préfixé d'une étoile,
+  /// pour les clients qui ignorent la modification ; `m.new_content`, le vrai
+  /// nouveau texte ; et la relation qui désigne la cible. Les ponts mautrix la
+  /// traduisent en modification chez WhatsApp et Signal.
+  @discardableResult
+  public func sendEdit(
+    roomID: String,
+    targetEventID: String,
+    newText: String,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    guard !ledger.isUsed(transactionID) else { return nil }
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.room.message/\(Self.escape(transactionID))",
+      body: .object([
+        "msgtype": .string("m.text"),
+        "body": .string("* \(newText)"),
+        "m.new_content": .object([
+          "msgtype": .string("m.text"),
+          "body": .string(newText),
+        ]),
+        "m.relates_to": .object([
+          "rel_type": .string("m.replace"),
+          "event_id": .string(targetEventID),
+        ]),
+      ])
+    )
+    ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
   /// `m.reaction` : une annotation sur un event existant.
   /// mautrix-whatsapp la relaie dans les deux sens (un seul emoji par personne).
   @discardableResult

@@ -657,6 +657,26 @@ final class RelayStore {
     await loadMessages(conversationID: conversationID, backfill: false)
   }
 
+  /// Modifier un de mes messages, là où le réseau sait le faire.
+  func editMessage(messageID: String, newText: String, conversationID: String) async {
+    guard !isDemo,
+          let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
+    else { return }
+    do {
+      try await matrix.editMessage(conversationID: target, messageID: messageID, newText: newText)
+      await loadMessages(conversationID: conversationID, backfill: false)
+    } catch {
+      syncError = Self.readable(error)
+    }
+  }
+
+  /// Le geste « Modifier » est-il offert sur ce message ? Seulement les miens,
+  /// et seulement là où le réseau sait le faire.
+  func canEdit(_ message: ChatMessage) -> Bool {
+    message.isFromMe && !message.isPending && !message.isRetracted && !message.isSystemEvent
+      && !message.text.isEmpty && message.network.supportsEditing && !isDemo
+  }
+
   func hide(messageID: String, conversationID: String) {
     hiddenMessageIDs.insert(messageID)
     HiddenMessageStore.save(hiddenMessageIDs)

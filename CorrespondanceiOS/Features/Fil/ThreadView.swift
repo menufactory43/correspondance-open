@@ -110,6 +110,13 @@ struct ThreadView: View {
                     onDeleteEverywhere: message.isFromMe ? {
                       Task { await store.deleteEverywhere(messageID: message.id, conversationID: conversationID) }
                     } : nil,
+                    onEdit: store.canEdit(message) ? { (nouveau: String) in
+                      let fil = conversationID
+                      let bulle = message.id
+                      Task { @MainActor in
+                        await store.editMessage(messageID: bulle, newText: nouveau, conversationID: fil)
+                      }
+                    } : nil,
                     onVotePoll: message.poll == nil ? nil : { (answerID: String) in
                       let fil = conversationID
                       let bulle = message.id

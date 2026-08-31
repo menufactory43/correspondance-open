@@ -1017,6 +1017,36 @@ final class InboxStore {
     Task.detached { await bridge.setTyping(conversationID: conversationID, isTyping: isTyping) }
   }
 
+  /// Modifier un de mes messages sur un fil du Relais. iMessage passe, lui,
+  /// par l'automatisation Messages (`editMessageViaAutomation`).
+  func editMessage(messageID: String, newText: String) async {
+    guard let message = messages.first(where: { $0.id == messageID }),
+          let conversation = conversation(ofMessage: message),
+          conversation.network.supportsEditing, isMatrixConnected
+    else { return }
+    do {
+      try await matrix.editMessage(
+        conversationID: conversation.id,
+        messageID: messageID,
+        newText: newText
+      )
+      await loadMessagesForSelection()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  /// Le geste « Modifier » est-il offert sur ce message ? Seulement sur les
+  /// miens, et seulement là où le réseau sait le faire — proposer ailleurs,
+  /// c'est promettre une correction que personne d'autre ne verra.
+  func canEdit(_ message: ChatMessage) -> Bool {
+    guard message.isFromMe, !message.isPending, !message.isRetracted, !message.isSystemEvent,
+          !message.text.isEmpty
+    else { return false }
+    guard let conversation = conversation(ofMessage: message) else { return false }
+    return conversation.network.supportsEditing && isMatrixConnected
+  }
+
   /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
   func openSelfNote() async {

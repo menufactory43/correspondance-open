@@ -143,10 +143,15 @@ final class MatrixSyncParserTests: XCTestCase {
     XCTAssertTrue(attachment.isImage)
   }
 
-  func testEditedMessageDoesNotDuplicateTheOriginal() throws {
+  /// Une modification ne fait pas un message de plus : elle corrige le sien,
+  /// garde l'ancien texte dans son historique, et porte la mention « Modifié ».
+  func testEditedMessageCorrectsTheOriginalInPlace() throws {
     let room = try XCTUnwrap(try parsedRooms()[groupRoomID])
     XCTAssertEqual(room.sortedMessages.map(\.id), ["$msg-groupe-1"])
-    XCTAssertEqual(room.sortedMessages.first?.text, "J'ai réservé le gîte.")
+    let message = try XCTUnwrap(room.sortedMessages.first)
+    XCTAssertEqual(message.text, "J'ai réservé le gîte pour six.")
+    XCTAssertEqual(message.editHistory, ["J'ai réservé le gîte."])
+    XCTAssertNotNil(message.editedAt)
   }
 
   func testApplyingTheSameSyncTwiceIsIdempotent() throws {

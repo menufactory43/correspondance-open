@@ -33,6 +33,22 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Les modifications reçues avant le message qu'elles corrigent — une page
+  /// remontée à l'envers en livre. La dernière par cible seulement : c'est
+  /// elle qui fait foi, les intermédiaires n'ont plus rien à dire.
+  public var pendingEdits: [String: PendingEdit] = [:]
+
+  /// Une modification en attente de sa cible.
+  public struct PendingEdit: Sendable, Hashable {
+    public var text: String
+    public var at: Date
+
+    public init(text: String, at: Date) {
+      self.text = text
+      self.at = at
+    }
+  }
+
   /// Qui est en train d'écrire, d'après la dernière EDU `m.typing`, et quand
   /// on l'a apprise. L'EDU n'est renvoyée qu'au **changement** : sans date, un
   /// « Alice écrit… » resterait à l'écran jusqu'au prochain message.

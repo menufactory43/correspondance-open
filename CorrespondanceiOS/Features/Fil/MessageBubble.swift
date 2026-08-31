@@ -22,12 +22,17 @@ struct MessageBubble: View {
   var onHide: (() -> Void)?
   var onDeleteEverywhere: (() -> Void)?
   /// Voter sur le sondage de cette bulle. `nil` = sondage en lecture seule.
+  /// Modifier ce message. `nil` quand le réseau ne sait pas le faire — l'action
+  /// est alors absente, pas grisée : on ne propose pas ce qui n'arrivera pas.
+  var onEdit: ((String) -> Void)?
   var onVotePoll: ((String) -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isPickingReaction = false
   @State private var dragOffset: CGFloat = 0
   @State private var pendingDeletion = false
+  @State private var isEditing = false
+  @State private var editedText = ""
 
   private var bodySize: CGFloat { Typography.bubbleSize() }
 
@@ -51,6 +56,17 @@ struct MessageBubble: View {
     .offset(x: dragOffset)
     .gesture(replyDrag)
     .frame(maxWidth: .infinity, alignment: message.isFromMe ? .trailing : .leading)
+    .alert("Modifier le message", isPresented: $isEditing) {
+      TextField("Message", text: $editedText)
+      Button("Enregistrer") {
+        let trimmed = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != message.text else { return }
+        onEdit?(trimmed)
+      }
+      Button("Annuler", role: .cancel) {}
+    } message: {
+      Text("La correction remplace le message chez ton correspondant aussi.")
+    }
     .alert("Supprimer ce message pour tout le monde ?", isPresented: $pendingDeletion) {
       Button("Supprimer", role: .destructive) { onDeleteEverywhere?() }
       Button("Annuler", role: .cancel) {}
@@ -186,6 +202,14 @@ struct MessageBubble: View {
     }
     if let onReply {
       Button { onReply() } label: { Label("Répondre en citant", systemImage: "arrowshape.turn.up.left") }
+    }
+    if onEdit != nil {
+      Button {
+        editedText = message.text
+        isEditing = true
+      } label: {
+        Label("Modifier…", systemImage: "pencil")
+      }
     }
     if !message.text.isEmpty {
       Button {

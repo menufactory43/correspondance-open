@@ -278,8 +278,13 @@ public struct MatrixSyncParser: Sendable {
           let eventID = event.eventID,
           let content = event.content
     else { return }
-    // Les éditions arrivent en double du message d'origine — on garde l'original.
-    if content.string(at: "m.relates_to.rel_type") == "m.replace" { return }
+    // Une modification (`m.replace`) n'est pas un message de plus : elle
+    // corrige celui qu'elle vise. Elle peut arriver avant lui — une page
+    // remontée à l'envers — auquel cas elle attend dans `pendingEdits`.
+    if content.string(at: "m.relates_to.rel_type") == "m.replace" {
+      applyEdit(event, content: content, to: &model)
+      return
+    }
 
     // Le réseau du salon vient de l'état `m.bridge` ; s'il n'est pas encore arrivé
     // (timeline lue avant l'état), on le déduit des ghosts et bots présents plutôt
@@ -343,7 +348,7 @@ public struct MatrixSyncParser: Sendable {
       text = body
     }
 
-    let message = ChatMessage(
+    var message = ChatMessage(
       id: eventID,
       conversationID: model.conversationID,
       network: network,
@@ -359,6 +364,10 @@ public struct MatrixSyncParser: Sendable {
       linkPreview: linkPreview
     )
     guard message.hasVisibleBody else { return }
+    // Une modification arrivée avant sa cible s'applique à sa naissance.
+    if let waiting = model.pendingEdits.removeValue(forKey: eventID) {
+      message = Self.edited(message, text: waiting.text, at: waiting.at)
+    }
     model.messagesByID[eventID] = message
     if replyTo?.awaitsTarget == true {
       model.unresolvedQuoteMessageIDs.insert(eventID)
@@ -380,6 +389,51 @@ public struct MatrixSyncParser: Sendable {
     let millis = audio?["duration"]?.doubleValue ?? content.double(at: "info.duration") ?? 0
     let raw = (audio?["waveform"]?.arrayValue ?? []).compactMap(\.intValue)
     return VoiceNote(duration: millis / 1000, waveform: VoiceNote.normalized(raw))
+  }
+
+  /// Applique une modification `m.replace`. Le nouveau texte vit dans
+  /// `m.new_content` ; le `body` de l'event, lui, porte le repli « * texte »
+  /// que lisent les clients qui ignorent MSC2676 — jamais ce qu'on affiche.
+  ///
+  /// Seul l'auteur peut corriger son message : une modification venue de
+  /// quelqu'un d'autre n'en est pas une, et on la laisse tomber.
+  private func applyEdit(_ event: MatrixEvent, content: MatrixJSON, to model: inout MatrixRoomModel) {
+    guard let target = content.string(at: "m.relates_to.event_id"),
+          let text = Self.newText(in: content)
+    else { return }
+    guard let existing = model.messagesByID[target] else {
+      // La cible n'est pas là : la modification attend, et seule la dernière
+      // compte — corriger deux fois ne garde que le dernier mot.
+      if let known = model.pendingEdits[target], known.at > event.sentAt { return }
+      model.pendingEdits[target] = MatrixRoomModel.PendingEdit(text: text, at: event.sentAt)
+      return
+    }
+    guard existing.senderID == event.sender else { return }
+    // Une modification plus ancienne qui arrive après ne défait pas la dernière.
+    if let editedAt = existing.editedAt, editedAt > event.sentAt { return }
+    model.messagesByID[target] = Self.edited(existing, text: text, at: event.sentAt)
+  }
+
+  /// Le message corrigé : le nouveau texte, la date, et l'ancien rangé dans
+  /// l'historique — c'est lui qu'on lit sous la mention « Modifié ».
+  private static func edited(_ message: ChatMessage, text: String, at: Date) -> ChatMessage {
+    var updated = message
+    if !message.text.isEmpty, message.text != text, !updated.editHistory.contains(message.text) {
+      updated.editHistory.append(message.text)
+    }
+    updated.text = text
+    updated.editedAt = at
+    return updated
+  }
+
+  /// Le texte d'une modification : `m.new_content.body`, et rien d'autre. Le
+  /// `body` racine est un repli préfixé d'une étoile — l'afficher ajouterait
+  /// une astérisque au message à chaque correction.
+  public static func newText(in content: MatrixJSON) -> String? {
+    if let body = content.string(at: "m.new_content.body") { return body }
+    // Certains ponts ne posent que le repli : on lui retire son étoile.
+    guard let fallback = content.string(at: "body") else { return nil }
+    return fallback.hasPrefix("* ") ? String(fallback.dropFirst(2)) : fallback
   }
 
   /// Le premier aperçu de `com.beeper.linkpreviews` qui porte une adresse. Les

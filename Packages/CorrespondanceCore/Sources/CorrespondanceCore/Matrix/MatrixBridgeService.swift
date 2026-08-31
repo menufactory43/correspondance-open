@@ -526,6 +526,22 @@ public actor MatrixBridgeService {
   /// `remote delete` Signal, `unsend` Meta) — c'est la même suppression que celle
   /// du téléphone. Le `/sync` la confirmera ; on retire l'event du modèle tout de
   /// suite pour que le fil ne le montre plus le temps du long-poll.
+  /// Modifier un de mes messages. Refuse là où le réseau ne le sait pas faire
+  /// (Instagram) : mieux vaut un geste absent qu'une correction qui n'arrive
+  /// que chez soi.
+  public func editMessage(conversationID: String, messageID: String, newText: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let message = rooms[roomID]?.messagesByID[messageID]
+    else { throw MatrixError.decoding("message introuvable") }
+    guard message.isFromMe else { throw MatrixError.decoding("on ne modifie que ses propres messages") }
+    guard message.network.supportsEditing else {
+      throw MatrixError.decoding("\(message.network.labelFR) ne sait pas modifier un message envoyé")
+    }
+    let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed != message.text else { return }
+    try await client.sendEdit(roomID: roomID, targetEventID: messageID, newText: trimmed)
+  }
+
   public func deleteMessage(conversationID: String, messageID: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
