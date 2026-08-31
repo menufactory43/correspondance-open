@@ -125,6 +125,66 @@ extension InboxStore {
     }
   }
 
+  // MARK: - Migration unique
+
+  /// Au premier lancement de cette version, l'état accumulé en local part vers
+  /// le Relais — sans quoi une archive de trois ans n'existerait que sur ce Mac.
+  ///
+  /// Jouée une seule fois (`correspondance.stateMigratedToRelay.v1`), après le
+  /// premier `/sync` : avant lui, aucun salon n'est connu et il n'y aurait rien
+  /// à migrer. On ne pousse que ce que le Relais ne sait pas déjà — sur un
+  /// compte qui a déjà servi ailleurs, c'est l'union qui gagne, pas l'écrasement.
+  func migrateStateToRelayIfNeeded() async {
+    let flag = "correspondance.stateMigratedToRelay.v1"
+    guard !UserDefaults.standard.bool(forKey: flag), isMatrixConnected else { return }
+    let relay = await matrix.conversationState
+
+    var ids = conversations.map(\.id)
+    ids.append(contentsOf: mergedMemberConversationIDs)
+    var pushed = 0
+    for id in Set(ids) {
+      guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
+      if archivedIDs.contains(id), !relay.archived.contains(roomID) {
+        relayQueue.enqueue(.archived(roomID: roomID, value: true))
+        pushed += 1
+      }
+      if pinnedIDs.contains(id), !relay.pinned.contains(roomID) {
+        relayQueue.enqueue(.pinned(roomID: roomID, value: true))
+        pushed += 1
+      }
+      if mutedIDs.contains(id), !relay.muted.contains(roomID) {
+        relayQueue.enqueue(.muted(roomID: roomID, value: true))
+        pushed += 1
+      }
+      let text = draftSnapshot[id]?.text ?? ""
+      if !text.isEmpty, relay.drafts[roomID] == nil {
+        relayQueue.enqueue(.draft(roomID: roomID, text: text))
+        pushed += 1
+      }
+    }
+
+    // Les masqués sont globaux chez nous, rangés par salon chez le Relais :
+    // c'est le pont qui sait à quel salon appartient un event.
+    for (roomID, eventIDs) in await matrix.roomIDs(ofMessages: hiddenMessageIDs) {
+      let merged = (relay.hidden[roomID] ?? []).union(eventIDs)
+      guard merged != relay.hidden[roomID] else { continue }
+      relayQueue.enqueue(.hidden(roomID: roomID, eventIDs: merged))
+      pushed += 1
+    }
+
+    let localMerges = MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs)
+    if relay.mergedContacts == nil, !localMerges.merged.isEmpty || !localMerges.dismissedPairs.isEmpty {
+      relayQueue.enqueue(.mergedContacts(localMerges))
+      pushed += 1
+    }
+
+    UserDefaults.standard.set(true, forKey: flag)
+    saveRelayQueue()
+    Self.relayLog.notice("état local migré vers le Relais : \(pushed, privacy: .public) élément(s).")
+    await flushRelayWrites()
+    await adoptRelayState()
+  }
+
   // MARK: - Lire
 
   /// Relit tout l'état depuis le Relais (démarrage, ou après une reconnexion).

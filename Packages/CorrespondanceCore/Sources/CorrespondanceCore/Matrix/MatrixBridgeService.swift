@@ -421,6 +421,18 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Range des identifiants de messages par salon. Sert à la migration unique :
+  /// l'ensemble des messages masqués est global côté Mac, alors que le Relais
+  /// les range salon par salon.
+  public func roomIDs(ofMessages messageIDs: Set<String>) -> [String: Set<String>] {
+    var result: [String: Set<String>] = [:]
+    for (roomID, model) in rooms {
+      let mine = messageIDs.filter { model.messagesByID[$0] != nil }
+      if !mine.isEmpty { result[roomID] = mine }
+    }
+    return result
+  }
+
   /// Le salon d'un fil, pour les écritures d'état. `nil` si le fil n'est pas
   /// bridgé (iMessage) ou si son salon n'est pas connu de cette session.
   public func roomID(ofConversation conversationID: String) -> String? {

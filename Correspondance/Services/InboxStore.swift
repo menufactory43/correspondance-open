@@ -1529,6 +1529,8 @@ final class InboxStore {
           // sauf ce qui attend encore de partir. Et ce qui attend part maintenant.
           await self.flushRelayWrites()
           await self.adoptRelayState()
+          // Après le premier `/sync` seulement : avant, aucun salon n'est connu.
+          await self.migrateStateToRelayIfNeeded()
           self.didSettleInitialMatrixSync = true
         } catch is CancellationError {
           return
