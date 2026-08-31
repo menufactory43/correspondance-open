@@ -279,6 +279,14 @@ public struct MatrixRoomModel: Sendable {
       .sorted { $0.sentAt < $1.sentAt }
   }
 
+  /// Le dernier message qui a le droit de représenter le fil dans la file.
+  ///
+  /// Une proposition de l'agent n'a été dite à personne : elle ne devient ni
+  /// l'aperçu de la ligne d'inbox, ni la date qui fait remonter le fil.
+  public var lastListedMessage: ChatMessage? {
+    sortedMessages.last { !$0.isAgentProposal }
+  }
+
   /// La note à soi : un salon sans pont dont je suis le seul habitant.
   ///
   /// La reconnaissance ne se devine pas — c'est l'account data global
@@ -286,7 +294,7 @@ public struct MatrixRoomModel: Sendable {
   /// passe ici. Un salon vide ou un salon de gestion abandonné ne deviendra
   /// jamais une note à soi par accident.
   public func selfNoteConversation(selfUserID: String) -> Conversation {
-    let last = sortedMessages.last
+    let last = lastListedMessage
     var conversation = Conversation(
       id: "\(MessageNetwork.selfNote.rawValue):\(roomID)",
       network: .selfNote,
@@ -310,7 +318,7 @@ public struct MatrixRoomModel: Sendable {
   public func conversation(selfUserID: String) -> Conversation? {
     guard let network else { return nil }
     let group = isGroup(selfUserID: selfUserID)
-    let last = sortedMessages.last
+    let last = lastListedMessage
     let preview = last?.listPreview(isGroup: group)
       ?? (group ? "Groupe \(network.labelFR)" : "Écrire sur \(network.labelFR)…")
     var conversation = Conversation(
