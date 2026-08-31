@@ -80,6 +80,13 @@ struct ConversationAvatarView: View {
       id: "\(conversation.id)|\(conversation.remoteAvatarID ?? "")|\(conversation.memberAvatarIDs.joined(separator: ","))"
     ) {
       image = nil
+      // Au lancement, la photo attend que le fil soit peint : chaque portrait
+      // qui arrive relance une passe de layout de toute la fenêtre, et dix
+      // portraits égrenés pendant la construction du fil le retardaient de
+      // ~100 ms (et bloquaient le fil principal ~170 ms juste après la fenêtre).
+      if !LaunchGate.didPaintFirstThread {
+        await LaunchGate.firstThreadOnScreen()
+      }
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
          let loaded = PlatformImage(data: data)
       {

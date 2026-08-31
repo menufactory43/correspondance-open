@@ -1437,8 +1437,12 @@ final class InboxStore {
 
   /// Déclenche la boîte système Contacts. À rappeler depuis Réglages / bannière.
   func requestContactsPermission() async {
-    NSApp.activate(ignoringOtherApps: true)
-    try? await Task.sleep(for: .milliseconds(250))
+    // La boîte système veut l'app au premier plan. Au lancement elle y est
+    // déjà : ré-activer une app active la fait clignoter et redessiner pour rien.
+    if !NSApp.isActive {
+      NSApp.activate(ignoringOtherApps: true)
+      try? await Task.sleep(for: .milliseconds(250))
+    }
 
     // Reset TCC local de l’ancienne signature / état coincé (aide au debug).
     let statusBefore = ContactDirectory.shared.authorizationStatus

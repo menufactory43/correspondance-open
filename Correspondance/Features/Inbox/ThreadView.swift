@@ -19,12 +19,22 @@ struct ThreadView: View {
   /// est de toute façon invisible tant qu'il n'est pas ancré en bas — il
   /// arrive donc entier, un instant plus tard, sans saut.
   @State private var awaitsFirstFrame = !LaunchGate.didPaintFirstWindow
+  /// Au lancement, le fil paraît par sa QUEUE : l'écran ne montre que les
+  /// derniers messages, inutile d'en construire cent vingt — corps, mise en
+  /// page, rendu — avant de le montrer. Le reste s'ajoute au-dessus, hors
+  /// champ, une frame plus tard ; le bas tient (`keepScrolledToBottom`), rien
+  /// ne bouge à l'écran. Mesuré : le fil paraît ~190 ms plus tôt. `nil` = entier.
+  @State private var launchTail: Int? = LaunchGate.didPaintFirstWindow ? nil : ThreadMetrics.launchTailCount
   /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
   /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
   @State private var isNearBottom = true
 
   private var theme: WritingTheme { themes.theme }
-  private var thread: [ChatMessage] { awaitsFirstFrame ? [] : store.messages }
+  private var thread: [ChatMessage] {
+    if awaitsFirstFrame { return [] }
+    if let launchTail { return Array(store.messages.suffix(launchTail)) }
+    return store.messages
+  }
 
   private var sendLaterPickerPresented: Binding<Bool> {
     Binding(
@@ -66,6 +76,8 @@ struct ThreadView: View {
           .font(Typography.emptyState(themes.typeface))
           .foregroundStyle(theme.inkSecondary)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          // Pas de fil à attendre : ce qui patiente derrière lui peut y aller.
+          .onAppear { LaunchGate.markThreadPainted() }
       }
     }
     .background(theme.paper)
@@ -155,6 +167,7 @@ struct ThreadView: View {
         guard awaitsFirstFrame else { return }
         await LaunchGate.firstWindowOnScreen()
         awaitsFirstFrame = false
+        LaunchTrace.mark("thread-begin")
         pinToBottom(proxy)
       }
       .onChange(of: store.messages.count) { oldCount, newCount in
@@ -304,10 +317,23 @@ struct ThreadView: View {
   private func pinToBottom(_ proxy: ScrollViewProxy) {
     proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
     DispatchQueue.main.async {
-      proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+      // Pas de second `scrollTo(id)` ici : il s'arrête 14 pt trop haut et, joué
+      // après coup, il défaisait le recalage au bord réel que
+      // `keepScrolledToBottom` vient de faire sur le contenu arrivé — le fil
+      // paraissait alors décalé, puis sautait au premier changement de hauteur.
       // Tant que le fil n'est pas arrivé, rien n'est « posé » ni à montrer.
       guard !awaitsFirstFrame else { return }
       isShowingThread = true
+      LaunchTrace.mark("thread")
+      LaunchGate.markThreadPainted()
+      if launchTail != nil {
+        // La queue est peinte ; le reste du fil monte au-dessus, hors champ.
+        // Un court délai, pour que la frame de la queue parte avant.
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(80)) {
+          launchTail = nil
+          DispatchQueue.main.async { LaunchTrace.mark("thread-full") }
+        }
+      }
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = store.messages.last?.id
       animatesArrivals = true
@@ -333,6 +359,10 @@ enum ThreadMetrics {
   /// Air au-dessus du premier message, en plus de la zone sûre de la barre
   /// d'outils que le système fournit déjà.
   static let topClearance: CGFloat = 16
+  /// Ce que la première peinture du lancement emporte. Assez pour remplir une
+  /// fenêtre haute de bulles courtes (≈ 40 pt chacune), assez peu pour que
+  /// la passe reste brève : 15 → 30 messages coûtaient ~50 ms de plus.
+  static let launchTailCount = 20
   /// Hauteur de la bande où le fil se dissout sous la barre d'outils.
   static let topFadeHeight: CGFloat = 64
 }

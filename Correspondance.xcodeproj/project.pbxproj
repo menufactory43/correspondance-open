@@ -123,6 +123,7 @@
 		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
+		FFDC2FEB7122DD8798DD2C33 /* LaunchExperiment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F2AFCEFE15D88844C9879FE /* LaunchExperiment.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -170,6 +171,7 @@
 		0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */ = {isa = PBXFileReference; path = "imessage-macos26.db"; sourceTree = "<group>"; };
 		0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Correspondance iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CorrespondanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0F2AFCEFE15D88844C9879FE /* LaunchExperiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperiment.swift; sourceTree = "<group>"; };
 		1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowState.swift; sourceTree = "<group>"; };
 		13F4051D4B4D35D826FCBC41 /* CorrespondanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceiOSApp.swift; sourceTree = "<group>"; };
 		14C444A549BA3C7D7093F38E /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
@@ -676,6 +678,7 @@
 				D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */,
 				5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */,
 				1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */,
+				0F2AFCEFE15D88844C9879FE /* LaunchExperiment.swift */,
 				CE1035547A9E34370159CF87 /* LaunchGate.swift */,
 				B60BDDA391398F90A5210D4D /* LaunchWarmup.swift */,
 			);
@@ -995,6 +998,7 @@
 				EB9BF4A84E3FF11A77F95899 /* InboxStore+Relay.swift in Sources */,
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,
 				74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */,
+				FFDC2FEB7122DD8798DD2C33 /* LaunchExperiment.swift in Sources */,
 				40276C56251E072B800E7657 /* LaunchGate.swift in Sources */,
 				E8096E3B2FE11B4EC42F80CE /* LaunchWarmup.swift in Sources */,
 				BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */,

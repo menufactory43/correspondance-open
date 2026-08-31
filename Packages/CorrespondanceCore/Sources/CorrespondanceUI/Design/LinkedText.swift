@@ -27,6 +27,16 @@ public struct LinkedText: View {
     return attributed
   }
 
+  /// La première adresse web du message, via le même mémo que le rendu : la
+  /// carte d'aperçu ne relance pas le détecteur que la bulle vient de payer.
+  @MainActor
+  static func firstWebURL(in text: String) -> URL? {
+    detected(in: text).first { link in
+      let scheme = link.url.scheme?.lowercased()
+      return scheme == "http" || scheme == "https"
+    }?.url
+  }
+
   /// `NSDataDetector` coûte cher et une bulle se redessine à chaque frappe dans le
   /// composer : on garde les plages trouvées, indexées par le texte lui-même.
   @MainActor private static var memo: [String: [TextLinks.Detected]] = [:]

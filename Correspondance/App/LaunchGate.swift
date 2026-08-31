@@ -33,5 +33,25 @@ enum LaunchGate {
       try? await Task.sleep(for: .milliseconds(30))
     }
     didPaintFirstWindow = true
+    LaunchTrace.mark("window")
+  }
+
+  /// Vrai dès que le fil de la conversation ouverte a été peint une fois — ou
+  /// qu'aucun fil n'est venu dans le délai (pas de conversation, agent).
+  /// C'est le second palier : ce qui peut attendre le fil (les photos de la
+  /// barre latérale) attend ici, pour ne pas lui voler ses passes de layout.
+  nonisolated(unsafe) private(set) static var didPaintFirstThread = false
+
+  static func markThreadPainted() {
+    didPaintFirstThread = true
+  }
+
+  static func firstThreadOnScreen(timeout: Duration = .seconds(2)) async {
+    await firstWindowOnScreen()
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline, !didPaintFirstThread {
+      try? await Task.sleep(for: .milliseconds(30))
+    }
+    didPaintFirstThread = true
   }
 }
