@@ -27,6 +27,16 @@ struct SettingsMatrixPane: View {
             Task { await store.refreshMatrixStatus() }
           }
         }
+
+        if store.isMatrixConnected {
+          SettingsRow(
+            label: "État de conversation",
+            detail: relayStateDetail,
+            systemImage: store.relayQueue.isEmpty ? "arrow.triangle.2.circlepath" : "clock.arrow.circlepath"
+          ) {
+            EmptyView()
+          }
+        }
       }
 
       if store.isMatrixConnected {
@@ -64,6 +74,14 @@ struct SettingsMatrixPane: View {
         }
       }
     }
+  }
+
+  /// Archives, épingles, sourdines et brouillons vivent dans le Relais (ADR 0001).
+  /// Rien à régler ici : juste de quoi voir qu'une écriture attend son tour.
+  private var relayStateDetail: String {
+    let pending = store.relayQueue.count
+    guard pending > 0 else { return "Synchronisé avec le Relais." }
+    return "Synchronisé avec le Relais · \(pending) en attente"
   }
 
   private func connect() {
