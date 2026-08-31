@@ -16,10 +16,12 @@ ME=$(printf '%s' "$CREDS" | python3 -c 'import sys,json;print(json.load(sys.stdi
 
 ROOM="${1:-}"
 if [ -z "$ROOM" ]; then
-  ROOM=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
-    "$HS/_matrix/client/v3/user/$ME/account_data/fr.correspondance.self_note" \
-    | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("room_id") or d.get("roomID") or "")')
-  [ -n "$ROOM" ] || { echo "pas de note à soi enregistrée — ouvre-la une fois dans Correspondance, ou passe un room id" >&2; exit 1; }
+  BODY=$(curl -sS -H "Authorization: Bearer $TOKEN" \
+    "$HS/_matrix/client/v3/user/$ME/account_data/fr.correspondance.self_note" || true)
+  ROOM=$(printf '%s' "$BODY" | python3 -c 'import sys,json
+try: d=json.load(sys.stdin); print(d.get("room_id") or "")
+except Exception: print("")')
+  [ -n "$ROOM" ] || { echo "pas de note à soi enregistrée sur le Relais — ouvre « Note à soi » une fois dans Correspondance (elle se crée à la première ouverture), puis relance. Ou passe un room id en argument." >&2; exit 1; }
 fi
 
 echo "→ $ME invite $AGENT dans $ROOM"
