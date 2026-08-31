@@ -98,6 +98,25 @@ services:
     networks:
       - matrix
 
+  sygnal:
+    # Le passe-plat entre Synapse et APNs. Il ne voit QUE le réseau Docker :
+    # aucun `ports:`, donc rien de publié sur le tailnet. Synapse l'appelle par
+    # son nom de service — http://sygnal:5000/_matrix/push/v1/notify.
+    image: matrixdotorg/sygnal:latest
+    container_name: correspondance-sygnal
+    restart: unless-stopped
+    depends_on:
+      - synapse
+    environment:
+      SYGNAL_CONF: /config/sygnal.yaml
+    volumes:
+      - ./data/sygnal:/config:ro
+      # La clé APNs (.p8) vit HORS du dépôt et hors de data/ : elle ne se
+      # régénère pas, elle se retélécharge chez Apple (une fois, jamais deux).
+      - ./secrets/apns:/secrets:ro
+    networks:
+      - matrix
+
 networks:
   matrix:
     driver: bridge

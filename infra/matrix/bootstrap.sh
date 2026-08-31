@@ -24,6 +24,14 @@ WHATSAPP_IMAGE_TAG="${WHATSAPP_IMAGE_TAG:-v26.08}"
 # plus que Messenger — Instagram est passé au binaire mautrix-instagram.
 META_IMAGE_TAG="${META_IMAGE_TAG:-ig-v26.08}"
 SIGNAL_IMAGE_TAG="${SIGNAL_IMAGE_TAG:-v26.08}"
+# Push iOS (Sygnal). Ces trois-là ne se génèrent pas : ils viennent du portail
+# Apple. On les passe en variables d'environnement à la première passe, ils
+# atterrissent dans le .env du NUC et n'en bougent plus.
+# Cf. docs/MATRIX-SETUP.md § « Push iOS — Sygnal ».
+APNS_KEY_ID="${APNS_KEY_ID:-}"
+APNS_TEAM_ID="${APNS_TEAM_ID:-}"
+# sandbox = Xcode et TestFlight interne ; production = App Store.
+APNS_PLATFORM="${APNS_PLATFORM:-sandbox}"
 
 # ---------------------------------------------------------------- phase locale
 if [[ "${1:-}" != "--remote" ]]; then
@@ -38,13 +46,14 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' APNS_PLATFORM='${APNS_PLATFORM}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
 # ---------------------------------------------------------------- phase distante
 cd "$HOME/$REMOTE_DIR"
-mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/mautrix-signal data/postgres
+mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/mautrix-signal data/postgres data/sygnal secrets/apns
+chmod 700 secrets secrets/apns
 CREDS="$HOME/$REMOTE_DIR/CREDENTIALS.txt"
 
 # 1) Secrets — générés une seule fois, relus ensuite (idempotence).
@@ -82,6 +91,25 @@ ensure_env_secret() {
 ensure_env_secret DOUBLEPUPPET_AS_TOKEN "$(openssl rand -hex 32)"
 ensure_env_secret DOUBLEPUPPET_HS_TOKEN "$(openssl rand -hex 32)"
 ensure_env_secret DOUBLEPUPPET_SENDER "dp$(openssl rand -hex 12)"
+
+# Les identifiants APNs ne sont pas des secrets générés — ils viennent d'Apple.
+# On les mémorise à la première passe qui les fournit, et on les relit ensuite :
+# relancer le bootstrap sans les repasser ne doit pas effacer le push.
+remember_env_value() {
+  local key="$1" value="$2"
+  if [[ -n "$value" ]]; then
+    if grep -q "^${key}=" "$ENVFILE"; then
+      sed -i "s|^${key}=.*|${key}=${value}|" "$ENVFILE"
+    else
+      echo "${key}=${value}" >> "$ENVFILE"
+    fi
+    export "${key}=${value}"
+  fi
+}
+remember_env_value APNS_KEY_ID "${APNS_KEY_ID}"
+remember_env_value APNS_TEAM_ID "${APNS_TEAM_ID}"
+remember_env_value APNS_PLATFORM "${APNS_PLATFORM}"
+set -a; . "./$ENVFILE"; set +a
 
 # 2) Clé de signature + log config Synapse (via `generate`, une seule fois).
 if [[ ! -f "data/synapse/${SERVER_NAME}.signing.key" ]]; then
@@ -203,11 +231,27 @@ namespaces:
 EOF
 chmod 600 data/synapse/doublepuppet-registration.yaml
 
-# 6) La pile complète.
+# 6) Sygnal — la config, et le verdict sur la clé APNs.
+#    Le service reste déclaré même sans clé : docker-compose le redémarrera en
+#    boucle, ce qui est un signal plus honnête qu'un push silencieusement absent.
+echo "→ Écriture de sygnal.yaml"
+sed \
+  -e "s|__APNS_KEY_ID__|${APNS_KEY_ID:-__APNS_KEY_ID__}|g" \
+  -e "s|__APNS_TEAM_ID__|${APNS_TEAM_ID:-__APNS_TEAM_ID__}|g" \
+  -e "s|__APNS_PLATFORM__|${APNS_PLATFORM:-sandbox}|g" \
+  templates/sygnal.yaml.tmpl > data/sygnal/sygnal.yaml
+chmod 600 data/sygnal/sygnal.yaml
+
+APNS_READY=1
+[[ -f "secrets/apns/apns.p8" ]] || { echo "⚠ secrets/apns/apns.p8 absent — le push iOS ne partira pas."; APNS_READY=0; }
+[[ -n "${APNS_KEY_ID:-}" ]] || { echo "⚠ APNS_KEY_ID non renseigné — voir docs/MATRIX-SETUP.md."; APNS_READY=0; }
+[[ -n "${APNS_TEAM_ID:-}" ]] || { echo "⚠ APNS_TEAM_ID non renseigné — voir docs/MATRIX-SETUP.md."; APNS_READY=0; }
+
+# 7) La pile complète.
 echo "→ docker-compose up -d"
 docker-compose up -d
 
-# 7) Attente de Synapse.
+# 8) Attente de Synapse.
 echo "→ Attente du homeserver"
 OK=0
 for _ in $(seq 1 45); do
@@ -236,7 +280,7 @@ if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
   docker-compose restart mautrix-whatsapp mautrix-meta mautrix-signal >/dev/null
 fi
 
-# 8) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
+# 9) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
 if [[ ! -f "$CREDS" ]]; then
   MATRIX_PASSWORD="$(openssl rand -base64 24)"
   echo "→ Création de l'utilisateur ${MATRIX_ADMIN}"
@@ -266,7 +310,28 @@ add_credentials_line "bot_whatsapp" "@whatsappbot:${SERVER_NAME}"
 add_credentials_line "bot_instagram" "@instagrambot:${SERVER_NAME}"
 add_credentials_line "bot_signal" "@signalbot:${SERVER_NAME}"
 
+# 10) Sygnal répond-il ? Depuis le réseau Docker uniquement : rien n'est publié.
+if [[ "$APNS_READY" == 1 ]]; then
+  SYGNAL_OK=0
+  for _ in $(seq 1 15); do
+    if docker-compose exec -T synapse curl -fsS "http://sygnal:5000/health" >/dev/null 2>&1; then
+      SYGNAL_OK=1; break
+    fi
+    sleep 2
+  done
+  if [[ "$SYGNAL_OK" == 1 ]]; then
+    echo "✓ Sygnal répond à Synapse (http://sygnal:5000/health)"
+  else
+    echo "⚠ Sygnal ne répond pas — docker-compose logs sygnal"
+  fi
+fi
+
 echo
 docker-compose ps
 echo
 echo "✓ Pile Matrix prête (WhatsApp + Instagram + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
+if [[ "$APNS_READY" == 1 ]]; then
+  echo "✓ Push iOS : Sygnal armé pour com.correspondance.ios (${APNS_PLATFORM})."
+else
+  echo "⚠ Push iOS : Sygnal démarré sans clé APNs utilisable — voir docs/MATRIX-SETUP.md § « Push iOS — Sygnal »."
+fi

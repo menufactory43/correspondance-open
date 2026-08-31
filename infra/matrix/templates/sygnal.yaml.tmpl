@@ -1,0 +1,71 @@
+# Sygnal — le passe-plat entre le Relais et APNs.
+#
+# Réécrit à chaque passe de bootstrap.sh depuis ce gabarit : la source de
+# vérité est le dépôt, jamais le fichier posé sur le NUC. Les placeholders
+# __APNS_KEY_ID__ / __APNS_TEAM_ID__ / __APNS_PLATFORM__ sont remplacés par
+# les valeurs du .env (cf. docs/MATRIX-SETUP.md § « Push iOS — Sygnal »).
+#
+# Ce que Sygnal reçoit de Synapse : un POST /_matrix/push/v1/notify par
+# événement à notifier. Ce qu'il en fait : un push APNs vers le pushkey de
+# l'appareil. Avec `format: event_id_only` (posé par l'app dans son pusher),
+# la charge utile ne porte QUE room_id et event_id — jamais le texte du
+# message. C'est la conception qui survivra à l'E2EE (décision 7) : le push
+# réveille, l'appareil lit.
+
+log:
+  setup:
+    version: 1
+    formatters:
+      normal:
+        format: "%(asctime)s [%(process)d] %(levelname)-5s %(name)s %(message)s"
+    handlers:
+      stderr:
+        class: logging.StreamHandler
+        formatter: normal
+        stream: "ext://sys.stderr"
+    loggers:
+      sygnal:
+        level: INFO
+        handlers: [stderr]
+    root:
+      level: INFO
+      handlers: [stderr]
+    disable_existing_loggers: false
+  access:
+    x_forwarded_for: false
+
+http:
+  # 0.0.0.0 dans le conteneur seulement : docker-compose ne publie aucun port
+  # pour ce service, donc rien ne sort du réseau `matrix`.
+  bind_addresses: ['0.0.0.0']
+  port: 5000
+
+metrics:
+  prometheus:
+    enabled: false
+  opentracing:
+    enabled: false
+  sentry:
+    enabled: false
+
+apps:
+  # La clé de cette entrée est l'`app_id` que l'app iOS écrit dans son pusher
+  # (MatrixClient.setPusher). Les deux doivent coïncider au caractère près,
+  # sinon Synapse appelle Sygnal pour rien : « no app configured ».
+  com.correspondance.ios:
+    type: apns
+    # Clé de signature APNs (.p8), montée en lecture seule depuis
+    # ~/correspondance-matrix/secrets/apns/ sur le NUC. Jamais dans le dépôt.
+    keyfile: /secrets/apns.p8
+    key_id: __APNS_KEY_ID__
+    team_id: __APNS_TEAM_ID__
+    # Le « topic » APNs est l'identifiant de bundle de l'app, à la lettre.
+    topic: com.correspondance.ios
+    # sandbox = builds Xcode et TestFlight *interne* ; production = App Store et
+    # TestFlight externe. Un jeton obtenu sur l'un ne vaut RIEN sur l'autre :
+    # se tromper ici donne un « BadDeviceToken » silencieux.
+    platform: __APNS_PLATFORM__
+    # `alert` et non `background` : c'est ce qui autorise l'extension de service
+    # à s'exécuter (aps.mutable-content) et à réécrire le texte de la
+    # notification avant qu'elle ne s'affiche.
+    push_type: alert

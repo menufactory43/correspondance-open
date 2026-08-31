@@ -343,6 +343,91 @@ reprend son état depuis Postgres, rien n'est perdu.
 en v26.08 a changé le format des MXID que le client analyse, et la même version a sorti Instagram
 de `mautrix-meta`. Côté Instagram, penser aussi au préfixe : `ig-v26.08`, jamais `v26.08`.
 
+## 3 bis. Push iOS — Sygnal
+
+L'iPhone ne peut pas tenir un `/sync` en permanence : c'est APNs qui le réveille. Entre le Relais et
+APNs il faut un passe-plat qui parle les deux langues — **Sygnal**, le pousseur de matrix.org.
+
+Le chemin complet, dans l'ordre : l'app iOS déclare son pusher au Relais
+(`POST /_matrix/client/v3/pushers/set`, `app_id: com.correspondance.ios`, `pushkey` = jeton APNs) →
+Synapse, quand une push rule dit « notifie », appelle `http://sygnal:5000/_matrix/push/v1/notify` →
+Sygnal signe un push APNs avec la clé `.p8` → l'iPhone se réveille → l'extension de service va lire
+l'événement et écrit « Alice · WhatsApp : On se voit demain ? ».
+
+La charge utile ne porte **que** `room_id` et `event_id` (`format: event_id_only`) : jamais le texte.
+C'est voulu — le push réveille, l'appareil lit (décision 7 de `PRODUCT.md`, celle qui survivra à
+l'E2EE). Et le muet reste appliqué côté Relais : un salon muet a une push rule `actions: []`, donc
+Synapse n'appelle même pas Sygnal.
+
+### Ce qu'il faut faire chez Apple, une fois
+
+1. **developer.apple.com › Certificates, Identifiers & Profiles › Keys › +**
+2. Cocher **Apple Push Notifications service (APNs)**, nommer la clé (« Correspondance push »),
+   **Continue**, **Register**.
+3. **Download** : le fichier `AuthKey_XXXXXXXXXX.p8`. Apple ne le redonne **jamais** — s'il est
+   perdu, il faut révoquer la clé et en refaire une.
+4. Noter le **Key ID** (les dix caractères de `AuthKey_XXXXXXXXXX.p8`) et le **Team ID**
+   (en haut à droite du portail, ou dans Membership).
+5. Sur l'identifiant d'app `com.correspondance.ios` : cocher la capacité **Push Notifications**.
+
+Une même clé APNs vaut pour sandbox et production. Ce qui change, c'est le **serveur** qu'on
+interroge — et un jeton d'appareil obtenu sur l'un ne vaut rien sur l'autre :
+
+| build | `platform` dans `sygnal.yaml` |
+|-------|------------------------------|
+| Xcode (`Debug`), TestFlight **interne** | `sandbox` |
+| App Store, TestFlight **externe** | `production` |
+
+Se tromper de ligne donne un `BadDeviceToken` côté Sygnal, et rien du tout côté iPhone.
+
+### Ce qu'il faut faire sur le NUC, une fois
+
+```sh
+# 1) Déposer la clé — hors du dépôt, hors de data/, chmod 600.
+ssh nuc 'mkdir -p ~/correspondance-matrix/secrets/apns && chmod 700 ~/correspondance-matrix/secrets ~/correspondance-matrix/secrets/apns'
+scp AuthKey_XXXXXXXXXX.p8 nuc:~/correspondance-matrix/secrets/apns/apns.p8
+ssh nuc 'chmod 600 ~/correspondance-matrix/secrets/apns/apns.p8'
+
+# 2) Rejouer le bootstrap en lui donnant les deux identifiants. Ils atterrissent
+#    dans le .env du NUC : les passes suivantes n'ont plus besoin de les repasser.
+APNS_KEY_ID=XXXXXXXXXX APNS_TEAM_ID=AKMNXGVVGX APNS_PLATFORM=sandbox \
+  ./infra/matrix/bootstrap.sh
+```
+
+Le bootstrap écrit `data/sygnal/sygnal.yaml` depuis `templates/sygnal.yaml.tmpl`, démarre le service
+et dit ce qu'il en pense (`✓ Push iOS : Sygnal armé…`). Sans clé, il démarre quand même et le
+signale : un service qui redémarre en boucle est un aveu plus honnête qu'un push absent en silence.
+
+### Vérifier
+
+```sh
+# Sygnal est-il debout, vu de Synapse ? (il n'est publié sur AUCUN port du tailnet)
+ssh nuc 'cd correspondance-matrix && docker-compose exec -T synapse curl -sS http://sygnal:5000/health'
+# → une réponse vide avec un code 200. Rien d'autre à attendre : /health ne dit que « je réponds ».
+
+# Le pusher est-il déclaré côté Relais ? (jeton d'accès de l'app, cf. CREDENTIALS.txt)
+curl -sS -H "Authorization: Bearer $TOKEN" http://100.64.0.7:8008/_matrix/client/v3/pushers | python3 -m json.tool
+# → un pusher app_id=com.correspondance.ios, kind=http, data.url=http://sygnal:5000/_matrix/push/v1/notify
+
+# Que raconte Sygnal quand un message arrive ?
+ssh nuc 'cd correspondance-matrix && docker-compose logs -f --tail=40 sygnal'
+```
+
+L'URL `data.url` est celle que **Synapse** voit, pas l'iPhone : `sygnal` est un nom de service Docker,
+il ne résout que sur le réseau `matrix`. C'est exactement ce qu'on veut — Sygnal n'est joignable de
+nulle part ailleurs.
+
+### Dépannage
+
+| Symptôme | Cause probable |
+|----------|----------------|
+| `no app configured` dans les logs Sygnal | l'`app_id` du pusher ne correspond pas à la clé sous `apps:` dans `sygnal.yaml` |
+| `BadDeviceToken` | mauvais `platform` (sandbox ↔ production), ou jeton d'un autre bundle |
+| `TopicDisallowed` | `topic:` n'est pas exactement l'identifiant de bundle de l'app |
+| Sygnal redémarre en boucle | `secrets/apns/apns.p8` absent, illisible, ou `key_id`/`team_id` encore en placeholder |
+| Rien n'arrive, et Sygnal n'est jamais appelé | le salon est **muet** (push rule `actions: []`) — c'est le comportement voulu |
+| Le simulateur ne reçoit rien | normal : un simulateur n'a pas de jeton APNs. `xcrun simctl push <UDID> com.correspondance.ios payload.apns` sert à exercer l'extension, pas le chemin réseau |
+
 ## 4. Migrer vers un VPS
 
 Le NUC est un point de départ, pas une fin : il faut que la machine soit joignable pour recevoir les
