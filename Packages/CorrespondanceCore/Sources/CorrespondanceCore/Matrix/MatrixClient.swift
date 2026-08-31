@@ -249,6 +249,26 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Un event de salon d'un type quelconque — nos propres types
+  /// (`fr.correspondance.agent.*`), que les ponts mautrix ne relaient pas :
+  /// ce qui s'y dit reste entre le Relais et ses clients.
+  @discardableResult
+  public func sendEvent(
+    roomID: String,
+    type: String,
+    content: MatrixJSON,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    guard !ledger.isUsed(transactionID) else { return nil }
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(type))/\(Self.escape(transactionID))",
+      body: content
+    )
+    ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
   /// Modifier un message déjà envoyé (MSC2676, `m.replace`).
   ///
   /// Trois morceaux obligatoires : le `body` de repli, préfixé d'une étoile,
