@@ -199,15 +199,27 @@ targets:
         NSPhotoLibraryUsageDescription: Correspondance joint vos photos à vos messages.
         NSCameraUsageDescription: Correspondance prend une photo pour la joindre à un message.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour vos messages vocaux.
-        # Le Relais est un homeserver privé, en HTTP clair sur le tailnet, et
-        # son adresse est une CONFIGURATION (décision 6) : elle n'est pas connue
-        # à la compilation, donc aucune liste d'exceptions ne peut la couvrir.
-        # ATS est donc ouvert ici — l'app ne parle qu'au serveur que l'utilisateur
-        # lui a désigné, sur son propre réseau. Le tailnet reste nommé pour la
-        # journée où l'exception suffira (exposition publique = HTTPS, cf. ADR 0001).
+        # ATS ouvert, et PAS de NSAllowsLocalNetworking — décision 6 de
+        # docs/PRODUCT.md § « Révision iOS ».
+        #
+        # Le Relais est un homeserver privé en HTTP clair, joint par Tailscale ;
+        # son adresse est une CONFIGURATION, inconnue à la compilation, donc
+        # aucune liste d'exceptions ne peut la couvrir. Deux faits mesurés sur
+        # le simulateur iOS 26.3 (sonde URLSession, code -1022 = refus ATS) :
+        #
+        # 1. NSAllowsLocalNetworking NE COUVRE PAS le tailnet. Il exempte
+        #    RFC1918 (192.168/16 : passe) et « .local » (passe), mais une
+        #    adresse CGNAT 100.64/10 — celle que Tailscale attribue — est
+        #    REFUSÉE (-1022). Elle n'est pas « locale » aux yeux d'ATS.
+        # 2. NSAllowsLocalNetworking ANNULE NSAllowsArbitraryLoads. C'est la
+        #    règle de rétrocompatibilité d'Apple : sur un système qui connaît
+        #    les clés récentes, ArbitraryLoads est ignoré dès que l'une d'elles
+        #    est là. Les deux ensemble — ce qu'on avait — refusaient donc 100.x.
+        #
+        # NSExceptionDomains, lui, n'annule rien : le tailnet reste nommé pour
+        # la journée où l'exception suffira (exposition publique = HTTPS, ADR 0001).
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-          NSAllowsLocalNetworking: true
           NSExceptionDomains:
             ts.net:
               NSIncludesSubdomains: true

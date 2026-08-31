@@ -106,6 +106,7 @@ Glossaire : `CONTEXT.md`. Décision structurante : `docs/adr/0001-relais-source-
    Tout le chantier (y compris le code Mac « état dans Matrix ») se fait dans un worktree ; `main` reste l’app quotidienne, intacte jusqu’à la fusion. Une étape = un build vert = un commit, zéro changement de comportement.
 5. **Notifications** : Sygnal sur le Relais + APNs dès la v1 ; muet appliqué par push rules côté Relais.
 6. **Accès au Relais** : Tailscale sur l’iPhone en v1. URL du Relais = configuration, jamais en dur. Exposition publique = plus tard (impose un vrai `server_name`).
+   **ATS** (mesuré sur simulateur iOS 26.3, sonde URLSession, `-1022` = refus) : `NSAllowsLocalNetworking` exempte RFC1918 et `.local`, mais **pas** les adresses CGNAT `100.64/10` — celles que Tailscale attribue. Pire, sa seule présence **annule** `NSAllowsArbitraryLoads` (règle de rétrocompatibilité d'Apple). L'app iOS garde donc `NSAllowsArbitraryLoads` **seul**, plus des `NSExceptionDomains` (qui, eux, n'annulent rien).
 7. **E2EE** : après la v1 iOS, premier chantier de la v2. Règle dès Core : *aucune fonctionnalité ne dépend de la lecture des messages par le Relais* (recherche locale, aperçus côté appareil, push = réveil).
 8. **Agents** (Hermes/OpenClaw comme utilisateurs Matrix) : après iOS, avant E2EE. Non modélisés pour l’instant.
 9. **UI iPhone** : Inbox (liste) par défaut, Focus accessible depuis la barre du bas. Repère visuel : Beeper iOS. Layout adaptatif dès la v1 (compact = pile, regular = deux colonnes) — obligatoire pour iPhone Fold, offre l’iPad.
