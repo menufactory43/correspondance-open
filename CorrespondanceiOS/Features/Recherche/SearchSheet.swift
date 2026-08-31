@@ -128,12 +128,9 @@ struct SearchSheet: View {
   /// Toutes les conversations, cherchées jusque dans le corps des messages déjà
   /// chargés — c'est ce que `blob` indexe.
   private var conversationResults: some View {
-    let index = Dictionary(
-      uniqueKeysWithValues: store.conversations.map {
-        ($0.id, ConversationSearch.blob(for: store.visibleMessages($0.id)))
-      }
+    let hits = ConversationSearch.filter(
+      store.conversations, query: trimmed, index: store.searchIndex(query: trimmed)
     )
-    let hits = ConversationSearch.filter(store.conversations, query: trimmed, index: index)
       .sorted { $0.lastMessageAt > $1.lastMessageAt }
     return list(empty: "Rien de ce nom-là") {
       ForEach(hits) { conversation in
@@ -158,9 +155,7 @@ struct SearchSheet: View {
   /// Les messages, dans leur fil, avec la bulle telle qu'elle est — c'est elle
   /// qu'on reconnaît, pas une ligne de résumé.
   private func messageResults(_ facet: MessageFacet) -> some View {
-    let hits = FacetedSearch.hits(in: store.conversations, facet: facet, query: trimmed) {
-      store.visibleMessages($0.id)
-    }
+    let hits = store.facetHits(facet: facet, query: trimmed)
 
     return list(empty: "Rien en « \(facet.labelFR) »") {
       ForEach(hits) { hit in
@@ -231,22 +226,15 @@ struct SearchSheet: View {
   private var isEmpty: Bool {
     switch facet {
     case .none:
-      let index = Dictionary(
-        uniqueKeysWithValues: store.conversations.map {
-          ($0.id, ConversationSearch.blob(for: store.visibleMessages($0.id)))
-        }
-      )
-      return ConversationSearch.filter(store.conversations, query: trimmed, index: index).isEmpty
+      return ConversationSearch.filter(
+        store.conversations, query: trimmed, index: store.searchIndex(query: trimmed)
+      ).isEmpty
     case .some(.drafts):
       return FacetedSearch.conversationsWithDrafts(
         store.conversations, drafts: store.viewState.drafts, query: trimmed
       ).isEmpty
     case .some(let facet):
-      return !store.conversations.contains { conversation in
-        !FacetedSearch.messages(
-          store.visibleMessages(conversation.id), facet: facet, query: trimmed
-        ).isEmpty
-      }
+      return store.facetHits(facet: facet, query: trimmed).isEmpty
     }
   }
 

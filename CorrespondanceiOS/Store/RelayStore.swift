@@ -424,6 +424,33 @@ final class RelayStore {
 
   /// Les messages visibles d'un fil : ce que le Relais a livré, moins ce qu'on
   /// a masqué. Une ligne de fusion réunit les fils de ses membres, à l'heure.
+  /// Les résultats d'un onglet, tous fils du Relais confondus. Ils viennent de
+  /// la base locale : on trouve la photo d'une conversation qu'on n'a pas
+  /// ouverte depuis six mois, ce qui n'était pas le cas quand la recherche ne
+  /// voyait que ce qui était chargé.
+  func facetHits(facet: MessageFacet, query: String) -> [FacetedSearch.Hit] {
+    guard !isDemo else {
+      return FacetedSearch.hits(in: conversations, facet: facet, query: query) {
+        visibleMessages($0.id)
+      }
+    }
+    let hits = LocalStore.shared?.facetHits(in: conversations, facet: facet, query: query) ?? []
+    return hits.filter { !hiddenMessageIDs.contains($0.message.id) }
+  }
+
+  /// L'index de recherche pour cette question : ce que la base trouve dans le
+  /// corps des messages, pour que « resto » ramène le fil qui en parle.
+  func searchIndex(query: String) -> [String: String] {
+    guard !isDemo else {
+      return Dictionary(
+        uniqueKeysWithValues: conversations.map {
+          ($0.id, ConversationSearch.blob(for: visibleMessages($0.id)))
+        }
+      )
+    }
+    return LocalStore.shared?.searchIndex(query: query) ?? [:]
+  }
+
   func visibleMessages(_ conversationID: String) -> [ChatMessage] {
     let raw: [ChatMessage]
     if MergedContact.isMergedID(conversationID) {

@@ -80,7 +80,7 @@ public final class LocalStore: @unchecked Sendable {
   /// Version du schéma attendue par ce code. Chaque migration est jouée dans
   /// l'ordre, une fois, et la base retient où elle en est — plus de champ
   /// « absent des caches plus anciens » : la forme est la même pour tous.
-  static let schemaVersion = 1
+  static let schemaVersion = 2
 
   private func migrate() throws {
     try withLock {
@@ -104,6 +104,7 @@ public final class LocalStore: @unchecked Sendable {
   private static func migration(to version: Int) -> String {
     switch version {
     case 1: return schemaV1
+    case 2: return schemaV2
     default: return ""
     }
   }
@@ -162,6 +163,47 @@ public final class LocalStore: @unchecked Sendable {
   CREATE INDEX reactions_by_room ON reactions (room_id);
 
   CREATE TABLE sync_state (key TEXT PRIMARY KEY NOT NULL, value TEXT);
+  """
+
+  /// v2 — l'index plein texte, et les déclencheurs qui le tiennent à jour.
+  ///
+  /// Table externe (`content='messages'`) : le texte n'est pas stocké deux
+  /// fois, l'index ne garde que ses listes de positions. Les noms de fichiers
+  /// et les types MIME des pièces jointes y ont leur colonne — c'est ce qui
+  /// permet de chercher « devis.pdf » sans lire le contenu du PDF.
+  ///
+  /// `remove_diacritics 2` : « ecole » trouve « école », comme partout ailleurs
+  /// dans l'app (`ConversationSearch.fold`).
+  private static let schemaV2 = """
+  CREATE VIRTUAL TABLE messages_fts USING fts5(
+    text,
+    sender_name,
+    attachment_names,
+    attachment_types,
+    content='messages',
+    content_rowid='rowid',
+    tokenize='unicode61 remove_diacritics 2'
+  );
+
+  CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts (rowid, text, sender_name, attachment_names, attachment_types)
+    VALUES (new.rowid, new.text, IFNULL(new.sender_name, ''), new.attachment_names, new.attachment_types);
+  END;
+
+  CREATE TRIGGER messages_fts_delete AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts (messages_fts, rowid, text, sender_name, attachment_names, attachment_types)
+    VALUES ('delete', old.rowid, old.text, IFNULL(old.sender_name, ''), old.attachment_names, old.attachment_types);
+  END;
+
+  CREATE TRIGGER messages_fts_update AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts (messages_fts, rowid, text, sender_name, attachment_names, attachment_types)
+    VALUES ('delete', old.rowid, old.text, IFNULL(old.sender_name, ''), old.attachment_names, old.attachment_types);
+    INSERT INTO messages_fts (rowid, text, sender_name, attachment_names, attachment_types)
+    VALUES (new.rowid, new.text, IFNULL(new.sender_name, ''), new.attachment_names, new.attachment_types);
+  END;
+
+  INSERT INTO messages_fts (rowid, text, sender_name, attachment_names, attachment_types)
+    SELECT rowid, text, IFNULL(sender_name, ''), attachment_names, attachment_types FROM messages;
   """
 
   // MARK: - Curseur de `/sync`

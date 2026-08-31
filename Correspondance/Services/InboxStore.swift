@@ -201,6 +201,9 @@ final class InboxStore {
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   @ObservationIgnored private var searchIndex: [String: String] = [:]
+  /// Ce que la base locale a trouvé pour la dernière question posée. Mémoïsé :
+  /// `searched` est appelé à chaque rendu, la base ne l'est qu'au changement.
+  @ObservationIgnored private var relaySearchIndex: (query: String, index: [String: String])?
   /// L'onglet de recherche actif — Images, Vidéos, Liens, Fichiers, Brouillons.
   /// `nil` = on cherche des conversations, pas des choses.
   var searchFacet: MessageFacet?
@@ -371,9 +374,18 @@ final class InboxStore {
   /// plus ancien. Vide tant qu'aucun onglet n'est choisi.
   var facetHits: [FacetedSearch.Hit] {
     guard let facet = searchFacet, !facet.isConversationFacet else { return [] }
-    return FacetedSearch.hits(in: conversations, facet: facet, query: searchQuery) {
-      facetMessages[$0.id] ?? []
-    }
+    // Les fils du Relais viennent de la base : tout leur historique y est,
+    // même celui des conversations qu'on n'a jamais ouvertes.
+    let bridged = LocalStore.shared?
+      .facetHits(in: conversations, facet: facet, query: searchQuery) ?? []
+    // iMessage garde son chemin : sa base est ailleurs, on cherche dans ce que
+    // `refreshFacetIndex` en a chargé.
+    let local = FacetedSearch.hits(
+      in: conversations.filter { !$0.network.livesOnRelay },
+      facet: facet,
+      query: searchQuery
+    ) { facetMessages[$0.id] ?? [] }
+    return (bridged + local).sorted { $0.message.sentAt > $1.message.sentAt }
   }
 
   /// Les fils qui portent un brouillon — l'onglet « Brouillons ».
@@ -392,19 +404,18 @@ final class InboxStore {
     Task { await refreshFacetIndex() }
   }
 
-  /// Rassemble les messages déjà chargés : les salons du pont (déjà en
-  /// mémoire), les fils ouverts, puis la base iMessage — celle-là hors du fil
-  /// principal, c'est la seule qui coûte quelque chose.
+  /// Rassemble ce qu'il faut aux onglets **côté iMessage** : les fils ouverts,
+  /// puis la base `chat.db`, hors du fil principal.
+  ///
+  /// Les fils du Relais n'y sont plus : ils se cherchent dans la base locale
+  /// (FTS5), sans avoir été chargés — c'est ce qui permet de trouver la photo
+  /// d'une conversation qu'on n'a pas ouverte depuis six mois.
   func refreshFacetIndex() async {
     guard !isRefreshingFacetIndex else { return }
     isRefreshingFacetIndex = true
     defer { isRefreshingFacetIndex = false }
 
     var index = facetMessages
-    for conversation in conversations where conversation.network.livesOnRelay {
-      let list = await matrix.messages(conversationID: conversation.id)
-      if !list.isEmpty { index[conversation.id] = list }
-    }
     for session in liveSessions where !session.messages.isEmpty {
       index[session.conversationID] = session.messages
     }
@@ -580,7 +591,23 @@ final class InboxStore {
 
   /// Applique la recherche de la liste. Sans requête, renvoie la file telle quelle.
   private func searched(_ list: [Conversation]) -> [Conversation] {
-    ConversationSearch.filter(list, query: searchQuery, index: searchIndex)
+    ConversationSearch.filter(list, query: searchQuery, index: mergedSearchIndex(searchQuery))
+  }
+
+  /// L'index de recherche pour cette question : celui d'iMessage (chargé une
+  /// fois) plus ce que la base locale trouve dans les fils du Relais.
+  ///
+  /// Interrogé une fois par question, pas à chaque rendu : le résultat est
+  /// gardé tant que la question ne change pas.
+  private func mergedSearchIndex(_ query: String) -> [String: String] {
+    let folded = ConversationSearch.fold(query)
+    guard !folded.isEmpty else { return searchIndex }
+    if relaySearchIndex?.query != folded {
+      relaySearchIndex = (folded, LocalStore.shared?.searchIndex(query: query) ?? [:])
+    }
+    return searchIndex.merging(relaySearchIndex?.index ?? [:]) { local, relay in
+      local.isEmpty ? relay : local + "\n" + relay
+    }
   }
 
   var isSearching: Bool { !ConversationSearch.fold(searchQuery).isEmpty }
@@ -588,7 +615,7 @@ final class InboxStore {
   /// Recherche indépendante de celle de la liste — le mini-sélecteur (⌘K) du
   /// panneau de réponse rapide cherche sans déranger le champ de l'inbox.
   func quickSearch(_ query: String) -> [Conversation] {
-    ConversationSearch.filter(activeQueue, query: query, index: searchIndex)
+    ConversationSearch.filter(activeQueue, query: query, index: mergedSearchIndex(query))
   }
 
   var inboxRecents: [Conversation] {
@@ -1159,15 +1186,6 @@ final class InboxStore {
   private func indexMessages(_ list: [ChatMessage], conversationID: String) {
     guard !list.isEmpty else { return }
     searchIndex[conversationID] = ConversationSearch.blob(for: list)
-  }
-
-  /// Index initial : ce que les caches disque contiennent déjà, sans une requête réseau.
-  private func seedSearchIndex(
-    signal: [String: [ChatMessage]],
-    matrix: [String: [ChatMessage]]
-  ) {
-    for (id, list) in signal { searchIndex[id] = ConversationSearch.blob(for: list) }
-    for (id, list) in matrix { searchIndex[id] = ConversationSearch.blob(for: list) }
   }
 
   /// Index iMessage : une passe SQL bornée, hors du fil principal.
