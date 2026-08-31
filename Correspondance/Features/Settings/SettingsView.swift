@@ -192,8 +192,30 @@ struct SettingsAgentPane: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
+  /// Ce que le scan a dit — au premier affichage, puis à chaque « Scanner ».
+  @State private var enginesDetail: String?
+  @State private var isScanning = false
+
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
+      SettingsCard(
+        title: "Moteurs",
+        footnote: "Les moteurs vivent là où l’agent tourne (le Relais), pas sur ce Mac. "
+          + "cc scanne sa machine à son démarrage et publie ce qu’il y trouve."
+      ) {
+        SettingsRow(
+          label: "Sur la machine de cc",
+          detail: enginesDetail ?? "pas encore scanné",
+          systemImage: "cpu"
+        ) {
+          if isScanning {
+            ProgressView().controlSize(.small)
+          } else {
+            Button("Scanner") { Task { await scanEngines() } }
+          }
+        }
+      }
+
       SettingsCard(
         title: "Réponses de cc",
         footnote: "En tête-à-tête avec toi, cc répond toujours à voix haute. "
@@ -219,6 +241,25 @@ struct SettingsAgentPane: View {
       Text("Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
         .font(Typography.meta(themes.typeface))
         .foregroundStyle(themes.theme.inkTertiary)
+    }
+    .task { await scanEngines() }
+  }
+
+  /// Lit le dernier status que cc a posté dans la note à soi :
+  /// « moteur hermes · prêts : claude, hermes », daté de son dernier démarrage.
+  private func scanEngines() async {
+    isScanning = true
+    defer { isScanning = false }
+    do {
+      guard let status = try await store.matrix.agentStatus() else {
+        enginesDetail = "cc n’a rien publié — jamais démarré, ou trop ancien pour le dire (redéploie-le)"
+        return
+      }
+      // L'app parle français ; le formateur suivrait la locale système.
+      let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
+      enginesDetail = "\(status.engines) — au démarrage de cc, \(age)"
+    } catch {
+      enginesDetail = "le Relais n’a pas répondu : \(error.localizedDescription)"
     }
   }
 }

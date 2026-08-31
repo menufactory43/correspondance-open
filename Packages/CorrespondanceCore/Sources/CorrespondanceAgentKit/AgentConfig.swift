@@ -26,7 +26,13 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   /// avec un propriétaire : `draft`, toujours. `direct` ne se donne qu'à la main.
   public var defaultMode: RoomMode = .draft
 
+  /// Le moteur derrière ce bot : `claude` (défaut) ou `hermes`. Un bot, un
+  /// moteur, un utilisateur Matrix — pour un second moteur, on lance une
+  /// seconde instance (`CORRESPONDANCE_AGENT_HOME`) avec son propre compte.
+  public var backend: Backend = .claude
+
   public var claude: ClaudeSettings = ClaudeSettings()
+  public var hermes: HermesSettings = HermesSettings()
 
   /// Réglages par room : dans quel dépôt travailler, et si l'agent envoie ou propose.
   public var rooms: [String: RoomBinding] = [:]
@@ -41,7 +47,7 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   // Tout ce qui a une valeur par défaut est facultatif dans le fichier : un
   // `config.json` de quatre lignes doit suffire.
   private enum CodingKeys: String, CodingKey {
-    case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, claude, rooms
+    case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, backend, claude, hermes, rooms
   }
 
   public init(from decoder: Decoder) throws {
@@ -53,7 +59,9 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     trigger = try c.decodeIfPresent(String.self, forKey: .trigger) ?? "@cc"
     hourlyCap = try c.decodeIfPresent(Int.self, forKey: .hourlyCap) ?? 30
     defaultMode = try c.decodeIfPresent(RoomMode.self, forKey: .defaultMode) ?? .draft
+    backend = try c.decodeIfPresent(Backend.self, forKey: .backend) ?? .claude
     claude = try c.decodeIfPresent(ClaudeSettings.self, forKey: .claude) ?? ClaudeSettings()
+    hermes = try c.decodeIfPresent(HermesSettings.self, forKey: .hermes) ?? HermesSettings()
     rooms = try c.decodeIfPresent([String: RoomBinding].self, forKey: .rooms) ?? [:]
   }
 
@@ -66,6 +74,35 @@ public struct AgentConfig: Codable, Sendable, Equatable {
       return String(owner[owner.index(after: colon)...])
     }
     return "@\(user):\(serverName ?? homeserver.host() ?? "localhost")"
+  }
+
+  public enum Backend: String, Codable, Sendable {
+    case claude
+    case hermes
+  }
+
+  public struct HermesSettings: Codable, Sendable, Equatable {
+    /// Chemin de l'exécutable `hermes`. Résolu via `PATH` s'il est absent.
+    public var binary: String?
+    /// Répertoire de travail quand la room n'en fixe pas.
+    public var defaultCwd: String?
+    public var model: String?
+    /// Au-delà, on tue le processus et on le dit dans la room.
+    public var timeoutSeconds: Int = 300
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+      case binary, defaultCwd, model, timeoutSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      binary = try c.decodeIfPresent(String.self, forKey: .binary)
+      defaultCwd = try c.decodeIfPresent(String.self, forKey: .defaultCwd)
+      model = try c.decodeIfPresent(String.self, forKey: .model)
+      timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 300
+    }
   }
 
   public enum RoomMode: String, Codable, Sendable {
@@ -101,11 +138,14 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     public var systemPrompt: String = ClaudeSettings.defaultSystemPrompt
     /// Au-delà, on tue le processus et on le dit dans la room.
     public var timeoutSeconds: Int = 300
+    /// Les outils hors de `allowedTools` : refusés (`enabled: false`), ou
+    /// demandés dans la room et accordés par un 👍 d'un propriétaire.
+    public var permission: PermissionSettings = PermissionSettings()
 
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-      case binary, defaultCwd, allowedTools, model, systemPrompt, timeoutSeconds
+      case binary, defaultCwd, allowedTools, model, systemPrompt, timeoutSeconds, permission
     }
 
     public init(from decoder: Decoder) throws {
@@ -116,6 +156,23 @@ public struct AgentConfig: Codable, Sendable, Equatable {
       model = try c.decodeIfPresent(String.self, forKey: .model)
       systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? Self.defaultSystemPrompt
       timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 300
+      permission = try c.decodeIfPresent(PermissionSettings.self, forKey: .permission) ?? PermissionSettings()
+    }
+
+    public struct PermissionSettings: Codable, Sendable, Equatable {
+      public var enabled: Bool = false
+      /// Le temps laissé au 👍 avant que la demande ne devienne un refus.
+      public var timeoutSeconds: Int = 120
+
+      public init() {}
+
+      private enum CodingKeys: String, CodingKey { case enabled, timeoutSeconds }
+
+      public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 120
+      }
     }
 
     public static let defaultSystemPrompt = """

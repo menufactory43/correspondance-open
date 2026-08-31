@@ -7,7 +7,8 @@ import Foundation
 //   correspondance-agent init            écrit ~/.correspondance-agent/config.json
 //   correspondance-agent rooms           liste les rooms rejointes (pour la config)
 //   correspondance-agent run             tourne (défaut)
-//   correspondance-agent ask "…"         un tour de Claude sans Matrix (diagnostic)
+//   correspondance-agent ask "…"         un tour du moteur sans Matrix (diagnostic)
+//   correspondance-agent doctor          quels moteurs la machine sait lancer
 //   CORRESPONDANCE_AGENT_HOME=/chemin    change le dossier de config/état
 //
 // Pas de `main.swift` : son code de premier niveau est `@MainActor`, et un
@@ -39,6 +40,26 @@ struct AgentCommand {
     }
   }
 
+  /// Le moteur que la config désigne, ou l'échec qui dit quoi installer.
+  static func makeBackend(_ config: AgentConfig) -> any AgentBackend {
+    switch config.backend {
+    case .claude:
+      guard ClaudeCodeBackend.resolveBinary(config.claude.binary) != nil else {
+        fail("`claude` introuvable — installe Claude Code ou renseigne claude.binary")
+      }
+      let selfBinary = ClaudeCodeBackend.resolveSelfBinary()
+      if config.claude.permission.enabled, selfBinary == nil {
+        fail("permission.enabled mais je ne retrouve pas mon propre exécutable — lance-moi par un chemin absolu")
+      }
+      return ClaudeCodeBackend(settings: config.claude, selfBinary: selfBinary)
+    case .hermes:
+      guard HermesBackend.resolveBinary(config.hermes.binary) != nil else {
+        fail("`hermes` introuvable — installe Hermes (Nous Research) ou renseigne hermes.binary")
+      }
+      return HermesBackend(settings: config.hermes)
+    }
+  }
+
   static func main() async {
     let command = CommandLine.arguments.dropFirst().first ?? "run"
     switch command {
@@ -58,7 +79,7 @@ struct AgentCommand {
       let prompt = CommandLine.arguments.dropFirst(2).joined(separator: " ")
       guard !prompt.isEmpty else { fail("ask : il manque la question") }
       do {
-        let turn = try await ClaudeCodeBackend(settings: config.claude).run(prompt: prompt, cwd: nil, sessionID: nil)
+        let turn = try await makeBackend(config).run(prompt: prompt, cwd: nil, sessionID: nil)
         print(turn.text)
         print("— session \(turn.sessionID ?? "?")\(turn.isError ? " (erreur)" : "")")
       } catch {
@@ -80,18 +101,30 @@ struct AgentCommand {
 
     case "run":
       let config = loadConfig()
-      guard ClaudeCodeBackend.resolveBinary(config.claude.binary) != nil else {
-        fail("`claude` introuvable — installe Claude Code ou renseigne claude.binary")
-      }
-      let agent = Agent(config: config, backend: ClaudeCodeBackend(settings: config.claude), stateURL: stateURL, log: { stamp($0) })
+      let agent = Agent(config: config, backend: makeBackend(config), stateURL: stateURL, log: { stamp($0) })
       do {
         try await agent.run()
       } catch {
         fail(error.localizedDescription)
       }
 
+    // Quels moteurs cette machine sait lancer, et si celui de la config est là.
+    case "doctor":
+      let config = (try? AgentConfig.load(from: configURL)) ?? AgentConfig.example()
+      let scan = await Task.detached { EngineScan.scan(config: config) }.value
+      print(scan.reportFR(backend: config.backend))
+      if !scan.isPresent(config.backend) { exit(1) }
+
+    // Serveur MCP éphémère, lancé par `claude` (jamais à la main) : il porte
+    // les demandes d'outils au spool et attend le 👍. Cf. `Permission`.
+    case "permission-tool":
+      let args = CommandLine.arguments.dropFirst(2)
+      guard let spoolPath = args.first else { fail("permission-tool : il manque le dossier de spool") }
+      let timeout = args.dropFirst().first.flatMap(Int.init) ?? 120
+      PermissionTool(spool: URL(fileURLWithPath: spoolPath), timeoutSeconds: timeout).serve()
+
     default:
-      fail("commande inconnue « \(command) » — init | rooms | run | ask")
+      fail("commande inconnue « \(command) » — init | rooms | run | ask | doctor")
     }
   }
 }

@@ -15,8 +15,16 @@ public struct AgentTurn: Sendable, Equatable {
 
 /// Ce qu'un moteur doit savoir faire. Claude Code aujourd'hui ; `codex exec` ou
 /// `gemini` demain sur le même contrat — chacun sur son abonnement.
+/// `permissionSpool` : le dossier où le moteur dépose ses demandes d'outils et
+/// attend les décisions (cf. `Permission`). `nil` : hors liste blanche, refus.
 public protocol AgentBackend: Sendable {
-  func run(prompt: String, cwd: String?, sessionID: String?) async throws -> AgentTurn
+  func run(prompt: String, cwd: String?, sessionID: String?, permissionSpool: URL?) async throws -> AgentTurn
+}
+
+extension AgentBackend {
+  public func run(prompt: String, cwd: String?, sessionID: String?) async throws -> AgentTurn {
+    try await run(prompt: prompt, cwd: cwd, sessionID: sessionID, permissionSpool: nil)
+  }
 }
 
 public enum AgentBackendError: Error, LocalizedError {
@@ -75,85 +83,86 @@ public enum ClaudeOutput {
 /// l'abonnement de la machine. Jamais de clé API ici.
 public struct ClaudeCodeBackend: AgentBackend {
   public var settings: AgentConfig.ClaudeSettings
+  /// Le chemin absolu de `correspondance-agent` lui-même : c'est lui que
+  /// `claude` relance en serveur MCP (`permission-tool`) quand un spool est fourni.
+  public var selfBinary: String?
 
-  public init(settings: AgentConfig.ClaudeSettings) {
+  public init(settings: AgentConfig.ClaudeSettings, selfBinary: String? = nil) {
     self.settings = settings
+    self.selfBinary = selfBinary
   }
 
   /// Les arguments, sans le prompt (il passe par stdin : pas de limite de
   /// longueur, pas d'échappement).
-  public static func arguments(settings: AgentConfig.ClaudeSettings, sessionID: String?) -> [String] {
+  public static func arguments(
+    settings: AgentConfig.ClaudeSettings,
+    sessionID: String?,
+    permission: (spool: String, selfBinary: String)? = nil
+  ) -> [String] {
     var args = ["-p", "--output-format", "json"]
     if let sessionID { args += ["--resume", sessionID] }
     if !settings.allowedTools.isEmpty { args += ["--allowedTools", settings.allowedTools.joined(separator: ",")] }
     if let model = settings.model { args += ["--model", model] }
     if !settings.systemPrompt.isEmpty { args += ["--append-system-prompt", settings.systemPrompt] }
+    if let permission {
+      // Un serveur MCP éphémère — nous-même, en sous-commande — et la consigne
+      // de lui demander tout outil hors liste blanche au lieu de le refuser.
+      let server: [String: Any] = [
+        "command": permission.selfBinary,
+        "args": ["permission-tool", permission.spool, String(settings.permission.timeoutSeconds)],
+      ]
+      let mcpConfig = ["mcpServers": ["cc-perm": server]]
+      if let data = try? JSONSerialization.data(withJSONObject: mcpConfig),
+         let json = String(data: data, encoding: .utf8) {
+        args += ["--mcp-config", json, "--permission-prompt-tool", "mcp__cc-perm__approve"]
+      }
+    }
     return args
   }
 
+  /// Le chemin absolu de l'exécutable courant — `claude` le lancera depuis un
+  /// autre répertoire, un chemin relatif ne survivrait pas.
+  public static func resolveSelfBinary() -> String? {
+    let arg0 = CommandLine.arguments.first ?? ""
+    let url: URL
+    if arg0.hasPrefix("/") {
+      url = URL(fileURLWithPath: arg0)
+    } else if arg0.contains("/") {
+      url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(path: arg0)
+    } else {
+      let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+      guard let dir = path.split(separator: ":").first(where: {
+        FileManager.default.isExecutableFile(atPath: "\($0)/\(arg0)")
+      }) else { return nil }
+      url = URL(fileURLWithPath: "\(dir)/\(arg0)")
+    }
+    let resolved = url.resolvingSymlinksInPath().path()
+    return FileManager.default.isExecutableFile(atPath: resolved) ? resolved : nil
+  }
+
   public static func resolveBinary(_ configured: String?) -> String? {
-    if let configured, FileManager.default.isExecutableFile(atPath: configured) { return configured }
-    let home = FileManager.default.homeDirectoryForCurrentUser.path()
-    let candidates = [
-      "\(home)/.local/bin/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude", "/usr/bin/claude",
-    ]
-    if let found = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) { return found }
-    let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
-    for dir in path.split(separator: ":") {
-      let candidate = "\(dir)/claude"
-      if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
-    }
-    return nil
+    Subprocess.find("claude", configured: configured)
   }
 
-  public func run(prompt: String, cwd: String?, sessionID: String?) async throws -> AgentTurn {
+  public func run(prompt: String, cwd: String?, sessionID: String?, permissionSpool: URL?) async throws -> AgentTurn {
     guard let binary = Self.resolveBinary(settings.binary) else { throw AgentBackendError.binaryNotFound }
-    let args = Self.arguments(settings: settings, sessionID: sessionID)
+    var permission: (spool: String, selfBinary: String)?
+    var extraEnv: [String: String] = [:]
+    var timeout = settings.timeoutSeconds
+    if let permissionSpool, let selfBinary = selfBinary ?? Self.resolveSelfBinary() {
+      permission = (spool: permissionSpool.path(), selfBinary: selfBinary)
+      // Le temps d'un 👍 s'ajoute au tour : ni Claude (timeout d'appel MCP),
+      // ni nous (timeout du processus) ne devons couper avant l'humain.
+      extraEnv["MCP_TOOL_TIMEOUT"] = String((settings.permission.timeoutSeconds + 30) * 1000)
+      timeout += settings.permission.timeoutSeconds
+    }
+    let args = Self.arguments(settings: settings, sessionID: sessionID, permission: permission)
     let workdir = cwd ?? settings.defaultCwd
-    let timeout = settings.timeoutSeconds
-    let data = try await Task.detached(priority: .userInitiated) {
-      try Self.runBlocking(binary: binary, arguments: args, stdin: prompt, cwd: workdir, timeoutSeconds: timeout)
+    let deadline = timeout
+    let env = extraEnv
+    let output = try await Task.detached(priority: .userInitiated) {
+      try Subprocess.run(binary: binary, arguments: args, stdin: prompt, cwd: workdir, timeoutSeconds: deadline, extraEnv: env)
     }.value
-    return try ClaudeOutput.parse(data)
-  }
-
-  /// Bloquant, à appeler hors de l'acteur. `Process` n'est pas `Sendable` :
-  /// il naît et meurt ici.
-  private static func runBlocking(binary: String, arguments: [String], stdin: String, cwd: String?, timeoutSeconds: Int) throws -> Data {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: binary)
-    process.arguments = arguments
-    if let cwd { process.currentDirectoryURL = URL(fileURLWithPath: cwd) }
-    // Un `claude` lancé depuis un autre `claude` refuse de démarrer : on ne
-    // lui transmet pas les marqueurs de la session parente.
-    var env = ProcessInfo.processInfo.environment
-    for key in env.keys where key.hasPrefix("CLAUDECODE") || key.hasPrefix("CLAUDE_CODE_") { env.removeValue(forKey: key) }
-    process.environment = env
-
-    let input = Pipe(), output = Pipe(), errors = Pipe()
-    process.standardInput = input
-    process.standardOutput = output
-    process.standardError = errors
-    try process.run()
-    input.fileHandleForWriting.write(Data(stdin.utf8))
-    try input.fileHandleForWriting.close()
-
-    // Lire avant d'attendre : un tube plein bloquerait l'enfant.
-    let outData = output.fileHandleForReading.readDataToEndOfFile()
-    let errData = errors.fileHandleForReading.readDataToEndOfFile()
-
-    let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
-    while process.isRunning {
-      if Date() >= deadline {
-        process.terminate()
-        throw AgentBackendError.timedOut(seconds: timeoutSeconds)
-      }
-      Thread.sleep(forTimeInterval: 0.05)
-    }
-    guard process.terminationStatus == 0 || !outData.isEmpty else {
-      let stderr = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-      throw AgentBackendError.exit(code: process.terminationStatus, stderr: String(stderr.suffix(400)))
-    }
-    return outData
+    return try ClaudeOutput.parse(output.stdout)
   }
 }

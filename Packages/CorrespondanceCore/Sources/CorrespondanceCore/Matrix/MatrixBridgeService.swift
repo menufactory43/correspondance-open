@@ -354,6 +354,32 @@ public actor MatrixBridgeService {
     MatrixIdentity.agentUserID(sameServerAs: selfUserID)
   }
 
+  /// Ce que l'agent dit de lui-même : à chaque démarrage il scanne sa machine
+  /// et poste `fr.correspondance.agent.status` dans la note à soi —
+  /// « moteur hermes · prêts : claude, hermes ». C'est ainsi que les réglages
+  /// savent si un Hermes est présent, sans SSH : les moteurs vivent là où
+  /// l'agent tourne, pas là où l'app tourne. (La présence Matrix aurait été le
+  /// canal naturel ; elle est éteinte sur le Relais, exprès.)
+  public struct AgentStatus: Sendable, Equatable {
+    /// La ligne des moteurs, telle que l'agent l'a publiée.
+    public var engines: String
+    /// Le démarrage qui l'a publiée — un status vieux d'un mois parle d'un
+    /// agent qui ne redémarre plus.
+    public var publishedAt: Date
+  }
+
+  /// Le dernier status de cc dans la note à soi, ou `nil` : agent jamais
+  /// démarré, trop ancien pour publier, ou pas invité dans la note à soi.
+  public func agentStatus() async throws -> AgentStatus? {
+    guard let roomID = relayState.selfNoteRoomID else { return nil }
+    let messages = try await client.roomMessages(roomID: roomID, limit: 80)
+    let status = messages.chunk.first { event in
+      event.type == "fr.correspondance.agent.status" && event.sender == agentUserID
+    }
+    guard let status, let body = status.content?.string(at: "body") else { return nil }
+    return AgentStatus(engines: body, publishedAt: status.sentAt)
+  }
+
   /// L'agent est-il déjà membre (ou invité) de ce fil ?
   public func hasAgent(conversationID: String) -> Bool {
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }

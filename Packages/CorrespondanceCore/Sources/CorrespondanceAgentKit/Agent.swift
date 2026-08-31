@@ -17,6 +17,16 @@ public actor Agent {
   private var members: [String: Set<String>] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
+  /// Les demandes de permission posées dans une room, en attente d'un 👍 —
+  /// clef : l'event de la question ; valeur : où écrire la décision.
+  private var pendingPermissions: [String: PendingPermission] = [:]
+
+  struct PendingPermission {
+    var spool: URL
+    var requestID: String
+    var roomID: String
+    var toolName: String
+  }
   /// Le mode par défaut que l'app a écrit dans l'account data globale
   /// (`fr.correspondance.agent.settings`). `nil` tant qu'elle n'a rien dit :
   /// c'est alors la config qui décide. Cf. `AgentMode`.
@@ -90,6 +100,11 @@ public actor Agent {
     }
     log("à l'écoute de « \(config.trigger) » pour \(config.owners.joined(separator: ", ")) — plafond \(config.hourlyCap)/h")
 
+    // La machine des moteurs, c'est celle-ci : on scanne, et on le dit dans
+    // les rooms en tête-à-tête (la note à soi en tête) — l'app le lit dans les
+    // réglages, sans SSH. La présence Matrix est éteinte sur le Relais, exprès.
+    Task { await self.publishStatus() }
+
     while !Task.isCancelled {
       do {
         let response = try await client.sync(since: state.nextBatch, timeoutMilliseconds: 30_000)
@@ -99,8 +114,9 @@ public actor Agent {
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
           for event in room.timeline?.events ?? [] {
-            guard event.sender != credentials.userID,
-                  let request = Trigger.request(from: event, roomID: roomID, config: config, notBefore: notBefore)
+            guard event.sender != credentials.userID else { continue }
+            if resolvePermission(from: event) { continue }
+            guard let request = Trigger.request(from: event, roomID: roomID, config: config, notBefore: notBefore)
             else { continue }
             dispatch(request)
           }
@@ -220,9 +236,28 @@ public actor Agent {
       Task { [client] in try? await client.sendTyping(roomID: request.roomID, isTyping: false) }
     }
 
+    // Le spool du tour : `claude` y dépose ses demandes d'outils, le guetteur
+    // les porte dans la room, un 👍 y répond. Sans permission activée : rien.
+    var spool: URL?
+    var watcher: Task<Void, Never>?
+    if config.claude.permission.enabled {
+      let dir = stateURL.deletingLastPathComponent().appending(path: "permissions/\(UUID().uuidString)")
+      try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+      spool = dir
+      watcher = Task { await self.watchPermissionRequests(in: dir, for: request) }
+    }
+    defer {
+      watcher?.cancel()
+      if let spool {
+        pendingPermissions = pendingPermissions.filter { $0.value.spool != spool }
+        try? FileManager.default.removeItem(at: spool)
+      }
+    }
+
     do {
       let cwd = config.rooms[request.roomID]?.cwd
-      let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID])
+      let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
         try? persist()
@@ -234,6 +269,100 @@ public actor Agent {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
     }
+  }
+
+  // MARK: - Status
+
+  /// Scanne les moteurs et poste `fr.correspondance.agent.status` dans chaque
+  /// room en tête-à-tête avec les propriétaires. Les ponts ignorent ce type,
+  /// et on ne le poste de toute façon jamais devant des tiers.
+  private func publishStatus() async {
+    let config = self.config
+    let scan = await Task.detached { EngineScan.scan(config: config) }.value
+    let line = scan.statusLine(backend: config.backend)
+    log("moteurs : \(line)")
+    guard let joined = try? await client.joinedRooms() else { return }
+    for roomID in joined {
+      guard await isPrivateWithOwners(roomID) else { continue }
+      do {
+        try await client.sendEvent(
+          roomID: roomID,
+          type: AgentEvents.statusType,
+          content: AgentEvents.status(body: line, agent: config.user)
+        )
+      } catch {
+        log("[\(roomID)] status impostable : \(error.localizedDescription)")
+      }
+    }
+  }
+
+  // MARK: - Permissions
+
+  /// Guette le spool tant que le tour dure : chaque demande de `claude`
+  /// devient une question dans la room où l'ordre a été donné.
+  private func watchPermissionRequests(in spool: URL, for request: AgentRequest) async {
+    var asked: Set<String> = []
+    while !Task.isCancelled {
+      for pending in Permission.pendingRequests(in: spool) where !asked.contains(pending.id) {
+        asked.insert(pending.id)
+        await askPermission(pending, in: spool, for: request)
+      }
+      try? await Task.sleep(for: .milliseconds(500))
+    }
+  }
+
+  /// Pose la question. En tête-à-tête : un message ordinaire, lisible partout
+  /// (Correspondance, Element, le téléphone). Devant des tiers ou un pont : un
+  /// event `fr.correspondance.agent.permission`, que les ponts ne relaient pas
+  /// — la demande ne part jamais vers le réseau.
+  private func askPermission(_ pending: Permission.Request, in spool: URL, for request: AgentRequest) async {
+    let body = "🔐 cc veut utiliser \(pending.toolName) : \(pending.summary)\n👍 pour autoriser, 👎 pour refuser."
+    do {
+      let eventID: String?
+      if await isPrivateWithOwners(request.roomID) {
+        eventID = try await client.sendText(roomID: request.roomID, body: body, replyToEventID: request.eventID)
+      } else {
+        eventID = try await client.sendEvent(
+          roomID: request.roomID,
+          type: AgentEvents.permissionType,
+          content: AgentEvents.permission(body: body, tool: pending.toolName, agent: config.user, inReplyTo: request.eventID)
+        )
+      }
+      guard let eventID else { return }
+      pendingPermissions[eventID] = PendingPermission(
+        spool: spool, requestID: pending.id, roomID: request.roomID, toolName: pending.toolName
+      )
+      log("[\(request.roomID)] permission demandée : \(pending.toolName)")
+    } catch {
+      log("[\(request.roomID)] demande de permission impossible : \(error.localizedDescription)")
+      try? Permission.write(.init(allow: false, message: "la question n'a pas pu être posée"), in: spool, id: pending.id)
+    }
+  }
+
+  /// Un 👍 (ou 👎) d'un propriétaire sur une question en attente la tranche.
+  /// Tout autre event ressort sans effet. `👍🏻` et ses variantes comptent :
+  /// le scalaire de tête suffit.
+  private func resolvePermission(from event: MatrixEvent) -> Bool {
+    guard event.type == "m.reaction",
+          let target = event.content?.string(at: "m.relates_to.event_id"),
+          let pending = pendingPermissions[target]
+    else { return false }
+    guard let sender = event.sender, config.owners.contains(sender),
+          let key = event.content?.string(at: "m.relates_to.key")
+    else { return true } // la question est à nous, mais pas la réaction : on l'ignore
+    let allow: Bool
+    if key.hasPrefix("👍") { allow = true } else if key.hasPrefix("👎") { allow = false } else { return true }
+    pendingPermissions.removeValue(forKey: target)
+    do {
+      try Permission.write(
+        .init(allow: allow, message: allow ? nil : "refusé par \(sender) depuis la conversation"),
+        in: pending.spool, id: pending.requestID
+      )
+      log("[\(pending.roomID)] \(pending.toolName) : \(allow ? "autorisé" : "refusé") par \(sender)")
+    } catch {
+      log("[\(pending.roomID)] décision inécrivable : \(error.localizedDescription)")
+    }
+    return true
   }
 
   /// La réponse va là où l'ordre a été donné, dans la forme que la room impose.
