@@ -105,10 +105,21 @@ public final class LinkPreviewStore {
     return result
   }
 
-  /// La vignette, décodée une fois pour toutes.
+  /// Côté maximal, en pixels, d'une vignette de carte : deux fois la largeur
+  /// de la carte, pour un écran Retina. Une image livrée par le pont peut faire
+  /// plusieurs mégapixels ; la carte n'en montre jamais plus que ça.
+  public nonisolated static let thumbnailMaxPixel: CGFloat = 720
+
+  /// La vignette, décodée une fois pour toutes — et réduite à la taille de la
+  /// carte. Un fil de deux cents messages porte des dizaines d'aperçus : les
+  /// garder en pleine résolution, c'est des dizaines de mégapixels que le
+  /// compositeur remanie à chaque image, et un défilement qui s'alourdit.
   public func thumbnail(atPath path: String) -> PlatformImage? {
     if let hit = thumbnails[path] { return hit }
-    guard let image = PlatformImage(contentsOfFile: path) else { return nil }
+    let url = URL(fileURLWithPath: path)
+    guard let image = AttachmentThumbnailStore.downsample(url: url, maxPixel: Self.thumbnailMaxPixel)
+      ?? PlatformImage(contentsOfFile: path)
+    else { return nil }
     thumbnails[path] = image
     return image
   }

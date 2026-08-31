@@ -105,7 +105,10 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
   /// garder l'image pleine résolution en mémoire ; `ShouldCacheImmediately` sur
   /// la vignette la décode ici plutôt qu'au premier affichage, c'est-à-dire hors
   /// du fil principal.
-  fileprivate static func downsample(url: URL, maxPixel: CGFloat) -> PlatformImage? {
+  /// Décode `url` réduite à `maxPixel` de côté, par ImageIO, sans jamais
+  /// charger l'image entière : c'est la seule façon de garder la mémoire GPU
+  /// proportionnelle à ce qui s'affiche, et non à ce que le réseau a livré.
+  static func downsample(url: URL, maxPixel: CGFloat) -> PlatformImage? {
     let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
     guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
       return nil
