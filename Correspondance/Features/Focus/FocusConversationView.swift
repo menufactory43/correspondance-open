@@ -189,6 +189,8 @@ struct FocusTranscriptView: View {
       && store.didSettleInitialMatrixSync
       && message.id == thread.last?.id
       && message.id != settledMessageID
+      // Un message d'hier découvert en ouvrant la page est déjà vu : posé, pas tracé.
+      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
   }
 
   private func noteArrival(increased: Bool) {
@@ -434,7 +436,9 @@ struct FocusTranscriptView: View {
       LaunchGate.markThreadPainted()
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = thread.last?.id
-      animatesArrivals = true
+      // Une page encore vide n'arme pas le geste : ce qui va la remplir est un
+      // chargement, pas une arrivée. Cf. `ThreadView`.
+      animatesArrivals = !thread.isEmpty
     }
   }
 

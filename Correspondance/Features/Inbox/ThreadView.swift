@@ -300,6 +300,8 @@ struct ThreadView: View {
       && store.didSettleInitialMatrixSync
       && message.id == store.messages.last?.id
       && message.id != settledMessageID
+      // Un message d'hier découvert en ouvrant le fil est déjà vu : posé, pas tracé.
+      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
   }
 
   private func noteArrival(increased: Bool) {
@@ -354,7 +356,10 @@ struct ThreadView: View {
       }
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = store.messages.last?.id
-      animatesArrivals = true
+      // Un fil encore vide (la session vient de naître, le chargement suit)
+      // n'arme pas le geste : ce qui va le remplir est un chargement, pas une
+      // arrivée. Il s'armera à la passe suivante, une fois le fil posé.
+      animatesArrivals = !store.messages.isEmpty
     }
   }
 }
