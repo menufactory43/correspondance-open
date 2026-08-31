@@ -288,6 +288,16 @@ struct MessageBubble: View {
         typeface: typeface,
         isFromMe: message.isFromMe
       )
+    } else if let url = repaired.resolvedFileURL, repaired.isGIF {
+      // Un GIF se joue : montrer sa première trame, ce serait le rater.
+      AnimatedImageView(
+        url: url,
+        maxWidth: 300,
+        maxHeight: 420,
+        cornerRadius: 16,
+        placeholder: theme.bubbleIn,
+        label: repaired.filename ?? "image animée"
+      )
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       // En grand : sur un écran de téléphone, une photo de 280 points est un
       // timbre. On la laisse prendre la largeur utile de la bulle.

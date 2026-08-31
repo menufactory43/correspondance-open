@@ -201,3 +201,61 @@ final class FacetedSearchHitsTests: XCTestCase {
     XCTAssertEqual(hit.id, "whatsapp:!a:relais|$1")
   }
 }
+
+/// Un GIF est une image que les réseaux ne distinguent que par son type MIME.
+final class GIFAttachmentTests: XCTestCase {
+  func testLeTypeMimeFaitLeGIF() {
+    XCTAssertTrue(MessageAttachment(id: "mxc://a/b", contentType: "image/gif").isGIF)
+    XCTAssertFalse(MessageAttachment(id: "mxc://a/b", contentType: "image/jpeg").isGIF)
+  }
+
+  func testSansTypeDeclareLExtensionTranche() {
+    XCTAssertTrue(
+      MessageAttachment(id: "mxc://a/b", contentType: "", filename: "rire.gif").isGIF
+    )
+    XCTAssertFalse(
+      MessageAttachment(id: "mxc://a/b", contentType: "", filename: "plage.jpg").isGIF
+    )
+    // Un type déclaré et non « gif » fait foi, même sur un fichier mal nommé.
+    XCTAssertFalse(
+      MessageAttachment(id: "mxc://a/b", contentType: "image/png", filename: "rire.gif").isGIF
+    )
+  }
+
+  func testUnGIFResteUneImageMaisSeNommeAutrement() {
+    let gif = MessageAttachment(id: "mxc://a/b", contentType: "image/gif", filename: "rire.gif")
+    XCTAssertTrue(gif.isImage)
+    let message = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!a:relais", network: .whatsapp, text: "",
+      sentAt: .init(timeIntervalSince1970: 1), isFromMe: false, attachments: [gif]
+    )
+    XCTAssertEqual(message.sidebarPreviewText, "GIF")
+  }
+
+  func testUnGIFTombeDansLOngletImages() {
+    let gif = MessageAttachment(id: "mxc://a/b", contentType: "image/gif", filename: "rire.gif")
+    let message = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!a:relais", network: .whatsapp, text: "",
+      sentAt: .init(timeIntervalSince1970: 1), isFromMe: false, attachments: [gif]
+    )
+    XCTAssertTrue(FacetedSearch.matches(message, facet: .images))
+    XCTAssertFalse(FacetedSearch.matches(message, facet: .files))
+  }
+
+  func testLeSyncGardeLeTypeGIFDeLaPieceJointe() throws {
+    let json = """
+    {"next_batch":"s1","rooms":{"join":{"!a:relais":{
+      "state":{"events":[{"type":"m.bridge","state_key":"","content":{"protocol":{"id":"whatsappgo"}}}]},
+      "timeline":{"events":[{
+        "type":"m.room.message","event_id":"$1","sender":"@whatsapp_lid-1:relais",
+        "origin_server_ts":1800000000000,
+        "content":{"msgtype":"m.image","body":"rire.gif","url":"mxc://a/b",
+          "info":{"mimetype":"image/gif","w":320,"h":240}}}]}}}}}
+    """
+    let parser = MatrixSyncParser(selfUserID: "@meffysto:relais")
+    var rooms: [String: MatrixRoomModel] = [:]
+    parser.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(json.utf8)), to: &rooms)
+    let piece = try XCTUnwrap(rooms["!a:relais"]?.messagesByID["$1"]?.attachments.first)
+    XCTAssertTrue(piece.isGIF)
+  }
+}

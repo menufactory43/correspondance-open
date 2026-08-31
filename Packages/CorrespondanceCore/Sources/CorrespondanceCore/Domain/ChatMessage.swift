@@ -27,6 +27,20 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
     return ["mp4", "mov", "m4v"].contains(ext)
   }
 
+  /// Une image animée. Les réseaux la disent tous pareil : `msgtype` `m.image`
+  /// et `info.mimetype` `image/gif` — un GIF n'a pas de type d'event à lui.
+  /// La bulle la joue en boucle plutôt que d'en montrer la première image.
+  public var isGIF: Bool {
+    if contentType.lowercased() == "image/gif" { return true }
+    // Un type déclaré et non « gif » fait foi : c'est le réseau qui parle.
+    guard !contentType.hasPrefix("image/") else { return false }
+    let ext = (filename.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? localPath.map { URL(fileURLWithPath: $0).pathExtension }
+      ?? id.split(separator: ".").last.map(String.init)
+      ?? "").lowercased()
+    return ext == "gif"
+  }
+
   /// Message audio : iMessage les dépose en `.caf` (`audio/x-caf`), les autres
   /// réseaux en `.ogg`, `.m4a` ou `.mp3`. Le fil les joue sur place.
   public var isAudio: Bool {
@@ -278,6 +292,8 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     if isRetracted { return "Message annulé" }
     if let poll { return "📊 \(poll.question)" }
     if !text.isEmpty { return text }
+    // Le GIF passe avant la photo : c'en est une, mais on la nomme autrement.
+    if attachments.contains(where: \.isGIF) { return "GIF" }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
     if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
     if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }

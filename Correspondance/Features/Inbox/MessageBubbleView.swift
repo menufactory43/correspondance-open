@@ -500,6 +500,16 @@ struct MessageBubbleView: View {
         typeface: typeface,
         isFromMe: message.isFromMe
       )
+    } else if let url = repaired.resolvedFileURL, repaired.isGIF {
+      // Un GIF se joue : montrer sa première trame, ce serait le rater.
+      AnimatedImageView(
+        url: url,
+        maxWidth: 280,
+        maxHeight: 320,
+        cornerRadius: 12,
+        placeholder: theme.bubbleIn,
+        label: repaired.filename ?? "image animée"
+      )
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       AttachmentImageView(
         url: url,
