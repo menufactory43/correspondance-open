@@ -259,6 +259,23 @@ public actor MatrixClient {
     )
   }
 
+  /// `PUT /rooms/{r}/typing/{u}` — dire qu'on écrit, ou qu'on a fini.
+  ///
+  /// `timeout` est la durée pendant laquelle le serveur tient l'information
+  /// pour vraie sans nouvelle nouvelle : on le renouvelle tant qu'on tape, et
+  /// on envoie `typing: false` dès qu'on s'arrête (envoi, champ vidé, fil
+  /// quitté) plutôt que de laisser expirer.
+  public func sendTyping(roomID: String, isTyping: Bool, timeoutMilliseconds: Int = 20_000) async throws {
+    let user = try userID()
+    var content: [String: MatrixJSON] = ["typing": .bool(isTyping)]
+    if isTyping { content["timeout"] = .number(Double(timeoutMilliseconds)) }
+    _ = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/typing/\(Self.escape(user))",
+      body: .object(content)
+    )
+  }
+
   /// Retire un event — c'est ainsi qu'on retire une réaction.
   @discardableResult
   public func redact(

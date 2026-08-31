@@ -24,7 +24,10 @@ public struct MatrixSyncParser: Sendable {
         applyPoll(event, roomID: roomID, to: &model)
         applyRedaction(event, to: &model)
       }
-      for event in (room.ephemeral?.events ?? []) { applyReceipt(event, to: &model) }
+      for event in (room.ephemeral?.events ?? []) {
+        applyReceipt(event, to: &model)
+        applyTyping(event, to: &model)
+      }
       if let heroes = room.summary?.heroes { model.heroes = heroes }
       if let count = room.unreadNotifications?.notificationCount { model.unreadCount = count }
       resolveQuotes(in: &model)
@@ -575,6 +578,21 @@ public struct MatrixSyncParser: Sendable {
         model.readMarkerByUser[userID] = eventID
       }
     }
+  }
+
+  /// `m.typing` : `{ "user_ids": ["@alice:serveur"] }`.
+  ///
+  /// C'est une EDU, elle ne revient qu'au **changement** : une liste vide veut
+  /// dire « plus personne », et l'absence d'event ne veut rien dire du tout.
+  /// D'où la date, qui fait expirer l'indicateur toute seule.
+  ///
+  /// Les ponts mautrix relaient la frappe dans les deux sens pour WhatsApp et
+  /// Signal ; Instagram l'envoie sans toujours la recevoir.
+  private func applyTyping(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == "m.typing", let content = event.content else { return }
+    let ids = (content["user_ids"]?.arrayValue ?? []).compactMap(\.stringValue)
+    model.typingUserIDs = Set(ids)
+    model.typingUpdatedAt = Date()
   }
 
   /// `m.room.redaction` : retire la réaction (ou le message) supprimé.

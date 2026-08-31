@@ -33,6 +33,39 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Qui est en train d'écrire, d'après la dernière EDU `m.typing`, et quand
+  /// on l'a apprise. L'EDU n'est renvoyée qu'au **changement** : sans date, un
+  /// « Alice écrit… » resterait à l'écran jusqu'au prochain message.
+  public var typingUserIDs: Set<String> = []
+  public var typingUpdatedAt: Date = .distantPast
+
+  /// Au-delà, on considère que la personne a fini d'écrire. Le serveur donne
+  /// aux clients un `timeout` de 20 à 30 s ; on prend la borne basse, quitte à
+  /// faire clignoter l'indicateur plutôt qu'à le laisser mentir.
+  public static let typingLifetime: TimeInterval = 20
+
+  /// Les personnes qui écrivent VRAIMENT, maintenant — moi excepté.
+  public func typingUserIDs(now: Date, selfUserID: String) -> [String] {
+    guard now.timeIntervalSince(typingUpdatedAt) < Self.typingLifetime else { return [] }
+    return typingUserIDs.filter { $0 != selfUserID }.sorted()
+  }
+
+  /// « Alice écrit… », « Alice et Bruno écrivent… », « 3 personnes écrivent… ».
+  /// `nil` quand personne n'écrit : la vue n'a alors rien à réserver.
+  public func typingLabelFR(now: Date, selfUserID: String) -> String? {
+    let names = typingUserIDs(now: now, selfUserID: selfUserID)
+      .map { members[$0]?.displayName ?? "" }
+      .filter { !$0.isEmpty }
+    let count = typingUserIDs(now: now, selfUserID: selfUserID).count
+    guard count > 0 else { return nil }
+    switch names.count {
+    case 0: return count == 1 ? "Quelqu'un écrit…" : "\(count) personnes écrivent…"
+    case 1: return "\(names[0]) écrit…"
+    case 2: return "\(names[0]) et \(names[1]) écrivent…"
+    default: return "\(names.count) personnes écrivent…"
+    }
+  }
+
   /// Les sondages du salon, par event de départ. Séparés des messages : trois
   /// events les composent, et une voix arrive souvent avant qu'on ait la
   /// question sous la main.

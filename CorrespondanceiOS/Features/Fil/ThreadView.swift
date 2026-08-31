@@ -125,6 +125,17 @@ struct ThreadView: View {
             .frame(maxWidth: .infinity, alignment: group.isFromMe ? .trailing : .leading)
           }
 
+          // « Alice écrit… », au bas du fil, là où sa bulle apparaîtra.
+          if let typing = store.typingLabel(conversationID) {
+            Text(typing)
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.leading, 6)
+              .transition(.opacity)
+              .accessibilityLabel(typing)
+          }
+
           if let receipt = readReceiptLabel {
             Text(receipt)
               .font(Typography.meta(typeface))

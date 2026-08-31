@@ -283,6 +283,20 @@ public actor MatrixBridgeService {
     Set(rooms.values.filter(\.isNetworkFlaggedRequest).map(\.conversationID))
   }
 
+  /// « Alice écrit… » pour ce fil, ou `nil` si personne n'écrit.
+  public func typingLabel(conversationID: String, now: Date = Date()) -> String? {
+    guard let roomID = roomID(forConversation: conversationID) else { return nil }
+    return rooms[roomID]?.typingLabelFR(now: now, selfUserID: selfUserID)
+  }
+
+  /// Dit au Relais qu'on écrit — ou qu'on a fini. Le pont le relaie au réseau
+  /// (WhatsApp et Signal dans les deux sens ; Instagram l'envoie surtout).
+  public func setTyping(conversationID: String, isTyping: Bool) async {
+    guard let roomID = roomID(forConversation: conversationID) else { return }
+    // Une frappe qui n'arrive pas n'est pas une erreur à montrer : on se tait.
+    try? await client.sendTyping(roomID: roomID, isTyping: isTyping)
+  }
+
   public func messages(conversationID: String) -> [ChatMessage] {
     hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return [] }

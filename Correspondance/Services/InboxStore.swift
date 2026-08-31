@@ -979,6 +979,44 @@ final class InboxStore {
     }
   }
 
+  // MARK: - Indicateurs de frappe
+
+  /// « Alice écrit… » par fil, relu à chaque `/sync`.
+  private(set) var typingLabels: [String: String] = [:]
+  @ObservationIgnored private var typingSentAt: [String: Date] = [:]
+
+  func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+
+  /// Relit qui écrit dans les fils ouverts. Les autres n'intéressent personne :
+  /// un indicateur qu'on ne regarde pas ne vaut pas un aller-retour d'acteur.
+  func refreshTypingLabels() async {
+    var labels: [String: String] = [:]
+    for session in liveSessions {
+      for target in expandedIDs(for: session.conversationID) {
+        if let label = await matrix.typingLabel(conversationID: target) {
+          labels[session.conversationID] = label
+        }
+      }
+    }
+    if labels != typingLabels { typingLabels = labels }
+  }
+
+  /// Dit au Relais qu'on écrit — au plus une fois par dizaine de secondes, le
+  /// serveur tenant l'information vingt.
+  func noteTyping(conversationID: String, isTyping: Bool) {
+    guard isMatrixConnected,
+          conversations.first(where: { $0.id == conversationID })?.network.livesOnRelay == true
+    else { return }
+    if isTyping {
+      guard Date().timeIntervalSince(typingSentAt[conversationID] ?? .distantPast) > 10 else { return }
+      typingSentAt[conversationID] = Date()
+    } else {
+      guard typingSentAt.removeValue(forKey: conversationID) != nil else { return }
+    }
+    let bridge = matrix
+    Task.detached { await bridge.setTyping(conversationID: conversationID, isTyping: isTyping) }
+  }
+
   /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
   func openSelfNote() async {
@@ -1774,6 +1812,7 @@ final class InboxStore {
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
+          await self.refreshTypingLabels()
           // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
           // sauf ce qui attend encore de partir. Et ce qui attend part maintenant.
           await self.flushRelayWrites()

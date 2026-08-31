@@ -231,6 +231,7 @@ final class RelayStore {
       refreshPendingRequests()
       await flushRelayWrites()
       await refreshOpenThreads()
+      await refreshTypingLabels()
     } catch MatrixError.http(let status, let code, _) where status == 401 || code == "M_UNKNOWN_TOKEN" {
       session = .disconnected
       connectionError = "Session expirée sur le Relais — reconnecte-toi."
@@ -468,6 +469,8 @@ final class RelayStore {
   func setDraft(_ text: String, conversationID: String) {
     guard draftText(conversationID) != text else { return }
     localDrafts[conversationID] = text
+    // Écrire, c'est le dire ; effacer tout, c'est dire qu'on a fini.
+    noteTyping(conversationID, isTyping: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     scheduleRelayDraftPush(conversationID: conversationID, text: text)
   }
 
@@ -527,6 +530,7 @@ final class RelayStore {
 
     // Le champ se vide tout de suite : on n'écrit pas contre le réseau.
     localDrafts[conversationID] = ""
+    noteTyping(conversationID, isTyping: false)
     pendingAttachments[conversationID] = []
     replyTargets.removeValue(forKey: conversationID)
     scheduleRelayDraftPush(conversationID: conversationID, text: "")
@@ -718,6 +722,40 @@ final class RelayStore {
   func startBridgeChat(network: MessageNetwork, identifier: String) async throws {
     guard !isDemo else { return }
     try await matrix.startConversation(network: network, identifier: identifier)
+  }
+
+  // MARK: - Indicateurs de frappe
+
+  /// « Alice écrit… » par fil, relu à chaque `/sync`. Vide = personne n'écrit.
+  private(set) var typingLabels: [String: String] = [:]
+  /// Depuis quand on a dit au Relais qu'on écrit — pour renouveler plutôt que
+  /// de le lui redire à chaque touche.
+  private var typingSentAt: [String: Date] = [:]
+
+  func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+
+  private func refreshTypingLabels() async {
+    var labels: [String: String] = [:]
+    for id in Set([selectedConversationID, focusConversationID].compactMap { $0 }) {
+      for target in relayTargets(of: id) {
+        if let label = await matrix.typingLabel(conversationID: target) { labels[id] = label }
+      }
+    }
+    if labels != typingLabels { typingLabels = labels }
+  }
+
+  /// Dit au Relais qu'on écrit. Renouvelé au plus une fois par dizaine de
+  /// secondes : le serveur tient l'information vingt, inutile de le marteler.
+  private func noteTyping(_ conversationID: String, isTyping: Bool) {
+    guard !isDemo, session == .connected, let target = sendingTarget(conversationID) else { return }
+    if isTyping {
+      let last = typingSentAt[target] ?? .distantPast
+      guard Date().timeIntervalSince(last) > 10 else { return }
+      typingSentAt[target] = Date()
+    } else {
+      guard typingSentAt.removeValue(forKey: target) != nil else { return }
+    }
+    Task { await matrix.setTyping(conversationID: target, isTyping: isTyping) }
   }
 
   // MARK: - Note à soi

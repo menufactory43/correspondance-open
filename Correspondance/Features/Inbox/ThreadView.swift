@@ -145,6 +145,16 @@ struct ThreadView: View {
               .id("scheduled-\(scheduled.id)")
           }
 
+          // « Alice écrit… », là où sa bulle apparaîtra.
+          if let id = store.selectedConversationID, let typing = store.typingLabel(id) {
+            Text(typing)
+              .font(Typography.meta(themes.typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.leading, 4)
+              .accessibilityLabel(typing)
+          }
+
           // LE bas du fil : sous le dernier message il y a l'accusé, les envois
           // programmés… Viser le message laissait tout ça hors champ.
           Color.clear
