@@ -138,3 +138,66 @@ final class MessageFacetTests: XCTestCase {
     )
   }
 }
+
+/// La recherche par médias : les mêmes résultats sur les deux plateformes,
+/// parce que c'est le même code qui les produit.
+final class FacetedSearchHitsTests: XCTestCase {
+  private func conversation(_ id: String, _ title: String) -> Conversation {
+    Conversation(
+      id: id, network: .whatsapp, address: id, title: title, preview: "…",
+      lastMessageAt: Date(timeIntervalSince1970: 1_800_000_000), unreadCount: 0,
+      isArchived: false, transportKey: id, isGroup: false
+    )
+  }
+
+  private func message(_ id: String, in conversationID: String, at seconds: TimeInterval, image: Bool) -> ChatMessage {
+    ChatMessage(
+      id: id,
+      conversationID: conversationID,
+      network: .whatsapp,
+      text: image ? "" : "Le lien : https://exemple.fr/article",
+      sentAt: Date(timeIntervalSince1970: seconds),
+      isFromMe: false,
+      attachments: image
+        ? [MessageAttachment(id: "mxc://a/\(id)", contentType: "image/jpeg", filename: "plage.jpg")]
+        : []
+    )
+  }
+
+  func testLesResultatsViennentDeTousLesFilsDuPlusRecentAuPlusAncien() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let bruno = conversation("whatsapp:!b:relais", "Bruno")
+    let fils: [String: [ChatMessage]] = [
+      alice.id: [message("$1", in: alice.id, at: 100, image: true)],
+      bruno.id: [
+        message("$2", in: bruno.id, at: 300, image: true),
+        message("$3", in: bruno.id, at: 200, image: false),
+      ],
+    ]
+
+    let hits = FacetedSearch.hits(in: [alice, bruno], facet: .images) { fils[$0.id] ?? [] }
+    XCTAssertEqual(hits.map(\.message.id), ["$2", "$1"])
+    XCTAssertEqual(hits.first?.conversation.title, "Bruno")
+
+    let liens = FacetedSearch.hits(in: [alice, bruno], facet: .links) { fils[$0.id] ?? [] }
+    XCTAssertEqual(liens.map(\.message.id), ["$3"])
+  }
+
+  func testLaRequeteFiltreAussiSurLeNomDuFichier() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let fils = [alice.id: [message("$1", in: alice.id, at: 100, image: true)]]
+    XCTAssertEqual(
+      FacetedSearch.hits(in: [alice], facet: .images, query: "plage") { fils[$0.id] ?? [] }.count,
+      1
+    )
+    XCTAssertTrue(
+      FacetedSearch.hits(in: [alice], facet: .images, query: "montagne") { fils[$0.id] ?? [] }.isEmpty
+    )
+  }
+
+  func testChaqueResultatAUnIdentifiantStable() {
+    let alice = conversation("whatsapp:!a:relais", "Alice")
+    let hit = FacetedSearch.Hit(conversation: alice, message: message("$1", in: alice.id, at: 1, image: true))
+    XCTAssertEqual(hit.id, "whatsapp:!a:relais|$1")
+  }
+}

@@ -37,8 +37,14 @@ struct InboxListPane: View {
           .padding(.bottom, Spacing.xs)
       }
 
+      facetRow
+
       List {
-        if store.isShowingScheduled {
+        if let facet = store.searchFacet, !facet.isConversationFacet {
+          facetSection(facet)
+        } else if store.searchFacet == .drafts {
+          section(title: "Brouillons", items: store.facetDrafts)
+        } else if store.isShowingScheduled {
           scheduledSection
         } else if store.isShowingArchived {
           section(title: "Archivés", items: store.archivedQueue)
@@ -58,7 +64,7 @@ struct InboxListPane: View {
       .scrollContentBackground(.hidden)
       .environment(\.defaultMinListRowHeight, 52)
       .overlay {
-        if currentQueue.isEmpty {
+        if currentQueue.isEmpty, store.searchFacet == nil {
           emptyState
         }
       }
@@ -127,6 +133,80 @@ struct InboxListPane: View {
               }
             }
           }
+        }
+      }
+    }
+  }
+
+  /// La rangée d'onglets — Images · Vidéos · Liens · Fichiers · Brouillons.
+  /// Sans onglet on cherche des **conversations** ; avec, on cherche des
+  /// **choses**. Le champ sert aux deux, c'est l'onglet qui change la question.
+  /// Elle n'apparaît qu'en recherche : hors recherche, elle n'a rien à trier.
+  @ViewBuilder
+  private var facetRow: some View {
+    if !store.searchQuery.isEmpty || store.searchFacet != nil {
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 4) {
+          ForEach(MessageFacet.allCases) { candidate in
+            let selected = store.searchFacet == candidate
+            Button {
+              // Retaper l'onglet actif le referme : on revient aux conversations.
+              store.setSearchFacet(selected ? nil : candidate)
+            } label: {
+              Label(candidate.labelFR, systemImage: candidate.systemImage)
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(selected ? theme.accentInk : theme.inkSecondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                  Capsule().fill(selected ? theme.accentFill : theme.paperSecondary.opacity(0.6))
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+          }
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, 6)
+      }
+    }
+  }
+
+  /// Les messages d'un onglet, dans leur fil. Un clic ouvre la conversation.
+  @ViewBuilder
+  private func facetSection(_ facet: MessageFacet) -> some View {
+    let hits = store.facetHits
+    if hits.isEmpty {
+      Text("Rien en « \(facet.labelFR) ».")
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(theme.inkTertiary)
+        .padding(.vertical, Spacing.sm)
+    } else {
+      Section(facet.labelFR) {
+        ForEach(hits) { hit in
+          Button {
+            choose(hit.conversation.id)
+          } label: {
+            VStack(alignment: .leading, spacing: 2) {
+              HStack(spacing: 5) {
+                Image(systemName: hit.conversation.network.systemImage)
+                  .font(.system(size: 9))
+                Text(hit.conversation.title).fontWeight(.semibold)
+                Spacer(minLength: 4)
+                Text(hit.message.sentAt, style: .date)
+                  .monospacedDigit()
+              }
+              .font(Typography.meta(themes.typeface))
+              .foregroundStyle(theme.inkTertiary)
+              Text(hit.message.sidebarPreviewText)
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkSecondary)
+                .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
         }
       }
     }

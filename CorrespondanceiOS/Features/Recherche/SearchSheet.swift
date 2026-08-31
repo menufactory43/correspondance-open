@@ -158,19 +158,12 @@ struct SearchSheet: View {
   /// Les messages, dans leur fil, avec la bulle telle qu'elle est — c'est elle
   /// qu'on reconnaît, pas une ligne de résumé.
   private func messageResults(_ facet: MessageFacet) -> some View {
-    let hits: [(conversation: Conversation, message: ChatMessage)] = store.conversations
-      .flatMap { conversation in
-        FacetedSearch.messages(
-          store.visibleMessages(conversation.id),
-          facet: facet,
-          query: trimmed
-        )
-        .map { (conversation, $0) }
-      }
-      .sorted { $0.message.sentAt > $1.message.sentAt }
+    let hits = FacetedSearch.hits(in: store.conversations, facet: facet, query: trimmed) {
+      store.visibleMessages($0.id)
+    }
 
     return list(empty: "Rien en « \(facet.labelFR) »") {
-      ForEach(hits, id: \.message.id) { hit in
+      ForEach(hits) { hit in
         Button {
           open(hit.conversation.id)
         } label: {

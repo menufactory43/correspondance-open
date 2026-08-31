@@ -201,6 +201,14 @@ final class InboxStore {
   /// Corps replié des messages, par conversation — l'index de recherche, en mémoire.
   /// Alimenté par les trois caches disque puis par chaque fil ouvert.
   @ObservationIgnored private var searchIndex: [String: String] = [:]
+  /// L'onglet de recherche actif — Images, Vidéos, Liens, Fichiers, Brouillons.
+  /// `nil` = on cherche des conversations, pas des choses.
+  var searchFacet: MessageFacet?
+  /// Les messages qu'on a sous la main pour la recherche par médias, fil par
+  /// fil. Rempli à la demande, jamais au lancement : c'est une passe sur les
+  /// caches (les salons en mémoire, la base iMessage), pas une requête réseau.
+  private(set) var facetMessages: [String: [ChatMessage]] = [:]
+  private var isRefreshingFacetIndex = false
   /// Brouillons par conversation, restaurés au retour sur un fil.
   @ObservationIgnored private var drafts: [String: DraftStore.Draft] = [:]
   /// Écriture disque différée — on n'écrit pas un fichier à chaque frappe.
@@ -356,6 +364,68 @@ final class InboxStore {
   }
 
   func reminder(_ id: String) -> ConversationReminder? { remindersByID[id] }
+
+  // MARK: - Recherche par médias
+
+  /// Les résultats de l'onglet actif, tous fils confondus, du plus récent au
+  /// plus ancien. Vide tant qu'aucun onglet n'est choisi.
+  var facetHits: [FacetedSearch.Hit] {
+    guard let facet = searchFacet, !facet.isConversationFacet else { return [] }
+    return FacetedSearch.hits(in: conversations, facet: facet, query: searchQuery) {
+      facetMessages[$0.id] ?? []
+    }
+  }
+
+  /// Les fils qui portent un brouillon — l'onglet « Brouillons ».
+  var facetDrafts: [Conversation] {
+    FacetedSearch.conversationsWithDrafts(
+      conversations,
+      drafts: drafts.mapValues(\.text),
+      query: searchQuery
+    )
+  }
+
+  /// Choisit un onglet et remplit ce qu'il faut pour y répondre.
+  func setSearchFacet(_ facet: MessageFacet?) {
+    searchFacet = facet
+    guard let facet, !facet.isConversationFacet else { return }
+    Task { await refreshFacetIndex() }
+  }
+
+  /// Rassemble les messages déjà chargés : les salons du pont (déjà en
+  /// mémoire), les fils ouverts, puis la base iMessage — celle-là hors du fil
+  /// principal, c'est la seule qui coûte quelque chose.
+  func refreshFacetIndex() async {
+    guard !isRefreshingFacetIndex else { return }
+    isRefreshingFacetIndex = true
+    defer { isRefreshingFacetIndex = false }
+
+    var index = facetMessages
+    for conversation in conversations where conversation.network.isMatrixBridged {
+      let list = await matrix.messages(conversationID: conversation.id)
+      if !list.isEmpty { index[conversation.id] = list }
+    }
+    for session in liveSessions where !session.messages.isEmpty {
+      index[session.conversationID] = session.messages
+    }
+    let iMessageKeys = conversations
+      .filter { $0.network == .iMessage }
+      .map { (id: $0.id, chatGUID: $0.transportKey) }
+    if !iMessageKeys.isEmpty {
+      let db = iMessageDB
+      let fetched = await Task.detached(priority: .utility) { () -> [String: [ChatMessage]] in
+        var result: [String: [ChatMessage]] = [:]
+        for key in iMessageKeys {
+          if let list = try? db.fetchMessages(chatGUID: key.chatGUID), !list.isEmpty {
+            result[key.id] = list
+          }
+        }
+        return result
+      }.value
+      index.merge(fetched) { _, fresh in fresh }
+    }
+    facetMessages = index
+  }
 
   // MARK: - Demandes
 
