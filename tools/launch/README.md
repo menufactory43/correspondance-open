@@ -11,6 +11,9 @@ choisissent par la variable d'environnement `CORR_EXP=nom1,nom2`.
 L'app écrit dans le journal système (`subsystem == "app.correspondance.launch"`)
 des jalons en millisecondes depuis la création du process :
 
+- `didFinish` — `applicationDidFinishLaunching` (la fenêtre est construite,
+  pas encore à l'écran) ; `frame1` — le tour de boucle suivant, ≈ la
+  première frame (~125 ms après `didFinish`) ;
 - `window` — `LaunchGate` a vu l'inbox peinte ;
 - `thread-begin` — le fil commence à se construire ;
 - `thread` — le fil est montré (sa queue, au lancement) ;
@@ -56,3 +59,17 @@ Correspondance). Les mesures tuent toute instance de l'app.
   La détection de liens pèse ~30 ms au total.
 - Ce qui reste : ~100 ms de construction/rendu de la queue, et le settle
   AppKit après la fenêtre (`layoutIfNeeded` → `NSHostingView.minSize`).
+- Séquence réelle d'un lancement calme : `didFinish` ≈ 550 → `frame1` ≈ 675
+  → fenêtre visible ≈ 710 → porte 710 → première bulle 717 → fil ≈ 900. La
+  porte ne laisse rien du fil passer avant la première frame (vérifié par
+  jalons ; les bulles « pré-fenêtre » qu'on voit sous Instruments sont un
+  artefact de `xctrace --launch`).
+- Avant `didFinish` (~550 ms) : chargement du process ~110, init SwiftUI et
+  menu ~80 — dont ~45 ms de `dlopen(WritingToolsUILibraryCore)` déclenché par
+  AppKit pour le menu Édition, sans interrupteur connu —, construction de la
+  fenêtre ~350 (toolbar, `NSHostingView.minSize`, lignes de la `List` en
+  hauteur automatique, premier rendu).
+- La restauration d'état AppKit (`NSPersistentUIRestorer`) coûtait ~50 ms
+  pour ne rien restaurer : désactivée (`ApplePersistenceIgnoreState`, domaine
+  volatil). Le cadre de fenêtre et les largeurs de colonnes viennent des
+  préférences et survivent — vérifié par un quit propre.

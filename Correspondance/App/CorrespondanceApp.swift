@@ -13,6 +13,17 @@ struct CorrespondanceApp: App {
   @NSApplicationDelegateAdaptor(CorrespondanceAppDelegate.self) private var appDelegate
 
   init() {
+    // Pas de restauration d'état AppKit au lancement : l'inbox passait par
+    // `NSPersistentUIRestorer` (boucle imbriquée, décodage, seconde passe de
+    // layout) pour ne restaurer… rien — il n'y a même pas d'état sauvegardé
+    // sur disque. Le cadre de la fenêtre et les largeurs de colonnes vivent
+    // dans les préférences (`NSWindow Frame inbox-AppWindow-1`,
+    // `NSSplitView Subview Frames…`) et survivent à un quit sans lui — vérifié.
+    // Mesuré : fenêtre à l'écran 53 ms plus tôt. Domaine volatil : rien n'est
+    // écrit dans les préférences de l'utilisateur.
+    UserDefaults.standard.setVolatileDomain(
+      ["ApplePersistenceIgnoreState": true], forName: UserDefaults.argumentDomain
+    )
     // Les cœurs libres préchauffent détecteur de liens et fonte pendant
     // qu'AppKit monte la fenêtre : la première bulle les trouve déjà prêts.
     LaunchWarmup.begin()
@@ -64,6 +75,10 @@ struct CorrespondanceApp: App {
 /// Fermer l'inbox n'est pas quitter : une fenêtre détachée peut rester seule à
 /// l'écran, et le Dock sait rouvrir la liste.
 final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
+  func applicationDidFinishLaunching(_ notification: Notification) {
+    LaunchGate.noteDidFinishLaunching()
+  }
+
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     false
   }

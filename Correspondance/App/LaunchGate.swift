@@ -15,6 +15,16 @@ enum LaunchGate {
   /// Une vue née après n'a plus rien à différer. Lu depuis l'init des vues
   /// (hors isolation formelle, mais toujours sur le fil principal), écrit ici.
   nonisolated(unsafe) private(set) static var didPaintFirstWindow = false
+  /// `applicationDidFinishLaunching` est passé : la restauration de fenêtre —
+  /// et sa boucle imbriquée, pendant laquelle la fenêtre est déjà « visible »
+  /// sans avoir été peinte — est terminée.
+  nonisolated(unsafe) private(set) static var didFinishLaunching = false
+
+  static func noteDidFinishLaunching() {
+    didFinishLaunching = true
+    LaunchTrace.mark("didFinish")
+    DispatchQueue.main.async { LaunchTrace.mark("frame1") }
+  }
 
   static func firstWindowOnScreen(timeout: Duration = .seconds(3)) async {
     if didPaintFirstWindow { return }

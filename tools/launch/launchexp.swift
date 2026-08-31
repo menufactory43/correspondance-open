@@ -111,7 +111,7 @@ for run in 1...runs {
     let s = Sample(windowCG: got, window: m["window"], threadBegin: m["thread-begin"], thread: m["thread"])
     samples[variant, default: []].append(s)
     func fmt(_ v: Int?) -> String { v.map(String.init) ?? "-" }
-    print("\(variant) run \(run): window_cg=\(Int(got)) window=\(fmt(s.window)) thread-begin=\(fmt(s.threadBegin)) first-bubble=\(fmt(m["first-bubble"])) thread=\(fmt(s.thread)) full=\(fmt(m["thread-full"]))")
+    print("\(variant) run \(run): window_cg=\(Int(got)) window=\(fmt(s.window)) thread-begin=\(fmt(s.threadBegin)) first-bubble=\(fmt(m["first-bubble"])) didFinish=\(fmt(m["didFinish"])) frame1=\(fmt(m["frame1"])) thread=\(fmt(s.thread)) full=\(fmt(m["thread-full"]))")
     fflush(stdout)
   }
 }
