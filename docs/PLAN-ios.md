@@ -133,6 +133,7 @@ Agents (utilisateurs Matrix sur le Relais) → E2EE (matrix-rust-sdk dans Core) 
 - **Non prouvé sur simulateur** : l'extension de notification (simctl ne la réveille pas), les entitlements App Group / Trousseau partagé (vides sur simulateur). À valider sur un vrai iPhone.
 - **Dettes connues** : Team ID en dur dans `SharedRelayState`, pas d'icône iOS, `NSAllowsArbitraryLoads` (documenté, décision 6), contacts de « nouvelle conversation » = tête-à-tête seulement, `Platform.open` iOS non vérifié. (Le micro iOS, lui, est allumé — phase D.)
 - **Phase D** ✅ 9 commits, un par item, dans l'ordre imposé. Tout le calcul est dans `CorrespondanceCore` (modèles purs + parsing `/sync`), les vues partageables dans `CorrespondanceUI` (`PollView`, `AnimatedImageView`, `AudioMessageView`), le reste une vue par plateforme. Aucune logique dupliquée entre Mac et iPhone. 40 tests unitaires de plus dans Core (fixtures `/sync`, aucune dépendance au NUC).
+- **Magasin local** ✅ 7 commits (branche `core/local-store`). L'instantané JSON devient une base SQLite versionnée : le lancement ne lit plus que les lignes de l'inbox, une passe de `/sync` n'écrit que ce qu'elle change, le curseur `next_batch` reprend enfin, et la recherche (FTS5) trouve dans les fils jamais ouverts. Détails, mesures et ce qui reste : `docs/PLAN-store-local.md`.
 
 ### Écarts et dettes de la phase D
 
