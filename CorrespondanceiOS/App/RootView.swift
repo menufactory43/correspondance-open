@@ -112,6 +112,9 @@ struct RootView: View {
   /// de doigt à leur disposition.
   private func openDemoScreenIfRequested() {
     guard store.isDemo else { return }
+    // Une adresse passée au lancement vaut session : les Réglages ont alors
+    // quelque chose à montrer, et l'extension quelque chose à lire.
+    DemoRelay.seedSharedCredentials()
     switch DemoRelay.requestedScreen {
     case .inbox:
       break
@@ -134,10 +137,19 @@ struct RootView: View {
       mode = .focus
       store.state.archived = Set(store.conversations.map(\.id))
       store.focusConversationID = nil
+    case .nouvelle, .recherche, .reglages:
+      // Ces trois-là s'ouvrent en feuille, depuis l'inbox : c'est elle qui
+      // les porte (`InboxListView.openDemoSheetIfRequested`).
+      break
+    case .plusTard:
+      // Le sélecteur « Quand ? » a besoin d'un brouillon sous la main :
+      // on ouvre le fil qui en porte un (`ThreadComposer` fait le reste).
+      store.selectedConversationID = store.visibleConversations
+        .first { !store.draftText($0.id).isEmpty }?.id
+        ?? store.visibleConversations.first?.id
     case .notification:
       // Le seul écran de démonstration qui ne se photographie pas : il arme le
-      // push. La capture, elle, se prend sur l'écran verrouillé.
-      DemoRelay.seedSharedCredentials()
+      // push. La capture, elle, se prend sur l'écran d'accueil.
       Task {
         await push.requestAuthorizationIfNeeded()
         guard let reference = DemoRelay.demoPushReference else { return }

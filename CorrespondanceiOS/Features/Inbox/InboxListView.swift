@@ -12,6 +12,12 @@ struct InboxListView: View {
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(PushRegistration.self) private var push
+
+  @State private var isComposingNew = false
+  @State private var isShowingScheduled = false
+  @State private var isShowingSettings = false
+  @State private var isSearching = false
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -52,7 +58,7 @@ struct InboxListView: View {
       }
       .background(theme.paper.ignoresSafeArea())
 
-      InboxFloatingBar(mode: $mode)
+      InboxFloatingBar(mode: $mode, isSearching: $isSearching)
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.xs)
     }
@@ -64,6 +70,35 @@ struct InboxListView: View {
     }
     .toolbarBackground(theme.paper, for: .navigationBar)
     .safeAreaInset(edge: .top, spacing: 0) { syncBanner }
+    .sheet(isPresented: $isComposingNew) {
+      NewConversationSheet()
+        .environment(store)
+        .environment(themes)
+    }
+    .sheet(isPresented: $isShowingScheduled) {
+      ScheduledMessagesView()
+        .environment(store)
+        .environment(themes)
+    }
+    .sheet(isPresented: $isShowingSettings) {
+      SettingsView()
+        .environment(store)
+        .environment(themes)
+        .environment(push)
+    }
+    .task { openDemoSheetIfRequested() }
+  }
+
+  /// En démonstration, la feuille demandée s'ouvre seule — une capture n'a pas
+  /// de doigt. Cf. `RootView.openDemoScreenIfRequested`.
+  private func openDemoSheetIfRequested() {
+    guard store.isDemo else { return }
+    switch DemoRelay.requestedScreen {
+    case .nouvelle: isComposingNew = true
+    case .recherche: isSearching = true
+    case .reglages: isShowingSettings = true
+    default: break
+    }
   }
 
   // MARK: - Lignes
@@ -161,6 +196,22 @@ struct InboxListView: View {
             .tag(MessageNetwork?.some(network))
         }
       }
+      Divider()
+      // Le menu du titre porte ce qui n'est pas une portée : ce qui attend son
+      // heure, et l'engrenage. Comme Beeper — un endroit, pas dix.
+      Button {
+        isShowingScheduled = true
+      } label: {
+        Label(
+          store.scheduled.isEmpty ? "Programmés" : "Programmés (\(store.scheduled.count))",
+          systemImage: "clock"
+        )
+      }
+      Button {
+        isShowingSettings = true
+      } label: {
+        Label("Réglages", systemImage: "gearshape")
+      }
     } label: {
       HStack(spacing: 4) {
         Text(store.networkFilter?.labelFR ?? store.scope.labelFR)
@@ -176,13 +227,12 @@ struct InboxListView: View {
 
   private var newConversationButton: some View {
     Button {
-      // Phase C2 : puces réseau + `startBridgeChat`.
+      isComposingNew = true
     } label: {
       Image(systemName: "square.and.pencil")
         .font(.system(size: 17, weight: .medium))
     }
-    .disabled(true)
-    .accessibilityLabel("Nouvelle conversation (bientôt)")
+    .accessibilityLabel("Nouvelle conversation")
   }
 
   @ViewBuilder

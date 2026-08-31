@@ -51,6 +51,8 @@ final class RelayStore {
   var state = InboxState()
   var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
   var mergedContacts: [MergedContact] = []
+  /// Les messages qui attendent leur heure (`RelayStore+Scheduled`).
+  var scheduled: [ScheduledMessage] = ScheduledMessageStore.load()
 
   // MARK: - Ce que l'écran choisit
 
@@ -562,6 +564,16 @@ final class RelayStore {
 
   private func setMembership(_ set: inout Set<String>, _ id: String, _ member: Bool) {
     if member { set.insert(id) } else { set.remove(id) }
+  }
+
+  // MARK: - Ouvrir un fil vers quelqu'un
+
+  /// Demande au pont d'ouvrir un fil. La commande part au bot du réseau ; le
+  /// salon, lui, arrive par le `/sync` qui suit — c'est le pont qui décide
+  /// quand, pas nous.
+  func startBridgeChat(network: MessageNetwork, identifier: String) async throws {
+    guard !isDemo else { return }
+    try await matrix.startConversation(network: network, identifier: identifier)
   }
 
   // MARK: - Focus

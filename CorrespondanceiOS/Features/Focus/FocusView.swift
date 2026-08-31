@@ -13,6 +13,8 @@ struct FocusView: View {
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+
+  @State private var isSearching = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var headerOffset: CGFloat = 0
@@ -32,7 +34,7 @@ struct FocusView: View {
       } else {
         upToDate
       }
-      InboxFloatingBar(mode: $mode)
+      InboxFloatingBar(mode: $mode, isSearching: $isSearching)
         .padding(.horizontal, Spacing.md)
         .padding(.top, Spacing.sm)
     }

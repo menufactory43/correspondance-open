@@ -21,6 +21,7 @@ struct ThreadComposer: View {
   @State private var photoItems: [PhotosPickerItem] = []
   @State private var isImportingFile = false
   @State private var isTakingPhoto = false
+  @State private var isPickingSendLater = false
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -39,6 +40,9 @@ struct ThreadComposer: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      if !store.scheduledMessages(for: conversationID).isEmpty {
+        scheduledStrip
+      }
       if let quoted = store.replyTarget(conversationID) {
         replyChip(quoted)
       }
@@ -65,6 +69,16 @@ struct ThreadComposer: View {
     ) { result in
       if case .success(let urls) = result { importFiles(urls) }
     }
+    .sheet(isPresented: $isPickingSendLater) {
+      SendLaterSheet(conversationID: conversationID)
+        .environment(store)
+        .environment(themes)
+    }
+    .task {
+      // En démonstration, le sélecteur s'ouvre seul : une capture n'a pas de doigt.
+      guard store.isDemo, DemoRelay.requestedScreen == .plusTard else { return }
+      isPickingSendLater = true
+    }
     .fullScreenCover(isPresented: $isTakingPhoto) {
       CameraCapture { url in
         if let url { store.addAttachment(url.path, conversationID: conversationID) }
@@ -82,6 +96,13 @@ struct ThreadComposer: View {
       }
       Button { isTakingPhoto = true } label: { Label("Caméra", systemImage: "camera") }
       Button { isImportingFile = true } label: { Label("Fichier", systemImage: "folder") }
+      Divider()
+      Button {
+        isPickingSendLater = true
+      } label: {
+        Label("Envoyer plus tard", systemImage: "clock")
+      }
+      .disabled(!store.canSend(conversationID))
     } label: {
       Image(systemName: "plus")
         .font(.system(size: 17, weight: .medium))
@@ -155,6 +176,26 @@ struct ThreadComposer: View {
       .disabled(true)
       .accessibilityLabel("Message vocal (bientôt)")
     }
+  }
+
+  /// Ce qui attend son heure dans CE fil, au-dessus du champ : sinon un
+  /// message programmé disparaîtrait de la vue et reviendrait par surprise.
+  private var scheduledStrip: some View {
+    let pending = store.scheduledMessages(for: conversationID)
+    return HStack(spacing: 6) {
+      Image(systemName: "clock")
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(theme.accent)
+      Text(pending.count == 1
+        ? "1 message part \(SendLaterTime.label(for: pending[0].sendAt).lowercased())"
+        : "\(pending.count) messages programmés")
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.inkSecondary)
+        .lineLimit(1)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, Spacing.xs)
+    .accessibilityElement(children: .combine)
   }
 
   // MARK: - Citation et pièces jointes

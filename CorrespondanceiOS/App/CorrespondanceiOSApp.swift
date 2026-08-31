@@ -40,6 +40,15 @@ struct CorrespondanceiOSApp: App {
           guard session == .connected, !store.isDemo else { return }
           Task { await push.requestAuthorizationIfNeeded() }
         }
+        // « Envoyer plus tard » ne part que si l'app est là (voir
+        // `RelayStore+Scheduled`). Une passe au lancement, puis une par
+        // minute : la minute est la précision qu'on promet, pas la seconde.
+        .task {
+          while !Task.isCancelled {
+            await store.flushDueScheduledMessages()
+            try? await Task.sleep(for: .seconds(60))
+          }
+        }
     }
   }
 }

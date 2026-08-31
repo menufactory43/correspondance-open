@@ -9,6 +9,9 @@ import SwiftUI
 /// (décision 9) ; à droite la recherche, inactive jusqu'à la phase C2.
 struct InboxFloatingBar: View {
   @Binding var mode: PhoneMode
+  /// La recherche est ouverte par la loupe d'ici, mais l'inbox la tient : c'est
+  /// elle que la démonstration doit pouvoir ouvrir sans doigt.
+  @Binding var isSearching: Bool
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -31,6 +34,11 @@ struct InboxFloatingBar: View {
       isInteractive: true
     )
     .shadow(color: .black.opacity(theme.isDark ? 0.35 : 0.12), radius: 12, y: 4)
+    .sheet(isPresented: $isSearching) {
+      SearchSheet()
+        .environment(store)
+        .environment(themes)
+    }
   }
 
   // MARK: - Filtre
@@ -99,15 +107,14 @@ struct InboxFloatingBar: View {
 
   private var searchButton: some View {
     Button {
-      // Phase C2 : `.searchable` + `ConversationSearch` (déjà dans Core).
+      isSearching = true
     } label: {
       Image(systemName: "magnifyingglass")
         .font(.system(size: 15, weight: .medium))
-        .foregroundStyle(theme.inkTertiary)
+        .foregroundStyle(theme.inkSecondary)
         .frame(width: 40, height: 34)
     }
     .buttonStyle(.plain)
-    .disabled(true)
-    .accessibilityLabel("Rechercher (bientôt)")
+    .accessibilityLabel("Rechercher")
   }
 }

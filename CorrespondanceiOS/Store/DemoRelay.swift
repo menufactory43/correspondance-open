@@ -37,6 +37,11 @@ enum DemoRelay {
     /// l'extension de notification sans NUC : elle ira vraiment lire son
     /// événement, sur un serveur qui répond vraiment.
     case notification
+    /// Les quatre écrans de la phase C2, chacun sa feuille.
+    case nouvelle
+    case recherche
+    case plusTard
+    case reglages
   }
 
   /// L'adresse du Relais de démonstration, pour l'écran `notification`.

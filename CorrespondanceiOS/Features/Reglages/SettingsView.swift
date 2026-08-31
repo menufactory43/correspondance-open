@@ -1,0 +1,222 @@
+import CorrespondanceCore
+import CorrespondanceUI
+import SwiftUI
+
+/// Les Réglages de l'iPhone — quatre sections, et rien de plus.
+///
+/// Ce qu'on N'Y trouve pas est aussi net que ce qu'on y trouve : aucune gestion
+/// de pont. Relier un compte WhatsApp demande de scanner un QR, de lire les
+/// réponses d'un bot, de recoller des cookies — un travail d'établi, qui se
+/// fait sur le Mac (décision 4). L'iPhone lit la liste des ponts actifs et le
+/// dit en une ligne.
+struct SettingsView: View {
+  @Environment(RelayStore.self) private var store
+  @Environment(ThemePreferences.self) private var themes
+  @Environment(PushRegistration.self) private var push
+  @Environment(\.dismiss) private var dismiss
+
+  @State private var credentials: MatrixCredentials?
+  @State private var isSigningOut = false
+  @State private var confirmsSignOut = false
+
+  private var theme: WritingTheme { themes.theme }
+  private var typeface: WritingTypeface { themes.typeface }
+
+  var body: some View {
+    NavigationStack {
+      List {
+        relaySection
+        bridgesSection
+        themeSection
+        notificationsSection
+        signOutSection
+      }
+      .scrollContentBackground(.hidden)
+      .background(theme.paper.ignoresSafeArea())
+      .navigationTitle("Réglages")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) { Button("Fermer") { dismiss() } }
+      }
+      .toolbarBackground(theme.paper, for: .navigationBar)
+    }
+    .tint(theme.accent)
+    .task {
+      credentials = MatrixCredentialStore.load()
+      await push.refreshAuthorization()
+    }
+    .confirmationDialog(
+      "Se déconnecter du Relais ?",
+      isPresented: $confirmsSignOut,
+      titleVisibility: .visible
+    ) {
+      Button("Se déconnecter", role: .destructive) { signOut() }
+      Button("Annuler", role: .cancel) {}
+    } message: {
+      Text("Les conversations restent sur le Relais. Cet iPhone oublie sa session et cesse d'être réveillé.")
+    }
+  }
+
+  // MARK: - Relais
+
+  private var relaySection: some View {
+    Section {
+      row("Adresse", credentials?.homeserver.absoluteString ?? store.rememberedHomeserver)
+      row("Identifiant", credentials?.userID ?? "—")
+      row("Session", sessionLabel)
+      // La même phrase que sur le Mac, au mot près : c'est le même état, il n'a
+      // pas à se raconter de deux façons.
+      row("État de conversation", relayStateLabel)
+    } header: {
+      Text("Relais")
+    } footer: {
+      if let error = store.syncError {
+        Text(error).font(Typography.meta(typeface)).foregroundStyle(theme.accent)
+      } else {
+        Text("Le Relais se joint par Tailscale. Son adresse est une configuration, jamais une valeur en dur.")
+          .font(Typography.meta(typeface))
+      }
+    }
+  }
+
+  private var sessionLabel: String {
+    switch store.session {
+    case .connected: store.syncError == nil ? "Connectée" : "Connectée, sync en échec"
+    case .connecting: "Connexion…"
+    case .disconnected: "Déconnectée"
+    case .unknown: "Inconnue"
+    }
+  }
+
+  private var relayStateLabel: String {
+    let pending = store.relayQueue.count
+    guard pending > 0 else { return "Synchronisé" }
+    return "Synchronisé · \(pending) en attente"
+  }
+
+  // MARK: - Ponts
+
+  private var bridgesSection: some View {
+    Section {
+      if store.networksInUse.isEmpty {
+        Text("Aucun pont ne parle encore.")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkTertiary)
+      } else {
+        ForEach(store.networksInUse) { network in
+          HStack {
+            Label(network.labelFR, systemImage: network.systemImage)
+              .foregroundStyle(theme.ink)
+            Spacer()
+            Text(countLabel(network))
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkTertiary)
+          }
+        }
+      }
+    } header: {
+      Text("Comptes liés")
+    } footer: {
+      Text("Les comptes liés se connectent depuis le Mac — un QR à scanner, un bot à écouter. L'iPhone lit ce que le Relais raconte.")
+        .font(Typography.meta(typeface))
+    }
+  }
+
+  private func countLabel(_ network: MessageNetwork) -> String {
+    let count = store.conversations.count { $0.network == network }
+    return count == 1 ? "1 conversation" : "\(count) conversations"
+  }
+
+  // MARK: - Thème
+
+  private var themeSection: some View {
+    @Bindable var themes = themes
+    return Section {
+      Picker("Thème", selection: $themes.themeID) {
+        ForEach(WritingThemeID.allCases) { id in
+          Label(id.labelFR, systemImage: id.systemImage).tag(id)
+        }
+      }
+      Picker("Typographie", selection: $themes.typeface) {
+        ForEach(WritingTypeface.allCases) { face in
+          Text(face.labelFR).tag(face)
+        }
+      }
+    } header: {
+      Text("Écriture")
+    } footer: {
+      Text("Les six thèmes du Mac, et les mêmes fontes : les deux appareils écrivent de la même main.")
+        .font(Typography.meta(typeface))
+    }
+  }
+
+  // MARK: - Notifications
+
+  private var notificationsSection: some View {
+    Section {
+      row("Autorisation", push.authorizationLabelFR)
+      row("Inscription au Relais", push.isRegistered ? "Faite" : "Pas encore")
+      if push.authorization == .notDetermined {
+        Button("Autoriser les notifications") {
+          Task { await push.requestAuthorizationIfNeeded() }
+        }
+      } else {
+        Button("Ouvrir les Réglages du système") {
+          guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+          UIApplication.shared.open(url)
+        }
+      }
+    } header: {
+      Text("Notifications")
+    } footer: {
+      if let error = push.lastError {
+        Text(error).font(Typography.meta(typeface)).foregroundStyle(theme.accent)
+      } else {
+        Text("Une conversation en muet ne notifie pas : le Relais ne l'envoie même pas.")
+          .font(Typography.meta(typeface))
+      }
+    }
+  }
+
+  // MARK: - Déconnexion
+
+  private var signOutSection: some View {
+    Section {
+      Button(role: .destructive) {
+        confirmsSignOut = true
+      } label: {
+        HStack {
+          Text("Se déconnecter")
+          Spacer()
+          if isSigningOut { ProgressView() }
+        }
+      }
+      .disabled(isSigningOut || store.isDemo)
+    }
+  }
+
+  private func signOut() {
+    isSigningOut = true
+    Task {
+      // L'ordre compte : le pusher part tant que le jeton d'accès vaut encore.
+      await store.signOut(push: push)
+      isSigningOut = false
+      dismiss()
+    }
+  }
+
+  // MARK: - Habillage
+
+  private func row(_ label: String, _ value: String) -> some View {
+    HStack(alignment: .firstTextBaseline) {
+      Text(label).foregroundStyle(theme.ink)
+      Spacer(minLength: Spacing.sm)
+      Text(value.isEmpty ? "—" : value)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.inkSecondary)
+        .multilineTextAlignment(.trailing)
+        .lineLimit(2)
+        .textSelection(.enabled)
+    }
+  }
+}
