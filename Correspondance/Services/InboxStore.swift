@@ -771,9 +771,11 @@ final class InboxStore {
       iMessageStatusFR = "iMessage : première sync…"
     }
 
-    // Le cache Matrix est un simple fichier : lisible sans passer par l'actor.
-    let (_, matrixConversations, matrixMessages) = MatrixConversationCache.load()
-    seedSearchIndex(signal: [:], matrix: matrixMessages)
+    // La base locale se lit sans passer par l'actor : au lancement, l'inbox
+    // s'affiche avant que la boucle `/sync` ait commencé. On ne lit que les
+    // lignes — l'historique d'un fil attend qu'on l'ouvre.
+    let storedRooms = LocalStore.shared?.rooms() ?? []
+    let matrixConversations = storedRooms.compactMap { $0.conversation() }
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
       matrixStatusFR = "Cache · \(MatrixBridgeService.bridgedCountFR(matrixConversations)) — sync…"
@@ -788,10 +790,12 @@ final class InboxStore {
       ?? inboxGroups.first?.id
       ?? activeQueue.first?.id
     selectionIsUserMade = false
-    if let id = selectedConversationID {
-      if let cached = matrixMessages[id], !cached.isEmpty {
-        messages = cached
-      }
+    if let id = selectedConversationID,
+       let roomID = Self.relayRoomID(ofConversation: id),
+       let cached = LocalStore.shared?.messages(roomID: roomID),
+       !cached.isEmpty
+    {
+      messages = cached
     }
   }
 
@@ -1573,6 +1577,20 @@ final class InboxStore {
     matrixStatusFR = "Matrix : déconnecté."
   }
 
+  /// « Recharger depuis le Relais » : on jette la base locale et on repart d'un
+  /// sync initial. La porte de secours du jour où la base raconterait autre
+  /// chose que le Relais — un salon fantôme, un fil qui ne se comble pas.
+  func reloadFromRelay() async {
+    matrixSyncTask?.cancel()
+    matrixSyncTask = nil
+    await matrix.reloadFromRelay()
+    conversations.removeAll { $0.network.livesOnRelay }
+    messages = []
+    matrixStatusFR = "Matrix : rechargement depuis le Relais…"
+    didSettleInitialMatrixSync = false
+    startMatrixSync()
+  }
+
   func refreshMatrixStatus() async {
     matrixStatusFR = await matrix.statusMessageFR()
     isMatrixConnected = await matrix.isConnected
@@ -1842,6 +1860,17 @@ final class InboxStore {
       // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
       // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
       await self.reloadRelayState()
+      // Et ce que le Relais dit avoir rejoint, comparé à la base : un portail
+      // créé pendant que le Mac dormait n'apparaît dans aucun `/sync`
+      // incrémental. En arrière-plan — la boucle ne l'attend pas.
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        let adopted = await self.matrix.reconcileJoinedRooms()
+        guard !adopted.isEmpty else { return }
+        var fresh = await self.matrix.conversations()
+        await ContactDirectory.shared.enrichBridgedTitles(&fresh)
+        self.mergeMatrixConversations(fresh)
+      }
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {

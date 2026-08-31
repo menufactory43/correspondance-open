@@ -136,6 +136,21 @@ public actor MatrixClient {
     )
   }
 
+  /// L'état **complet** d'un salon, d'un bloc. C'est ce qu'il faut pour adopter
+  /// un salon rejoint pendant que l'app dormait : aucun `/sync` incrémental ne
+  /// racontera son `m.bridge`, son nom ni ses membres — ils ont déjà été dits.
+  public func roomStateEvents(roomID: String) async throws -> [MatrixEvent] {
+    let data = try await rawRequest(
+      method: "GET",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/state"
+    )
+    do {
+      return try JSONDecoder().decode([MatrixEvent].self, from: data)
+    } catch {
+      throw MatrixError.decoding("état du salon — \(error.localizedDescription)")
+    }
+  }
+
   public func joinedRooms() async throws -> [String] {
     let json = try await request(method: "GET", path: "/_matrix/client/v3/joined_rooms")
     return json["joined_rooms"]?.arrayValue?.compactMap(\.stringValue) ?? []

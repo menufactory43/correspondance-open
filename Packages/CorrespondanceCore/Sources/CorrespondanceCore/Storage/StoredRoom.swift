@@ -108,6 +108,27 @@ public extension StoredRoom {
     )
   }
 
+  /// La ligne d'inbox, dressée sans rien demander au Relais. `nil` pour un
+  /// salon qui n'est pas une conversation (gestion d'un pont, espace).
+  func conversation() -> Conversation? {
+    guard let network else { return nil }
+    var conversation = Conversation(
+      id: conversationID,
+      network: network,
+      address: state.bridgePhoneNumber ?? roomID,
+      title: title,
+      preview: preview,
+      lastMessageAt: lastMessageAt,
+      unreadCount: unreadCount,
+      isArchived: false,
+      transportKey: transportKey,
+      isGroup: isGroup
+    )
+    conversation.remoteAvatarID = avatarMXC
+    conversation.memberAvatarIDs = memberAvatarIDs
+    return conversation
+  }
+
   /// Le salon tel que le parseur le reprendra — **sans ses messages** : ils se
   /// chargent par pages, à l'ouverture du fil.
   func model() -> MatrixRoomModel {

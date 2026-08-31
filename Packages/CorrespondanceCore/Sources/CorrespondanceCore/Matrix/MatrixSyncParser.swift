@@ -49,28 +49,6 @@ public struct MatrixSyncParser: Sendable {
     snapshot.apply(response)
   }
 
-  /// Réinstalle l'historique du cache disque dans les salons, **avant** le premier
-  /// `/sync`. Sans ce semis, le sync initial — dix events par salon chez Synapse —
-  /// réécrivait le cache avec un modèle presque vide, et tout ce que les sessions
-  /// précédentes avaient backfillé disparaissait à chaque relance de l'app.
-  ///
-  /// Le `/sync` qui suit fusionne par identifiant d'event : rien ne se duplique.
-  /// Un envoi resté en attente au moment de quitter n'est pas repris — il n'a
-  /// jamais existé côté serveur.
-  public func seed(cachedMessages: [String: [ChatMessage]], into rooms: inout [String: MatrixRoomModel]) {
-    for (conversationID, list) in cachedMessages {
-      guard let roomID = Self.roomID(inConversationID: conversationID) else { continue }
-      var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
-      for message in list where !message.isPending && model.messagesByID[message.id] == nil {
-        model.messagesByID[message.id] = message
-        model.lastEventAt = max(model.lastEventAt, message.sentAt)
-        if message.replyTo?.awaitsTarget == true { model.unresolvedQuoteMessageIDs.insert(message.id) }
-      }
-      resolveQuotes(in: &model)
-      rooms[roomID] = model
-    }
-  }
-
   /// Installe dans un salon une page relue du magasin local : les messages,
   /// leurs réactions, et les modifications qui attendaient leur cible.
   ///
@@ -207,6 +185,13 @@ public struct MatrixSyncParser: Sendable {
       return TimelineGap(roomID: roomID, prevBatch: token, hasAnchor: hasAnchor)
     }
     .sorted { $0.roomID < $1.roomID }
+  }
+
+  /// L'état complet d'un salon (`GET /rooms/{id}/state`), appliqué d'un bloc.
+  /// C'est par là qu'un salon rejoint pendant que l'app dormait entre dans le
+  /// modèle : aucun `/sync` incrémental ne le raconterait.
+  public func applyState(_ events: [MatrixEvent], roomID: String, to model: inout MatrixRoomModel) {
+    for event in events { applyState(event, to: &model) }
   }
 
   // MARK: - État

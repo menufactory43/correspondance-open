@@ -56,6 +56,23 @@ public extension LocalStore {
     }
   }
 
+  /// Des messages précis, par identifiant d'event. Sert aux marqueurs de
+  /// lecture : sans le message pointé, on ne sait pas dire « Vu ».
+  func messages(eventIDs: [String]) -> [ChatMessage] {
+    guard !eventIDs.isEmpty else { return [] }
+    return read([]) {
+      let holes = Array(repeating: "?", count: eventIDs.count).joined(separator: ", ")
+      let statement = try database
+        .prepare("SELECT \(Self.messageColumns) FROM messages WHERE event_id IN (\(holes));")
+        .bind(eventIDs.map { .text($0) })
+      var result: [ChatMessage] = []
+      try statement.forEachRow { row in
+        if let message = Self.message(in: row) { result.append(message) }
+      }
+      return result
+    }
+  }
+
   func messageCount(roomID: String) -> Int {
     read(0) {
       Int(try database.scalarInt("SELECT COUNT(*) FROM messages WHERE room_id = ?;", [.text(roomID)]) ?? 0)

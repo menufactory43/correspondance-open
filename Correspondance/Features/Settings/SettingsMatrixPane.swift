@@ -49,6 +49,15 @@ struct SettingsMatrixPane: View {
               Task { await store.disconnectMatrix() }
             }
           }
+
+          SettingsRow(
+            label: "Recharger depuis le Relais",
+            detail: "Vide la base locale et refait une synchronisation complète. À faire si l’inbox ne ressemble plus à ce que raconte le Relais."
+          ) {
+            Button("Recharger") {
+              Task { await store.reloadFromRelay() }
+            }
+          }
         }
       } else {
         SettingsCard(title: "Connexion") {

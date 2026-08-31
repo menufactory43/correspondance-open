@@ -32,6 +32,10 @@ public final class LocalStore: @unchecked Sendable {
     applicationSupportDirectory().appendingPathComponent("correspondance.sqlite")
   }
 
+  /// L'unique base de l'app. `nil` si SQLite refuse d'ouvrir le fichier :
+  /// l'inbox marche alors sans mémoire, plutôt que pas du tout.
+  public static let shared: LocalStore? = try? LocalStore()
+
   public init(path: String) throws {
     database = try SQLiteDatabase(path: path)
     try migrate()

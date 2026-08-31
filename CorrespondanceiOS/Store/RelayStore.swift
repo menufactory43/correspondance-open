@@ -120,6 +120,29 @@ final class RelayStore {
     await reloadRelayState()
     refreshPendingRequests()
     startSyncLoop()
+    // Ce que le Relais dit avoir rejoint, comparé à la base : un portail créé
+    // pendant que l'iPhone dormait n'apparaît dans aucun `/sync` incrémental.
+    // En arrière-plan — l'écran ne l'attend pas.
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let adopted = await self.matrix.reconcileJoinedRooms()
+      guard !adopted.isEmpty else { return }
+      self.conversations = self.mergedRows(await self.matrix.conversations())
+    }
+  }
+
+  /// « Recharger depuis le Relais » : la base locale se vide et le prochain
+  /// `/sync` — initial — la repeuple. La porte de secours du jour où l'inbox ne
+  /// ressemblerait plus à ce que raconte le Relais.
+  func reloadFromRelay() async {
+    guard !isDemo, session == .connected else { return }
+    syncTask?.cancel()
+    syncTask = nil
+    await matrix.reloadFromRelay()
+    conversations = []
+    messages = [:]
+    openedConversationIDs = []
+    startSyncLoop()
   }
 
   func connect(homeserver raw: String, user: String, password: String) async {
