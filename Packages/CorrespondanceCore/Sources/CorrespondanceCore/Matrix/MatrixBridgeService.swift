@@ -975,6 +975,37 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Ajoute un contact à un groupe : on invite son ghost dans le portail, le pont
+  /// fait l'ajout sur le réseau. WhatsApp prend un numéro (`@whatsapp_<num>`),
+  /// Instagram un pseudo ou un identifiant Meta (`@instagram_<id>`). Signal
+  /// n'identifie ses ghosts que par UUID : on ne sait pas les deviner d'un
+  /// numéro, et on le dit plutôt que d'inviter dans le vide.
+  public func inviteMember(conversationID: String, identifier: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let network = rooms[roomID]?.network,
+          let bridge = network.bridge
+    else { throw MatrixError.decoding("fil sans pont : impossible d'y ajouter quelqu'un") }
+    let serverName = String(selfUserID.split(separator: ":").last ?? "")
+    let localpart: String
+    switch network {
+    case .whatsapp:
+      let digits = identifier.filter { $0.isNumber }
+      guard digits.count >= 8 else { throw MatrixError.decoding("numéro WhatsApp invalide") }
+      localpart = bridge.ghostPrefix + digits
+    case .instagram:
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Instagram vide") }
+      let metaID = trimmed.allSatisfy(\.isNumber)
+        ? trimmed
+        : try await resolveMetaID(username: trimmed, network: network)
+      localpart = bridge.ghostPrefix + metaID
+    default:
+      throw MatrixError.decoding("ajouter par numéro n'est pas possible sur \(network.labelFR)")
+    }
+    try await client.invite(roomID: roomID, userID: "@\(localpart):\(serverName)")
+  }
+
   /// `search <pseudo>` puis lecture de la réponse du bot pour en tirer l'ID numérique.
   /// Les ghosts Meta sont des identifiants numériques : `pm <pseudo>` échouerait sec.
   private func resolveMetaID(username: String, network: MessageNetwork) async throws -> String {

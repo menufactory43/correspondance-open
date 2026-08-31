@@ -8,8 +8,9 @@ import SwiftUI
 /// Le rendu est celui du Mac (`MessageBubbleView`) : mêmes coins, même
 /// interligne dérivé du thème, même emoji nu et grand, mêmes citations, mêmes
 /// pastilles de réaction, même aperçu de lien. Ce qui change tient au doigt :
-/// le survol n'existe pas, donc réagir se fait par appui long (sélecteur en
-/// rangée, comme Beeper) et citer par balayage vers la droite sur la bulle.
+/// le survol n'existe pas, donc l'appui long ouvre `MessageActionsOverlay`
+/// (les smileys au-dessus, les actions en dessous) et citer se fait par
+/// balayage vers la droite sur la bulle.
 struct MessageBubble: View {
   let message: ChatMessage
   let theme: WritingTheme
@@ -17,22 +18,16 @@ struct MessageBubble: View {
   /// Nom coloré au-dessus du groupe, en conversation de groupe.
   var senderLabel: String?
   var showsLinkPreviews = true
-  var onReact: ((String) -> Void)?
   var onReply: (() -> Void)?
-  var onHide: (() -> Void)?
-  var onDeleteEverywhere: (() -> Void)?
   /// Voter sur le sondage de cette bulle. `nil` = sondage en lecture seule.
-  /// Modifier ce message. `nil` quand le réseau ne sait pas le faire — l'action
-  /// est alors absente, pas grisée : on ne propose pas ce qui n'arrivera pas.
-  var onEdit: ((String) -> Void)?
   var onVotePoll: ((String) -> Void)?
+  /// Taper une pastille de réaction : la retirer ou la rejoindre.
+  var onReact: ((String) -> Void)?
+  /// L'appui long. `nil` = bulle inerte (résultat de recherche, aperçu).
+  var onLongPress: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var isPickingReaction = false
   @State private var dragOffset: CGFloat = 0
-  @State private var pendingDeletion = false
-  @State private var isEditing = false
-  @State private var editedText = ""
 
   private var bodySize: CGFloat { Typography.bubbleSize() }
 
@@ -56,23 +51,6 @@ struct MessageBubble: View {
     .offset(x: dragOffset)
     .gesture(replyDrag)
     .frame(maxWidth: .infinity, alignment: message.isFromMe ? .trailing : .leading)
-    .alert("Modifier le message", isPresented: $isEditing) {
-      TextField("Message", text: $editedText)
-      Button("Enregistrer") {
-        let trimmed = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != message.text else { return }
-        onEdit?(trimmed)
-      }
-      Button("Annuler", role: .cancel) {}
-    } message: {
-      Text("La correction remplace le message chez ton correspondant aussi.")
-    }
-    .alert("Supprimer ce message pour tout le monde ?", isPresented: $pendingDeletion) {
-      Button("Supprimer", role: .destructive) { onDeleteEverywhere?() }
-      Button("Annuler", role: .cancel) {}
-    } message: {
-      Text("Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour.")
-    }
   }
 
   private var bubbleStack: some View {
@@ -105,7 +83,8 @@ struct MessageBubble: View {
           .font(Typography.bubble(typeface))
           .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
           .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
-          .textSelection(.enabled)
+          // Pas de sélection de texte : elle prendrait l'appui long, qui
+          // ouvre les actions — et « Copier le texte » y est.
           .padding(.horizontal, 13)
           .padding(.vertical, 9)
           .background(
@@ -140,11 +119,10 @@ struct MessageBubble: View {
       maxWidth: 520,
       alignment: message.isFromMe ? .trailing : .leading
     )
-    .contextMenu { bubbleMenu }
-    .popover(isPresented: $isPickingReaction, arrowEdge: .top) {
-      reactionPicker
-        .presentationCompactAdaptation(.popover)
+    .onLongPressGesture(minimumDuration: 0.35) {
+      onLongPress?()
     }
+    .accessibilityAction(named: "Actions du message") { onLongPress?() }
   }
 
   // MARK: - Gestes
@@ -164,71 +142,6 @@ struct MessageBubble: View {
         else { withAnimation(.spring(duration: 0.28)) { dragOffset = 0 } }
         if triggered { onReply?() }
       }
-  }
-
-  private var reactionPicker: some View {
-    HStack(spacing: 2) {
-      ForEach(RelayStore.quickReactions, id: \.self) { emoji in
-        Button {
-          isPickingReaction = false
-          onReact?(emoji)
-        } label: {
-          Text(emoji)
-            .font(.system(size: 26))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 8)
-            .background(
-              Capsule().fill(message.myReactionEmoji == emoji ? theme.selection : .clear)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(
-          message.myReactionEmoji == emoji ? "Retirer la réaction \(emoji)" : "Réagir \(emoji)"
-        )
-      }
-    }
-    .padding(8)
-    .background(theme.paperSecondary)
-  }
-
-  @ViewBuilder
-  private var bubbleMenu: some View {
-    if onReact != nil {
-      Button {
-        isPickingReaction = true
-      } label: {
-        Label("Réagir…", systemImage: "face.smiling")
-      }
-    }
-    if let onReply {
-      Button { onReply() } label: { Label("Répondre en citant", systemImage: "arrowshape.turn.up.left") }
-    }
-    if onEdit != nil {
-      Button {
-        editedText = message.text
-        isEditing = true
-      } label: {
-        Label("Modifier…", systemImage: "pencil")
-      }
-    }
-    if !message.text.isEmpty {
-      Button {
-        Platform.copyToPasteboard(message.text)
-      } label: {
-        Label("Copier le texte", systemImage: "doc.on.doc")
-      }
-    }
-    Divider()
-    if onDeleteEverywhere != nil {
-      Button(role: .destructive) { pendingDeletion = true } label: {
-        Label("Supprimer pour tout le monde…", systemImage: "trash")
-      }
-    }
-    if let onHide {
-      Button(role: .destructive) { onHide() } label: {
-        Label("Supprimer ici", systemImage: "eye.slash")
-      }
-    }
   }
 
   // MARK: - Morceaux
@@ -413,7 +326,8 @@ struct MessageBubble: View {
     return parts.joined(separator: ", ")
   }
 
-  private static func repaired(_ attachment: MessageAttachment) -> MessageAttachment {
+  /// La pièce jointe avec son chemin local retrouvé dans le cache, si elle y est.
+  static func repaired(_ attachment: MessageAttachment) -> MessageAttachment {
     if attachment.resolvedFileURL != nil { return attachment }
     var copy = attachment
     if let path = MatrixAttachmentStore.existingLocalPath(

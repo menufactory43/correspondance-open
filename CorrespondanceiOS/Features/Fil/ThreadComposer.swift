@@ -287,6 +287,10 @@ struct ThreadComposer: View {
       .accessibilityLabel("Ne plus citer ce message")
     }
     .padding(.horizontal, Spacing.xs)
+    // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
+    // prend celle que l'encart de bas d'écran lui propose — tout l'écran —
+    // et la citation recouvre le fil au lieu de coiffer le champ.
+    .fixedSize(horizontal: false, vertical: true)
     .accessibilityElement(children: .combine)
   }
 

@@ -14,6 +14,10 @@ import SwiftUI
 /// au Relais — c'est la règle de la décision 7, celle qui tiendra le jour où le
 /// Relais ne saura plus lire un seul message.
 struct SearchSheet: View {
+  /// Un fil, et rien que lui : la recherche ouverte depuis sa fiche. Sans
+  /// onglet, on y cherche alors des messages, pas des conversations.
+  var scope: String?
+
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.dismiss) private var dismiss
@@ -113,9 +117,17 @@ struct SearchSheet: View {
 
   // MARK: - Résultats
 
+  /// Les conversations dans lesquelles on cherche : toutes, ou celle du fil.
+  private var conversations: [Conversation] {
+    guard let scope else { return store.conversations }
+    return store.conversations.filter { $0.id == scope }
+  }
+
   @ViewBuilder
   private var results: some View {
     switch facet {
+    case .none where scope != nil:
+      threadMessageResults
     case .none:
       conversationResults
     case .some(.drafts):
@@ -129,7 +141,7 @@ struct SearchSheet: View {
   /// chargés — c'est ce que `blob` indexe.
   private var conversationResults: some View {
     let hits = ConversationSearch.filter(
-      store.conversations, query: trimmed, index: store.searchIndex(query: trimmed)
+      conversations, query: trimmed, index: store.searchIndex(query: trimmed)
     )
       .sorted { $0.lastMessageAt > $1.lastMessageAt }
     return list(empty: "Rien de ce nom-là") {
@@ -139,9 +151,27 @@ struct SearchSheet: View {
     }
   }
 
+  /// Dans un fil : ses messages qui contiennent le mot, du plus récent au plus
+  /// ancien. Sans mot, rien — la liste entière est déjà derrière la feuille.
+  private var threadMessageResults: some View {
+    let hits = threadHits
+    return list(empty: trimmed.isEmpty ? "Un mot, et le fil se cherche" : "Rien dans ce fil") {
+      ForEach(hits) { message in
+        messageRow(message, in: conversations.first)
+      }
+    }
+  }
+
+  private var threadHits: [ChatMessage] {
+    guard let scope, !trimmed.isEmpty else { return [] }
+    return store.visibleMessages(scope)
+      .filter { $0.text.localizedStandardContains(trimmed) }
+      .reversed()
+  }
+
   private var draftResults: some View {
     let hits = FacetedSearch.conversationsWithDrafts(
-      store.conversations,
+      conversations,
       drafts: store.viewState.drafts,
       query: trimmed
     )
@@ -155,45 +185,57 @@ struct SearchSheet: View {
   /// Les messages, dans leur fil, avec la bulle telle qu'elle est — c'est elle
   /// qu'on reconnaît, pas une ligne de résumé.
   private func messageResults(_ facet: MessageFacet) -> some View {
-    let hits = store.facetHits(facet: facet, query: trimmed)
+    let hits = facetHits(facet)
 
     return list(empty: "Rien en « \(facet.labelFR) »") {
       ForEach(hits) { hit in
-        Button {
-          open(hit.conversation.id)
-        } label: {
-          VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-              Image(systemName: hit.conversation.network.systemImage)
-                .font(.system(size: 10))
-              Text(hit.conversation.title)
-                .fontWeight(.semibold)
-              Spacer(minLength: 6)
-              Text(ConversationRow.shortDate(hit.message.sentAt))
-                .monospacedDigit()
-            }
-            .font(Typography.meta(typeface))
-            .foregroundStyle(theme.inkTertiary)
-
-            MessageBubble(
-              message: hit.message,
-              theme: theme,
-              typeface: typeface,
-              // Pas d'aperçu de lien dans un résultat : dix cartes qui se
-              // chargent en même temps, c'est une liste qui saute.
-              showsLinkPreviews: false
-            )
-            .allowsHitTesting(false)
-          }
-          .padding(.horizontal, Spacing.sm)
-          .padding(.vertical, 8)
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets())
-        .listRowBackground(Color.clear)
+        messageRow(hit.message, in: hit.conversation)
       }
     }
+  }
+
+  private func facetHits(_ facet: MessageFacet) -> [FacetedSearch.Hit] {
+    let hits = store.facetHits(facet: facet, query: trimmed)
+    guard let scope else { return hits }
+    return hits.filter { $0.conversation.id == scope }
+  }
+
+  private func messageRow(_ message: ChatMessage, in conversation: Conversation?) -> some View {
+    Button {
+      if let conversation { open(conversation.id) }
+    } label: {
+      VStack(alignment: .leading, spacing: 5) {
+        HStack(spacing: 5) {
+          if let conversation {
+            Image(systemName: conversation.network.systemImage)
+              .font(.system(size: 10))
+            Text(conversation.title)
+              .fontWeight(.semibold)
+          }
+          Spacer(minLength: 6)
+          Text(ConversationRow.shortDate(message.sentAt))
+            .monospacedDigit()
+        }
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.inkTertiary)
+
+        MessageBubble(
+          message: message,
+          theme: theme,
+          typeface: typeface,
+          // Pas d'aperçu de lien dans un résultat : dix cartes qui se
+          // chargent en même temps, c'est une liste qui saute.
+          showsLinkPreviews: false
+        )
+        .allowsHitTesting(false)
+      }
+      .padding(.horizontal, Spacing.sm)
+      .padding(.vertical, 8)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .listRowInsets(EdgeInsets())
+    .listRowBackground(Color.clear)
   }
 
   // MARK: - Habillage
@@ -225,16 +267,18 @@ struct SearchSheet: View {
   /// Vide au sens de l'écran : rien à montrer pour la question posée.
   private var isEmpty: Bool {
     switch facet {
+    case .none where scope != nil:
+      return threadHits.isEmpty
     case .none:
       return ConversationSearch.filter(
-        store.conversations, query: trimmed, index: store.searchIndex(query: trimmed)
+        conversations, query: trimmed, index: store.searchIndex(query: trimmed)
       ).isEmpty
     case .some(.drafts):
       return FacetedSearch.conversationsWithDrafts(
-        store.conversations, drafts: store.viewState.drafts, query: trimmed
+        conversations, drafts: store.viewState.drafts, query: trimmed
       ).isEmpty
     case .some(let facet):
-      return store.facetHits(facet: facet, query: trimmed).isEmpty
+      return facetHits(facet).isEmpty
     }
   }
 

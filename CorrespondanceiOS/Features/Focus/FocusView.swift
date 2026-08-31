@@ -4,9 +4,11 @@ import SwiftUI
 
 /// Focus : un écran, une conversation de la file.
 ///
-/// Le fil au complet, son composer, et une barre : précédente · archiver ·
-/// suivante. Le geste qui compte est le balayage vers le haut sur l'en-tête —
-/// archiver et passer à la suivante, sans lever le pouce de l'écran.
+/// Le fil au complet, son composer, et un en-tête qui porte tout : le geste
+/// qui compte est le balayage vers le haut sur l'en-tête — archiver et passer
+/// à la suivante, sans lever le pouce de l'écran — et deux flèches discrètes
+/// pour revenir ou avancer. Pas de barre d'archivage : elle prenait une bande
+/// entière pour dire ce que le geste dit déjà.
 /// Quand la file est vide, il n'y a plus d'écran : « Vous êtes à jour ».
 struct FocusView: View {
   @Binding var mode: PhoneMode
@@ -30,7 +32,6 @@ struct FocusView: View {
       if let conversation = store.focusConversation() {
         header(conversation)
         ThreadView(conversationID: conversation.id, showsHeader: false)
-        focusBar(conversation)
       } else {
         upToDate
       }
@@ -60,6 +61,12 @@ struct FocusView: View {
         .font(.system(size: 12, weight: .semibold))
         .foregroundStyle(theme.inkTertiary.opacity(0.7))
         .accessibilityHidden(true)
+      barButton("chevron.left", label: "Conversation précédente", enabled: hasPrevious) {
+        store.focusPrevious()
+      }
+      barButton("chevron.right", label: "Conversation suivante", enabled: hasFollowing) {
+        store.focusNext()
+      }
     }
     .padding(.horizontal, Spacing.md)
     .padding(.vertical, Spacing.sm)
@@ -97,34 +104,7 @@ struct FocusView: View {
     return "\(index + 1) sur \(queue.count)"
   }
 
-  // MARK: - La barre
-
-  private func focusBar(_ conversation: Conversation) -> some View {
-    HStack(spacing: Spacing.sm) {
-      barButton("chevron.left", label: "Conversation précédente", enabled: hasPrevious) {
-        store.focusPrevious()
-      }
-      Button {
-        archive()
-      } label: {
-        Label("Archiver", systemImage: "archivebox")
-          .font(Typography.body(typeface, size: 15))
-          .foregroundStyle(theme.accentInk)
-          .padding(.horizontal, Spacing.md)
-          .padding(.vertical, 10)
-          .frame(maxWidth: .infinity)
-          .background(Capsule().fill(theme.accentFill))
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Archiver \(conversation.title) et passer à la suivante")
-
-      barButton("chevron.right", label: "Conversation suivante", enabled: hasFollowing) {
-        store.focusNext()
-      }
-    }
-    .padding(.horizontal, Spacing.md)
-    .padding(.top, Spacing.sm)
-  }
+  // MARK: - Précédente, suivante
 
   private func barButton(
     _ systemImage: String,
@@ -136,8 +116,8 @@ struct FocusView: View {
       Image(systemName: systemImage)
         .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(enabled ? theme.inkSecondary : theme.inkTertiary.opacity(0.4))
-        .frame(width: 44, height: 40)
-        .background(Capsule().fill(theme.paperSecondary))
+        .frame(width: 36, height: 36)
+        .background(Circle().fill(theme.paperSecondary))
     }
     .buttonStyle(.plain)
     .disabled(!enabled)

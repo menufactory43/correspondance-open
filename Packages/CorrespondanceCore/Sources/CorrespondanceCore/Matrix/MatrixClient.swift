@@ -163,6 +163,17 @@ public actor MatrixClient {
     return json.string(at: "room_id") ?? roomID
   }
 
+  /// Invite un utilisateur dans un salon. Inviter le ghost d'un contact dans le
+  /// portail d'un groupe, c'est l'ajouter au groupe sur le réseau distant : le
+  /// pont relaie l'invitation comme un ajout.
+  public func invite(roomID: String, userID: String) async throws {
+    _ = try await request(
+      method: "POST",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/invite",
+      body: .object(["user_id": .string(userID)])
+    )
+  }
+
   /// Quitte un salon. Côté pont, quitter le portail d'un groupe revient à quitter
   /// le groupe sur le réseau distant — c'est ainsi qu'on remplace `quitGroup`.
   public func leave(roomID: String) async throws {

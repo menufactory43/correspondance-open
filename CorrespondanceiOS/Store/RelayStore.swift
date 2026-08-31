@@ -794,6 +794,47 @@ final class RelayStore {
     try await matrix.startConversation(network: network, identifier: identifier)
   }
 
+  // MARK: - La fiche d'un fil
+
+  struct ThreadMember: Identifiable, Hashable {
+    let userID: String
+    let displayName: String?
+    var id: String { userID }
+    var name: String { displayName ?? MatrixIdentity.localpart(userID) }
+  }
+
+  /// Les correspondants d'un fil. En démonstration, il n'y a pas de salon :
+  /// on relit les auteurs des messages, un par nom.
+  func members(_ conversationID: String) async -> [ThreadMember] {
+    guard isDemo else {
+      return await matrix.members(conversationID: conversationID)
+        .map { ThreadMember(userID: $0.userID, displayName: $0.displayName) }
+    }
+    var seen: Set<String> = []
+    var result: [ThreadMember] = []
+    for message in visibleMessages(conversationID) where !message.isFromMe {
+      guard let name = message.displayedSenderName, seen.insert(name).inserted else { continue }
+      result.append(ThreadMember(userID: message.senderID ?? name, displayName: name))
+    }
+    return result
+  }
+
+  /// Ajoute quelqu'un au groupe, par son numéro ou son pseudo selon le réseau.
+  func inviteMember(_ identifier: String, conversationID: String) async throws {
+    guard !isDemo else { return }
+    try await matrix.inviteMember(conversationID: conversationID, identifier: identifier)
+  }
+
+  /// Les photos et vidéos du fil, la plus récente d'abord — celles qu'on a
+  /// déjà sur l'appareil, ou qu'on sait retrouver dans le cache.
+  func media(_ conversationID: String) -> [MessageAttachment] {
+    visibleMessages(conversationID).reversed().flatMap { message in
+      message.attachments.map(MessageBubble.repaired).filter {
+        ($0.isImage || $0.isVideo) && $0.resolvedFileURL != nil
+      }
+    }
+  }
+
   // MARK: - Indicateurs de frappe
 
   /// « Alice écrit… » par fil, relu à chaque `/sync`. Vide = personne n'écrit.

@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Le fil d'une conversation.
 ///
-/// En-tête flottant en verre (avatar + nom), messages regroupés par
+/// La pilule de verre (photo + nom) au centre de la barre, entre le retour et
+/// le menu ; elle ouvre la fiche du fil. Messages regroupés par
 /// `MessageGrouping` comme sur le Mac — un nom par prise de parole, une heure
 /// par silence de cinq minutes — et le composer en bas. L'accusé de lecture
 /// part à l'ouverture, comme sur le Mac.
@@ -16,35 +17,66 @@ struct ThreadView: View {
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
+  @State private var isShowingInfo = false
+  /// La bulle sous appui long, et le nom qu'elle portait dans le fil.
+  @State private var focused: FocusedMessage?
+
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
 
   private var conversation: Conversation? { store.conversation(conversationID) }
 
+  private struct FocusedMessage: Equatable {
+    var message: ChatMessage
+    var senderLabel: String?
+  }
+
   var body: some View {
-    ZStack(alignment: .top) {
-      thread
-      if showsHeader, let conversation {
-        ThreadPillHeader(conversation: conversation, theme: theme, typeface: typeface)
-          .padding(.horizontal, Spacing.md)
-          .padding(.top, Spacing.xs)
+    thread
+      .background(theme.paper.ignoresSafeArea())
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        ThreadComposer(conversationID: conversationID)
       }
-    }
-    .background(theme.paper.ignoresSafeArea())
-    .safeAreaInset(edge: .bottom, spacing: 0) {
-      ThreadComposer(conversationID: conversationID)
-    }
-    // Le nom du fil est déjà dans la pilule flottante : l'écrire aussi dans la
-    // barre de navigation le dirait deux fois, à dix points d'écart.
-    .navigationTitle("")
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar { toolbar }
-    .toolbarBackground(.hidden, for: .navigationBar)
-    .task(id: conversationID) { await store.open(conversationID: conversationID) }
+      .overlay {
+        if let focused {
+          MessageActionsOverlay(
+            message: focused.message,
+            conversationID: conversationID,
+            senderLabel: focused.senderLabel
+          ) {
+            self.focused = nil
+          }
+          .transition(.opacity)
+        }
+      }
+      .sensoryFeedback(.impact(weight: .medium), trigger: focused != nil) { _, new in new }
+      // Le nom du fil est dans la pilule : la barre n'a pas de titre à elle.
+      .navigationTitle("")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar { toolbar }
+      .toolbar(focused == nil ? .visible : .hidden, for: .navigationBar)
+      .toolbarBackground(.hidden, for: .navigationBar)
+      .sheet(isPresented: $isShowingInfo) {
+        ThreadInfoSheet(conversationID: conversationID)
+          .environment(store)
+          .environment(themes)
+      }
+      .task(id: conversationID) { await store.open(conversationID: conversationID) }
   }
 
   @ToolbarContentBuilder
   private var toolbar: some ToolbarContent {
+    if showsHeader, let conversation {
+      ToolbarItem(placement: .principal) {
+        Button {
+          isShowingInfo = true
+        } label: {
+          ThreadPillHeader(conversation: conversation, theme: theme, typeface: typeface)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Ouvre la fiche de la conversation")
+      }
+    }
     ToolbarItem(placement: .topBarTrailing) {
       Menu {
         Button {
@@ -84,9 +116,7 @@ struct ThreadView: View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 10) {
-          // De quoi passer sous l'en-tête flottant sans qu'il masque le premier
-          // message quand le fil est court.
-          Color.clear.frame(height: showsHeader ? 56 : 4)
+          Color.clear.frame(height: 4)
 
           ForEach(groups) { group in
             if let separator = group.timeSeparator {
@@ -102,26 +132,20 @@ struct ThreadView: View {
                     theme: theme,
                     typeface: typeface,
                     senderLabel: index == 0 ? group.senderLabel : nil,
-                    onReact: { emoji in
-                      Task { await store.react(conversationID: conversationID, messageID: message.id, emoji: emoji) }
-                    },
                     onReply: { store.setReplyTarget(message.id, conversationID: conversationID) },
-                    onHide: { store.hide(messageID: message.id, conversationID: conversationID) },
-                    onDeleteEverywhere: message.isFromMe ? {
-                      Task { await store.deleteEverywhere(messageID: message.id, conversationID: conversationID) }
-                    } : nil,
-                    onEdit: store.canEdit(message) ? { (nouveau: String) in
-                      let fil = conversationID
-                      let bulle = message.id
-                      Task { @MainActor in
-                        await store.editMessage(messageID: bulle, newText: nouveau, conversationID: fil)
-                      }
-                    } : nil,
                     onVotePoll: message.poll == nil ? nil : { (answerID: String) in
                       let fil = conversationID
                       let bulle = message.id
                       Task { @MainActor in
                         await store.votePoll(conversationID: fil, messageID: bulle, answerID: answerID)
+                      }
+                    },
+                    onReact: { emoji in
+                      Task { await store.react(conversationID: conversationID, messageID: message.id, emoji: emoji) }
+                    },
+                    onLongPress: {
+                      withAnimation(.easeOut(duration: 0.18)) {
+                        focused = FocusedMessage(message: message, senderLabel: group.senderLabel)
                       }
                     }
                   )
@@ -202,29 +226,28 @@ struct ThreadView: View {
   }
 }
 
-/// L'en-tête flottant : une pilule de verre avec la photo et le nom du fil.
+/// La pilule au centre de la barre : la photo du fil (mosaïque des membres
+/// pour un groupe, pastille du réseau) et son nom, dans une capsule de verre.
 struct ThreadPillHeader: View {
   let conversation: Conversation
   let theme: WritingTheme
   var typeface: WritingTypeface = .quattro
 
   var body: some View {
-    HStack(spacing: Spacing.xs) {
-      ConversationAvatar(conversation: conversation, size: 28, theme: theme)
-      VStack(alignment: .leading, spacing: 0) {
-        Text(conversation.title)
-          .font(Typography.body(typeface, size: 15))
-          .foregroundStyle(theme.ink)
-          .lineLimit(1)
-        Text(conversation.network.labelFR)
-          .font(Typography.meta(typeface))
-          .foregroundStyle(theme.inkTertiary)
-      }
-      Spacer(minLength: 0)
+    HStack(spacing: 7) {
+      ConversationAvatar(conversation: conversation, size: 26, theme: theme)
+      Text(conversation.title)
+        .font(Typography.body(typeface, size: 15))
+        .fontWeight(.medium)
+        .foregroundStyle(theme.ink)
+        .lineLimit(1)
+        .frame(maxWidth: 180)
     }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .glassSurface(cornerRadius: 22, fallbackFill: theme.sidebar, border: theme.edge)
+    .padding(.leading, 5)
+    .padding(.trailing, 12)
+    .padding(.vertical, 5)
+    .glassSurface(cornerRadius: 18, fallbackFill: theme.sidebar, border: theme.edge, isInteractive: true)
+    .contentShape(Capsule())
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(conversation.title), \(conversation.network.labelFR)")
   }
