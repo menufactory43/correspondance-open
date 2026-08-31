@@ -103,22 +103,36 @@ final class RelayStore {
   }
 
   /// Reprend la session du Trousseau, s'il y en a une, et lance la boucle.
+  ///
+  /// La base locale d'abord, le Relais ensuite : dehors, Tailscale met parfois
+  /// des secondes à monter le tunnel — l'inbox du disque s'affiche tout de
+  /// suite, la vérification de session court en fond. Et « injoignable »
+  /// n'éjecte pas vers l'écran de connexion : la session est probablement
+  /// bonne, c'est le réseau qui manque — la boucle `/sync` réessaiera.
   func start() async {
     guard !isDemo, session == .unknown else { return }
     guard MatrixCredentialStore.load() != nil else {
       session = .disconnected
       return
     }
-    let alive = await matrix.restoreCursorAndCheckSession()
-    guard alive else {
+    if await matrix.restoreFromDisk() {
+      conversations = mergedRows(await matrix.conversations())
+      session = .connected
+    }
+    switch await matrix.checkSession() {
+    case .invalid:
       session = .disconnected
       connectionError = "La session enregistrée n'est plus valable — reconnecte-toi."
       return
+    case .unreachable:
+      session = .connected
+      syncError = "Relais injoignable pour l'instant — nouvel essai en cours."
+    case .valid:
+      session = .connected
+      conversations = mergedRows(await matrix.conversations())
+      await reloadRelayState()
+      refreshPendingRequests()
     }
-    session = .connected
-    conversations = mergedRows(await matrix.conversations())
-    await reloadRelayState()
-    refreshPendingRequests()
     startSyncLoop()
     // Ce que le Relais dit avoir rejoint, comparé à la base : un portail créé
     // pendant que l'iPhone dormait n'apparaît dans aucun `/sync` incrémental.

@@ -131,6 +131,33 @@ public actor MatrixBridgeService {
 
   /// Reprend le curseur `next_batch` du cache et vérifie que la session tient encore.
   /// `false` = pas de credentials ou token périmé : l'appelant n'ouvre pas de boucle.
+  /// Reprend l'inbox du disque, sans réseau : l'identité vient des identifiants
+  /// enregistrés, la base locale fait le reste. C'est ce qui permet à l'écran
+  /// de s'allumer avant que le tunnel (Tailscale, dehors) ne soit monté.
+  public func restoreFromDisk() async -> Bool {
+    guard let credentials = await client.currentCredentials else { return false }
+    selfUserID = credentials.userID
+    hydrateIfNeeded()
+    return true
+  }
+
+  /// La session, vue du Relais. « Injoignable » n'est pas « invalide » : dehors,
+  /// le premier est fréquent et passager, le second demande une reconnexion.
+  public enum SessionCheck: Sendable { case valid, invalid, unreachable }
+
+  public func checkSession() async -> SessionCheck {
+    hydrateIfNeeded()
+    guard await client.isConfigured else { return .invalid }
+    do {
+      selfUserID = try await client.whoami()
+      return .valid
+    } catch MatrixError.http(let status, let errcode, _) where status == 401 || errcode == "M_UNKNOWN_TOKEN" {
+      return .invalid
+    } catch {
+      return .unreachable
+    }
+  }
+
   public func restoreCursorAndCheckSession() async -> Bool {
     hydrateIfNeeded()
     guard await client.isConfigured else { return false }
