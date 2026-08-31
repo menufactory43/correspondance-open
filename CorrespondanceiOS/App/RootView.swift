@@ -92,12 +92,14 @@ struct RootView: View {
         InboxListView(mode: $mode)
           .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 460)
       } detail: {
-        NavigationStack {
-          if let id = store.selectedConversationID, store.conversation(id) != nil {
-            ThreadView(conversationID: id)
-          } else {
-            noSelection
-          }
+        // Pas de `NavigationStack` ici : la colonne de détail en a déjà un, et
+        // en compact c'est lui qui reçoit la poussée quand la sélection change.
+        // En imbriquer un second faisait taper dans le vide — la conversation
+        // se sélectionnait, mais rien ne s'ouvrait.
+        if let id = store.selectedConversationID, store.conversation(id) != nil {
+          ThreadView(conversationID: id)
+        } else {
+          noSelection
         }
       }
       .navigationSplitViewStyle(.balanced)
