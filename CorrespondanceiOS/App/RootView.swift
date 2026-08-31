@@ -78,11 +78,19 @@ struct RootView: View {
     .background(theme.paper.ignoresSafeArea())
   }
 
-  /// Le fil arrive à l'étape suivante ; la liste, elle, est déjà l'écran par
-  /// défaut (décision 9).
   private var connected: some View {
     NavigationStack {
       InboxListView(mode: $mode)
+        .navigationDestination(
+          isPresented: Binding(
+            get: { store.selectedConversationID != nil },
+            set: { if !$0 { store.selectedConversationID = nil } }
+          )
+        ) {
+          if let id = store.selectedConversationID, store.conversation(id) != nil {
+            ThreadView(conversationID: id)
+          }
+        }
     }
     .tint(theme.accent)
   }
@@ -103,7 +111,10 @@ struct RootView: View {
         )
       }
     case .fil:
-      store.selectedConversationID = store.visibleConversations.first?.id
+      // Le fil le plus fourni : c'est celui qui montre le regroupement, les
+      // réactions et les citations sur une seule capture.
+      store.selectedConversationID = store.visibleConversations
+        .max { store.visibleMessages($0.id).count < store.visibleMessages($1.id).count }?.id
     case .focus, .vide:
       break
     }
