@@ -77,39 +77,49 @@ public enum MatrixConversationCache {
       conversation.memberAvatarIDs = cached.memberAvatarIDs ?? []
       return conversation
     }
-    let messages = snap.messages.mapValues { list in
-      list.map { cached in
-        // Re-résoudre les chemins : le cache disque peut avoir été vidé par macOS.
-        let attachments = cached.attachments.map { att -> MessageAttachment in
-          var copy = att
-          if copy.resolvedFileURL == nil {
-            copy.localPath = MatrixAttachmentStore.existingLocalPath(forMXC: att.id, contentType: att.contentType)
-          }
-          return copy
-        }
-        return ChatMessage(
-          id: cached.id,
-          conversationID: cached.conversationID,
-          network: cached.network,
-          text: cached.text,
-          sentAt: cached.sentAt,
-          isFromMe: cached.isFromMe,
-          senderID: cached.senderID,
-          senderName: cached.senderName,
-          attachments: attachments,
-          reactions: cached.reactions ?? [],
-          replyTo: cached.replyTo,
-          linkPreview: cached.linkPreview.map { preview in
-            var copy = preview
-            if let path = copy.imageLocalPath, !FileManager.default.fileExists(atPath: path) {
-              copy.imageLocalPath = nil
-            }
-            return copy
-          }
+    let messages = snap.messages.mapValues { list in list.map(Self.chatMessage(from:)) }
+    return (snap.nextBatch, conversations, messages)
+  }
+
+  /// Les messages d'une conversation de l'instantané, retraduits. C'est par là
+  /// que passe la reprise vers la base locale.
+  public static func messages(in snapshot: Snapshot, conversationID: String) -> [ChatMessage] {
+    (snapshot.messages[conversationID] ?? []).map(chatMessage(from:))
+  }
+
+  /// Un message du fichier tel que le reste de l'app l'attend. Les chemins des
+  /// pièces jointes sont re-résolus : le cache disque a pu être vidé par le
+  /// système alors que l'instantané, lui, était resté.
+  static func chatMessage(from cached: CachedMessage) -> ChatMessage {
+    let attachments = cached.attachments.map { attachment -> MessageAttachment in
+      var copy = attachment
+      if copy.resolvedFileURL == nil {
+        copy.localPath = MatrixAttachmentStore.existingLocalPath(
+          forMXC: attachment.id, contentType: attachment.contentType
         )
       }
+      return copy
     }
-    return (snap.nextBatch, conversations, messages)
+    return ChatMessage(
+      id: cached.id,
+      conversationID: cached.conversationID,
+      network: cached.network,
+      text: cached.text,
+      sentAt: cached.sentAt,
+      isFromMe: cached.isFromMe,
+      senderID: cached.senderID,
+      senderName: cached.senderName,
+      attachments: attachments,
+      reactions: cached.reactions ?? [],
+      replyTo: cached.replyTo,
+      linkPreview: cached.linkPreview.map { preview in
+        var copy = preview
+        if let path = copy.imageLocalPath, !FileManager.default.fileExists(atPath: path) {
+          copy.imageLocalPath = nil
+        }
+        return copy
+      }
+    )
   }
 
   public static func save(nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {

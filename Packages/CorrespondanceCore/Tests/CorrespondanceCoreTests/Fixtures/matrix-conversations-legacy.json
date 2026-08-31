@@ -1,0 +1,73 @@
+{
+  "nextBatch": "s4242_1_0_1",
+  "conversations": [
+    {
+      "id": "signal:!perruches:correspondance.local",
+      "network": "signal",
+      "address": "!perruches:correspondance.local",
+      "title": "Les perruches",
+      "preview": "Alice : à demain",
+      "lastMessageAt": 776000002,
+      "unreadCount": 2,
+      "transportKey": "!perruches:correspondance.local",
+      "isGroup": true,
+      "remoteAvatarID": "mxc://correspondance.local/groupe",
+      "memberAvatarIDs": ["mxc://correspondance.local/alice"]
+    },
+    {
+      "id": "whatsapp:!camille:correspondance.local",
+      "network": "whatsapp",
+      "address": "+33612345678",
+      "title": "Camille",
+      "preview": "📷 Photo",
+      "lastMessageAt": 776000010,
+      "unreadCount": 0,
+      "transportKey": "!camille:correspondance.local",
+      "isGroup": false
+    }
+  ],
+  "messages": {
+    "signal:!perruches:correspondance.local": [
+      {
+        "id": "$ancien1",
+        "conversationID": "signal:!perruches:correspondance.local",
+        "network": "signal",
+        "text": "on se retrouve où ?",
+        "sentAt": 776000001,
+        "isFromMe": false,
+        "attachments": [],
+        "senderID": "@signal_alice:correspondance.local",
+        "senderName": "Alice",
+        "reactions": [{ "emoji": "🔥", "senders": ["Bruno"], "isMine": false }]
+      },
+      {
+        "id": "$ancien2",
+        "conversationID": "signal:!perruches:correspondance.local",
+        "network": "signal",
+        "text": "à demain",
+        "sentAt": 776000002,
+        "isFromMe": false,
+        "attachments": [],
+        "senderID": "@signal_alice:correspondance.local",
+        "senderName": "Alice"
+      }
+    ],
+    "whatsapp:!camille:correspondance.local": [
+      {
+        "id": "$photo",
+        "conversationID": "whatsapp:!camille:correspondance.local",
+        "network": "whatsapp",
+        "text": "",
+        "sentAt": 776000010,
+        "isFromMe": false,
+        "attachments": [
+          {
+            "id": "mxc://correspondance.local/photo",
+            "contentType": "image/jpeg",
+            "filename": "vacances.jpg"
+          }
+        ]
+      }
+    ]
+  }
+}
