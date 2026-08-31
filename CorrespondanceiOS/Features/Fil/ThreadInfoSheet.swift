@@ -23,6 +23,8 @@ struct ThreadInfoSheet: View {
   @State private var inviteError: String?
   @State private var inviteSent = false
   @State private var members: [RelayStore.ThreadMember] = []
+  /// Vrai quand le fil peut accueillir « cc » — pas encore membre.
+  @State private var agentInvitable = false
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -62,7 +64,10 @@ struct ThreadInfoSheet: View {
       }
     }
     .tint(theme.accent)
-    .task(id: conversationID) { members = await store.members(conversationID) }
+    .task(id: conversationID) {
+      members = await store.members(conversationID)
+      agentInvitable = await store.agentInvitable(conversationID)
+    }
     .sheet(isPresented: $isSearching) {
       SearchSheet(scope: conversationID)
         .environment(store)
@@ -254,6 +259,42 @@ struct ThreadInfoSheet: View {
               Text("Ajouter un membre")
                 .font(Typography.body(typeface, size: 16))
                 .foregroundStyle(theme.accent)
+              Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          if !members.isEmpty { rowDivider }
+        }
+        if agentInvitable {
+          Button {
+            agentInvitable = false
+            let fil = conversationID
+            Task { @MainActor in
+              do {
+                try await store.inviteAgent(fil)
+              } catch {
+                inviteError = RelayStore.readable(error)
+                agentInvitable = true
+              }
+            }
+          } label: {
+            HStack(spacing: 12) {
+              Image(systemName: "pencil.line")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(theme.accent)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(theme.accent.opacity(0.12)))
+              VStack(alignment: .leading, spacing: 1) {
+                Text("Inviter cc")
+                  .font(Typography.body(typeface, size: 16))
+                  .foregroundStyle(theme.accent)
+                Text("L'agent pourra proposer des réponses ici")
+                  .font(Typography.meta(typeface))
+                  .foregroundStyle(theme.inkTertiary)
+              }
               Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)

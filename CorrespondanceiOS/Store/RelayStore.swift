@@ -883,6 +883,18 @@ final class RelayStore {
     var name: String { displayName ?? MatrixIdentity.localpart(userID) }
   }
 
+  /// « Inviter cc » a-t-il un sens ici : un fil dont cc n'est pas déjà membre.
+  func agentInvitable(_ conversationID: String) async -> Bool {
+    guard !isDemo, let target = relayTargets(of: conversationID).first else { return false }
+    return await !matrix.hasAgent(conversationID: target)
+  }
+
+  /// Invite l'agent dans le fil ; « cc a rejoint la conversation » suivra.
+  func inviteAgent(_ conversationID: String) async throws {
+    guard let target = relayTargets(of: conversationID).first else { return }
+    try await matrix.inviteAgent(conversationID: target)
+  }
+
   /// Les correspondants d'un fil. En démonstration, il n'y a pas de salon :
   /// on relit les auteurs des messages, un par nom.
   func members(_ conversationID: String) async -> [ThreadMember] {

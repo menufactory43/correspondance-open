@@ -33,6 +33,9 @@ struct ThreadView: View {
   /// calcule rien, et le défilement rame quand même. On monte la fin, le
   /// reste attend derrière « Voir les messages précédents ».
   @State private var windowCount = ThreadMetrics.windowCount
+  /// Le tiroir du « + » propose « Inviter cc » — seulement quand le fil est au
+  /// Relais et que cc n'y est pas déjà.
+  @State private var canInviteAgent = false
   /// Le compte de messages pour lequel une expansion est programmée : si le
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
@@ -82,6 +85,10 @@ struct ThreadView: View {
             theme: theme,
             onAttach: { store.pickAttachments() },
             onSendLater: { store.toggleSendLaterPicker() },
+            onInviteAgent: canInviteAgent ? {
+              canInviteAgent = false
+              Task { await store.inviteAgent() }
+            } : nil,
             onSend: { Task { await store.sendDraft() } }
           )
           .popover(isPresented: sendLaterPickerPresented, arrowEdge: .top) {
@@ -228,6 +235,9 @@ struct ThreadView: View {
       .onChange(of: store.messages.count) { oldCount, newCount in
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
+      }
+      .task(id: store.selectedConversationID) {
+        canInviteAgent = await store.agentInvitable()
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         LaunchTrace.event("select")

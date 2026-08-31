@@ -349,6 +349,27 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Le Matrix ID de l'agent « cc » sur ce Relais — même serveur que moi.
+  public var agentUserID: String {
+    let serverName = String(selfUserID.split(separator: ":").last ?? "")
+    return "@cc:\(serverName)"
+  }
+
+  /// L'agent est-il déjà membre (ou invité) de ce fil ?
+  public func hasAgent(conversationID: String) -> Bool {
+    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }
+    return model.members[agentUserID]?.isActive == true
+  }
+
+  /// Invite « cc » dans le fil. Il ne rejoint que sur MON invitation — c'est
+  /// précisément elle. Le fil affichera « cc a rejoint la conversation ».
+  public func inviteAgent(conversationID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.invite(roomID: roomID, userID: agentUserID)
+  }
+
   /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
   /// pont ne l'annonce (voir `MatrixRoomModel.isNetworkFlaggedRequest`).
   public func networkFlaggedRequestIDs() -> Set<String> {

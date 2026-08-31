@@ -211,6 +211,8 @@ struct ComposerPlusTray: View {
   /// `nil` là où « plus tard » n'a pas cours — une fenêtre détachée. Le tiroir
   /// n'ouvre alors qu'un seul bouton, plutôt qu'une horloge qui ne fait rien.
   var onSendLater: (() -> Void)?
+  /// « Inviter cc » : présent seulement quand le fil peut l'accueillir.
+  var onInviteAgent: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -218,9 +220,8 @@ struct ComposerPlusTray: View {
   private var offersSendLater: Bool { onSendLater != nil }
   /// La largeur du tiroir suit le nombre de boutons qu'il cache.
   private var trayWidth: CGFloat {
-    offersSendLater
-      ? ComposerMetrics.control * 2 + Self.itemSpacing
-      : ComposerMetrics.control
+    let buttons = 1 + (offersSendLater ? 1 : 0) + (onInviteAgent != nil ? 1 : 0)
+    return ComposerMetrics.control * CGFloat(buttons) + Self.itemSpacing * CGFloat(buttons - 1)
   }
   /// Sans « plus tard », l'état « programmé » n'existe pas pour ce composer.
   private var showsScheduling: Bool { isScheduling && offersSendLater }
@@ -260,6 +261,15 @@ struct ComposerPlusTray: View {
             iconSize: 15,
             isActive: showsScheduling,
             action: { choose(onSendLater) }
+          )
+        }
+        if let onInviteAgent {
+          ComposerCircleButton(
+            systemImage: "pencil.line",
+            helpText: "Inviter cc dans cette conversation",
+            theme: theme,
+            iconSize: 15,
+            action: { choose(onInviteAgent) }
           )
         }
       }

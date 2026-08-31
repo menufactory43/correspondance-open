@@ -11,6 +11,7 @@ struct ComposerBar: View {
   var theme: WritingTheme
   var onAttach: () -> Void
   var onSendLater: () -> Void = {}
+  var onInviteAgent: (() -> Void)?
   var onSend: () -> Void
 
   @Environment(InboxStore.self) private var store
@@ -46,7 +47,8 @@ struct ComposerBar: View {
           isScheduling: isScheduling,
           isExpanded: $isTrayExpanded,
           onAttach: onAttach,
-          onSendLater: onSendLater
+          onSendLater: onSendLater,
+          onInviteAgent: onInviteAgent
         )
         .padding(.bottom, 2)
 
