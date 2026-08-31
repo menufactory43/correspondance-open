@@ -143,7 +143,11 @@ final class RelayStore {
     }
   }
 
-  func signOut() async {
+  /// La déconnexion. L'ordre compte : le pusher part AVANT le jeton d'accès —
+  /// après, le Relais ne nous écouterait plus, et continuerait de réveiller un
+  /// téléphone qui n'a plus de session.
+  func signOut(push: PushRegistration? = nil) async {
+    await push?.removeFromRelay()
     syncTask?.cancel()
     syncTask = nil
     for task in relayDraftTasks.values { task.cancel() }
@@ -156,6 +160,7 @@ final class RelayStore {
     selectedConversationID = nil
     focusConversationID = nil
     openedConversationIDs = []
+    SharedRelayState.saveMutedRoomIDs([])
     session = .disconnected
   }
 

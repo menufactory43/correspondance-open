@@ -358,6 +358,27 @@ public actor MatrixBridgeService {
     rooms.removeValue(forKey: roomID)
   }
 
+  // MARK: - Push
+
+  /// Déclare le pusher de cet appareil auprès du Relais.
+  /// `sygnalURL` est celle que **Synapse** voit, pas nous.
+  public func setPusher(
+    pushkey: String,
+    sygnalURL: URL,
+    deviceDisplayName: String
+  ) async throws {
+    try await client.setPusher(
+      pushkey: pushkey,
+      sygnalURL: sygnalURL,
+      deviceDisplayName: deviceDisplayName
+    )
+  }
+
+  /// Retire le pusher — à la déconnexion, tant que le jeton d'accès vaut encore.
+  public func removePusher(pushkey: String) async throws {
+    try await client.removePusher(pushkey: pushkey)
+  }
+
   // MARK: - État de conversation (Relais)
 
   /// L'état que le Relais a déjà raconté à cette session.

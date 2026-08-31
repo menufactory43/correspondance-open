@@ -46,6 +46,7 @@ enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
 struct RootView: View {
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(PushRegistration.self) private var push
 
   @State private var mode: PhoneMode = .inbox
   // `.automatic` replie la liste sur un iPad en portrait : les deux colonnes
@@ -133,6 +134,15 @@ struct RootView: View {
       mode = .focus
       store.state.archived = Set(store.conversations.map(\.id))
       store.focusConversationID = nil
+    case .notification:
+      // Le seul écran de démonstration qui ne se photographie pas : il arme le
+      // push. La capture, elle, se prend sur l'écran verrouillé.
+      DemoRelay.seedSharedCredentials()
+      Task {
+        await push.requestAuthorizationIfNeeded()
+        guard let reference = DemoRelay.demoPushReference else { return }
+        await push.presentDemoNotification(reference: reference, after: 8)
+      }
     }
   }
 

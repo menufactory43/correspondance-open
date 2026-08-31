@@ -31,6 +31,49 @@ enum DemoRelay {
     case erreur
     /// File vidée : « Vous êtes à jour ».
     case vide
+    /// L'écran des notifications : demande l'autorisation, et sème dans le
+    /// Trousseau partagé une session pointant vers le Relais de démonstration
+    /// (`-CorrespondanceDemoHomeserver`). C'est le seul moyen d'exercer
+    /// l'extension de notification sans NUC : elle ira vraiment lire son
+    /// événement, sur un serveur qui répond vraiment.
+    case notification
+  }
+
+  /// L'adresse du Relais de démonstration, pour l'écran `notification`.
+  /// Rien en dur : elle est passée au lancement, comme la vraie.
+  static var demoHomeserver: URL? {
+    guard isRequested,
+          let raw = UserDefaults.standard.string(forKey: "CorrespondanceDemoHomeserver")
+    else { return nil }
+    return URL(string: raw)
+  }
+
+  /// Le couple (salon, événement) que le push nommerait — passé au lancement,
+  /// comme le ferait Sygnal. `-CorrespondanceDemoPush "!salon:serveur/$event"`.
+  static var demoPushReference: PushNotification.EventReference? {
+    guard isRequested,
+          let raw = UserDefaults.standard.string(forKey: "CorrespondanceDemoPush"),
+          let slash = raw.lastIndex(of: "/")
+    else { return nil }
+    return PushNotification.EventReference(
+      roomID: String(raw[raw.startIndex..<slash]),
+      eventID: String(raw[raw.index(after: slash)...])
+    )
+  }
+
+  /// Sème la session dans le Trousseau PARTAGÉ — celui que l'extension lit.
+  /// Ne fait rien hors démonstration : c'est la seule garde qui compte.
+  static func seedSharedCredentials() {
+    guard isRequested, let homeserver = demoHomeserver else { return }
+    MatrixCredentialStore.accessGroup = SharedRelayState.keychainAccessGroup
+    MatrixCredentialStore.save(
+      MatrixCredentials(
+        homeserver: homeserver,
+        userID: selfUserID,
+        accessToken: "demonstration",
+        deviceID: "DEMO"
+      )
+    )
   }
 
   /// L'adresse injoignable de l'écran d'erreur. Un nom qui ne résout nulle part,

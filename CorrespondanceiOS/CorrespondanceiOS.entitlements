@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Le conteneur partagé avec l'extension de notification : elle y lit la
+	     liste des salons muets, rien d'autre. Cf. Core/SharedRelayState. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.correspondance</string>
+	</array>
+	<!-- Le Trousseau partagé : la session Matrix, pour que l'extension puisse
+	     aller lire l'événement que le push lui a nommé. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.correspondance.shared</string>
+	</array>
+	<!-- development = APNs sandbox, la moitié Apple du couple sandbox/production
+	     de sygnal.yaml. Xcode et TestFlight interne ; l'App Store veut production. -->
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

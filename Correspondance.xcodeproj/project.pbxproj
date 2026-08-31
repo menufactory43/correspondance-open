@@ -46,6 +46,7 @@
 		5F30B472631DCD434DC11D5F /* ReadReceiptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C28DC628ACA371751E703 /* ReadReceiptTests.swift */; };
 		5FFE55AB239E658DF272BAF2 /* IMessageAutomationHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = C94AD0E8F97378754384E6E6 /* IMessageAutomationHealth.swift */; };
 		62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */; };
+		660C9A9C36AE32F91EF157CD /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370C3355911FCEFC1AC793B7 /* NotificationService.swift */; };
 		663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */; };
 		66CD3CC0DFBB21B5236788CE /* ConversationRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F798C1E52A24C90A294483 /* ConversationRow.swift */; };
 		6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72EC2976B9D7432A734100 /* NetworkRailView.swift */; };
@@ -83,9 +84,11 @@
 		A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */; };
 		A7E4683BE328EF7B138AD137 /* QuickReplyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200371D508DA6447F58B59 /* QuickReplyPanel.swift */; };
 		AACF21AE1C0A6B7B3AE16915 /* SenderAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */; };
+		AB527CABCA3E052EF550AB15 /* CorrespondanceiOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F807FD24E1467416CB81E90 /* MentionMenu.swift */; };
+		C1A364F177A76D1E5B33FC4C /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = E30260377CE15D0E3426943D /* CorrespondanceCore */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
@@ -103,6 +106,7 @@
 		E8096E3B2FE11B4EC42F80CE /* LaunchWarmup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B60BDDA391398F90A5210D4D /* LaunchWarmup.swift */; };
 		EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B758EF0696E62CAE3AD887FF /* SettingsView.swift */; };
 		EB9BF4A84E3FF11A77F95899 /* InboxStore+Relay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C6F0FFC5820E4E17A42F1AF /* InboxStore+Relay.swift */; };
+		EBFB2C2602F26B5C3AD242F9 /* PushRegistration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94D422F39E0A48F41C38E6CD /* PushRegistration.swift */; };
 		EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */; };
 		EEB24836FDC67C64A30C1376 /* AvatarStoreReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */; };
 		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
@@ -131,7 +135,28 @@
 			remoteGlobalIDString = 35DB61E2F937BA38195B4EEE;
 			remoteInfo = Correspondance;
 		};
+		BC88ADE605BDEE6E6E881EF6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FCCEA8E462CC3D94DD059E8A /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 229993EFEA923BC16541D93C;
+			remoteInfo = CorrespondanceiOSNotificationService;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2F9C537E2E182E5B38216601 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AB527CABCA3E052EF550AB15 /* CorrespondanceiOSNotificationService.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
@@ -159,6 +184,7 @@
 		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Mentions.swift"; sourceTree = "<group>"; };
 		33A2DEA6220E02771BAD4467 /* ThemePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePreferences.swift; sourceTree = "<group>"; };
+		370C3355911FCEFC1AC793B7 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		3796849D6D70116DE246282E /* FocusConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusConversationView.swift; sourceTree = "<group>"; };
 		388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxListPane.swift; sourceTree = "<group>"; };
 		3D03259AAAF015B7E7C7ED0F /* InboxNavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxNavigationUITests.swift; sourceTree = "<group>"; };
@@ -166,6 +192,7 @@
 		3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceSmokeTests.swift; sourceTree = "<group>"; };
 		3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAttachmentSendTests.swift; sourceTree = "<group>"; };
 		4151D8EBFA079B28AAEB4660 /* DetachedWindowStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowStateTests.swift; sourceTree = "<group>"; };
+		4399BA71FE841C551BCA82A8 /* CorrespondanceiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CorrespondanceiOS.entitlements; sourceTree = "<group>"; };
 		4416D0B9EBE11AE72CF12470 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
 		4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageConversationCache.swift; sourceTree = "<group>"; };
 		471DBB431518CAF077924600 /* SettingsAutomationPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAutomationPane.swift; sourceTree = "<group>"; };
@@ -175,6 +202,7 @@
 		506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageChatDatabaseTests.swift; sourceTree = "<group>"; };
 		524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramWebLoginView.swift; sourceTree = "<group>"; };
 		55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAvatarView.swift; sourceTree = "<group>"; };
+		5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CorrespondanceiOSNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatarView.swift; sourceTree = "<group>"; };
 		5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceApp.swift; sourceTree = "<group>"; };
 		61D40C88633B918284B962D0 /* InboxListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxListView.swift; sourceTree = "<group>"; };
@@ -195,11 +223,13 @@
 		830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSessionTests.swift; sourceTree = "<group>"; };
 		8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Detached.swift"; sourceTree = "<group>"; };
 		90E28665C56283D03F52E170 /* DemoRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRelay.swift; sourceTree = "<group>"; };
+		94D422F39E0A48F41C38E6CD /* PushRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistration.swift; sourceTree = "<group>"; };
 		9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Deletion.swift"; sourceTree = "<group>"; };
 		95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStoreReadinessTests.swift; sourceTree = "<group>"; };
 		95ED3D336C908CA8FB5DE7FA /* SettingsDictationPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDictationPane.swift; sourceTree = "<group>"; };
 		97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-instagram.json"; sourceTree = "<group>"; };
 		9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageDatabase.swift; sourceTree = "<group>"; };
+		9BF1A03D10B09F999B0FC7AC /* CorrespondanceiOSNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CorrespondanceiOSNotificationService.entitlements; sourceTree = "<group>"; };
 		9C41963F5AA875508D844FF1 /* IMessageSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSender.swift; sourceTree = "<group>"; };
 		9C6F0FFC5820E4E17A42F1AF /* InboxStore+Relay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Relay.swift"; sourceTree = "<group>"; };
 		9C7267837591C8566C627056 /* CorrespondanceCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CorrespondanceCore; path = Packages/CorrespondanceCore; sourceTree = SOURCE_ROOT; };
@@ -256,6 +286,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D673639814CA21ECFA44CC6D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1A364F177A76D1E5B33FC4C /* CorrespondanceCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F1CBB850AC822DD73ED3DB22 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -276,6 +314,7 @@
 				D46C056F6B42F908D48CF911 /* Design */,
 				834091FB511A21E88D27F81C /* Features */,
 				A16BFFB516C474AB4D00BB6A /* Store */,
+				4399BA71FE841C551BCA82A8 /* CorrespondanceiOS.entitlements */,
 				E637F86CB35FBFE62AD7A64C /* Info.plist */,
 			);
 			path = CorrespondanceiOS;
@@ -386,6 +425,15 @@
 			path = CorrespondanceTests;
 			sourceTree = "<group>";
 		};
+		6E9466309BD877AC4FC28457 /* CorrespondanceiOSNotificationService */ = {
+			isa = PBXGroup;
+			children = (
+				9BF1A03D10B09F999B0FC7AC /* CorrespondanceiOSNotificationService.entitlements */,
+				370C3355911FCEFC1AC793B7 /* NotificationService.swift */,
+			);
+			path = CorrespondanceiOSNotificationService;
+			sourceTree = "<group>";
+		};
 		7185301BB697D6D80C250DFF /* Inbox */ = {
 			isa = PBXGroup;
 			children = (
@@ -424,6 +472,7 @@
 			children = (
 				0BC33D748B4A7C8CD3A059B3 /* Correspondance iOS.app */,
 				BC47469B7E80A1746977143F /* Correspondance.app */,
+				5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */,
 				622305F9E8C988671B15E82C /* CorrespondanceiOSUITests.xctest */,
 				0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */,
 			);
@@ -485,6 +534,7 @@
 			children = (
 				79E0E47B6D8C4974896F461C /* Correspondance */,
 				1381A130F873C39BE71E03B0 /* CorrespondanceiOS */,
+				6E9466309BD877AC4FC28457 /* CorrespondanceiOSNotificationService */,
 				8BC7F4E3BFC1778332A21187 /* CorrespondanceiOSUITests */,
 				6CFDFAF0F6D7A5D0B208EA53 /* CorrespondanceTests */,
 				4C3A735EBB27CF32D0CE129B /* Packages */,
@@ -504,6 +554,7 @@
 			isa = PBXGroup;
 			children = (
 				90E28665C56283D03F52E170 /* DemoRelay.swift */,
+				94D422F39E0A48F41C38E6CD /* PushRegistration.swift */,
 				503F3F88679B6D47523DF6E9 /* RelayStore.swift */,
 				F7E8B4040804E0B8928CA910 /* RelayStore+Relay.swift */,
 			);
@@ -613,6 +664,25 @@
 			productReference = 622305F9E8C988671B15E82C /* CorrespondanceiOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		229993EFEA923BC16541D93C /* CorrespondanceiOSNotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D7DC4467622B0F29A21C485 /* Build configuration list for PBXNativeTarget "CorrespondanceiOSNotificationService" */;
+			buildPhases = (
+				563F1FCDF1A6165688C36F8F /* Sources */,
+				D673639814CA21ECFA44CC6D /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CorrespondanceiOSNotificationService;
+			packageProductDependencies = (
+				E30260377CE15D0E3426943D /* CorrespondanceCore */,
+			);
+			productName = CorrespondanceiOSNotificationService;
+			productReference = 5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		35DB61E2F937BA38195B4EEE /* Correspondance */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 70CE23B8B91E1BFA39EAC68D /* Build configuration list for PBXNativeTarget "Correspondance" */;
@@ -660,10 +730,12 @@
 				6A5401FBE00A8A8EEC2AB7A4 /* Sources */,
 				5759051AC943ED3AA33A2124 /* Resources */,
 				6C45541F75B9BCC5A74E332A /* Frameworks */,
+				2F9C537E2E182E5B38216601 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AD68CF6E24B3B4DD1CC199D8 /* PBXTargetDependency */,
 			);
 			name = "Correspondance iOS";
 			packageProductDependencies = (
@@ -687,6 +759,10 @@
 						DevelopmentTeam = AKMNXGVVGX;
 						ProvisioningStyle = Automatic;
 						TestTargetID = 9F5299C2F5F8873F7C1C7467;
+					};
+					229993EFEA923BC16541D93C = {
+						DevelopmentTeam = AKMNXGVVGX;
+						ProvisioningStyle = Automatic;
 					};
 					35DB61E2F937BA38195B4EEE = {
 						DevelopmentTeam = AKMNXGVVGX;
@@ -722,6 +798,7 @@
 				35DB61E2F937BA38195B4EEE /* Correspondance */,
 				9F5299C2F5F8873F7C1C7467 /* Correspondance iOS */,
 				5DFB0104C4B4A70DC25D5126 /* CorrespondanceTests */,
+				229993EFEA923BC16541D93C /* CorrespondanceiOSNotificationService */,
 				172B2C34341D49B840E39793 /* CorrespondanceiOSUITests */,
 			);
 		};
@@ -793,6 +870,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		563F1FCDF1A6165688C36F8F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				660C9A9C36AE32F91EF157CD /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6A5401FBE00A8A8EEC2AB7A4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -806,6 +891,7 @@
 				D099FC98DF3CFFDF4196D6BA /* InboxFloatingBar.swift in Sources */,
 				1A09B518E7B07C14A042C7B8 /* InboxListView.swift in Sources */,
 				F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */,
+				EBFB2C2602F26B5C3AD242F9 /* PushRegistration.swift in Sources */,
 				09407B8BC2003E1E1793E51D /* RelayLoginView.swift in Sources */,
 				5DB60D713DFC2D4CA8B139D3 /* RelayStore+Relay.swift in Sources */,
 				2ABA6E026D46714A83FDDAB2 /* RelayStore.swift in Sources */,
@@ -901,6 +987,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		AD68CF6E24B3B4DD1CC199D8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 229993EFEA923BC16541D93C /* CorrespondanceiOSNotificationService */;
+			targetProxy = BC88ADE605BDEE6E6E881EF6 /* PBXContainerItemProxy */;
+		};
 		AF2325DE8DAB2084A5FBCB04 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 35DB61E2F937BA38195B4EEE /* Correspondance */;
@@ -1052,6 +1143,34 @@
 			};
 			name = Debug;
 		};
+		3DA6E7AB73F16FF0BA68CD65 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AKMNXGVVGX;
+				ENTITLEMENTS_REQUIRED = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CorrespondanceiOSNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios.NotificationService;
+				PRODUCT_NAME = CorrespondanceiOSNotificationService;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		53E8739E5A5B8B7571711608 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1142,12 +1261,16 @@
 		A738AD13FBDFB848230FF31F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = NO;
+				ENTITLEMENTS_REQUIRED = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CorrespondanceiOS/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1160,6 +1283,34 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
 				PRODUCT_NAME = Correspondance;
 				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BD1B24A100F2104AD823CD26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AKMNXGVVGX;
+				ENTITLEMENTS_REQUIRED = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = CorrespondanceiOSNotificationService/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios.NotificationService;
+				PRODUCT_NAME = CorrespondanceiOSNotificationService;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1190,12 +1341,16 @@
 		D599E34E12F9E193F0FA63AC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				AD_HOC_CODE_SIGNING_ALLOWED = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = "";
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = NO;
+				ENTITLEMENTS_REQUIRED = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = CorrespondanceiOS/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1238,6 +1393,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2D7DC4467622B0F29A21C485 /* Build configuration list for PBXNativeTarget "CorrespondanceiOSNotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BD1B24A100F2104AD823CD26 /* Debug */,
+				3DA6E7AB73F16FF0BA68CD65 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		3A43306D81AF412024C49357 /* Build configuration list for PBXProject "Correspondance" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1306,6 +1470,10 @@
 			productName = CorrespondanceCore;
 		};
 		D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CorrespondanceCore;
+		};
+		E30260377CE15D0E3426943D /* CorrespondanceCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CorrespondanceCore;
 		};

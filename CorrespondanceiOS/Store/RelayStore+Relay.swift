@@ -174,5 +174,10 @@ extension RelayStore {
     if let stored = snapshot.mergedContacts, stored.merged != mergedContacts {
       mergedContacts = stored.merged
     }
+
+    // Ce que l'extension de notification a le droit de savoir, et rien d'autre :
+    // quels salons sont muets. Elle ne tient pas de `/sync` — c'est ce dépôt-là
+    // qui lui permet de taire une notification déjà arrivée (SharedRelayState).
+    SharedRelayState.saveMutedRoomIDs(SharedRelayState.mutedRoomIDs(in: snapshot))
   }
 }

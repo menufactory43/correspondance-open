@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Les deux mêmes que l'app : sans eux l'extension ne sait ni qui est muet,
+	     ni comment parler au Relais. Elle afficherait alors « Nouveau message ». -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.correspondance</string>
+	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.correspondance.shared</string>
+	</array>
+</dict>
+</plist>

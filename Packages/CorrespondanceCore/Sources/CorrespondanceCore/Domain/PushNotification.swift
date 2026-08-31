@@ -87,6 +87,83 @@ public enum PushNotification {
     )
   }
 
+  // MARK: - Aller lire l'événement
+
+  /// Ce que le push ne dit pas, et qu'il faut donc demander au Relais.
+  ///
+  /// Vit ici plutôt que dans l'extension pour une raison simple : l'extension
+  /// est un processus qu'on ne peut ni lancer à la main, ni instrumenter —
+  /// `xcrun simctl push` ne la réveille même pas. Mise dans Core, la même
+  /// fonction se laisse exercer depuis l'app et depuis les tests.
+  ///
+  /// Quatre lectures au plus, l'une après l'autre : l'événement, l'auteur, le
+  /// nom du salon, le réseau. Elles pourraient partir ensemble ; elles ne le
+  /// font pas, parce que trente secondes suffisent largement et qu'un `/state`
+  /// en parallèle ne gagne rien face à la latence d'un tailnet.
+  public static func resolve(
+    _ reference: EventReference,
+    using client: MatrixClient
+  ) async -> Presentation {
+    guard let event = try? await client.roomEvent(
+      roomID: reference.roomID,
+      eventID: reference.eventID
+    ) else {
+      return presentation(senderName: nil, conversationTitle: nil, network: nil, text: nil)
+    }
+
+    var text = event.string(at: "content.body") ?? ""
+    if event.string(at: "content.m.relates_to.m.in_reply_to.event_id") != nil {
+      text = QuotedMessage.strippingReplyFallback(text)
+    }
+
+    let sender = event.string(at: "sender")
+    let name = await senderName(sender, roomID: reference.roomID, client: client)
+    let title = await roomName(reference.roomID, client: client)
+    let network = await network(ofRoom: reference.roomID, client: client)
+
+    return presentation(
+      senderName: name,
+      conversationTitle: title,
+      network: network,
+      text: text
+    )
+  }
+
+  /// Le `m.room.member` de l'auteur — et son nom, débarrassé du suffixe que
+  /// mautrix colle aux ghosts (« Alice Martin (WA) » → « Alice Martin »).
+  private static func senderName(
+    _ sender: String?,
+    roomID: String,
+    client: MatrixClient
+  ) async -> String? {
+    guard let sender else { return nil }
+    let member = try? await client.roomState(
+      roomID: roomID,
+      type: "m.room.member",
+      stateKey: sender
+    )
+    guard let raw = member?.string(at: "displayname"), !raw.isEmpty else { return nil }
+    return MatrixIdentity.stripBridgeSuffix(raw)
+  }
+
+  private static func roomName(_ roomID: String, client: MatrixClient) async -> String? {
+    guard let name = try? await client.roomState(roomID: roomID, type: "m.room.name"),
+          let raw = name.string(at: "name"), !raw.isEmpty
+    else { return nil }
+    return MatrixIdentity.stripBridgeSuffix(raw)
+  }
+
+  private static func network(ofRoom roomID: String, client: MatrixClient) async -> MessageNetwork? {
+    for type in MatrixSyncParser.bridgeStateTypes {
+      guard let state = try? await client.roomState(roomID: roomID, type: type),
+            let id = state.string(at: "protocol.id"),
+            let network = MessageNetwork.fromBridgeProtocol(id)
+      else { continue }
+      return network
+    }
+    return nil
+  }
+
   // MARK: - Le muet, deux fois plutôt qu'une
 
   /// Le muet est appliqué par le Relais : un salon muet porte une push rule
@@ -112,6 +189,12 @@ public enum PushNotification {
 /// l'extension le relit. Rien d'autre ne transite : ni message, ni brouillon.
 public enum SharedRelayState {
   public static let appGroup = "group.com.correspondance"
+
+  /// Le groupe d'accès du Trousseau partagé, préfixé du Team ID — c'est le
+  /// format qu'exige `kSecAttrAccessGroup`, et `$(AppIdentifierPrefix)` des
+  /// entitlements n'est développé qu'à la signature, pas à l'exécution.
+  /// Le même littéral que `DEVELOPMENT_TEAM` dans project.yml.
+  public static let keychainAccessGroup = "AKMNXGVVGX.com.correspondance.shared"
   private static let mutedKey = "correspondance.shared.mutedRoomIDs"
 
   public static func defaults(suiteName: String = appGroup) -> UserDefaults? {
