@@ -799,6 +799,11 @@ public actor MatrixBridgeService {
     case .mergedContacts(let stored):
       guard let content = ConversationStateCodec.mergedContactsContent(stored) else { return }
       try await client.setAccountData(type: ConversationStateKeys.mergedContactsType, content: content)
+    case .agentSettings(let settings):
+      try await client.setAccountData(
+        type: ConversationStateKeys.agentSettingsType,
+        content: ConversationStateCodec.agentSettingsContent(settings)
+      )
     }
     // L'écriture partie, on la pose aussi sur notre copie : le `/sync` qui la
     // renverra n'apprendra rien de neuf, et rien ne clignote entre-temps.

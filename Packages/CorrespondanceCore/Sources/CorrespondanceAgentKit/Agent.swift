@@ -17,6 +17,10 @@ public actor Agent {
   private var members: [String: Set<String>] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
+  /// Le mode par défaut que l'app a écrit dans l'account data globale
+  /// (`fr.correspondance.agent.settings`). `nil` tant qu'elle n'a rien dit :
+  /// c'est alors la config qui décide. Cf. `AgentMode`.
+  private var accountDefaultMode: AgentConfig.RoomMode?
   /// On ne rejoue pas l'historique : seuls les ordres postérieurs comptent —
   /// avec dix minutes de marge pour un ordre donné pendant un redémarrage.
   private let notBefore: Date
@@ -78,6 +82,7 @@ public actor Agent {
       // relit pas les timelines — l'agent ne répond qu'à ce qui vient.
       let initial = try await client.sync(since: nil, timeoutMilliseconds: 0)
       absorbMembers(from: initial)
+      absorbSettings(from: initial)
       await acceptInvites(in: initial)
       state.nextBatch = initial.nextBatch
       try persist()
@@ -90,6 +95,7 @@ public actor Agent {
         let response = try await client.sync(since: state.nextBatch, timeoutMilliseconds: 30_000)
         backoff = 2
         absorbMembers(from: response)
+        absorbSettings(from: response)
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
           for event in room.timeline?.events ?? [] {
@@ -162,9 +168,23 @@ public actor Agent {
     return (members[roomID] ?? []).isSubset(of: allowed)
   }
 
+  /// Le réglage que l'app a écrit, quand ce `/sync` en parle. Un `/sync` qui
+  /// n'en parle pas ne l'efface pas — le serveur ne renvoie que ce qui change.
+  private func absorbSettings(from response: MatrixSyncResponse) {
+    guard let mode = AgentMode.defaultMode(in: response) else { return }
+    if mode != accountDefaultMode {
+      log("réglage reçu : réponses par défaut en « \(mode.rawValue) »")
+    }
+    accountDefaultMode = mode
+  }
+
   func mode(for roomID: String) async -> AgentConfig.RoomMode {
-    if let explicit = config.rooms[roomID]?.mode { return explicit }
-    return await isPrivateWithOwners(roomID) ? .direct : config.defaultMode
+    await AgentMode.resolve(
+      roomMode: config.rooms[roomID]?.mode,
+      isPrivateWithOwners: isPrivateWithOwners(roomID),
+      accountDataDefault: accountDefaultMode,
+      configuredDefault: config.defaultMode
+    )
   }
 
   // MARK: - Un tour

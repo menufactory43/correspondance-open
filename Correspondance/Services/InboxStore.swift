@@ -155,6 +155,10 @@ final class InboxStore {
   /// le fil ne les montre plus. `private(set)` — la suppression passe par
   /// `InboxStore+Deletion`.
   private(set) var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
+  /// Comment « cc » répond dans les conversations où d'autres humains lisent.
+  /// Le réglage ne vit pas ici : il vit dans l'account data globale, que l'agent
+  /// relit sur le Relais. Ceci n'en est que la copie affichée.
+  private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
@@ -2318,6 +2322,21 @@ final class InboxStore {
   }
 
   // MARK: - Propositions de l'agent
+
+  /// Le réglage « répondre à voix haute par défaut ». Il part vers le Relais,
+  /// où l'agent le relira à son prochain `/sync` : rien ici ne lui parle
+  /// directement.
+  func setAgentDefaultMode(_ mode: AgentSettings.Mode) {
+    guard mode != agentDefaultMode else { return }
+    agentDefaultMode = mode
+    relayNoteAgentSettings(AgentSettings(defaultMode: mode))
+  }
+
+  /// Adopté depuis le Relais : un autre appareil a pu trancher.
+  func installAgentSettings(_ settings: AgentSettings?) {
+    let mode = settings?.defaultMode ?? AgentSettings.fallback.defaultMode
+    if mode != agentDefaultMode { agentDefaultMode = mode }
+  }
 
   /// « Envoyer » : le texte que « cc » propose part comme MON message, par le
   /// chemin d'envoi ordinaire — même composer, même réseau, même citation.

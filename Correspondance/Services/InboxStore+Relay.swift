@@ -65,6 +65,13 @@ extension InboxStore {
     startRelayFlush()
   }
 
+  /// Les réglages de l'agent — account data globale, comme les fusions.
+  func relayNoteAgentSettings(_ settings: AgentSettings) {
+    relayQueue.enqueue(.agentSettings(settings))
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   func relayNoteMergedContacts(_ stored: MergedContactStore.Stored) {
     relayQueue.enqueue(.mergedContacts(stored))
     saveRelayQueue()
@@ -230,6 +237,9 @@ extension InboxStore {
   /// on ne peut ni le montrer ni le perdre.
   func adoptRelayState() async {
     let snapshot = relayQueue.applied(to: await matrix.conversationState)
+    // Les réglages de l'agent ne dépendent d'aucun salon : ils s'adoptent avant
+    // qu'on renonce faute de conversation connue.
+    installAgentSettings(snapshot.agentSettings)
     var roomToConversation: [String: String] = [:]
     for conversation in conversations {
       if let roomID = Self.relayRoomID(ofConversation: conversation.id) {

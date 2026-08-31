@@ -50,6 +50,10 @@ final class RelayStore {
   /// geste (tout de suite) et par l'adoption de l'instantané du Relais.
   var state = InboxState()
   var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
+  /// Comment « cc » répond dans les conversations où d'autres humains lisent.
+  /// Le réglage vit dans l'account data globale, que l'agent relit sur le
+  /// Relais ; ceci n'en est que la copie affichée.
+  private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
   var mergedContacts: [MergedContact] = []
   /// Les messages qui attendent leur heure (`RelayStore+Scheduled`).
   var scheduled: [ScheduledMessage] = ScheduledMessageStore.load()
@@ -742,6 +746,20 @@ final class RelayStore {
   }
 
   // MARK: - Propositions de l'agent
+
+  /// Le réglage « répondre à voix haute par défaut ». Il part vers le Relais,
+  /// où l'agent le relira à son prochain `/sync`.
+  func setAgentDefaultMode(_ mode: AgentSettings.Mode) {
+    guard mode != agentDefaultMode else { return }
+    agentDefaultMode = mode
+    relayNoteAgentSettings(AgentSettings(defaultMode: mode))
+  }
+
+  /// Adopté depuis le Relais : le Mac a pu trancher entre-temps.
+  func installAgentSettings(_ settings: AgentSettings?) {
+    let mode = settings?.defaultMode ?? AgentSettings.fallback.defaultMode
+    if mode != agentDefaultMode { agentDefaultMode = mode }
+  }
 
   /// « Envoyer » : le texte que « cc » propose part comme MON message, par le
   /// chemin d'envoi ordinaire. La proposition quitte ensuite le fil.

@@ -164,3 +164,43 @@ final class AgentProposalTests: XCTestCase {
     XCTAssertNil(groupes[1].senderLabel)
   }
 }
+
+/// Les réglages de l'agent voyagent par l'account data globale : l'app écrit,
+/// l'agent lit. Le codec est le contrat entre les deux.
+final class AgentSettingsCodecTests: XCTestCase {
+  func testLeCorpsEcritEstCeluiQueLAgentRelit() throws {
+    let content = ConversationStateCodec.agentSettingsContent(AgentSettings(defaultMode: .direct))
+    XCTAssertEqual(content.string(at: "default_mode"), "direct")
+    XCTAssertEqual(ConversationStateCodec.agentSettings(in: content)?.defaultMode, .direct)
+  }
+
+  func testUnModeInconnuNeDonnePasDeReglage() {
+    let content = MatrixJSON.object(["default_mode": .string("chuchoter")])
+    XCTAssertNil(ConversationStateCodec.agentSettings(in: content))
+    XCTAssertNil(ConversationStateCodec.agentSettings(in: .object([:])))
+  }
+
+  func testLeSyncPoseLesReglagesDansLInstantane() throws {
+    let json = """
+    {"next_batch":"s1","account_data":{"events":[
+      {"type":"fr.correspondance.agent.settings","content":{"default_mode":"direct"}}
+    ]}}
+    """
+    let response = try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(json.utf8))
+    var snapshot = ConversationStateSnapshot()
+    snapshot.apply(response)
+    XCTAssertEqual(snapshot.agentSettings?.defaultMode, .direct)
+    XCTAssertFalse(snapshot.isEmpty)
+  }
+
+  func testUneEcritureEnAttentePrimeSurLeRelais() {
+    let snapshot = ConversationStateSnapshot(agentSettings: AgentSettings(defaultMode: .draft))
+    var queue = RelayWriteQueue()
+    queue.enqueue(.agentSettings(AgentSettings(defaultMode: .direct)))
+    XCTAssertEqual(queue.applied(to: snapshot).agentSettings?.defaultMode, .direct)
+    // Deux fois le même réglage ne fait qu'une écriture.
+    queue.enqueue(.agentSettings(AgentSettings(defaultMode: .draft)))
+    XCTAssertEqual(queue.count, 1)
+    XCTAssertNil(RelayWrite.agentSettings(AgentSettings(defaultMode: .draft)).roomID)
+  }
+}
