@@ -293,6 +293,51 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Un **message vocal** : le même `m.audio` qu'un fichier audio, plus les
+  /// deux clés qui disent « quelqu'un a parlé » (MSC3245) et à quoi ça
+  /// ressemble (MSC1767). C'est ce que les ponts mautrix attendent pour
+  /// produire un vocal — et non une pièce jointe — sur WhatsApp et Signal.
+  @discardableResult
+  public func sendVoiceMessage(
+    roomID: String,
+    fileURL: URL,
+    voice: VoiceNote,
+    transactionID: String = UUID().uuidString
+  ) async throws -> String? {
+    guard !ledger.isUsed(transactionID) else { return nil }
+    let data: Data
+    do {
+      data = try Data(contentsOf: fileURL)
+    } catch {
+      throw MatrixError.transport("lecture de \(fileURL.lastPathComponent) impossible")
+    }
+    let filename = fileURL.lastPathComponent
+    let mime = Self.mimeType(for: fileURL)
+    let mxc = try await upload(data: data, filename: filename, contentType: mime)
+    let millis = Double(Int((voice.duration * 1000).rounded()))
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/m.room.message/\(Self.escape(transactionID))",
+      body: .object([
+        "msgtype": .string("m.audio"),
+        "body": .string(filename),
+        "url": .string(mxc),
+        "info": .object([
+          "mimetype": .string(mime),
+          "size": .number(Double(data.count)),
+          "duration": .number(millis),
+        ]),
+        VoiceNoteKeys.voice: .object([:]),
+        VoiceNoteKeys.audio: .object([
+          "duration": .number(millis),
+          "waveform": .array(voice.encodedWaveform.map { .number(Double($0)) }),
+        ]),
+      ])
+    )
+    ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
   public func upload(data: Data, filename: String, contentType: String) async throws -> String {
     guard let creds = credentials else { throw MatrixError.notConfigured }
     var components = URLComponents(url: creds.homeserver, resolvingAgainstBaseURL: false)

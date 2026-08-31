@@ -326,7 +326,8 @@ public struct MatrixSyncParser: Sendable {
             id: mxc,
             contentType: content.string(at: "info.mimetype") ?? Self.fallbackMime(for: msgtype),
             filename: explicitFilename ?? (body.isEmpty ? nil : body),
-            localPath: MatrixAttachmentStore.existingLocalPath(forMXC: mxc)
+            localPath: MatrixAttachmentStore.existingLocalPath(forMXC: mxc),
+            voice: Self.voiceNote(in: content, msgtype: msgtype)
           )
         )
         text = caption ?? ""
@@ -360,6 +361,20 @@ public struct MatrixSyncParser: Sendable {
       model.unresolvedQuoteMessageIDs.remove(eventID)
     }
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  /// Le message vocal d'un `m.audio`, ou `nil` si ce n'en est pas un.
+  ///
+  /// C'est la présence de `org.matrix.msc3245.voice` qui tranche — un objet
+  /// vide, on ne lit donc que sa présence. La durée et la forme d'onde viennent
+  /// de `org.matrix.msc1767.audio` ; à défaut, `info.duration` sait encore dire
+  /// la durée, et la bulle se passe de forme d'onde.
+  public static func voiceNote(in content: MatrixJSON, msgtype: String) -> VoiceNote? {
+    guard msgtype == "m.audio", content.value(at: VoiceNoteKeys.voice) != nil else { return nil }
+    let audio = content.value(at: VoiceNoteKeys.audio)
+    let millis = audio?["duration"]?.doubleValue ?? content.double(at: "info.duration") ?? 0
+    let raw = (audio?["waveform"]?.arrayValue ?? []).compactMap(\.intValue)
+    return VoiceNote(duration: millis / 1000, waveform: VoiceNote.normalized(raw))
   }
 
   /// Le premier aperçu de `com.beeper.linkpreviews` qui porte une adresse. Les

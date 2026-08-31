@@ -6,6 +6,9 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
   public var filename: String?
   /// Chemin local une fois le média téléchargé.
   public var localPath: String?
+  /// Renseigné quand le réseau annonce un **message vocal** (et pas un simple
+  /// fichier audio joint) : durée et forme d'onde de l'expéditeur.
+  public var voice: VoiceNote?
 
   public var isImage: Bool {
     if contentType.hasPrefix("image/") { return true }
@@ -40,11 +43,21 @@ public struct MessageAttachment: Identifiable, Hashable, Codable, Sendable {
     return FileManager.default.fileExists(atPath: url.path) ? url : nil
   }
 
-  public init(id: String, contentType: String, filename: String? = nil, localPath: String? = nil) {
+  /// Un message vocal, pas une pièce jointe qu'on ouvre.
+  public var isVoiceNote: Bool { voice != nil }
+
+  public init(
+    id: String,
+    contentType: String,
+    filename: String? = nil,
+    localPath: String? = nil,
+    voice: VoiceNote? = nil
+  ) {
     self.id = id
     self.contentType = contentType
     self.filename = filename
     self.localPath = localPath
+    self.voice = voice
   }
 }
 
@@ -260,6 +273,7 @@ public struct ChatMessage: Identifiable, Hashable, Sendable {
     if isRetracted { return "Message annulé" }
     if !text.isEmpty { return text }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
+    if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
     if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }
     if !attachments.isEmpty { return "Pièce jointe" }
     return text

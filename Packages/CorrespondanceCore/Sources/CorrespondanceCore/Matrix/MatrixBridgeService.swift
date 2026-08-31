@@ -377,6 +377,26 @@ public actor MatrixBridgeService {
   /// WhatsApp comme Instagram n'acceptent **qu'un emoji par personne et par message**
   /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp et de mautrix-instagram) :
   /// reposer le même emoji le retire, en poser un autre remplace le précédent.
+  /// Envoie un message vocal : le fichier enregistré et sa forme d'onde.
+  /// Un `m.audio` marqué MSC3245, ce que les ponts traduisent en vocal chez
+  /// WhatsApp et Signal (et en pièce jointe audio ailleurs).
+  public func sendVoiceMessage(
+    conversationID: String,
+    fileURL: URL,
+    voice: VoiceNote,
+    localID: String
+  ) async throws {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    try await client.sendVoiceMessage(
+      roomID: roomID,
+      fileURL: fileURL,
+      voice: voice,
+      transactionID: ledger.transactionID(forLocalID: localID)
+    )
+  }
+
   public func toggleReaction(conversationID: String, messageID: String, emoji: String) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")

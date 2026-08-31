@@ -554,6 +554,57 @@ final class RelayStore {
     }
   }
 
+  // MARK: - Message vocal
+
+  /// Le micro du composer. Un seul enregistreur pour l'app : on ne parle pas
+  /// dans deux fils à la fois.
+  let recorder = VoiceRecorder()
+
+  /// Envoie ce qu'on vient d'enregistrer. La bulle apparaît tout de suite, le
+  /// fichier part ensuite — la même discipline que le texte.
+  func sendVoiceMessage(_ url: URL, voice: VoiceNote, conversationID: String) async {
+    guard let target = sendingTarget(conversationID),
+          let conversation = conversation(target)
+    else { return }
+    sendingConversationIDs.insert(conversationID)
+    defer { sendingConversationIDs.remove(conversationID) }
+
+    let localID = UUID().uuidString
+    var piece = MessageAttachment(
+      id: url.path,
+      contentType: "audio/mp4",
+      filename: url.lastPathComponent,
+      localPath: url.path
+    )
+    piece.voice = voice
+    messages[target, default: []].append(
+      ChatMessage(
+        id: localID,
+        conversationID: target,
+        network: conversation.network,
+        text: "",
+        sentAt: .now,
+        isFromMe: true,
+        isPending: true,
+        attachments: [piece]
+      )
+    )
+
+    guard !isDemo else { return }
+    do {
+      try await matrix.sendVoiceMessage(
+        conversationID: target,
+        fileURL: url,
+        voice: voice,
+        localID: localID
+      )
+      await loadMessages(conversationID: conversationID, backfill: false)
+    } catch {
+      syncError = Self.readable(error)
+      messages[target]?.removeAll { $0.id == localID }
+    }
+  }
+
   /// Le fil qui portera l'envoi : lui-même, ou le membre actif d'une fusion.
   private func sendingTarget(_ conversationID: String) -> String? {
     guard MergedContact.isMergedID(conversationID) else { return conversationID }

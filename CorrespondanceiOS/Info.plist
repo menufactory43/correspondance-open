@@ -41,6 +41,8 @@
 	<string>Correspondance utilise le micro pour vos messages vocaux.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Correspondance joint vos photos à vos messages.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Correspondance transcrit les messages vocaux pour que vous puissiez les lire.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/iAWriterQuattroS-Regular.ttf</string>
