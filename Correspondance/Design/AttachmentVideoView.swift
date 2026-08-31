@@ -176,7 +176,7 @@ enum VideoPlayerWindow {
       return
     }
     let player = AVPlayer(url: url)
-    let host = NSHostingController(rootView: PlayerScreen(player: player))
+    let host = PlayerScreen(player: player)
     let window = NSWindow(contentViewController: host)
     window.title = title
     window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -209,14 +209,30 @@ enum VideoPlayerWindow {
     return NSSize(width: max(480, natural.width * scale), height: max(270, natural.height * scale))
   }
 
-  private struct PlayerScreen: View {
-    let player: AVPlayer
+  /// Le lecteur d'AppKit plutôt que `VideoPlayer` de SwiftUI : ce dernier
+  /// abandonne le processus au moment où AppKit met la fenêtre en page
+  /// (métadonnée générique d'`_AVKit_SwiftUI` introuvable au runtime).
+  private final class PlayerScreen: NSViewController {
+    private let player: AVPlayer
 
-    var body: some View {
-      VideoPlayer(player: player)
-        .frame(minWidth: 480, minHeight: 270)
-        .background(Color.black)
-        .ignoresSafeArea()
+    init(player: AVPlayer) {
+      self.player = player
+      super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) n'est pas utilisé") }
+
+    override func loadView() {
+      let playerView = AVPlayerView(frame: NSRect(x: 0, y: 0, width: 960, height: 540))
+      playerView.player = player
+      playerView.controlsStyle = .floating
+      playerView.showsFullScreenToggleButton = true
+      playerView.allowsPictureInPicturePlayback = true
+      playerView.videoGravity = .resizeAspect
+      playerView.wantsLayer = true
+      playerView.layer?.backgroundColor = NSColor.black.cgColor
+      view = playerView
     }
   }
 }
