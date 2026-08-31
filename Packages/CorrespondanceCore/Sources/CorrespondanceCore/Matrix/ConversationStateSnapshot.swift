@@ -23,6 +23,9 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
   public var selfNoteRoomID: String?
   /// Fusions de contacts — un seul objet global, tel que `MergedContactStore` l'écrit.
   public var mergedContacts: MergedContactStore.Stored?
+  /// Les réglages de l'agent. `nil` tant que personne n'a tranché : l'agent
+  /// s'en tient alors à sa propre configuration.
+  public var agentSettings: AgentSettings?
 
   public init(
     archived: Set<String> = [],
@@ -33,7 +36,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     reminders: [String: ConversationReminder] = [:],
     requests: [String: ConversationRequest.Decision] = [:],
     selfNoteRoomID: String? = nil,
-    mergedContacts: MergedContactStore.Stored? = nil
+    mergedContacts: MergedContactStore.Stored? = nil,
+    agentSettings: AgentSettings? = nil
   ) {
     self.archived = archived
     self.pinned = pinned
@@ -44,12 +48,13 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     self.requests = requests
     self.selfNoteRoomID = selfNoteRoomID
     self.mergedContacts = mergedContacts
+    self.agentSettings = agentSettings
   }
 
   public var isEmpty: Bool {
     archived.isEmpty && pinned.isEmpty && muted.isEmpty
       && drafts.isEmpty && hidden.isEmpty && reminders.isEmpty && requests.isEmpty
-      && selfNoteRoomID == nil && mergedContacts == nil
+      && selfNoteRoomID == nil && mergedContacts == nil && agentSettings == nil
   }
 
   /// Fusionne un payload `/sync`. Chaque event reçu **remplace** ce qu'il décrit :
@@ -89,6 +94,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
       selfNoteRoomID = content.string(at: "room_id")
     case ConversationStateKeys.mergedContactsType:
       mergedContacts = ConversationStateCodec.mergedContacts(in: content)
+    case ConversationStateKeys.agentSettingsType:
+      agentSettings = ConversationStateCodec.agentSettings(in: content)
     default:
       break
     }
@@ -204,6 +211,20 @@ public enum ConversationStateCodec {
 
   public static func hiddenEventIDs(in content: MatrixJSON) -> Set<String> {
     Set((content["event_ids"]?.arrayValue ?? []).compactMap(\.stringValue).filter { !$0.isEmpty })
+  }
+
+  /// `fr.correspondance.agent.settings` → `{ "default_mode": "direct" | "draft" }`.
+  /// Le corps est laissé extensible : une clé par salon viendra s'y ajouter
+  /// sans que l'agent d'aujourd'hui ait à changer.
+  public static func agentSettingsContent(_ settings: AgentSettings) -> MatrixJSON {
+    .object(["default_mode": .string(settings.defaultMode.rawValue)])
+  }
+
+  public static func agentSettings(in content: MatrixJSON) -> AgentSettings? {
+    guard let raw = content.string(at: "default_mode"),
+          let mode = AgentSettings.Mode(rawValue: raw)
+    else { return nil }
+    return AgentSettings(defaultMode: mode)
   }
 
   /// `fr.correspondance.merged_contacts` → le `MergedContactStore.Stored` tel

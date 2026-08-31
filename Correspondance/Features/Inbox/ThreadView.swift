@@ -239,7 +239,17 @@ struct ThreadView: View {
             .padding(.leading, ThreadMetrics.senderLabelLeading)
         }
         ForEach(group.messages) { message in
-          if let event = message.systemEventText {
+          if let proposal = message.agentProposal {
+            AgentProposalCard(
+              proposal: proposal,
+              theme: theme,
+              typeface: themes.typeface,
+              onSend: { Task { await store.sendAgentProposal(message) } },
+              onEdit: { store.editAgentProposal(message) },
+              onIgnore: { store.ignoreAgentProposal(message) }
+            )
+            .id(message.id)
+          } else if let event = message.systemEventText {
             ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
               .id(message.id)
           } else {

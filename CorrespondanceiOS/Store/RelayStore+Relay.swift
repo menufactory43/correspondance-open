@@ -67,6 +67,13 @@ extension RelayStore {
   /// Les messages masqués d'un salon. L'ensemble local est global ; celui du
   /// Relais est par salon, et c'est lui qui fait autorité — on lui ajoute
   /// simplement ce qu'on vient de masquer.
+  /// Les réglages de l'agent — account data globale, sans salon.
+  func relayNoteAgentSettings(_ settings: AgentSettings) {
+    relayQueue.enqueue(.agentSettings(settings))
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   func relayNoteHidden(messageID: String, conversationID: String) {
     guard let roomID = Self.relayRoomID(ofConversation: conversationID),
           messageID.hasPrefix("$")
@@ -151,6 +158,9 @@ extension RelayStore {
   func adoptRelayState() async {
     guard !isDemo else { return }
     let snapshot = relayQueue.applied(to: await matrix.conversationState)
+    // Les réglages de l'agent ne dépendent d'aucun salon : ils s'adoptent avant
+    // qu'on renonce faute de conversation connue.
+    installAgentSettings(snapshot.agentSettings)
 
     var roomToConversation: [String: String] = [:]
     for conversation in conversations {

@@ -28,6 +28,7 @@ struct SettingsView: View {
         relaySection
         bridgesSection
         themeSection
+        agentSection
         notificationsSection
         signOutSection
       }
@@ -146,6 +147,31 @@ struct SettingsView: View {
       Text("Écriture")
     } footer: {
       Text("Les six thèmes du Mac, et les mêmes fontes : les deux appareils écrivent de la même main.")
+        .font(Typography.meta(typeface))
+    }
+  }
+
+  // MARK: - Agent
+
+  /// « cc » ne tourne pas ici : c'est un processus à part, sur le Relais. Ce
+  /// choix part dans l'account data Matrix globale, et l'agent l'y relit — le
+  /// Mac et l'iPhone écrivent donc le même réglage, au même endroit.
+  private var agentSection: some View {
+    Section {
+      Picker("Dans les groupes", selection: Binding(
+        get: { store.agentDefaultMode },
+        set: { store.setAgentDefaultMode($0) }
+      )) {
+        Text("Brouillon à valider").tag(AgentSettings.Mode.draft)
+        Text("À voix haute").tag(AgentSettings.Mode.direct)
+      }
+      Text(store.agentDefaultMode.subtitleFR)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.inkSecondary)
+    } header: {
+      Text("Agent")
+    } footer: {
+      Text("En tête-à-tête avec toi, cc répond toujours à voix haute. Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
         .font(Typography.meta(typeface))
     }
   }

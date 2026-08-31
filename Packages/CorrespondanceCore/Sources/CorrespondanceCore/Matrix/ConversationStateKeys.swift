@@ -24,6 +24,9 @@ public enum ConversationStateKeys {
   public static let mergedContactsType = "fr.correspondance.merged_contacts"
   /// Account data global : le salon de la note à soi. `{ "room_id": "!x:serveur" }`.
   public static let selfNoteType = "fr.correspondance.self_note"
+  /// Account data global : les réglages de l'agent « cc », que lui seul lit.
+  /// `{ "default_mode": "direct" | "draft" }`.
+  public static let agentSettingsType = "fr.correspondance.agent.settings"
   /// Account data global : les push rules, d'où vient la sourdine.
   public static let pushRulesType = "m.push_rules"
   /// Account data de salon : les tags, tels que `/sync` les livre.

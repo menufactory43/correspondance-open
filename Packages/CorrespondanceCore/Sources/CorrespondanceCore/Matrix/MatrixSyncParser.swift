@@ -22,6 +22,7 @@ public struct MatrixSyncParser: Sendable {
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
         applyPoll(event, roomID: roomID, to: &model)
+        applyAgentProposal(event, to: &model)
         applyRedaction(event, to: &model)
       }
       for event in (room.ephemeral?.events ?? []) {
@@ -114,6 +115,7 @@ public struct MatrixSyncParser: Sendable {
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
       applyPoll(event, roomID: roomID, to: &model)
+      applyAgentProposal(event, to: &model)
       applyRedaction(event, to: &model)
     }
     resolveQuotes(in: &model)
@@ -333,6 +335,53 @@ public struct MatrixSyncParser: Sendable {
     )
     model.markWritten(eventID)
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  // MARK: - Propositions de l'agent
+
+  /// Un brouillon posé par « cc » (`fr.correspondance.agent.proposal`).
+  ///
+  /// Il entre dans le fil comme un message, mais il n'en est pas un : aucun
+  /// pont ne le relaie, il ne bouge pas `lastEventAt` (le fil ne remonte donc
+  /// pas dans la file pour une phrase que personne n'a dite), et
+  /// `sidebarPreviewText` reste muet. Ce qui l'efface est ce qui efface un
+  /// message : une redaction, ou le masquage « ici ».
+  private func applyAgentProposal(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == AgentProposal.eventType,
+          let eventID = event.eventID,
+          let content = event.content,
+          let proposal = Self.agentProposal(in: content, sender: event.sender),
+          !proposal.isEmpty
+    else { return }
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      // Une proposition n'est de personne : ni de moi, ni du correspondant.
+      isFromMe: false,
+      senderID: event.sender,
+      senderName: event.sender.map { displayName(of: $0, in: model) },
+      agentProposal: proposal
+    )
+    model.markWritten(eventID)
+  }
+
+  /// Le corps d'une proposition : `{ "body", "agent", "m.relates_to" }`.
+  /// À défaut de champ `agent`, le localpart de l'expéditeur fait le nom.
+  public static func agentProposal(in content: MatrixJSON, sender: String?) -> AgentProposal? {
+    guard let body = content.string(at: "body"), !body.isEmpty else { return nil }
+    let declared = content.string(at: "agent")?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let agent = (declared?.isEmpty == false)
+      ? declared!
+      : sender.map { MatrixIdentity.localpart(of: $0) } ?? ""
+    return AgentProposal(
+      agent: agent,
+      text: body,
+      inReplyToEventID: content.string(at: "m.relates_to.m.in_reply_to.event_id")
+    )
   }
 
   // MARK: - Messages
