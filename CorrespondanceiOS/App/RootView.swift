@@ -48,6 +48,7 @@ struct RootView: View {
   @Environment(ThemePreferences.self) private var themes
 
   @State private var mode: PhoneMode = .inbox
+  @State private var columns = NavigationSplitViewVisibility.automatic
 
   private var theme: WritingTheme { themes.theme }
 
@@ -78,21 +79,27 @@ struct RootView: View {
     .background(theme.paper.ignoresSafeArea())
   }
 
+  @ViewBuilder
   private var connected: some View {
-    NavigationStack {
-      InboxListView(mode: $mode)
-        .navigationDestination(
-          isPresented: Binding(
-            get: { store.selectedConversationID != nil },
-            set: { if !$0 { store.selectedConversationID = nil } }
-          )
-        ) {
+    @Bindable var store = store
+    if mode == .focus {
+      FocusView(mode: $mode)
+    } else {
+      NavigationSplitView(columnVisibility: $columns) {
+        InboxListView(mode: $mode)
+          .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 460)
+      } detail: {
+        NavigationStack {
           if let id = store.selectedConversationID, store.conversation(id) != nil {
             ThreadView(conversationID: id)
+          } else {
+            noSelection
           }
         }
+      }
+      .navigationSplitViewStyle(.balanced)
+      .tint(theme.accent)
     }
-    .tint(theme.accent)
   }
 
   /// En démonstration, l'écran demandé s'ouvre seul — les captures n'ont pas
@@ -115,9 +122,25 @@ struct RootView: View {
       // réactions et les citations sur une seule capture.
       store.selectedConversationID = store.visibleConversations
         .max { store.visibleMessages($0.id).count < store.visibleMessages($1.id).count }?.id
-    case .focus, .vide:
-      break
+    case .focus:
+      mode = .focus
+    case .vide:
+      mode = .focus
+      store.state.archived = Set(store.conversations.map(\.id))
+      store.focusConversationID = nil
     }
   }
 
+  private var noSelection: some View {
+    VStack(spacing: Spacing.sm) {
+      Image(systemName: "tray")
+        .font(.system(size: 32, weight: .light))
+        .foregroundStyle(theme.inkTertiary)
+      Text("Choisis une conversation")
+        .font(Typography.emptyState(themes.typeface))
+        .foregroundStyle(theme.inkSecondary)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(theme.paper.ignoresSafeArea())
+  }
 }

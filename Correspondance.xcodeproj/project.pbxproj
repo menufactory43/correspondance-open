@@ -109,6 +109,7 @@
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
 		F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */; };
 		F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B38B0A2FFD77B5B638F0F /* MessageBubble.swift */; };
+		FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBED963D2D0FDDC25F5A0072 /* FocusView.swift */; };
 		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
@@ -211,6 +212,7 @@
 		C7D01FDE40EA14E84BD9E90B /* DetachedConversationWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedConversationWindow.swift; sourceTree = "<group>"; };
 		C94AD0E8F97378754384E6E6 /* IMessageAutomationHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationHealth.swift; sourceTree = "<group>"; };
 		CAD0102675D287E0FEE9A64F /* IMessageAutomationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationTests.swift; sourceTree = "<group>"; };
+		CBED963D2D0FDDC25F5A0072 /* FocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusView.swift; sourceTree = "<group>"; };
 		CC8813E85552216BB19289AD /* SettingsPermissionsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPermissionsPane.swift; sourceTree = "<group>"; };
 		CD054E8FAA9E48EC5121F3DF /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = Correspondance/Resources/Fonts; sourceTree = SOURCE_ROOT; };
 		CE1035547A9E34370159CF87 /* LaunchGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchGate.swift; sourceTree = "<group>"; };
@@ -453,6 +455,7 @@
 			children = (
 				6060BD16F0C88E512ACA04C1 /* Connexion */,
 				66FD4A9E23316AEEA7745E0C /* Fil */,
+				E8FAD5AA7B81446E4DEC9ED0 /* Focus */,
 				19C7300BEAD8440163E635C0 /* Inbox */,
 			);
 			path = Features;
@@ -547,6 +550,14 @@
 				A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		E8FAD5AA7B81446E4DEC9ED0 /* Focus */ = {
+			isa = PBXGroup;
+			children = (
+				CBED963D2D0FDDC25F5A0072 /* FocusView.swift */,
+			);
+			path = Focus;
 			sourceTree = "<group>";
 		};
 		EB449693DCD6B00C8AAEAA2F /* App */ = {
@@ -747,6 +758,7 @@
 				66CD3CC0DFBB21B5236788CE /* ConversationRow.swift in Sources */,
 				5152ABA560F184A04472AB55 /* CorrespondanceiOSApp.swift in Sources */,
 				8838960EDD24130CAA38F648 /* DemoRelay.swift in Sources */,
+				FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */,
 				D099FC98DF3CFFDF4196D6BA /* InboxFloatingBar.swift in Sources */,
 				1A09B518E7B07C14A042C7B8 /* InboxListView.swift in Sources */,
 				F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */,
