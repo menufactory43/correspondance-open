@@ -593,6 +593,46 @@ final class InboxStore {
     networkFilter = network
   }
 
+  // MARK: - Filtres de liste
+
+  /// La rangée de pilules est-elle montrée ? Cachée par défaut : la file se lit
+  /// sans elle, et un filtre oublié est une file qui ment.
+  private(set) var isFilterBarVisible = false
+
+  /// Le filtre en cours. Il ne touche QUE les sections de la liste : la file
+  /// Focus, elle, ne se filtre pas — Focus montre LA file, pas une vue de la file.
+  private(set) var listFilter: ConversationFilter = .all
+
+  /// ⌘⇧Y : montrer ou cacher la rangée. La refermer remet le filtre à zéro —
+  /// une pilule qu'on ne voit plus ne doit rien retenir.
+  func toggleFilterBar() {
+    isFilterBarVisible.toggle()
+    if !isFilterBarVisible { listFilter = .all }
+  }
+
+  func setListFilter(_ filter: ConversationFilter) {
+    // Retaper la pilule active la relâche : on revient à « Tous ».
+    listFilter = (listFilter == filter) ? .all : filter
+    if listFilter != .all { isFilterBarVisible = true }
+  }
+
+  /// Un message attend-il son heure dans ce fil ?
+  private func hasScheduledMessage(_ conversationID: String) -> Bool {
+    scheduledMessages.contains { $0.conversationID == conversationID }
+  }
+
+  /// Applique le filtre de la rangée. Sans filtre, la liste passe telle quelle.
+  private func filtered(_ list: [Conversation]) -> [Conversation] {
+    guard listFilter != .all else { return list }
+    return list.filter {
+      listFilter.accepts(
+        $0,
+        hasDraft: hasDraft($0.id),
+        hasScheduled: hasScheduledMessage($0.id)
+      )
+    }
+  }
+
   /// Applique la recherche de la liste. Sans requête, renvoie la file telle quelle.
   private func searched(_ list: [Conversation]) -> [Conversation] {
     ConversationSearch.filter(list, query: searchQuery, index: mergedSearchIndex(searchQuery))
@@ -625,13 +665,13 @@ final class InboxStore {
   var inboxRecents: [Conversation] {
     // En recherche, la partition Récents / Groupes / Contacts n'a plus de sens :
     // tout ce qui correspond remonte dans une seule liste.
-    if isSearching { return searched(activeQueue) }
-    return activeQueue.filter(\.hasLivePreview)
+    if isSearching { return filtered(searched(activeQueue)) }
+    return filtered(activeQueue.filter(\.hasLivePreview))
   }
 
   var inboxGroups: [Conversation] {
     if isSearching { return [] }
-    return activeQueue.filter { $0.isGroup && !$0.hasLivePreview }
+    return filtered(activeQueue.filter { $0.isGroup && !$0.hasLivePreview })
       .sorted { lhs, rhs in
         if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -640,7 +680,7 @@ final class InboxStore {
 
   var inboxContacts: [Conversation] {
     if isSearching { return [] }
-    return activeQueue.filter { !$0.isGroup && !$0.hasLivePreview }
+    return filtered(activeQueue.filter { !$0.isGroup && !$0.hasLivePreview })
       .sorted { lhs, rhs in
         if isPinned(lhs.id) != isPinned(rhs.id) { return isPinned(lhs.id) }
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -1285,7 +1325,18 @@ final class InboxStore {
     updateDockBadge()
   }
 
+  /// Les rafales en cours, par fil : de quoi savoir si la notification qui
+  /// arrive doit REMPLACER la précédente ou s'ouvrir à côté (cf. `NotificationGrouping`).
+  @ObservationIgnored private var notificationBursts: [String: NotificationBurst] = [:]
+  /// Compteur qui ne recule pas : deux rafales successives d'un même fil ne
+  /// doivent pas partager d'identifiant, sinon la seconde efface la première.
+  @ObservationIgnored private var notificationSequence = 0
+
   /// Un message entrant sur un fil non muet et non sélectionné = une notification.
+  ///
+  /// Une rafale du même fil n'en fait qu'une : la dernière remplace, et dit ce
+  /// qu'elle cache (« et 3 autres messages »). Sauf un code à usage unique,
+  /// qui vaut trente secondes et ouvre toujours la sienne.
   private func conversationsDidChange() {
     updateDockBadge()
     defer { notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
@@ -1293,11 +1344,21 @@ final class InboxStore {
     for conversation in conversations {
       guard shouldNotify(conversation, previous: notificationBaseline[conversation.id]) else { continue }
       lastNotifiedAt[conversation.id] = conversation.lastMessageAt
+      notificationSequence += 1
+      let burst = NotificationGrouping.extend(
+        notificationBursts[conversation.id],
+        conversationID: conversation.id,
+        at: Date(),
+        isUrgent: OneTimeCode.looksLikeCode(conversation.preview),
+        sequence: notificationSequence
+      )
+      notificationBursts[conversation.id] = burst
       NotificationService.shared.postIncoming(
         conversationID: conversation.id,
         title: conversation.title,
         networkLabel: conversation.network.labelFR,
-        body: conversation.preview
+        body: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count),
+        requestID: burst.key
       )
     }
   }
@@ -2242,6 +2303,100 @@ final class InboxStore {
       // Désarchiver ramène le fil sous les yeux.
       isShowingArchived = false
       await select(conversationID)
+    }
+  }
+
+  // MARK: - Archiver tout ce qui est lu
+
+  /// Ce qu'un « archiver tout ce qui est lu » emporterait. Les épinglés n'en
+  /// sont jamais : c'est la promesse de l'épingle (cf. `ArchiveSweep`).
+  var readArchivableConversations: [Conversation] {
+    ArchiveSweep.targets(
+      unfilteredQueue,
+      pinned: pinnedIDs,
+      archived: archivedIDs,
+      asleep: Set(remindersQueue.map(\.id)),
+      requests: Set(requestsQueue.map(\.id))
+    )
+  }
+
+  /// La question posée avant le balayage. `nil` = rien à demander.
+  var archiveAllReadPrompt: String?
+
+  /// Ouvre la confirmation. Un balayage qui range quarante fils d'un coup se
+  /// demande une fois, avec son compte : c'est le compte qui fait décider.
+  func presentArchiveAllRead() {
+    let count = readArchivableConversations.count
+    guard count > 0 else { return }
+    archiveAllReadPrompt = ArchiveSweep.confirmationFR(count: count)
+  }
+
+  func cancelArchiveAllRead() { archiveAllReadPrompt = nil }
+
+  /// Range d'un coup tout ce qui n'attend plus rien. Le geste de fin de
+  /// journée — jamais sans avoir montré son compte d'abord.
+  func archiveAllRead() async {
+    archiveAllReadPrompt = nil
+    for conversation in readArchivableConversations {
+      await setArchived(true, conversationID: conversation.id)
+    }
+  }
+
+  // MARK: - Sélection multiple
+
+  /// Les fils cochés. Vide = pas de mode sélection ; c'est le même état qui
+  /// porte les deux, pour qu'aucun « mode » ne survive à une liste vidée.
+  private(set) var selectedConversationIDs: Set<String> = []
+  /// Le mode est-il armé ? Les cases à cocher paraissent alors sur les lignes,
+  /// et un clic coche au lieu d'ouvrir.
+  private(set) var isSelectionMode = false
+
+  func toggleSelectionMode() {
+    isSelectionMode.toggle()
+    if !isSelectionMode { selectedConversationIDs = [] }
+  }
+
+  func toggleSelection(_ conversationID: String) {
+    if selectedConversationIDs.contains(conversationID) {
+      selectedConversationIDs.remove(conversationID)
+    } else {
+      selectedConversationIDs.insert(conversationID)
+    }
+  }
+
+  func isSelected(_ conversationID: String) -> Bool {
+    selectedConversationIDs.contains(conversationID)
+  }
+
+  func clearSelection() {
+    selectedConversationIDs = []
+    isSelectionMode = false
+  }
+
+  /// Archive tout ce qui est coché — épingles comprises : ici c'est un geste
+  /// explicite, fil par fil, pas un balayage aveugle.
+  func archiveSelection() async {
+    let ids = selectedConversationIDs
+    clearSelection()
+    for id in ids { await setArchived(true, conversationID: id) }
+  }
+
+  func markSelectionRead() async {
+    let ids = selectedConversationIDs
+    clearSelection()
+    for id in ids {
+      guard let conversation = conversations.first(where: { $0.id == id }) else { continue }
+      await markRead(conversation)
+    }
+  }
+
+  /// Coupe le son des fils cochés. Jamais l'inverse : un geste groupé qui
+  /// bascule ferait la moitié d'une chose et la moitié de son contraire.
+  func muteSelection() {
+    let ids = selectedConversationIDs
+    clearSelection()
+    for id in ids where !mutedIDs.contains(id) {
+      toggleMuted(conversationID: id)
     }
   }
 

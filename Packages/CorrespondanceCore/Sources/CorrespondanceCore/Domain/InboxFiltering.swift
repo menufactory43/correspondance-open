@@ -44,8 +44,11 @@ public enum InboxScope: String, CaseIterable, Identifiable, Sendable {
 public enum ConversationFilter: String, CaseIterable, Identifiable, Sendable {
   case all
   case unread
-  case drafts
   case unanswered
+  case drafts
+  /// Les fils où un message attend son heure. Il n'y a rien à y répondre —
+  /// c'est une vérification, pas une file de travail.
+  case scheduled
   case groups
 
   public var id: String { rawValue }
@@ -54,8 +57,9 @@ public enum ConversationFilter: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .all: "Tous"
     case .unread: "Non lus"
-    case .drafts: "Brouillons"
     case .unanswered: "Sans réponse"
+    case .drafts: "Brouillons"
+    case .scheduled: "Programmés"
     case .groups: "Groupes"
     }
   }
@@ -64,16 +68,23 @@ public enum ConversationFilter: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .all: "line.3.horizontal.decrease"
     case .unread: "circle.fill"
-    case .drafts: "pencil.line"
     case .unanswered: "arrowshape.turn.up.left"
+    case .drafts: "pencil.line"
+    case .scheduled: "clock"
     case .groups: "person.3"
     }
   }
 
   /// Ce filtre laisse-t-il passer cette conversation ?
   ///
-  /// - Parameter hasDraft: un brouillon attend dans ce fil (Relais ou local).
-  public func accepts(_ conversation: Conversation, hasDraft: Bool) -> Bool {
+  /// - Parameters:
+  ///   - hasDraft: un brouillon attend dans ce fil (Relais ou local).
+  ///   - hasScheduled: un message y attend son heure.
+  public func accepts(
+    _ conversation: Conversation,
+    hasDraft: Bool,
+    hasScheduled: Bool = false
+  ) -> Bool {
     switch self {
     case .all:
       true
@@ -81,6 +92,8 @@ public enum ConversationFilter: String, CaseIterable, Identifiable, Sendable {
       conversation.hasUnread
     case .drafts:
       hasDraft
+    case .scheduled:
+      hasScheduled
     // « Sans réponse » : le dernier mot est le leur. Un fil de catalogue, qui
     // n'a encore aucun message, n'attend rien de personne.
     case .unanswered:
@@ -221,6 +234,8 @@ public enum InboxOrdering {
     network: MessageNetwork?,
     filter: ConversationFilter,
     state: InboxState,
+    /// Les fils où un message attend son heure — le filtre « Programmés ».
+    scheduled: Set<String> = [],
     now: Date = Date()
   ) -> [Conversation] {
     let kept = conversations.filter { conversation in
@@ -237,7 +252,11 @@ public enum InboxOrdering {
         guard archived == (scope == .archive) else { return false }
       }
       if let network, conversation.network != network { return false }
-      return filter.accepts(conversation, hasDraft: state.hasDraft(conversation.id))
+      return filter.accepts(
+        conversation,
+        hasDraft: state.hasDraft(conversation.id),
+        hasScheduled: scheduled.contains(conversation.id)
+      )
     }
     guard scope != .reminders else { return kept.sorted(by: byWakeTime(state)) }
     return sorted(kept, pinned: state.pinned)

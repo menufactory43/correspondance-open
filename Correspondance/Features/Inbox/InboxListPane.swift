@@ -15,6 +15,12 @@ struct InboxListPane: View {
   /// l'accent du système — un bleu franc qui écrase la ligne une demi-seconde
   /// avant de céder la place à la nôtre. C'est donc le clic qui choisit.
   private func choose(_ id: String) {
+    // En sélection multiple, cliquer coche : on désigne des fils, on n'en lit
+    // aucun. Ouvrir en même temps marquerait comme lu ce qu'on allait archiver.
+    guard !store.isSelectionMode else {
+      store.toggleSelection(id)
+      return
+    }
     // Recliquer la ligne déjà sélectionnée n'est pas un non-événement quand
     // c'est l'app qui l'avait choisie au lancement : c'est le geste par
     // lequel l'utilisateur dit qu'il lit enfin ce fil.
@@ -39,6 +45,8 @@ struct InboxListPane: View {
       }
 
       searchField
+
+      if store.isFilterBarVisible { filterRow }
 
       facetRow
 
@@ -72,6 +80,8 @@ struct InboxListPane: View {
         }
       }
 
+      if store.isSelectionMode { selectionBar }
+
       archiveToggle
     }
     .confirmationDialog(
@@ -90,6 +100,19 @@ struct InboxListPane: View {
       Button("Annuler", role: .cancel) { pendingLeaveID = nil }
     } message: {
       Text("Tu ne recevras plus les messages de ce groupe.")
+    }
+    .confirmationDialog(
+      store.archiveAllReadPrompt ?? "",
+      isPresented: Binding(
+        get: { store.archiveAllReadPrompt != nil },
+        set: { if !$0 { store.cancelArchiveAllRead() } }
+      ),
+      titleVisibility: .visible
+    ) {
+      Button("Archiver") { Task { await store.archiveAllRead() } }
+      Button("Annuler", role: .cancel) { store.cancelArchiveAllRead() }
+    } message: {
+      Text("Les fils épinglés et les non lus restent dans la file. Un nouveau message ramène un fil archivé.")
     }
   }
 
@@ -189,6 +212,94 @@ struct InboxListPane: View {
         }
       }
     }
+  }
+
+  /// La rangée de pilules (⌘⇧Y) : ce que je veux voir maintenant.
+  ///
+  /// Cachée par défaut — la file se lit sans elle, et un filtre oublié est une
+  /// file qui ment. Les quatre premières pilules disent l'état du fil, les
+  /// suivantes son réseau (le rail ⌘1…⌘9 mène au même endroit, par un autre
+  /// chemin : ici on choisit à la souris, là au clavier).
+  private var filterRow: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 4) {
+        ForEach(ConversationFilter.allCases.filter { $0 != .all }) { candidate in
+          pill(
+            label: candidate.labelFR,
+            systemImage: candidate.systemImage,
+            isOn: store.listFilter == candidate
+          ) {
+            store.setListFilter(candidate)
+          }
+        }
+
+        if !connectedNetworks.isEmpty {
+          Divider().frame(height: 14).overlay(theme.edge)
+          ForEach(connectedNetworks) { network in
+            pill(
+              label: network.labelFR,
+              systemImage: network.systemImage,
+              isOn: store.networkFilter == network
+            ) {
+              store.setNetworkFilter(store.networkFilter == network ? nil : network)
+            }
+          }
+        }
+      }
+      .padding(.horizontal, Spacing.sm)
+      .padding(.vertical, 6)
+    }
+  }
+
+  /// Les réseaux réellement branchés — une pilule pour un réseau muet n'aurait
+  /// rien à filtrer.
+  private var connectedNetworks: [MessageNetwork] {
+    MessageNetwork.allCases.filter { store.hasConversations(on: $0) }
+  }
+
+  private func pill(
+    label: String,
+    systemImage: String,
+    isOn: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Label(label, systemImage: systemImage)
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(isOn ? theme.accentInk : theme.inkSecondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(isOn ? theme.accentFill : theme.paperSecondary.opacity(0.6)))
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(isOn ? [.isSelected, .isButton] : .isButton)
+  }
+
+  /// Le pied de liste quand on coche : ce qu'on a désigné, et ce qu'on peut
+  /// en faire d'un seul geste.
+  private var selectionBar: some View {
+    HStack(spacing: 8) {
+      Text(selectionLabel)
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(theme.inkSecondary)
+      Spacer(minLength: 4)
+      Button("Archiver") { Task { await store.archiveSelection() } }
+      Button("Marquer lu") { Task { await store.markSelectionRead() } }
+      Button("Muet") { store.muteSelection() }
+      Button("Terminer") { store.clearSelection() }
+    }
+    .buttonStyle(.borderless)
+    .font(Typography.meta(themes.typeface))
+    .disabled(store.selectedConversationIDs.isEmpty)
+    .padding(.horizontal, Spacing.sm)
+    .padding(.vertical, 7)
+    .background(theme.paperSecondary)
+  }
+
+  private var selectionLabel: String {
+    let count = store.selectedConversationIDs.count
+    if count == 0 { return "Choisir des fils" }
+    return count == 1 ? "1 fil sélectionné" : "\(count) fils sélectionnés"
   }
 
   /// La rangée d'onglets — Images · Vidéos · Liens · Fichiers · Brouillons.
@@ -323,18 +434,31 @@ struct InboxListPane: View {
   }
 
   private func row(_ conversation: Conversation) -> some View {
-    ConversationRowView(
-      conversation: conversation,
-      theme: theme,
-      typeface: themes.typeface,
-      isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,
-      isPinned: store.isPinned(conversation.id),
-      isMuted: store.isMuted(conversation.id)
-    )
+    HStack(spacing: Spacing.xs) {
+      // La case ne paraît qu'en sélection multiple : le reste du temps, la
+      // ligne n'a rien à cocher et récupère toute sa largeur.
+      if store.isSelectionMode {
+        Image(systemName: store.isSelected(conversation.id) ? "checkmark.circle.fill" : "circle")
+          .font(.system(size: 15))
+          .foregroundStyle(store.isSelected(conversation.id) ? theme.accent : theme.inkTertiary)
+          .padding(.leading, Spacing.xs)
+      }
+      ConversationRowView(
+        conversation: conversation,
+        theme: theme,
+        typeface: themes.typeface,
+        isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,
+        isPinned: store.isPinned(conversation.id),
+        isMuted: store.isMuted(conversation.id)
+      )
+    }
     .contentShape(Rectangle())
     .onTapGesture { choose(conversation.id) }
     .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
     .listRowBackground(rowBackground(for: conversation.id))
+    .accessibilityAddTraits(
+      store.isSelectionMode && store.isSelected(conversation.id) ? .isSelected : []
+    )
     .contextMenu {
       conversationContextMenu(conversation)
     }
@@ -381,6 +505,11 @@ struct InboxListPane: View {
 
     Button("Détacher la conversation") {
       store.detach(conversationID: conversation.id)
+    }
+
+    Button(store.isSelectionMode ? "Quitter la sélection" : "Sélectionner plusieurs fils") {
+      store.toggleSelectionMode()
+      if store.isSelectionMode { store.toggleSelection(conversation.id) }
     }
 
     Button(store.isArchived(conversation.id) ? "Désarchiver" : "Archiver") {

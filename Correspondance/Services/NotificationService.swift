@@ -109,7 +109,17 @@ final class NotificationService: NSObject {
 
   /// Une notification par message entrant. `conversationID` sert d'identifiant de thread :
   /// macOS empile les notifications d'un même fil au lieu d'en accumuler dix.
-  func postIncoming(conversationID: String, title: String, networkLabel: String, body: String) {
+  ///
+  /// `requestID` porte le regroupement anti-rafale : reposter la MÊME
+  /// identité remplace la notification à l'écran au lieu d'en ajouter une.
+  /// C'est `NotificationGrouping` qui décide quand elle change.
+  func postIncoming(
+    conversationID: String,
+    title: String,
+    networkLabel: String,
+    body: String,
+    requestID: String? = nil
+  ) {
     guard isAvailable, isAuthorized else { return }
     let content = UNMutableNotificationContent()
     content.title = title
@@ -121,7 +131,7 @@ final class NotificationService: NSObject {
     content.userInfo = [Self.conversationIDKey: conversationID]
 
     let request = UNNotificationRequest(
-      identifier: "\(conversationID)#\(UUID().uuidString)",
+      identifier: requestID ?? "\(conversationID)#\(UUID().uuidString)",
       content: content,
       trigger: nil
     )

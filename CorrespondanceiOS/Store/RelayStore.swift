@@ -327,7 +327,8 @@ final class RelayStore {
       scope: scope,
       network: networkFilter,
       filter: filter,
-      state: viewState
+      state: viewState,
+      scheduled: Set(scheduled.map(\.conversationID))
     )
   }
 
@@ -1032,6 +1033,25 @@ final class RelayStore {
   static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
 
   // MARK: - Gestes sur une ligne
+
+  /// Ce qu'un « archiver tout ce qui est lu » emporterait — épingles et non
+  /// lus épargnés (cf. `ArchiveSweep`).
+  var readArchivableConversations: [Conversation] {
+    ArchiveSweep.targets(
+      conversations,
+      pinned: viewState.pinned,
+      archived: viewState.archived,
+      asleep: Set(conversations.filter { viewState.isAsleep($0) }.map(\.id)),
+      requests: viewState.pendingRequests
+    )
+  }
+
+  /// Le geste de fin de journée : range d'un coup tout ce qui n'attend plus rien.
+  func archiveAllRead() {
+    for conversation in readArchivableConversations {
+      setArchived(true, conversationID: conversation.id)
+    }
+  }
 
   func toggleArchived(_ conversationID: String) {
     setArchived(!isArchived(conversationID), conversationID: conversationID)

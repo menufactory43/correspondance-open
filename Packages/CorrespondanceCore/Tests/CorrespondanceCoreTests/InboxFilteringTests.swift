@@ -29,6 +29,58 @@ final class InboxFilteringTests: XCTestCase {
 
   // MARK: - Filtres
 
+  /// Le filtre « Programmés » ne regarde ni le fil ni son dernier message :
+  /// il ne connaît que ce qui attend son heure.
+  func testLeFiltreProgrammesNeGardeQueLesFilsQuiOntUnDepartEnAttente() {
+    let fil = conversation("a")
+    XCTAssertTrue(ConversationFilter.scheduled.accepts(fil, hasDraft: false, hasScheduled: true))
+    XCTAssertFalse(ConversationFilter.scheduled.accepts(fil, hasDraft: true, hasScheduled: false))
+  }
+
+  func testLaListeSaitFiltrerSurLesProgrammes() {
+    let list = [conversation("a"), conversation("b")]
+    let kept = InboxOrdering.list(
+      list, scope: .inbox, network: nil, filter: .scheduled,
+      state: InboxState(), scheduled: ["b"]
+    )
+    XCTAssertEqual(kept.map(\.id), ["b"])
+  }
+
+  // MARK: - Archiver tout ce qui est lu
+
+  func testLeBalayageEpargneLesEpinglesEtLesNonLus() {
+    let list = [
+      conversation("lu"),
+      conversation("nonlu", unread: 2),
+      conversation("epingle"),
+    ]
+    let targets = ArchiveSweep.targets(list, pinned: ["epingle"], archived: [])
+    XCTAssertEqual(targets.map(\.id), ["lu"])
+  }
+
+  /// Un fil de catalogue n'a jamais rien reçu : il n'y a rien à y ranger.
+  func testLeBalayageIgnoreCeQuiNAJamaisRienRecu() {
+    let catalogue = Conversation(
+      id: "catalogue",
+      network: .signal,
+      address: "catalogue",
+      title: "Catalogue",
+      preview: "Écrire sur Signal…",
+      lastMessageAt: Date(timeIntervalSince1970: 0),
+      unreadCount: 0,
+      isArchived: false,
+      transportKey: "catalogue",
+      isGroup: false,
+      lastMessageIsFromMe: false
+    )
+    XCTAssertTrue(ArchiveSweep.targets([catalogue], pinned: [], archived: []).isEmpty)
+  }
+
+  func testLaQuestionPorteLeCompte() {
+    XCTAssertEqual(ArchiveSweep.confirmationFR(count: 1), "Archiver 1 fil lu ?")
+    XCTAssertEqual(ArchiveSweep.confirmationFR(count: 12), "Archiver 12 fils lus ?")
+  }
+
   func testFilterAllKeepsEverything() {
     let list = [conversation("a"), conversation("b", unread: 3)]
     for item in list {

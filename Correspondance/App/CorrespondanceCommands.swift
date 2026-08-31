@@ -90,6 +90,13 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("f", modifiers: [.command, .shift])
 
+      // Même touche que Beeper (TOGGLE_FILTER_UNREAD ⌘⇧Y), élargie à toute la
+      // rangée de pilules : « non lus » n'est qu'un filtre parmi cinq.
+      Button(store.isFilterBarVisible ? "Masquer les filtres" : "Filtrer la liste") {
+        store.toggleFilterBar()
+      }
+      .keyboardShortcut("y", modifiers: [.command, .shift])
+
       Button("Rechercher dans le fil") {
         store.toggleThreadSearch()
       }
@@ -120,6 +127,17 @@ struct CorrespondanceCommands: Commands {
         }
       }
       .keyboardShortcut("e", modifiers: [.command])
+
+      // ⌘⇧E ouvre déjà la vue « Archivés » : le balayage prend ⌥⌘E, libre.
+      Button("Archiver tout ce qui est lu…") {
+        store.presentArchiveAllRead()
+      }
+      .keyboardShortcut("e", modifiers: [.command, .option])
+      .disabled(store.readArchivableConversations.isEmpty)
+
+      Button(store.isSelectionMode ? "Quitter la sélection" : "Sélectionner plusieurs fils") {
+        store.toggleSelectionMode()
+      }
 
       Button(store.isShowingArchived ? "Retour à l’inbox" : "Voir les archivés") {
         store.setShowingArchived(!store.isShowingArchived)

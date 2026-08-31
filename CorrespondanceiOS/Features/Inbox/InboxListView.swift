@@ -18,6 +18,8 @@ struct InboxListView: View {
   @State private var isShowingScheduled = false
   @State private var isShowingSettings = false
   @State private var isSearching = false
+  /// Le balayage de fin de journée se demande une fois, avec son compte.
+  @State private var confirmsArchiveAllRead = false
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -85,6 +87,16 @@ struct InboxListView: View {
         .environment(store)
         .environment(themes)
         .environment(push)
+    }
+    .confirmationDialog(
+      ArchiveSweep.confirmationFR(count: store.readArchivableConversations.count),
+      isPresented: $confirmsArchiveAllRead,
+      titleVisibility: .visible
+    ) {
+      Button("Archiver") { store.archiveAllRead() }
+      Button("Annuler", role: .cancel) {}
+    } message: {
+      Text("Les fils épinglés et les non lus restent dans la file. Un nouveau message ramène un fil archivé.")
     }
     .task { openDemoSheetIfRequested() }
   }
@@ -262,6 +274,12 @@ struct InboxListView: View {
       } label: {
         Label(MessageNetwork.selfNote.labelFR, systemImage: MessageNetwork.selfNote.systemImage)
       }
+      Button {
+        confirmsArchiveAllRead = true
+      } label: {
+        Label("Archiver tout ce qui est lu…", systemImage: "archivebox")
+      }
+      .disabled(store.readArchivableConversations.isEmpty)
       Button {
         isShowingSettings = true
       } label: {
