@@ -68,7 +68,11 @@ extension InboxStore {
     guard !messageID.isEmpty else { return }
     var ids = hiddenMessageIDs
     ids.insert(messageID)
-    setHiddenMessageIDs(ids)
+    // Le salon du message : sur un fil bridgé, le masquage rejoint le Relais,
+    // pour que l'iPhone ne remontre pas la bulle qu'on vient de retirer ici.
+    let conversationID = messages.first { $0.id == messageID }
+      .flatMap { conversation(ofMessage: $0) }?.id
+    setHiddenMessageIDs(ids, hiddenIn: conversationID)
     forgetDeletedMessage(messageID)
     messages = HiddenMessageStore.visible(messages, hiddenIDs: ids)
     refreshPreviewAfterDeletion()

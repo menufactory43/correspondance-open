@@ -198,6 +198,16 @@ final class InboxStore {
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
   @ObservationIgnored private var isNotificationPrimed = false
 
+  // MARK: - Relais (ADR 0001)
+
+  /// Écritures d'état qui n'ont pas encore atteint le Relais. Observé : Réglages
+  /// en affiche le compte. Voir `InboxStore+Relay`.
+  var relayQueue = RelayWriteQueue()
+  /// Un envoi de file à la fois — deux passes concurrentes rejoueraient la même écriture.
+  @ObservationIgnored var isFlushingRelay = false
+  /// Brouillons en attente d'être poussés, une tâche par fil (≈ 1 s après la frappe).
+  @ObservationIgnored var relayDraftTasks: [String: Task<Void, Never>] = [:]
+
   var selectedConversation: Conversation? {
     guard let selectedConversationID else { return nil }
     return conversations.first { $0.id == selectedConversationID }
@@ -268,6 +278,8 @@ final class InboxStore {
       drafts[session.conversationID] = draft
     }
     scheduleDraftPersist()
+    // Le Relais ne reçoit que le texte, et pas à chaque frappe (cf. InboxStore+Relay).
+    scheduleRelayDraftPush(conversationID: session.conversationID, text: draft.text)
   }
 
   /// Une fenêtre détachée s'ouvre.
@@ -457,6 +469,7 @@ final class InboxStore {
     archivedIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.archivedIDs) ?? [])
     manuallyUnreadIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.manuallyUnread) ?? [])
     drafts = DraftStore.load()
+    relayQueue = RelayWriteQueue.load(from: .standard, key: Keys.relayQueue)
     let mergeStore = MergedContactStore.load()
     mergedContacts = mergeStore.merged
     dismissedMergePairs = mergeStore.dismissedPairs
@@ -1147,9 +1160,9 @@ final class InboxStore {
   }
 
   private func persistMergedContacts() {
-    MergedContactStore.save(
-      MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs)
-    )
+    let stored = MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs)
+    MergedContactStore.save(stored)
+    relayNoteMergedContacts(stored)
   }
 
   private func shouldNotify(_ conversation: Conversation, previous: Conversation?) -> Bool {
@@ -1495,6 +1508,10 @@ final class InboxStore {
         return
       }
       self.isMatrixConnected = true
+      // L'état de conversation ne revient pas dans un `/sync` incrémental : on le
+      // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
+      // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
+      await self.reloadRelayState()
       var backoffSeconds = 2
       while !Task.isCancelled {
         do {
@@ -1508,6 +1525,10 @@ final class InboxStore {
           self.mergeMatrixConversations(updated)
           self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
+          // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
+          // sauf ce qui attend encore de partir. Et ce qui attend part maintenant.
+          await self.flushRelayWrites()
+          await self.adoptRelayState()
           self.didSettleInitialMatrixSync = true
         } catch is CancellationError {
           return
@@ -1597,9 +1618,11 @@ final class InboxStore {
   }
 
   /// `hiddenMessageIDs` est `private(set)` : `InboxStore+Deletion` passe par ici.
-  func setHiddenMessageIDs(_ ids: Set<String>) {
+  func setHiddenMessageIDs(_ ids: Set<String>, hiddenIn conversationID: String? = nil) {
+    let newlyHidden = ids.subtracting(hiddenMessageIDs).first
     hiddenMessageIDs = ids
     HiddenMessageStore.save(ids)
+    if let conversationID, let last = newlyHidden { relayNoteHidden(messageID: last, conversationID: conversationID) }
   }
 
   /// `messagesAutomationHealth` est `private(set)` : l'extension passe par ici.
@@ -1677,23 +1700,24 @@ final class InboxStore {
 
   func togglePinned(conversationID: String) {
     let ids = expandedIDs(for: conversationID)
-    if pinnedIDs.contains(conversationID) {
-      for id in ids { pinnedIDs.remove(id) }
-    } else {
-      for id in ids { pinnedIDs.insert(id) }
+    let pinned = !pinnedIDs.contains(conversationID)
+    for id in ids {
+      if pinned { pinnedIDs.insert(id) } else { pinnedIDs.remove(id) }
     }
     persistFlags()
+    relayNote(.pinned, value: pinned, conversationIDs: ids)
     conversations.sort(by: { sortForInbox($0, $1) })
   }
 
   func toggleMuted(conversationID: String) {
     let ids = expandedIDs(for: conversationID)
-    if mutedIDs.contains(conversationID) {
-      for id in ids { mutedIDs.remove(id) }
-    } else {
-      for id in ids { mutedIDs.insert(id) }
+    let muted = !mutedIDs.contains(conversationID)
+    for id in ids {
+      if muted { mutedIDs.insert(id) } else { mutedIDs.remove(id) }
     }
     persistFlags()
+    // Le muet vit aussi côté Relais : un salon muet n'émet aucun push (iPhone compris).
+    relayNote(.muted, value: muted, conversationIDs: ids)
     updateDockBadge()
   }
 
@@ -1713,6 +1737,7 @@ final class InboxStore {
       archivedIDs.remove(conversationID)
       disappearingSecondsByID.removeValue(forKey: conversationID)
       persistFlags()
+      relayForget(conversationID: conversationID)
       if selectedConversationID == conversationID {
         await select(activeQueue.first?.id)
       }
@@ -1756,6 +1781,7 @@ final class InboxStore {
       mergedMemberCache[id]?.isArchived = archived
     }
     persistFlags()
+    relayNote(.archived, value: archived, conversationIDs: ids)
     normalizeArchiveState()
     // Archiver le fil ouvert enchaîne sur le suivant : c'est le geste Focus.
     if archived, selectedConversationID == conversationID {
@@ -2629,6 +2655,70 @@ final class InboxStore {
     return trimmed.filter(\.isNumber)
   }
 
+  /// Les brouillons, en lecture — `drafts` est privé au fichier.
+  var draftSnapshot: [String: DraftStore.Draft] { drafts }
+
+  /// Les fils membres d'une ligne fusionnée : ils portent un état, sans figurer
+  /// dans `conversations`. `mergedMemberCache` est privé au fichier.
+  var mergedMemberConversationIDs: [String] { Array(mergedMemberCache.keys) }
+
+  /// L'état revenu du Relais s'installe. `pinnedIDs` & co sont `private(set)` :
+  /// l'extension `InboxStore+Relay` passe par ici. On ne touche QUE ce que le
+  /// Relais connaît — un fil iMessage, ou un salon pas encore chargé, garde le sien.
+  func installRelayState(
+    pinned: Set<String>,
+    muted: Set<String>,
+    archived: Set<String>,
+    known: Set<String>,
+    drafts newDrafts: [String: String],
+    hidden: Set<String>,
+    merged: MergedContactStore.Stored?
+  ) {
+    var changedFlags = false
+    for id in known {
+      let wasPinned = pinnedIDs.contains(id)
+      if pinned.contains(id) { pinnedIDs.insert(id) } else { pinnedIDs.remove(id) }
+      let wasMuted = mutedIDs.contains(id)
+      if muted.contains(id) { mutedIDs.insert(id) } else { mutedIDs.remove(id) }
+      let wasArchived = archivedIDs.contains(id)
+      if archived.contains(id) { archivedIDs.insert(id) } else { archivedIDs.remove(id) }
+      mergedMemberCache[id]?.isArchived = archived.contains(id)
+      if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
+        || wasArchived != archived.contains(id) { changedFlags = true }
+    }
+    if changedFlags {
+      persistFlags()
+      _ = normalizeArchiveState()
+      conversations.sort(by: { sortForInbox($0, $1) })
+      updateDockBadge()
+    }
+
+    // Un fil ouvert est en train d'être écrit : son brouillon lui appartient.
+    let live = Set(liveSessions.map(\.conversationID))
+    var draftsChanged = false
+    for id in known where !live.contains(id) {
+      let text = newDrafts[id] ?? ""
+      var draft = drafts[id] ?? DraftStore.Draft()
+      guard draft.text != text else { continue }
+      draft.text = text
+      if draft.isEmpty { drafts.removeValue(forKey: id) } else { drafts[id] = draft }
+      draftsChanged = true
+    }
+    if draftsChanged { DraftStore.save(drafts) }
+
+    if hiddenMessageIDs != hidden {
+      hiddenMessageIDs = hidden
+      HiddenMessageStore.save(hidden)
+    }
+
+    if let merged, merged != MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs) {
+      mergedContacts = merged.merged
+      dismissedMergePairs = merged.dismissedPairs
+      MergedContactStore.save(merged)
+      _ = normalizeMergedContacts()
+    }
+  }
+
   private func persistFlags() {
     UserDefaults.standard.set(Array(pinnedIDs), forKey: Keys.pinnedIDs)
     UserDefaults.standard.set(Array(mutedIDs), forKey: Keys.mutedIDs)
@@ -2650,6 +2740,9 @@ final class InboxStore {
     static let manuallyUnread = "correspondance.manuallyUnreadConversationIDs"
     static let messagesAutomation = "correspondance.messagesAutomation.enabled"
     static let messagesAutomationOffscreen = "correspondance.messagesAutomation.offscreenWindow"
+    /// Cf. `InboxStore+Relay` : la file d'écritures et le drapeau de migration.
+    static let relayQueue = "correspondance.relayWriteQueue"
+    static let stateMigrated = "correspondance.stateMigratedToRelay.v1"
   }
 
   private static func demoConversations() -> [Conversation] {
