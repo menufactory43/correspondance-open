@@ -480,14 +480,28 @@ public actor MatrixBridgeService {
     }
     if !text.isEmpty {
       let quoted = replyToMessageID.flatMap { rooms[roomID]?.messagesByID[$0] }
+      let sendsFallback = Self.sendsReplyFallback(on: rooms[roomID]?.network)
       try await client.sendText(
         roomID: roomID,
         body: text,
         replyToEventID: replyToMessageID,
-        replyFallback: quoted.map { (sender: $0.senderID ?? selfUserID, text: $0.sidebarPreviewText) },
+        replyFallback: sendsFallback
+          ? quoted.map { (sender: $0.senderID ?? selfUserID, text: $0.sidebarPreviewText) }
+          : nil,
         transactionID: txnID
       )
     }
+  }
+
+  /// Faut-il joindre le repli « > <@x> … » à une réponse citée ?
+  ///
+  /// mautrix-signal transmet le corps **tel quel** : le repli arrive chez le
+  /// correspondant en texte brut, MXID `@signal_…:correspondance.local` compris.
+  /// La citation passe par `m.in_reply_to`, le repli n'apporte rien — on ne
+  /// l'envoie pas. WhatsApp, lui, le retire correctement ; on ne change rien
+  /// à ce qui marche.
+  static func sendsReplyFallback(on network: MessageNetwork?) -> Bool {
+    network != .signal
   }
 
   /// Pose, remplace ou retire ma réaction sur un message.

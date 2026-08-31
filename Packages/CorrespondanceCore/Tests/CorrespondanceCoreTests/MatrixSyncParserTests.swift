@@ -255,4 +255,16 @@ extension MatrixSyncParserTests {
     ], roomID: model.roomID, to: &model)
     XCTAssertTrue(model.messagesByID.isEmpty, "\(model.messagesByID.keys)")
   }
+
+
+  // MARK: - Repli de citation par réseau
+
+  func testSignalRepliesCarryNoFallback() {
+    // mautrix-signal relaie le corps tel quel : le repli « > <@x> … » y serait
+    // du bruit, MXID compris — le bug vu sur iPhone.
+    XCTAssertFalse(MatrixBridgeService.sendsReplyFallback(on: .signal))
+    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: .whatsapp))
+    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: .instagram))
+    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: nil))
+  }
 }
