@@ -7,6 +7,7 @@ struct InboxListPane: View {
   @Environment(ThemePreferences.self) private var themes
 
   @State private var pendingLeaveID: String?
+  @FocusState private var isSearchFocused: Bool
 
   private var theme: WritingTheme { themes.theme }
 
@@ -36,6 +37,8 @@ struct InboxListPane: View {
           .padding(.horizontal, Spacing.sm)
           .padding(.bottom, Spacing.xs)
       }
+
+      searchField
 
       facetRow
 
@@ -71,11 +74,6 @@ struct InboxListPane: View {
 
       archiveToggle
     }
-    .searchable(
-      text: Bindable(store).searchQuery,
-      placement: .sidebar,
-      prompt: "Rechercher un fil, un contact, un message"
-    )
     .confirmationDialog(
       "Quitter le groupe ?",
       isPresented: Binding(
@@ -92,6 +90,61 @@ struct InboxListPane: View {
       Button("Annuler", role: .cancel) { pendingLeaveID = nil }
     } message: {
       Text("Tu ne recevras plus les messages de ce groupe.")
+    }
+  }
+
+  /// Le champ de recherche appartient à la LISTE, pas à la colonne.
+  /// `.searchable(placement: .sidebar)` le hisse au-dessus de la colonne
+  /// entière : la pilule enjambait alors le rail des réseaux. Posé ici, il
+  /// commence là où commence la liste et s'arrête avec elle.
+  private var searchField: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "magnifyingglass")
+        .font(.system(size: 12))
+        .foregroundStyle(theme.inkTertiary)
+
+      TextField(
+        "Rechercher une conversation",
+        text: Bindable(store).searchQuery
+      )
+      .textFieldStyle(.plain)
+      .font(Typography.meta(themes.typeface))
+      .foregroundStyle(theme.ink)
+      .focused($isSearchFocused)
+      .onKeyPress(.escape) {
+        guard !store.searchQuery.isEmpty else { return .ignored }
+        store.searchQuery = ""
+        return .handled
+      }
+
+      if !store.searchQuery.isEmpty {
+        Button {
+          store.searchQuery = ""
+          isSearchFocused = true
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(.system(size: 12))
+            .foregroundStyle(theme.inkTertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Effacer la recherche")
+      }
+    }
+    .padding(.horizontal, Spacing.xs)
+    .padding(.vertical, 6)
+    .background {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .fill(theme.room.opacity(theme.isDark ? 0.55 : 0.45))
+    }
+    .padding(.horizontal, Spacing.xs)
+    .padding(.top, Spacing.xs)
+    .padding(.bottom, Spacing.xxs)
+    .background {
+      // ⌘F pose le curseur dans le champ sans afficher de bouton.
+      Button("") { isSearchFocused = true }
+        .keyboardShortcut("f", modifiers: .command)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
   }
 

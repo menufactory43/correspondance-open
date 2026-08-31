@@ -119,10 +119,22 @@ struct ContentView: View {
     .toolbar {
       if !isFocus {
         ToolbarItem(placement: .primaryAction) {
-          Button("Nouvelle conversation", systemImage: "square.and.pencil") {
+          Button {
             store.presentNewConversation()
+          } label: {
+            // Même gabarit que le bouton de colonne posé par le split view.
+            // Le décalage n'est pas un caprice : SF Symbols centre la boîte
+            // ENTIÈRE du glyphe, or « square.and.pencil » sort sa mine en
+            // haut à droite. Son carré descendait donc d'un point et demi
+            // sous le rectangle voisin. On aligne les deux carrés, pas les
+            // deux boîtes — c'est ce que l'œil compare.
+            Image(systemName: "square.and.pencil")
+              .font(.system(size: 14, weight: .regular))
+              .offset(y: -1.5)
+              .frame(width: 28, height: 22)
           }
           .help("Nouvelle conversation (⌘N)")
+          .accessibilityLabel("Nouvelle conversation")
         }
       }
     }
