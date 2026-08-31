@@ -194,8 +194,11 @@ public struct MatrixSyncParser: Sendable {
       let quoted = model.messagesByID[targetID]
       replyTo = QuotedMessage(
         messageID: targetID,
-        senderName: quoted.map { $0.isFromMe ? "Moi" : displayName(of: $0.senderID ?? "", in: model) }
-          ?? Self.fallbackQuotedSender(in: content.string(at: "body") ?? ""),
+        senderName: quotedSenderName(
+          of: quoted,
+          fallbackBody: content.string(at: "body") ?? "",
+          in: model
+        ),
         text: quoted?.sidebarPreviewText ?? Self.fallbackQuotedText(in: content.string(at: "body") ?? "")
       )
       if replyTo?.isEmpty == true { replyTo = nil }
@@ -302,22 +305,55 @@ public struct MatrixSyncParser: Sendable {
   }
 
   /// Nom affichable d'un expéditeur : le membre du salon, sinon le localpart nu.
+  /// Le nom d'une personne dans ce salon, ou **rien**.
+  ///
+  /// Le repli sur le localpart tient pour un vrai compte Matrix (`@meffysto`),
+  /// jamais pour un ghost de pont : « whatsapp_lid-19876543210 » n'est pas
+  /// quelqu'un, c'est une clé de base de données. Aux vues de choisir alors
+  /// quoi montrer (le titre du fil, rien du tout) — cf. `displayedSenderName`.
   private func displayName(of userID: String, in model: MatrixRoomModel) -> String {
     if userID == selfUserID { return "Moi" }
     if let name = model.members[userID]?.displayName, !name.isEmpty { return name }
+    guard !MatrixIdentity.isGhost(userID), !MatrixIdentity.isBridgeBot(userID) else { return "" }
     return MatrixIdentity.localpart(userID)
   }
 
+  /// Le nom à écrire au-dessus d'une citation — un NOM, jamais un identifiant.
+  ///
+  /// Trois sources, dans l'ordre : le message cité s'il est chargé ; à défaut le
+  /// MXID que porte le repli « > <@mxid> … », résolu contre les membres du
+  /// salon ; à défaut encore, en tête-à-tête, le titre du fil — il n'y a qu'une
+  /// personne en face. Sinon rien : la bulle citée montrera son seul texte.
+  private func quotedSenderName(
+    of quoted: ChatMessage?,
+    fallbackBody: String,
+    in model: MatrixRoomModel
+  ) -> String {
+    if let quoted {
+      if quoted.isFromMe { return "Moi" }
+      let name = displayName(of: quoted.senderID ?? "", in: model)
+      if !name.isEmpty { return name }
+    }
+    if let mxid = Self.fallbackQuotedSenderID(in: fallbackBody), !mxid.isEmpty {
+      let name = displayName(of: mxid, in: model)
+      if !name.isEmpty { return name }
+    }
+    guard !model.isGroup(selfUserID: selfUserID) else { return "" }
+    let title = model.title(selfUserID: selfUserID)
+    return title == model.roomID ? "" : title
+  }
+
   /// Quand la cible n'est pas (encore) dans le modèle, le repli de citation reste
-  /// la seule source : « > <@whatsapp_x:serveur> On se voit demain ? ».
-  public static func fallbackQuotedSender(in body: String) -> String {
+  /// la seule source : « > <@whatsapp_x:serveur> On se voit demain ? ». Il en
+  /// rend le MXID — à l'appelant de le traduire en nom, il a le salon sous la main.
+  public static func fallbackQuotedSenderID(in body: String) -> String? {
     guard let first = body.split(separator: "\n", omittingEmptySubsequences: false).first,
           first.hasPrefix("> <"),
           let open = first.firstIndex(of: "<"),
           let close = first[first.index(after: open)...].firstIndex(of: ">")
-    else { return "" }
+    else { return nil }
     let mxid = String(first[first.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
-    return MatrixIdentity.localpart(mxid)
+    return mxid.isEmpty ? nil : mxid
   }
 
   public static func fallbackQuotedText(in body: String) -> String {

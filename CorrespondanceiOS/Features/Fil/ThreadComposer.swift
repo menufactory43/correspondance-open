@@ -163,7 +163,9 @@ struct ThreadComposer: View {
     HStack(spacing: 6) {
       RoundedRectangle(cornerRadius: 1).fill(theme.accent).frame(width: 2)
       VStack(alignment: .leading, spacing: 1) {
-        Text(message.displayedSenderName ?? "Moi")
+        // Le nom, jamais l'identifiant du pont — et jamais « Moi » pour un
+        // message reçu : à défaut de nom, le titre du fil dit à qui l'on parle.
+        Text(quotedSenderName(message))
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.accent)
         Text(message.sidebarPreviewText)
@@ -183,6 +185,13 @@ struct ThreadComposer: View {
     }
     .padding(.horizontal, Spacing.xs)
     .accessibilityElement(children: .combine)
+  }
+
+  private func quotedSenderName(_ message: ChatMessage) -> String {
+    if message.isFromMe { return "Moi" }
+    return message.displayedSenderName
+      ?? store.conversation(conversationID)?.title
+      ?? "Ce message"
   }
 
   private var attachmentStrip: some View {

@@ -25,7 +25,7 @@ final class QuotedReplyTests: XCTestCase {
 
   func testFallbackSenderAndTextAreRecovered() {
     let body = "> <@whatsapp_lid-123:serveur> Message d'avant\n\nJe confirme."
-    XCTAssertEqual(MatrixSyncParser.fallbackQuotedSender(in: body), "whatsapp_lid-123")
+    XCTAssertEqual(MatrixSyncParser.fallbackQuotedSenderID(in: body), "@whatsapp_lid-123:serveur")
     XCTAssertEqual(MatrixSyncParser.fallbackQuotedText(in: body), "Message d'avant")
   }
 
@@ -61,7 +61,9 @@ final class QuotedReplyTests: XCTestCase {
     XCTAssertEqual(reply.text, "Je confirme.")
     let quote = try XCTUnwrap(reply.replyTo)
     XCTAssertEqual(quote.text, "Message d'avant")
-    XCTAssertEqual(quote.senderName, "whatsapp_lid-19876543210")
+    // Le nom, pas l'identifiant du pont : la cible est perdue, mais son auteur
+    // est un membre du salon — on sait donc le nommer.
+    XCTAssertEqual(quote.senderName, "Alice Martin")
   }
 
   func testMessagesWithoutReplyHaveNoQuote() throws {
