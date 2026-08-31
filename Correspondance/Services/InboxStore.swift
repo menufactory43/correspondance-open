@@ -1528,9 +1528,11 @@ final class InboxStore {
           // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
           // sauf ce qui attend encore de partir. Et ce qui attend part maintenant.
           await self.flushRelayWrites()
-          await self.adoptRelayState()
-          // Après le premier `/sync` seulement : avant, aucun salon n'est connu.
+          // La migration lit l'état local : elle passe AVANT que celui du Relais
+          // ne le remplace. Après le premier `/sync` seulement — avant, aucun
+          // salon n'est connu et il n'y aurait rien à migrer.
           await self.migrateStateToRelayIfNeeded()
+          await self.adoptRelayState()
           self.didSettleInitialMatrixSync = true
         } catch is CancellationError {
           return

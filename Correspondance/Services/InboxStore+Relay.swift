@@ -221,9 +221,10 @@ extension InboxStore {
     for (roomID, text) in snapshot.drafts {
       if let id = roomToConversation[roomID] { drafts[id] = text }
     }
-    // Le masquage : ce qui vient du Relais pour les salons connus, plus ce que
-    // les fils non bridgés (iMessage) avaient déjà chez nous.
-    var hidden = hiddenMessageIDs.filter { !$0.hasPrefix("$") }
+    // Le masquage s'ajoute, il ne se retire jamais : rien dans l'app ne
+    // démasque un message, et un identifiant qu'on ne sait pas rattacher à un
+    // salon (message pas encore chargé) serait perdu pour de bon.
+    var hidden = hiddenMessageIDs
     for roomID in roomToConversation.keys {
       hidden.formUnion(snapshot.hidden[roomID] ?? [])
     }
