@@ -112,6 +112,14 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("e", modifiers: [.command, .shift])
 
+      // Se laisser un mot : un salon du Relais dont on est le seul membre,
+      // donc le même fil sur le Mac et sur l'iPhone.
+      Button("Note à soi") {
+        Task { @MainActor in await store.openSelfNote() }
+      }
+      .keyboardShortcut("n", modifiers: [.command, .shift])
+      .disabled(!store.isMatrixConnected)
+
       Button(store.isShowingScheduled ? "Retour à l’inbox" : "Voir les programmés") {
         store.setShowingScheduled(!store.isShowingScheduled)
       }

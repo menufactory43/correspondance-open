@@ -18,7 +18,8 @@ extension InboxStore {
     guard let conversation = conversation(ofMessage: message) else { return false }
     switch conversation.network {
     case .iMessage: return false
-    case .signal, .whatsapp, .instagram: return isMatrixConnected
+    // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
+    case .signal, .whatsapp, .instagram, .selfNote: return isMatrixConnected
     }
   }
 

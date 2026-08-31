@@ -720,6 +720,23 @@ final class RelayStore {
     try await matrix.startConversation(network: network, identifier: identifier)
   }
 
+  // MARK: - Note à soi
+
+  /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
+  /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur le Mac.
+  func openSelfNote() async {
+    guard !isDemo, session == .connected else { return }
+    do {
+      _ = try await matrix.ensureSelfNote()
+      conversations = mergedRows(await matrix.conversations())
+      guard let id = await matrix.selfNoteConversationID() else { return }
+      selectedConversationID = id
+      await open(conversationID: id)
+    } catch {
+      syncError = Self.readable(error)
+    }
+  }
+
   // MARK: - Focus
 
   /// La conversation que Focus doit montrer : celle qu'on suivait si elle est

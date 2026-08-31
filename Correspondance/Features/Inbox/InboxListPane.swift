@@ -348,7 +348,7 @@ struct InboxListPane: View {
 
     Divider()
 
-    if conversation.network.isMatrixBridged {
+    if conversation.network.livesOnRelay {
       Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
         if conversation.hasUnread {
           Task { await store.select(conversation.id) }

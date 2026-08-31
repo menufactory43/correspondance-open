@@ -259,3 +259,52 @@ final class GIFAttachmentTests: XCTestCase {
     XCTAssertTrue(piece.isGIF)
   }
 }
+
+/// La note à soi : un salon du Relais dont je suis le seul membre. Aucun
+/// réseau derrière — mais bien un fil, et le même sur les deux appareils.
+final class SelfNoteTests: XCTestCase {
+  func testLaNoteASoiNaPasDePontMaisVitSurLeRelais() {
+    XCTAssertFalse(MessageNetwork.selfNote.isMatrixBridged)
+    XCTAssertTrue(MessageNetwork.selfNote.livesOnRelay)
+    XCTAssertNil(MessageNetwork.selfNote.bridge)
+    XCTAssertFalse(MessageNetwork.matrixBridged.contains(.selfNote))
+    XCTAssertEqual(MessageNetwork.selfNote.labelFR, "Note à soi")
+  }
+
+  func testLeSalonDeLaNoteASoiSeDesigneParLAccountData() throws {
+    let json = """
+    {"next_batch":"s1","account_data":{"events":[
+      {"type":"fr.correspondance.self_note","content":{"room_id":"!note:relais"}}
+    ]}}
+    """
+    var instantane = ConversationStateSnapshot()
+    instantane.apply(try JSONDecoder().decode(MatrixSyncResponse.self, from: Data(json.utf8)))
+    XCTAssertEqual(instantane.selfNoteRoomID, "!note:relais")
+    XCTAssertEqual(
+      ConversationStateCodec.selfNoteContent(roomID: "!note:relais").string(at: "room_id"),
+      "!note:relais"
+    )
+  }
+
+  func testUnSalonSansPontNeDevientJamaisUneConversationParAccident() {
+    var model = MatrixRoomModel(roomID: "!note:relais")
+    model.members["@meffysto:relais"] = .init(displayName: "Moi", membership: "join")
+    // Sans `m.bridge`, il n'y a pas de conversation : c'est l'account data qui
+    // désigne la note à soi, jamais une déduction.
+    XCTAssertNil(model.conversation(selfUserID: "@meffysto:relais"))
+
+    let note = model.selfNoteConversation(selfUserID: "@meffysto:relais")
+    XCTAssertEqual(note.network, .selfNote)
+    XCTAssertEqual(note.id, "selfNote:!note:relais")
+    XCTAssertEqual(note.transportKey, "!note:relais")
+    XCTAssertFalse(note.isGroup)
+    XCTAssertEqual(note.title, "Note à soi")
+  }
+
+  func testLeSalonDeLaNoteSeRetrouveDepuisSonIdentifiantDeFil() {
+    XCTAssertEqual(
+      MatrixSyncParser.roomID(inConversationID: "selfNote:!note:relais"),
+      "!note:relais"
+    )
+  }
+}

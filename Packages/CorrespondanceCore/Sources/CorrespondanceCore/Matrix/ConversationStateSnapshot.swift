@@ -19,6 +19,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
   public var reminders: [String: ConversationReminder]
   /// Demandes tranchées : un salon absent d'ici attend encore une décision.
   public var requests: [String: ConversationRequest.Decision]
+  /// Le salon de la note à soi, s'il en existe un. Un seul par compte.
+  public var selfNoteRoomID: String?
   /// Fusions de contacts — un seul objet global, tel que `MergedContactStore` l'écrit.
   public var mergedContacts: MergedContactStore.Stored?
 
@@ -30,6 +32,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     hidden: [String: Set<String>] = [:],
     reminders: [String: ConversationReminder] = [:],
     requests: [String: ConversationRequest.Decision] = [:],
+    selfNoteRoomID: String? = nil,
     mergedContacts: MergedContactStore.Stored? = nil
   ) {
     self.archived = archived
@@ -39,13 +42,14 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     self.hidden = hidden
     self.reminders = reminders
     self.requests = requests
+    self.selfNoteRoomID = selfNoteRoomID
     self.mergedContacts = mergedContacts
   }
 
   public var isEmpty: Bool {
     archived.isEmpty && pinned.isEmpty && muted.isEmpty
       && drafts.isEmpty && hidden.isEmpty && reminders.isEmpty && requests.isEmpty
-      && mergedContacts == nil
+      && selfNoteRoomID == nil && mergedContacts == nil
   }
 
   /// Fusionne un payload `/sync`. Chaque event reçu **remplace** ce qu'il décrit :
@@ -81,6 +85,8 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     switch event.type {
     case ConversationStateKeys.pushRulesType:
       muted = Self.mutedRoomIDs(inPushRules: content)
+    case ConversationStateKeys.selfNoteType:
+      selfNoteRoomID = content.string(at: "room_id")
     case ConversationStateKeys.mergedContactsType:
       mergedContacts = ConversationStateCodec.mergedContacts(in: content)
     default:
@@ -172,6 +178,11 @@ public enum ConversationStateCodec {
       wakeAt: Date(timeIntervalSince1970: wake / 1000),
       setAt: Date(timeIntervalSince1970: set / 1000)
     )
+  }
+
+  /// `fr.correspondance.self_note` → `{ "room_id": "!x:serveur" }`.
+  public static func selfNoteContent(roomID: String) -> MatrixJSON {
+    .object(["room_id": .string(roomID)])
   }
 
   /// `fr.correspondance.request` → `{ "decision": "accepted" | "declined" }`.

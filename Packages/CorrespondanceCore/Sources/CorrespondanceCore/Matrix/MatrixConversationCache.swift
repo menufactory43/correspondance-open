@@ -113,7 +113,7 @@ public enum MatrixConversationCache {
   }
 
   public static func save(nextBatch: String?, conversations: [Conversation], messages: [String: [ChatMessage]]) {
-    let bridged = conversations.filter { $0.network.isMatrixBridged }
+    let bridged = conversations.filter { $0.network.livesOnRelay }
     let keep = Set(bridged.map(\.id))
     let snap = Snapshot(
       nextBatch: nextBatch,

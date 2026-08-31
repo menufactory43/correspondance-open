@@ -401,7 +401,7 @@ final class InboxStore {
     defer { isRefreshingFacetIndex = false }
 
     var index = facetMessages
-    for conversation in conversations where conversation.network.isMatrixBridged {
+    for conversation in conversations where conversation.network.livesOnRelay {
       let list = await matrix.messages(conversationID: conversation.id)
       if !list.isEmpty { index[conversation.id] = list }
     }
@@ -965,7 +965,7 @@ final class InboxStore {
   func votePoll(messageID: String, answerID: String) async {
     guard let message = messages.first(where: { $0.id == messageID }),
           let conversation = conversation(ofMessage: message),
-          conversation.network.isMatrixBridged, isMatrixConnected
+          conversation.network.livesOnRelay, isMatrixConnected
     else { return }
     do {
       try await matrix.votePoll(
@@ -974,6 +974,26 @@ final class InboxStore {
         answerID: answerID
       )
       await loadMessagesForSelection()
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
+  }
+
+  /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
+  /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
+  func openSelfNote() async {
+    guard isMatrixConnected else {
+      lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      return
+    }
+    do {
+      _ = try await matrix.ensureSelfNote()
+      var fresh = await matrix.conversations()
+      await ContactDirectory.shared.enrichBridgedTitles(&fresh)
+      mergeMatrixConversations(fresh)
+      guard let id = await matrix.selfNoteConversationID() else { return }
+      isShowingArchived = false
+      await select(id)
     } catch {
       lastErrorMessage = error.localizedDescription
     }
@@ -992,7 +1012,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -1463,7 +1483,7 @@ final class InboxStore {
     stopBridgeLoginPolling()
     await matrix.disconnect()
     isMatrixConnected = false
-    conversations.removeAll { $0.network.isMatrixBridged }
+    conversations.removeAll { $0.network.livesOnRelay }
     if let id = selectedConversationID, !conversations.contains(where: { $0.id == id }) {
       await select(activeQueue.first?.id)
     }
@@ -1836,7 +1856,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -2182,7 +2202,7 @@ final class InboxStore {
     if conversation.network == .iMessage, !attachments.isEmpty {
       return "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
     }
-    if conversation.network.isMatrixBridged, !isMatrixConnected {
+    if conversation.network.livesOnRelay, !isMatrixConnected {
       return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
     }
     return nil
@@ -2244,7 +2264,7 @@ final class InboxStore {
           try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
         }
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -2498,7 +2518,7 @@ final class InboxStore {
     // Un salon quitté côté réseau distant disparaît de l'inbox.
     let live = Set(incomingList.map(\.id))
     for (id, conversation) in byID
-    where conversation.network.isMatrixBridged && !live.contains(id)
+    where conversation.network.livesOnRelay && !live.contains(id)
       && !MergedContact.isMergedID(id)
     {
       byID.removeValue(forKey: id)
@@ -2526,7 +2546,7 @@ final class InboxStore {
     // et on le recoud au reste. Repasser par le chargement complet du fil
     // recopierait `chat.db` à chaque `/sync` — la boucle live s'en garde.
     if isMerged(id) {
-      let bridged = memberConversations(of: id).filter { $0.network.isMatrixBridged }
+      let bridged = memberConversations(of: id).filter { $0.network.livesOnRelay }
       guard !bridged.isEmpty else { return }
       let bridgedIDs = Set(bridged.map(\.id))
       var refreshed: [ChatMessage] = []
@@ -2542,7 +2562,7 @@ final class InboxStore {
       if isAttended(id) { clearUnread(for: id) }
       return
     }
-    guard conversation.network.isMatrixBridged else { return }
+    guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
     session.messages = await matrix.ensureLocalAttachments(fetched)
@@ -2644,7 +2664,7 @@ final class InboxStore {
     // en entier : sans ça, les fils bridgés disparaîtraient de la liste jusqu'au
     // `/sync` suivant, et la sélection sauterait sur un fil iMessage entre-temps.
     merged.append(contentsOf: conversations.filter {
-      $0.network.isMatrixBridged && !MergedContact.isMergedID($0.id)
+      $0.network.livesOnRelay && !MergedContact.isMergedID($0.id)
     })
 
     preserveComposing(into: &merged)
@@ -2794,7 +2814,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .selfNote:
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {
         // Fil jamais ouvert, ou connu seulement par la fenêtre du sync initial :

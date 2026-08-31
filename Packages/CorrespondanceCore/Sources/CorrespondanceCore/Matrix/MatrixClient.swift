@@ -172,6 +172,22 @@ public actor MatrixClient {
     return roomID
   }
 
+  /// Un salon privé dont je suis le seul membre — la note à soi. Aucune
+  /// invitation : personne d'autre n'y entre, et rien n'est chiffré (le
+  /// Relais est privé, cf. ADR 0001).
+  public func createSelfRoom(name: String) async throws -> String {
+    let body: MatrixJSON = .object([
+      "preset": .string("private_chat"),
+      "name": .string(name),
+      "visibility": .string("private"),
+    ])
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
+    guard let roomID = json.string(at: "room_id") else {
+      throw MatrixError.decoding("createRoom sans room_id")
+    }
+    return roomID
+  }
+
   // MARK: - Envoi
 
   /// `txnId` idempotent : deux appels avec le même identifiant n'envoient qu'un message.

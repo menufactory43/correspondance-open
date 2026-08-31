@@ -230,9 +230,37 @@ public actor MatrixBridgeService {
   }
 
   public func conversations() -> [Conversation] {
-    rooms.values
+    var list = rooms.values
       .compactMap { $0.conversation(selfUserID: selfUserID) }
-      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+    // La note à soi n'a pas de pont : c'est l'account data qui la désigne.
+    if let roomID = relayState.selfNoteRoomID, let model = rooms[roomID] {
+      list.append(model.selfNoteConversation(selfUserID: selfUserID))
+    }
+    return list.sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  /// Le salon de la note à soi, en le créant s'il n'existe pas encore.
+  ///
+  /// Un salon privé dont je suis le seul membre, désigné une fois pour toutes
+  /// par l'account data global : le Mac et l'iPhone tombent donc sur le même,
+  /// et personne n'en crée un second.
+  @discardableResult
+  public func ensureSelfNote() async throws -> String {
+    if let existing = relayState.selfNoteRoomID { return existing }
+    let roomID = try await client.createSelfRoom(name: MessageNetwork.selfNote.labelFR)
+    try await client.setAccountData(
+      type: ConversationStateKeys.selfNoteType,
+      content: ConversationStateCodec.selfNoteContent(roomID: roomID)
+    )
+    relayState.selfNoteRoomID = roomID
+    if rooms[roomID] == nil { rooms[roomID] = MatrixRoomModel(roomID: roomID) }
+    return roomID
+  }
+
+  /// L'identifiant du fil de la note à soi, s'il existe déjà.
+  public func selfNoteConversationID() -> String? {
+    guard let roomID = relayState.selfNoteRoomID else { return nil }
+    return "\(MessageNetwork.selfNote.rawValue):\(roomID)"
   }
 
   public struct Member: Sendable, Hashable {

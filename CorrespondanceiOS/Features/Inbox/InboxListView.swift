@@ -258,6 +258,11 @@ struct InboxListView: View {
         )
       }
       Button {
+        Task { await store.openSelfNote() }
+      } label: {
+        Label(MessageNetwork.selfNote.labelFR, systemImage: MessageNetwork.selfNote.systemImage)
+      }
+      Button {
         isShowingSettings = true
       } label: {
         Label("Réglages", systemImage: "gearshape")

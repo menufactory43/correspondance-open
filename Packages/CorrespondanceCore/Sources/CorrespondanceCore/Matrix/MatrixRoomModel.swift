@@ -201,6 +201,33 @@ public struct MatrixRoomModel: Sendable {
       .sorted { $0.sentAt < $1.sentAt }
   }
 
+  /// La note à soi : un salon sans pont dont je suis le seul habitant.
+  ///
+  /// La reconnaissance ne se devine pas — c'est l'account data global
+  /// `fr.correspondance.self_note` qui désigne le salon, et l'appelant qui le
+  /// passe ici. Un salon vide ou un salon de gestion abandonné ne deviendra
+  /// jamais une note à soi par accident.
+  public func selfNoteConversation(selfUserID: String) -> Conversation {
+    let last = sortedMessages.last
+    var conversation = Conversation(
+      id: "\(MessageNetwork.selfNote.rawValue):\(roomID)",
+      network: .selfNote,
+      address: roomID,
+      title: explicitName?.isEmpty == false ? explicitName! : MessageNetwork.selfNote.labelFR,
+      preview: last?.sidebarPreviewText ?? "Se laisser un mot…",
+      lastMessageAt: last?.sentAt ?? lastEventAt,
+      unreadCount: 0,
+      isArchived: false,
+      transportKey: roomID,
+      isGroup: false
+    )
+    conversation.lastMessageIsFromMe = true
+    if conversation.lastMessageAt == .distantPast {
+      conversation.lastMessageAt = Date(timeIntervalSince1970: 0)
+    }
+    return conversation
+  }
+
   /// `nil` tant que le salon n'est pas un portail de bridge reconnu (salon de gestion, espace…).
   public func conversation(selfUserID: String) -> Conversation? {
     guard let network else { return nil }
