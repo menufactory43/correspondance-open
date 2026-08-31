@@ -88,4 +88,9 @@ final class VoiceNoteTests: XCTestCase {
     XCTAssertEqual(VoiceRecorder.normalized(decibels: -160), 0)
     XCTAssertEqual(VoiceRecorder.normalized(decibels: .infinity), 0)
   }
+
+  func testLeVocalPartAvecUnTypeAudio() {
+    XCTAssertEqual(MatrixClient.mimeType(for: URL(fileURLWithPath: "/tmp/x.m4a")), "audio/mp4")
+    XCTAssertEqual(MatrixClient.mimeType(for: URL(fileURLWithPath: "/tmp/x.ogg")), "audio/ogg")
+  }
 }

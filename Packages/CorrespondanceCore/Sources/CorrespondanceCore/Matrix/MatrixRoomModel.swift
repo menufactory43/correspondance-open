@@ -42,10 +42,14 @@ public struct MatrixRoomModel: Sendable {
   public struct PendingEdit: Sendable, Hashable {
     public var text: String
     public var at: Date
+    /// Qui corrige : à la naissance de la cible, seule une correction de son
+    /// auteur s'applique — comme quand la cible est déjà là.
+    public var sender: String?
 
-    public init(text: String, at: Date) {
+    public init(text: String, at: Date, sender: String? = nil) {
       self.text = text
       self.at = at
+      self.sender = sender
     }
   }
 
