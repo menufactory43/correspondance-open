@@ -35,6 +35,16 @@ bridge:
     'correspondance.local': user
     '__MATRIX_ADMIN__': admin
 
+# Mode relais : ce qu'un utilisateur du Relais non connecté au réseau — l'agent
+# « cc » — dit dans un portail part via MON compte, préfixé de son nom. Rien ne
+# se relaie tout seul : il faut, par room, `!meta set-relay` (admin).
+  relay:
+    enabled: true
+    admin_only: true
+    message_formats:
+      m.text: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+      m.notice: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+
 # Historique initial : sans ça les salons arrivent vides côté Correspondance.
 # `thread_backfill.batch_count` vaut 0 par défaut sur Instagram — il faut le demander.
 backfill:
