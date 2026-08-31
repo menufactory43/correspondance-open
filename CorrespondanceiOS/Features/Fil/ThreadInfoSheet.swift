@@ -22,6 +22,10 @@ struct ThreadInfoSheet: View {
   @State private var newMember = ""
   @State private var inviteError: String?
   @State private var inviteSent = false
+  @State private var isRenaming = false
+  @State private var newName = ""
+  /// Le membre qu'on s'apprête à retirer : la question se pose une fois.
+  @State private var pendingRemoval: RelayStore.ThreadMember?
   @State private var members: [RelayStore.ThreadMember] = []
   /// Vrai quand le fil peut accueillir « cc » — pas encore membre.
   @State private var agentInvitable = false
@@ -31,12 +35,9 @@ struct ThreadInfoSheet: View {
   private var conversation: Conversation? { store.conversation(conversationID) }
   private var media: [MessageAttachment] { store.media(conversationID) }
 
-  /// Ajouter quelqu'un passe par le ghost de son numéro ou de son pseudo :
-  /// WhatsApp et Instagram savent le faire, Signal non (ses ghosts sont des UUID).
-  private var canAddMember: Bool {
-    guard let conversation, conversation.isGroup else { return false }
-    return store.isDemo || conversation.network == .whatsapp || conversation.network == .instagram
-  }
+  /// Ajouter quelqu'un passe par le ghost de son numéro ou de son pseudo.
+  /// La table des capacités tranche — plus aucune liste de réseaux en dur.
+  private var canAddMember: Bool { store.canInviteMember(conversationID) }
 
   var body: some View {
     NavigationStack {
@@ -83,6 +84,27 @@ struct ThreadInfoSheet: View {
       Text(conversation?.network == .instagram
         ? "Son pseudo Instagram, ou son identifiant."
         : "Son numéro, avec l'indicatif du pays.")
+    }
+    .alert("Renommer le groupe", isPresented: $isRenaming) {
+      TextField("Nom du groupe", text: $newName)
+      Button("Renommer") { rename() }
+      Button("Annuler", role: .cancel) { newName = "" }
+    } message: {
+      Text("Le nouveau nom part sur \(conversation?.network.labelFR ?? "le réseau") : tout le groupe le verra.")
+    }
+    .confirmationDialog(
+      pendingRemoval.map { "Retirer \($0.name) du groupe ?" } ?? "",
+      isPresented: Binding(
+        get: { pendingRemoval != nil },
+        set: { if !$0 { pendingRemoval = nil } }
+      ),
+      titleVisibility: .visible,
+      presenting: pendingRemoval
+    ) { member in
+      Button("Retirer", role: .destructive) { remove(member) }
+      Button("Annuler", role: .cancel) { pendingRemoval = nil }
+    } message: { _ in
+      Text("Le retrait part sur le réseau : cette personne ne recevra plus les messages du groupe.")
     }
     .alert("Impossible d'ajouter ce membre", isPresented: Binding(
       get: { inviteError != nil },
@@ -147,6 +169,14 @@ struct ThreadInfoSheet: View {
             store.isMuted(conversationID) ? "Réactiver les notifications" : "Mettre en muet",
             systemImage: store.isMuted(conversationID) ? "bell" : "bell.slash"
           )
+        }
+        if store.canRenameGroup(conversationID) {
+          Button {
+            newName = conversation.title
+            isRenaming = true
+          } label: {
+            Label("Renommer le groupe…", systemImage: "pencil")
+          }
         }
         if !conversation.isGroup, !conversation.address.isEmpty {
           Button {
@@ -309,6 +339,15 @@ struct ThreadInfoSheet: View {
         }
         ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
           memberRow(name: member.name, detail: nil, avatarUserID: member.userID)
+            .contextMenu {
+              if store.canRemoveMember(conversationID) {
+                Button(role: .destructive) {
+                  pendingRemoval = member
+                } label: {
+                  Label("Retirer du groupe…", systemImage: "person.badge.minus")
+                }
+              }
+            }
           if index < members.count - 1 { rowDivider }
         }
       }
@@ -360,7 +399,38 @@ struct ThreadInfoSheet: View {
   }
 
   private var addMemberPrompt: String {
-    conversation?.network == .instagram ? "pseudo" : "+33 6 12 34 56 78"
+    switch conversation?.network {
+    case .instagram: "pseudo"
+    case .signal: "identifiant Signal"
+    default: "+33 6 12 34 56 78"
+    }
+  }
+
+  private func rename() {
+    let value = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+    newName = ""
+    guard !value.isEmpty else { return }
+    let fil = conversationID
+    Task { @MainActor in
+      do {
+        try await store.renameGroup(value, conversationID: fil)
+      } catch {
+        inviteError = RelayStore.readable(error)
+      }
+    }
+  }
+
+  private func remove(_ member: RelayStore.ThreadMember) {
+    pendingRemoval = nil
+    let fil = conversationID
+    Task { @MainActor in
+      do {
+        try await store.removeMember(member.userID, conversationID: fil)
+        members = await store.members(fil)
+      } catch {
+        inviteError = RelayStore.readable(error)
+      }
+    }
   }
 
   private func invite() {

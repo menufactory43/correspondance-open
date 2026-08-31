@@ -99,6 +99,9 @@ struct ThreadView: View {
               canInviteAgent = false
               Task { await store.inviteAgent() }
             } : nil,
+            onManageGroup: store.selectedConversationID.flatMap { id in
+              store.canManageGroup(id) ? { store.presentGroupSheet(id) } : nil
+            },
             voiceConversationID: store.canRecordVoice(in: store.selectedConversationID)
               ? store.selectedConversationID
               : nil,

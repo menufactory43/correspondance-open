@@ -1144,6 +1144,41 @@ final class RelayStore {
     try await matrix.inviteMember(conversationID: conversationID, identifier: identifier)
   }
 
+  /// Renomme le groupe. Le nouveau nom part sur le réseau là où le pont le
+  /// relaie — c'est `NetworkCapabilities` qui décide si le geste est offert.
+  func renameGroup(_ name: String, conversationID: String) async throws {
+    guard !isDemo else { return }
+    try await matrix.renameGroup(conversationID: conversationID, name: name)
+    await reloadFromRelay()
+  }
+
+  /// Retire quelqu'un du groupe. Le pont relaie le `kick` comme un retrait.
+  func removeMember(_ userID: String, conversationID: String) async throws {
+    guard !isDemo else { return }
+    try await matrix.removeMember(conversationID: conversationID, userID: userID)
+  }
+
+  /// Les trois gestes de groupe, chacun masqué là où le pont ne le porte pas.
+  func canRenameGroup(_ conversationID: String) -> Bool {
+    groupCapability(conversationID) { $0.renamesGroup }
+  }
+
+  func canRemoveMember(_ conversationID: String) -> Bool {
+    groupCapability(conversationID) { $0.removesMember }
+  }
+
+  func canInviteMember(_ conversationID: String) -> Bool {
+    isDemo || groupCapability(conversationID) { $0.addsMember }
+  }
+
+  private func groupCapability(
+    _ conversationID: String,
+    _ keyPath: (NetworkCapabilities) -> Bool
+  ) -> Bool {
+    guard let conversation = conversation(conversationID), conversation.isGroup else { return false }
+    return keyPath(conversation.network.capabilities)
+  }
+
   /// Les photos et vidéos du fil, la plus récente d'abord — celles qu'on a
   /// déjà sur l'appareil, ou qu'on sait retrouver dans le cache.
   func media(_ conversationID: String) -> [MessageAttachment] {

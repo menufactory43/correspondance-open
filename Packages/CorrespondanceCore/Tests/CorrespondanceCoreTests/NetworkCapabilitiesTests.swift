@@ -48,11 +48,14 @@ final class NetworkCapabilitiesTests: XCTestCase {
     XCTAssertFalse(MessageNetwork.iMessage.supportsVoiceMessages)
   }
 
-  /// Aucun pont n'expose la création de portail depuis Matrix : la table le dit
-  /// pour que personne ne dessine l'écran avant que ce soit vrai.
-  func testAucunReseauNeCreeDeGroupeDepuisLApp() {
-    for network in MessageNetwork.allCases {
-      XCTAssertFalse(network.capabilities.createsGroup, "\(network.labelFR)")
-    }
+  /// Créer un groupe passe par `create-group` (bridgev2) : WhatsApp et Signal
+  /// l'implémentent, mautrix-meta ne l'annonce que pour des groupes NON
+  /// chiffrés — non vérifié, donc non proposé.
+  func testSeulsWhatsAppEtSignalCreentUnGroupe() {
+    XCTAssertTrue(MessageNetwork.whatsapp.capabilities.createsGroup)
+    XCTAssertTrue(MessageNetwork.signal.capabilities.createsGroup)
+    XCTAssertFalse(MessageNetwork.instagram.capabilities.createsGroup)
+    XCTAssertFalse(MessageNetwork.iMessage.capabilities.createsGroup)
+    XCTAssertFalse(MessageNetwork.selfNote.capabilities.createsGroup)
   }
 }

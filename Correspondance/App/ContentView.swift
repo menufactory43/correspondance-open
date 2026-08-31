@@ -70,6 +70,11 @@ struct ContentView: View {
     }
     .onChange(of: store.mode) { _, _ in syncColumns(animated: true) }
     .onChange(of: store.selectedConversationID) { _, _ in store.resetFocusChrome() }
+    .sheet(isPresented: Bindable(store).isPresentingNewGroup) {
+      NewGroupSheet()
+        .environment(store)
+        .environment(themes)
+    }
     .sheet(isPresented: Bindable(store).isPresentingNewConversation) {
       NewConversationSheet()
         .environment(store)

@@ -366,16 +366,12 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
-    do {
-      try await client.invite(roomID: roomID, userID: agentUserID)
-    } catch MatrixError.http(403, _, _) {
-      // Le pont ne m'a pas donné le droit d'inviter dans ce portail. Mon
-      // compte administre le Relais : je me donne le pouvoir dans le salon
-      // (l'API s'appuie sur le bot de pont, déjà au pouvoir), puis je réessaie.
-      // On n'ajoute personne au groupe réel — cc est un utilisateur Matrix,
-      // les ponts ne relaient pas les adhésions.
-      try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
-      try await client.invite(roomID: roomID, userID: agentUserID)
+    // Le pont ne m'a pas toujours donné le droit d'inviter dans ce portail :
+    // `withRoomPower` se hisse et réessaie. On n'ajoute personne au groupe
+    // réel — cc est un utilisateur Matrix, les ponts ne relaient pas les
+    // adhésions de gens qui n'ont pas de compte sur le réseau.
+    try await withRoomPower(roomID: roomID) {
+      try await self.client.invite(roomID: roomID, userID: self.agentUserID)
     }
   }
 
@@ -1116,6 +1112,23 @@ public actor MatrixBridgeService {
           let network = rooms[roomID]?.network,
           let bridge = network.bridge
     else { throw MatrixError.decoding("fil sans pont : impossible d'y ajouter quelqu'un") }
+    let ghost = try await ghostUserID(for: identifier, network: network, bridge: bridge)
+    try await withRoomPower(roomID: roomID) {
+      try await self.client.invite(roomID: roomID, userID: ghost)
+    }
+  }
+
+  /// Le MXID du fantôme d'un correspondant, à partir de ce qu'on tape.
+  ///
+  /// WhatsApp prend un numéro, Instagram un pseudo (résolu en identifiant Meta)
+  /// ou l'identifiant lui-même. Signal n'identifie ses fantômes que par UUID :
+  /// on ne sait pas les deviner d'un numéro, et on le dit plutôt que d'inviter
+  /// dans le vide.
+  private func ghostUserID(
+    for identifier: String,
+    network: MessageNetwork,
+    bridge: MatrixBridgeDescriptor
+  ) async throws -> String {
     let serverName = String(selfUserID.split(separator: ":").last ?? "")
     let localpart: String
     switch network {
@@ -1131,10 +1144,162 @@ public actor MatrixBridgeService {
         ? trimmed
         : try await resolveMetaID(username: trimmed, network: network)
       localpart = bridge.ghostPrefix + metaID
+    case .signal:
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard trimmed.contains("-"), trimmed.count >= 32 else {
+        throw MatrixError.decoding(
+          "Signal identifie ses correspondants par UUID, pas par numéro : ouvre d'abord un fil avec la personne."
+        )
+      }
+      localpart = bridge.ghostPrefix + trimmed.lowercased()
     default:
-      throw MatrixError.decoding("ajouter par numéro n'est pas possible sur \(network.labelFR)")
+      throw MatrixError.decoding("ajouter quelqu'un n'est pas possible sur \(network.labelFR)")
     }
-    try await client.invite(roomID: roomID, userID: "@\(localpart):\(serverName)")
+    return "@\(localpart):\(serverName)"
+  }
+
+  // MARK: - Créer un groupe
+
+  /// Crée un groupe sur le réseau, depuis l'app.
+  ///
+  /// Le chemin est celui de bridgev2, et il n'y en a pas d'autre : on monte un
+  /// salon Matrix nommé, on y invite le bot du pont **et** les fantômes des
+  /// participants, puis on lui envoie `create-group`. Le pont lit alors le nom
+  /// et les membres du salon, crée le groupe distant, et adopte le salon comme
+  /// portail. C'est pour cela que le nom se pose à la création du salon et non
+  /// après : la commande le lit, elle ne l'attend pas.
+  ///
+  /// Deux ponts seulement le savent faire (`NetworkCapabilities.createsGroup`) :
+  /// mautrix-whatsapp depuis v0.12.5, mautrix-signal depuis v0.8.7. Un pont plus
+  /// ancien répondra « unknown command » — on le dit, et on jette le salon
+  /// plutôt que de laisser un salon orphelin dans la liste.
+  public func createGroup(
+    network: MessageNetwork,
+    name: String,
+    identifiers: [String]
+  ) async throws -> String {
+    guard network.capabilities.createsGroup, let bridge = network.bridge else {
+      throw MatrixError.decoding("\(network.labelFR) ne sait pas créer un groupe depuis l'app")
+    }
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw MatrixError.decoding("un groupe a besoin d'un nom") }
+    // Signal borne le nom à 32 signes ; refuser ici évite un aller-retour et un
+    // salon à jeter.
+    guard network != .signal || trimmed.count <= 32 else {
+      throw MatrixError.decoding("un groupe Signal ne prend pas plus de 32 caractères")
+    }
+    guard !identifiers.isEmpty else { throw MatrixError.decoding("un groupe a besoin de quelqu'un") }
+
+    var ghosts: [String] = []
+    for identifier in identifiers {
+      ghosts.append(try await ghostUserID(for: identifier, network: network, bridge: bridge))
+    }
+    let serverName = String(selfUserID.split(separator: ":").last ?? "")
+    let botID = bridge.botUserID(serverName: serverName)
+    let roomID = try await client.createGroupRoom(name: trimmed, invite: [botID] + ghosts)
+
+    do {
+      try await waitForBotToJoin(roomID: roomID, network: network)
+      let commandEventID = try await client.sendText(
+        roomID: roomID,
+        body: "\(bridge.commandPrefix) create-group",
+        transactionID: UUID().uuidString
+      )
+      try await waitForPortal(roomID: roomID, network: network, after: commandEventID)
+    } catch {
+      // Un salon qui n'est devenu le portail de rien n'a aucune raison de
+      // rester : il paraîtrait dans la liste comme un groupe fantôme.
+      try? await client.leave(roomID: roomID)
+      rooms.removeValue(forKey: roomID)
+      throw error
+    }
+    return "\(network.rawValue):\(roomID)"
+  }
+
+  /// Attend que le pont ait adopté le salon (`m.bridge` posé). S'il répond une
+  /// erreur à la place, c'est elle qu'on rapporte — pas un délai qui expire.
+  private func waitForPortal(roomID: String, network: MessageNetwork, after commandEventID: String?) async throws {
+    for _ in 0..<20 {
+      try? await Task.sleep(for: .seconds(1))
+      if (try? await client.roomState(roomID: roomID, type: "m.bridge")) != nil { return }
+      let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 10)
+      for event in response.chunk {
+        if let commandEventID, event.eventID == commandEventID { break }
+        guard event.type == "m.room.message",
+              let sender = event.sender,
+              MatrixIdentity.network(ofBot: sender) == network,
+              let body = event.content?.string(at: "body"),
+              Self.isBotFailure(body)
+        else { continue }
+        throw MatrixError.decoding("\(network.labelFR) : \(body)")
+      }
+    }
+    throw MatrixError.decoding("\(network.labelFR) n'a pas créé le groupe — le pont est peut-être trop ancien.")
+  }
+
+  /// Le bot annonce ses refus en clair. On ne cherche pas à tout comprendre :
+  /// on reconnaît qu'il s'agit d'un refus, et on rend SA phrase.
+  static func isBotFailure(_ body: String) -> Bool {
+    let folded = body.lowercased()
+    return folded.contains("unknown command")
+      || folded.contains("failed")
+      || folded.contains("error")
+      || folded.contains("you must")
+      || folded.contains("not logged in")
+  }
+
+  /// Renomme un groupe. Le `m.room.name` part sur le Relais ; les ponts qui
+  /// savent le faire (WhatsApp, Signal) poussent le nom jusqu'au réseau — c'est
+  /// `NetworkCapabilities` qui décide si le geste est seulement proposé.
+  public func renameGroup(conversationID: String, name: String) async throws {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw MatrixError.decoding("un groupe ne se nomme pas avec du blanc") }
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    // Un salon sans réseau est la note à soi : un salon à nous, qu'on nomme
+    // comme on veut.
+    let network = rooms[roomID]?.network ?? .selfNote
+    guard network.supportsGroupRename else {
+      throw MatrixError.decoding("\(network.labelFR) ne relaie pas le nom d'un groupe")
+    }
+    try await withRoomPower(roomID: roomID) {
+      try await self.client.setRoomName(roomID: roomID, name: trimmed)
+    }
+  }
+
+  /// Retire quelqu'un d'un groupe. Le `kick` part sur le portail, le pont le
+  /// relaie comme un retrait sur le réseau.
+  public func removeMember(conversationID: String, userID: String) async throws {
+    guard let roomID = roomID(forConversation: conversationID),
+          let network = rooms[roomID]?.network
+    else { throw MatrixError.decoding("salon introuvable pour \(conversationID)") }
+    guard network.supportsMemberRemoval else {
+      throw MatrixError.decoding("\(network.labelFR) ne relaie pas le retrait d'un membre")
+    }
+    guard userID != selfUserID else {
+      throw MatrixError.decoding("pour sortir soi-même d'un groupe, il faut le quitter")
+    }
+    try await withRoomPower(roomID: roomID) {
+      try await self.client.kick(roomID: roomID, userID: userID)
+    }
+  }
+
+  /// Fait un geste qui demande du pouvoir dans le salon, et le refait une fois
+  /// après s'être donné ce pouvoir.
+  ///
+  /// Un portail de pont ne m'accorde parfois rien : le bot y est seul au
+  /// pouvoir. Mon compte administre le Relais, donc je peux me hisser (l'API
+  /// Synapse s'appuie sur le bot, déjà admin) puis recommencer. C'est le même
+  /// chemin que l'invitation de « cc » — extrait ici, parce que trois gestes
+  /// s'y heurtent désormais.
+  private func withRoomPower(roomID: String, _ action: () async throws -> Void) async throws {
+    do {
+      try await action()
+    } catch MatrixError.http(403, _, _) {
+      try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      try await action()
+    }
   }
 
   /// `search <pseudo>` puis lecture de la réponse du bot pour en tirer l'ID numérique.

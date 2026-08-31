@@ -117,6 +117,9 @@ final class InboxStore {
   private(set) var messagesAutomationHealth: IMessageAutomationHealth = .unknown
   var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
+  /// La feuille « Nouveau groupe ». Séparée de la précédente : créer un groupe
+  /// n'est pas ouvrir une conversation, et deux ponts seulement le savent faire.
+  var isPresentingNewGroup = false
   /// Matrix joignable et session valide — conditionne les réseaux bridgés dans l'UI.
   var isMatrixConnected = false
   /// Réseau dont la feuille de connexion est ouverte — `nil` = aucune feuille.
@@ -2322,6 +2325,9 @@ final class InboxStore {
 
   /// La question posée avant le balayage. `nil` = rien à demander.
   var archiveAllReadPrompt: String?
+
+  /// Le fil dont la fiche de groupe est ouverte (cf. `InboxStore+Group`).
+  var groupSheetID: String?
 
   /// Ouvre la confirmation. Un balayage qui range quarante fils d'un coup se
   /// demande une fois, avec son compte : c'est le compte qui fait décider.

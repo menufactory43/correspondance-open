@@ -12,6 +12,9 @@ struct ComposerBar: View {
   var onAttach: () -> Void
   var onSendLater: () -> Void = {}
   var onInviteAgent: (() -> Void)?
+  /// « Gérer le groupe… » — nommer, ajouter, retirer. `nil` quand le fil n'est
+  /// pas un groupe, ou qu'aucun de ces gestes n'est relayé par son pont.
+  var onManageGroup: (() -> Void)?
   /// Le fil qui portera le vocal. `nil` = le réseau ne les porte pas, et le
   /// micro n'a rien à faire là.
   var voiceConversationID: String?
@@ -68,7 +71,8 @@ struct ComposerBar: View {
           isExpanded: $isTrayExpanded,
           onAttach: onAttach,
           onSendLater: onSendLater,
-          onInviteAgent: onInviteAgent
+          onInviteAgent: onInviteAgent,
+          onManageGroup: onManageGroup
         )
         .padding(.bottom, 2)
 

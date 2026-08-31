@@ -191,6 +191,28 @@ public actor MatrixClient {
     )
   }
 
+  /// Retire quelqu'un d'un salon. Dans le portail d'un groupe, le pont relaie
+  /// le `kick` comme un retrait du groupe sur le réseau distant.
+  public func kick(roomID: String, userID: String, reason: String? = nil) async throws {
+    var body: [String: MatrixJSON] = ["user_id": .string(userID)]
+    if let reason, !reason.isEmpty { body["reason"] = .string(reason) }
+    _ = try await request(
+      method: "POST",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/kick",
+      body: .object(body)
+    )
+  }
+
+  /// Renomme un salon (`m.room.name`). Dans un portail de groupe, les ponts qui
+  /// le savent faire poussent le nouveau nom jusqu'au réseau.
+  public func setRoomName(roomID: String, name: String) async throws {
+    _ = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/state/m.room.name",
+      body: .object(["name": .string(name)])
+    )
+  }
+
   /// Quitte un salon. Côté pont, quitter le portail d'un groupe revient à quitter
   /// le groupe sur le réseau distant — c'est ainsi qu'on remplace `quitGroup`.
   public func leave(roomID: String) async throws {
@@ -207,6 +229,23 @@ public actor MatrixClient {
       "is_direct": .bool(true),
       "preset": .string("trusted_private_chat"),
       "invite": .array([.string(userID)]),
+    ])
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
+    guard let roomID = json.string(at: "room_id") else {
+      throw MatrixError.decoding("createRoom sans room_id")
+    }
+    return roomID
+  }
+
+  /// Un salon privé nommé, avec ses invités. C'est le salon qu'un pont
+  /// transformera ensuite en groupe sur le réseau (`create-group`) : il doit
+  /// donc porter son nom AVANT la commande, plusieurs ponts le lisant de là.
+  public func createGroupRoom(name: String, invite: [String]) async throws -> String {
+    let body: MatrixJSON = .object([
+      "preset": .string("private_chat"),
+      "name": .string(name),
+      "visibility": .string("private"),
+      "invite": .array(invite.map { .string($0) }),
     ])
     let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
     guard let roomID = json.string(at: "room_id") else {

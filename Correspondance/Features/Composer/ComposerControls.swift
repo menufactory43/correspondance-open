@@ -213,6 +213,9 @@ struct ComposerPlusTray: View {
   var onSendLater: (() -> Void)?
   /// « Inviter cc » : présent seulement quand le fil peut l'accueillir.
   var onInviteAgent: (() -> Void)?
+  /// « Gérer le groupe » : nommer, ajouter, retirer. Présent seulement sur un
+  /// groupe dont le pont relaie au moins un de ces gestes.
+  var onManageGroup: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -221,6 +224,7 @@ struct ComposerPlusTray: View {
   /// La largeur du tiroir suit le nombre de boutons qu'il cache.
   private var trayWidth: CGFloat {
     let buttons = 1 + (offersSendLater ? 1 : 0) + (onInviteAgent != nil ? 1 : 0)
+      + (onManageGroup != nil ? 1 : 0)
     return ComposerMetrics.control * CGFloat(buttons) + Self.itemSpacing * CGFloat(buttons - 1)
   }
   /// Sans « plus tard », l'état « programmé » n'existe pas pour ce composer.
@@ -270,6 +274,15 @@ struct ComposerPlusTray: View {
             theme: theme,
             iconSize: 15,
             action: { choose(onInviteAgent) }
+          )
+        }
+        if let onManageGroup {
+          ComposerCircleButton(
+            systemImage: "person.2.badge.gearshape",
+            helpText: "Gérer le groupe : nom, membres",
+            theme: theme,
+            iconSize: 15,
+            action: { choose(onManageGroup) }
           )
         }
       }

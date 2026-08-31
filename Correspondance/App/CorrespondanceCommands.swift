@@ -40,6 +40,15 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("n", modifiers: [.command])
 
+      // ⌘⇧N est pris par la note à soi : le groupe passe en ⌥⌘N. L'entrée
+      // disparaît quand aucun pont branché ne sait créer de groupe — mieux
+      // vaut pas de menu qu'un menu qui échoue par construction.
+      Button("Nouveau groupe…") {
+        store.isPresentingNewGroup = true
+      }
+      .keyboardShortcut("n", modifiers: [.command, .option])
+      .disabled(!store.canCreateGroup)
+
       // ⌘R appartient à « Répondre en citant » (comme Beeper) : l'actualisation
       // manuelle, rare depuis que les trois réseaux syncent tout seuls, passe en ⌘⇧R.
       Button("Actualiser l’inbox") {

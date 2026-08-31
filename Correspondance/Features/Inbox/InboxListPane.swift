@@ -101,6 +101,14 @@ struct InboxListPane: View {
     } message: {
       Text("Tu ne recevras plus les messages de ce groupe.")
     }
+    .sheet(isPresented: Binding(
+      get: { store.groupSheetID != nil },
+      set: { if !$0 { store.dismissGroupSheet() } }
+    )) {
+      if let id = store.groupSheetID {
+        GroupSheet(conversationID: id)
+      }
+    }
     .confirmationDialog(
       store.archiveAllReadPrompt ?? "",
       isPresented: Binding(
@@ -545,6 +553,12 @@ struct InboxListPane: View {
 
       Button(store.isMuted(conversation.id) ? "Réactiver les notifications" : "Couper les notifications") {
         store.toggleMuted(conversationID: conversation.id)
+      }
+
+      if store.canManageGroup(conversation.id) {
+        Button("Gérer le groupe…") {
+          store.presentGroupSheet(conversation.id)
+        }
       }
 
       if conversation.isGroup, conversation.network.bridge?.relaysGroupLeave == true {

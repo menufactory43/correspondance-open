@@ -56,8 +56,12 @@ public struct NetworkCapabilities: Sendable, Hashable {
   /// - **La note à soi** est un salon à nous : rien ne s'y oppose, mais il n'y
   ///   a personne à y ajouter ni à en retirer.
   ///
-  /// Créer un groupe n'est vrai nulle part : aucun pont n'expose la création de
-  /// portail depuis Matrix (cf. le commit du lot C).
+  /// Créer un groupe passe par la commande `create-group` de bridgev2, que
+  /// seuls deux ponts implémentent : mautrix-whatsapp (v0.12.5+) et
+  /// mautrix-signal (v0.8.7+). mautrix-meta l'annonce en « support initial des
+  /// groupes NON chiffrés » : tant que ce n'est pas vérifié sur un vrai compte,
+  /// Instagram reste à non — un groupe qu'on croit avoir créé et qui n'existe
+  /// pas est pire que pas de bouton du tout.
   public static func of(_ network: MessageNetwork) -> NetworkCapabilities {
     switch network {
     case .iMessage:
@@ -67,6 +71,7 @@ public struct NetworkCapabilities: Sendable, Hashable {
         renamesGroup: true,
         removesMember: true,
         addsMember: true,
+        createsGroup: true,
         sendsVoiceMessages: true
       )
     case .whatsapp:
@@ -74,6 +79,7 @@ public struct NetworkCapabilities: Sendable, Hashable {
         renamesGroup: true,
         removesMember: true,
         addsMember: true,
+        createsGroup: true,
         sendsVoiceMessages: true
       )
     case .instagram:
