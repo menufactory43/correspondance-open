@@ -484,13 +484,26 @@ final class RelayStore {
     markLocallyRead(conversationID)
   }
 
+  /// En dessous, un fil passe pour court : le Relais est alors interrogé une
+  /// fois par session pour compléter l'historique.
+  private static let shortThreadCount = 20
+
   private func loadMessages(conversationID: String, backfill: Bool) async {
     for target in relayTargets(of: conversationID) {
-      var fresh = backfill
-        ? await matrix.backfill(conversationID: target)
-        : await matrix.messages(conversationID: target)
-      fresh = await matrix.ensureLocalAttachments(fresh)
-      messages[target] = fresh
+      // La page du magasin d'abord : le fil s'affiche sans attendre le réseau.
+      // Avant, tout — backfill réseau, pièces jointes une à une — se faisait
+      // écran vide ; un groupe plein de photos mettait des secondes à paraître.
+      let local = await matrix.messages(conversationID: target)
+      messages[target] = local
+      // Le Relais ne complète que les fils encore courts : un fil déjà garni
+      // par le magasin n'a rien à redemander à l'ouverture.
+      var fresh = local
+      if backfill, local.count < Self.shortThreadCount {
+        fresh = await matrix.backfill(conversationID: target)
+        messages[target] = fresh
+      }
+      // Les pièces jointes raffinent l'affichage après coup, sans le retenir.
+      messages[target] = await matrix.ensureLocalAttachments(fresh)
     }
   }
 

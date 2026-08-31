@@ -398,6 +398,10 @@ public actor MatrixBridgeService {
 
   /// Télécharge les pièces jointes manquantes et renvoie les messages avec chemins locaux.
   public func ensureLocalAttachments(_ messages: [ChatMessage]) async -> [ChatMessage] {
+    // Les téléchargements manquants partent de front avant la passe message
+    // par message : en série, un groupe de quinze photos coûtait quinze
+    // allers-retours l'un derrière l'autre.
+    await prefetchMissingMedia(for: messages)
     var result: [ChatMessage] = []
     for message in messages {
       guard !message.attachments.isEmpty || message.linkPreview?.imageMXC != nil else {
@@ -445,6 +449,50 @@ public actor MatrixBridgeService {
       result.append(updated)
     }
     return result
+  }
+
+  /// Descend en parallèle (quatre de front — assez pour masquer la latence,
+  /// sans assommer le Relais) tout média encore absent du cache disque. La
+  /// passe message par message qui suit ne trouve alors plus rien à attendre.
+  private func prefetchMissingMedia(for messages: [ChatMessage]) async {
+    struct Missing: Sendable {
+      let mxc: String
+      let contentType: String?
+    }
+    var missingByMXC: [String: Missing] = [:]
+    for message in messages {
+      if let preview = message.linkPreview, let mxc = preview.imageMXC,
+         preview.imageLocalPath == nil,
+         MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: preview.imageContentType) == nil
+      {
+        missingByMXC[mxc] = Missing(mxc: mxc, contentType: preview.imageContentType)
+      }
+      for attachment in message.attachments
+      where attachment.resolvedFileURL == nil
+        && MatrixAttachmentStore.existingLocalPath(forMXC: attachment.id, contentType: attachment.contentType) == nil
+      {
+        missingByMXC[attachment.id] = Missing(mxc: attachment.id, contentType: attachment.contentType)
+      }
+    }
+    guard !missingByMXC.isEmpty else { return }
+    let client = self.client
+    let download: @Sendable (Missing) async -> Void = { missing in
+      guard let data = try? await client.downloadMedia(mxcURI: missing.mxc), !data.isEmpty
+      else { return }
+      _ = MatrixAttachmentStore.store(data: data, forMXC: missing.mxc, contentType: missing.contentType)
+    }
+    await withTaskGroup(of: Void.self) { group in
+      var iterator = missingByMXC.values.makeIterator()
+      var inFlight = 0
+      while inFlight < 4, let missing = iterator.next() {
+        inFlight += 1
+        group.addTask { await download(missing) }
+      }
+      while await group.next() != nil {
+        guard let missing = iterator.next() else { continue }
+        group.addTask { await download(missing) }
+      }
+    }
   }
 
   /// Photo d'un portail (`m.room.avatar`), depuis le cache disque sinon le homeserver.
