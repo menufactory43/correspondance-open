@@ -81,6 +81,7 @@
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
 		8838960EDD24130CAA38F648 /* DemoRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E28665C56283D03F52E170 /* DemoRelay.swift */; };
 		89B82803BEB2BD559E0DF200 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */; };
+		8CE15690F8A69B4D6A577D11 /* SelectTextSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41162D81426258DB5EB6C027 /* SelectTextSheet.swift */; };
 		8EA83084ABDBE7CE01DCF535 /* CorrespondanceUI in Frameworks */ = {isa = PBXBuildFile; productRef = A1388660CF1198DE116A1477 /* CorrespondanceUI */; };
 		8F04B51130D641967DEDEA84 /* ThreadRecordingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 418C5A9108CB689F2CFD6F9C /* ThreadRecordingUITests.swift */; };
 		92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE06AF0526360BC841BE21 /* InboxStore.swift */; };
@@ -227,6 +228,7 @@
 		3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceSmokeTests.swift; sourceTree = "<group>"; };
 		3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAttachmentSendTests.swift; sourceTree = "<group>"; };
 		4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadGesturesUITests.swift; sourceTree = "<group>"; };
+		41162D81426258DB5EB6C027 /* SelectTextSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectTextSheet.swift; sourceTree = "<group>"; };
 		4151D8EBFA079B28AAEB4660 /* DetachedWindowStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowStateTests.swift; sourceTree = "<group>"; };
 		418C5A9108CB689F2CFD6F9C /* ThreadRecordingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadRecordingUITests.swift; sourceTree = "<group>"; };
 		4399BA71FE841C551BCA82A8 /* CorrespondanceiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CorrespondanceiOS.entitlements; sourceTree = "<group>"; };
@@ -467,6 +469,7 @@
 				0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */,
 				73E49DB73F8B4BF73B3C346C /* MessageAvatarView.swift */,
 				AE8B38B0A2FFD77B5B638F0F /* MessageBubble.swift */,
+				41162D81426258DB5EB6C027 /* SelectTextSheet.swift */,
 				F182E185A81655BCD5EF0FE6 /* ThreadComposer.swift */,
 				FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */,
 				16D2CE4167125A5E3D61756E /* ThreadView.swift */,
@@ -1019,6 +1022,7 @@
 				2ABA6E026D46714A83FDDAB2 /* RelayStore.swift in Sources */,
 				5892E9181882ACCB886A08A0 /* RootView.swift in Sources */,
 				5F6D4C9A159C59A7A0F5A76F /* SearchSheet.swift in Sources */,
+				8CE15690F8A69B4D6A577D11 /* SelectTextSheet.swift in Sources */,
 				5E84670E494B604BE024AE31 /* SendLaterSheet.swift in Sources */,
 				837364980DCFAF643A2E9899 /* SettingsView.swift in Sources */,
 				E3F1D34B0B88C8E7035C29EE /* ThemePreferences.swift in Sources */,
