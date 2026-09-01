@@ -65,18 +65,12 @@ extension InboxStore {
     startRelayFlush()
   }
 
-  /// « Inviter cc » a-t-il un sens ici : un fil du Relais où il n'est pas déjà.
-  func agentInvitable() async -> Bool {
-    guard let conversation = selectedConversation, conversation.network.livesOnRelay else { return false }
-    return await !matrix.hasAgent(conversationID: conversation.id)
-  }
-
-  /// Invite l'agent dans le fil ouvert. Sa venue s'annonce toute seule dans
-  /// le fil (« cc a rejoint la conversation »).
-  func inviteAgent() async {
+  /// Invite un agent dans le fil ouvert. Sa venue s'annonce toute seule dans
+  /// le fil (« hermes a rejoint la conversation »).
+  func inviteAgent(_ agent: String) async {
     guard let conversation = selectedConversation else { return }
     do {
-      try await matrix.inviteAgent(conversationID: conversation.id)
+      try await matrix.inviteAgent(conversationID: conversation.id, agent: agent)
     } catch {
       lastErrorMessage = error.localizedDescription
     }

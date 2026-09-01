@@ -35,12 +35,13 @@ struct ThreadView: View {
   /// calcule rien, et le défilement rame quand même. On monte la fin, le
   /// reste attend derrière « Voir les messages précédents ».
   @State private var windowCount = ThreadMetrics.windowCount
-  /// Le tiroir du « + » propose « Inviter cc » — seulement quand le fil est au
-  /// Relais et que cc n'y est pas déjà.
-  @State private var canInviteAgent = false
-  /// La voix de cc dans ce fil, quand il y est : brouillon ou voix haute. Le
-  /// même bouton du tiroir, une fois cc invité, la bascule.
-  @State private var agentVoice: AgentSettings.Mode?
+  /// Le tiroir du « + » propose d'inviter les agents qui ne sont pas encore
+  /// dans ce fil — un bouton s'il n'y en a qu'un, un menu s'il y en a
+  /// plusieurs. Vide quand le fil n'est pas au Relais, ou qu'ils y sont tous.
+  @State private var invitableAgents: [String] = []
+  /// La voix de chaque agent présent dans ce fil : brouillon ou voix haute. Un
+  /// bouton par agent, chacun réglant **sa** console.
+  @State private var agentVoices: [AgentVoice] = []
   /// Le compte de messages pour lequel une expansion est programmée : si le
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
@@ -110,19 +111,24 @@ struct ThreadView: View {
             theme: theme,
             onAttach: { store.pickAttachments() },
             onSendLater: { store.toggleSendLaterPicker() },
-            onInviteAgent: canInviteAgent ? {
-              canInviteAgent = false
+            invitableAgents: invitableAgents,
+            onInviteAgent: { agent in
+              invitableAgents.removeAll { $0 == agent }
               Task {
-                await store.inviteAgent()
-                agentVoice = await store.agentVoiceInSelectedConversation()
+                await store.inviteAgent(agent)
+                await rechargerLesAgents()
+                // Plusieurs agents dans un salon en font un atelier : chacun
+                // doit connaître les autres, sinon ils se répondent en boucle.
+                await store.linkAgentPeersInSelectedConversation()
               }
-            } : nil,
-            agentVoice: agentVoice,
-            onToggleAgentVoice: agentVoice.map { current in
-              {
-                Task {
-                  if let posee = await store.setAgentVoice(current == .direct ? .draft : .direct) {
-                    agentVoice = posee
+            },
+            agentVoices: agentVoices,
+            onToggleAgentVoice: agentVoices.isEmpty ? nil : { agent in
+              guard let courante = agentVoices.first(where: { $0.agent == agent })?.mode else { return }
+              Task {
+                if let posee = await store.setAgentVoice(courante == .direct ? .draft : .direct, agent: agent) {
+                  agentVoices = agentVoices.map {
+                    $0.agent == agent ? AgentVoice(agent: agent, mode: posee) : $0
                   }
                 }
               }
@@ -179,9 +185,24 @@ struct ThreadView: View {
   }
 
   /// Les noms qu'on peut mentionner ici — la liste que le menu « @ » du
-  /// composer tient déjà à jour pour la session ouverte.
+  /// composer tient déjà à jour pour la session ouverte, plus les agents que
+  /// le Relais connaît. Dans un atelier, c'est la mention qui désigne lequel
+  /// répond : un « @hermes » sans encre laisserait croire qu'on n'a appelé
+  /// personne.
   private var mentionNames: [String] {
-    MentionHighlight.withAgent(store.primarySession?.mentionCandidates.map(\.name) ?? [])
+    MentionHighlight.withAgents(
+      store.primarySession?.mentionCandidates.map(\.name) ?? [],
+      agents: store.agentDirectory.isEmpty ? MatrixIdentity.knownAgents : store.agentDirectory
+    )
+  }
+
+  /// Qui est là, qui manque, et de quelle voix — relu depuis le Relais. Tout
+  /// ce que le tiroir « + » affiche vient de là : un agent membre du salon, une
+  /// voix écrite dans **sa** console.
+  private func rechargerLesAgents() async {
+    await store.refreshAgentDirectory()
+    invitableAgents = await store.invitableAgents()
+    agentVoices = await store.agentVoicesInSelectedConversation()
   }
 
   /// Espace ouvre Quick Look sur la bulle SURVOLÉE — c'est le survol qui
@@ -371,8 +392,7 @@ struct ThreadView: View {
         pinToBottom(proxy)
       }
       .task(id: store.selectedConversationID) {
-        canInviteAgent = await store.agentInvitable()
-        agentVoice = await store.agentVoiceInSelectedConversation()
+        await rechargerLesAgents()
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         LaunchTrace.event("select")

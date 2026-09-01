@@ -89,6 +89,21 @@ extension MatrixBridgeService {
     return trouvees.sorted { $0.agent < $1.agent }
   }
 
+  /// L'annuaire avec la configuration de chacun, et **rien d'autre** : ni
+  /// status, ni journal. C'est ce que le fil demande à chaque changement de
+  /// conversation pour savoir qui parle à voix haute ici — un aller-retour de
+  /// messages par console y coûterait trop cher.
+  public func agentConfigs() async throws -> [AgentConsoleConfig] {
+    var configs: [AgentConsoleConfig] = []
+    for entry in try await agentConsoleRooms() {
+      guard let content = try? await client.roomState(roomID: entry.roomID, type: AgentWire.configType),
+            let config = AgentConsoleConfig(content: content)
+      else { continue }
+      configs.append(config)
+    }
+    return configs
+  }
+
   /// L'annuaire, lu en entier : pour chaque agent connu du Relais, sa console,
   /// sa config, son dernier status et son journal.
   ///

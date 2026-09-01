@@ -94,11 +94,24 @@ public enum MentionParser {
 /// On relit donc le texte avec la liste des gens du fil : ce qui suit un « @ »
 /// et qui porte le nom de quelqu'un est une mention, et prend l'encre.
 public enum MentionHighlight {
-  /// Les gens du fil, plus l'agent : « @cc » ne figure dans la liste d'aucun
-  /// salon — le Relais l'écarte des correspondants — mais c'est le mot qui le
-  /// réveille, et rien ne mérite plus de se voir.
-  public static func withAgent(_ names: [String]) -> [String] {
-    names + [MatrixIdentity.agentName]
+  /// Les gens du fil, plus **les agents** : « @cc » ne figure dans la liste
+  /// d'aucun salon — le Relais l'écarte des correspondants — mais c'est le mot
+  /// qui le réveille, et rien ne mérite plus de se voir.
+  ///
+  /// Le pluriel n'est pas décoratif : dans un atelier, la mention est
+  /// *obligatoire* et c'est elle qui désigne lequel des agents répond. Un
+  /// « @hermes » qui ne prend pas l'encre dans un salon où hermes est membre
+  /// laisserait croire qu'on n'a appelé personne.
+  ///
+  /// `agents` vient de l'annuaire du Relais quand l'appelant l'a ; à défaut,
+  /// des noms que l'app sait reconnaître.
+  public static func withAgents(
+    _ names: [String], agents: [String] = MatrixIdentity.knownAgents
+  ) -> [String] {
+    // Un agent qui figure déjà dans les correspondants (c'est le cas dans un
+    // atelier, où il est membre) ne doit pas être compté deux fois : les plages
+    // se chevaucheraient.
+    names + agents.filter { agent in !names.contains { $0.caseInsensitiveCompare(agent) == .orderedSame } }
   }
 
   /// Les plages « @Nom » d'un texte, l'arobase comprise. Le nom le plus long

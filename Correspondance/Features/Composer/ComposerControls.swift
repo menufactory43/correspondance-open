@@ -197,6 +197,44 @@ struct ComposerAttachmentStrip: View {
 /// vers la droite quand on l'ouvre — la pilule de texte se resserre d'autant.
 /// Le « + » pivote en « × » pour dire qu'il referme. Les entrées futures
 /// (fichier, sondage…) viendront s'y ranger.
+/// Le même rond que `ComposerCircleButton`, mais qui ouvre un menu.
+///
+/// Il existe pour un seul cas, et il faut le dire : **plusieurs agents**. Avec
+/// un seul agent invitable, un bouton suffit et rien ne change ; avec deux, un
+/// bouton choisirait à la place de l'utilisateur lequel des deux vient dans la
+/// conversation, ce qui n'est pas à lui de décider.
+struct ComposerCircleMenu<Content: View>: View {
+  let systemImage: String
+  var helpText: String
+  var theme: WritingTheme
+  var size: CGFloat = ComposerMetrics.control
+  var iconSize: CGFloat = 16
+  @ViewBuilder var content: Content
+
+  @State private var hovered = false
+
+  var body: some View {
+    Menu {
+      content
+    } label: {
+      Image(systemName: systemImage)
+        .font(.system(size: iconSize, weight: .medium))
+        .foregroundStyle(hovered ? theme.ink : theme.inkSecondary)
+        .frame(width: size, height: size)
+        .background(
+          Circle().fill(hovered ? theme.selection.opacity(0.9) : Color.clear)
+        )
+        .contentShape(Circle())
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .frame(width: size, height: size)
+    .help(helpText)
+    .accessibilityLabel(helpText)
+    .onHover { hovered = $0 }
+  }
+}
+
 struct ComposerPlusTray: View {
   var theme: WritingTheme
   var isScheduling: Bool = false
@@ -206,13 +244,18 @@ struct ComposerPlusTray: View {
   /// `nil` là où « plus tard » n'a pas cours — une fenêtre détachée. Le tiroir
   /// n'ouvre alors qu'un seul bouton, plutôt qu'une horloge qui ne fait rien.
   var onSendLater: (() -> Void)?
-  /// « Inviter cc » : présent seulement quand le fil peut l'accueillir.
-  var onInviteAgent: (() -> Void)?
-  /// Une fois cc dans le fil, le même bouton dit sa voix ici — brouillon ou
-  /// voix haute — et la bascule. C'est le réglage **par conversation** ; celui
-  /// des Réglages n'est que le défaut.
-  var agentVoice: AgentSettings.Mode? = nil
-  var onToggleAgentVoice: (() -> Void)? = nil
+  /// Les agents qu'on peut encore inviter ici. Un seul : le bouton d'avant.
+  /// Plusieurs : un menu, parce qu'un bouton unique choisirait à la place de
+  /// l'utilisateur lequel des deux vient.
+  var invitableAgents: [String] = []
+  var onInviteAgent: ((String) -> Void)?
+  /// Une fois un agent dans le fil, le même bouton dit sa voix ici — brouillon
+  /// ou voix haute — et la bascule. C'est le réglage **par conversation** ;
+  /// celui des Réglages n'est que le défaut. Plusieurs agents présents, c'est
+  /// un bouton par agent : deux agents dans un salon n'ont aucune raison de
+  /// parler de la même façon.
+  var agentVoices: [AgentVoice] = []
+  var onToggleAgentVoice: ((String) -> Void)? = nil
   /// « Gérer le groupe » : nommer, ajouter, retirer. Présent seulement sur un
   /// groupe dont le pont relaie au moins un de ces gestes.
   var onManageGroup: (() -> Void)?
@@ -221,10 +264,14 @@ struct ComposerPlusTray: View {
 
   private static let itemSpacing: CGFloat = 2
   private var offersSendLater: Bool { onSendLater != nil }
+  private var peutInviter: Bool { onInviteAgent != nil && !invitableAgents.isEmpty }
   /// La largeur du tiroir suit le nombre de boutons qu'il cache.
   private var trayWidth: CGFloat {
-    let buttons = 1 + (offersSendLater ? 1 : 0) + (onInviteAgent != nil ? 1 : 0)
-      + (onToggleAgentVoice != nil ? 1 : 0) + (onManageGroup != nil ? 1 : 0)
+    // Un seul agent invitable donne un bouton, plusieurs donnent un menu :
+    // dans les deux cas, une seule place dans le tiroir. Les voix, elles,
+    // prennent une place chacune — c'est un réglage par agent.
+    let buttons = 1 + (offersSendLater ? 1 : 0) + (peutInviter ? 1 : 0)
+      + (onToggleAgentVoice != nil ? agentVoices.count : 0) + (onManageGroup != nil ? 1 : 0)
     return ComposerMetrics.control * CGFloat(buttons) + Self.itemSpacing * CGFloat(buttons - 1)
   }
   /// Sans « plus tard », l'état « programmé » n'existe pas pour ce composer.
@@ -267,29 +314,44 @@ struct ComposerPlusTray: View {
             action: { choose(onSendLater) }
           )
         }
-        if let onInviteAgent {
-          ComposerCircleButton(
-            // L'étincelle de cc, pas le crayon : le crayon est la voix
-            // « brouillon » une fois cc présent, et un même dessin pour deux
-            // gestes faisait cliquer « inviter » en croyant régler.
-            systemImage: "sparkles",
-            helpText: "Inviter cc dans cette conversation",
-            theme: theme,
-            iconSize: 15,
-            action: { choose(onInviteAgent) }
-          )
+        if let onInviteAgent, peutInviter {
+          if invitableAgents.count == 1, let seul = invitableAgents.first {
+            ComposerCircleButton(
+              // L'étincelle de l'agent, pas le crayon : le crayon est la voix
+              // « brouillon » une fois l'agent présent, et un même dessin pour
+              // deux gestes faisait cliquer « inviter » en croyant régler.
+              systemImage: "sparkles",
+              helpText: "Inviter \(seul) dans cette conversation",
+              theme: theme,
+              iconSize: 15,
+              action: { choose { onInviteAgent(seul) } }
+            )
+          } else {
+            ComposerCircleMenu(
+              systemImage: "sparkles",
+              helpText: "Inviter un agent dans cette conversation",
+              theme: theme,
+              iconSize: 15
+            ) {
+              ForEach(invitableAgents, id: \.self) { nom in
+                Button("Inviter \(nom)") { choose { onInviteAgent(nom) } }
+              }
+            }
+          }
         }
-        if let onToggleAgentVoice, let agentVoice {
-          ComposerCircleButton(
-            systemImage: agentVoice == .direct ? "megaphone" : "pencil.line",
-            helpText: agentVoice == .direct
-              ? "cc répond à voix haute ici, le correspondant le lit — passer en brouillon"
-              : "cc propose des brouillons ici, visibles de toi seul — passer à voix haute",
-            theme: theme,
-            iconSize: 15,
-            isActive: agentVoice == .direct,
-            action: { choose(onToggleAgentVoice) }
-          )
+        if let onToggleAgentVoice {
+          ForEach(agentVoices) { voix in
+            ComposerCircleButton(
+              systemImage: voix.mode == .direct ? "megaphone" : "pencil.line",
+              helpText: voix.mode == .direct
+                ? "\(voix.agent) répond à voix haute ici, le correspondant le lit — passer en brouillon"
+                : "\(voix.agent) propose des brouillons ici, visibles de toi seul — passer à voix haute",
+              theme: theme,
+              iconSize: 15,
+              isActive: voix.mode == .direct,
+              action: { choose { onToggleAgentVoice(voix.agent) } }
+            )
+          }
         }
         if let onManageGroup {
           ComposerCircleButton(

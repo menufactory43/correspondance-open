@@ -37,6 +37,10 @@ public struct AgentRemoteConfig: Sendable, Equatable {
   public var rooms: [String: AgentConfig.RoomBinding]?
   /// La commande de l'adaptateur ACP, quand le moteur est `acp`.
   public var acpCommand: String?
+  /// Les autres agents du Relais (MXID). Renseigné par l'app quand plusieurs
+  /// agents partagent un salon : c'est ce qui arme la mention obligatoire et la
+  /// non-relance mutuelle (`Atelier`).
+  public var peers: [String]?
 
   public init(agent: String, version: Int = AgentRemoteConfig.currentVersion) {
     self.agent = agent
@@ -63,6 +67,7 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     model = content[AgentWire.ConfigKey.model]?.stringValue
     systemPrompt = content[AgentWire.ConfigKey.systemPrompt]?.stringValue
     acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
+    peers = content[AgentWire.ConfigKey.peers]?.arrayValue?.compactMap(\.stringValue)
     if let object = content[AgentWire.ConfigKey.rooms]?.objectValue {
       rooms = object.reduce(into: [String: AgentConfig.RoomBinding]()) { result, entry in
         result[entry.key] = AgentConfig.RoomBinding(
@@ -88,6 +93,7 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     if let model { fields[AgentWire.ConfigKey.model] = .string(model) }
     if let systemPrompt { fields[AgentWire.ConfigKey.systemPrompt] = .string(systemPrompt) }
     if let acpCommand { fields[AgentWire.ConfigKey.acpCommand] = .string(acpCommand) }
+    if let peers { fields[AgentWire.ConfigKey.peers] = .array(peers.map(MatrixJSON.string)) }
     if let rooms {
       fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
         var entry: [String: MatrixJSON] = [:]
@@ -126,6 +132,7 @@ extension AgentConfig {
     if let prompt = remote.systemPrompt, !prompt.isEmpty {
       config.claude.systemPrompt = prompt
     }
+    if let peers = remote.peers { config.peers = peers }
     if let command = remote.acpCommand, !command.isEmpty {
       config.acp.command = command
     }

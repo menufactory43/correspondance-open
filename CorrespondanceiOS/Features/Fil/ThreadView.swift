@@ -114,7 +114,7 @@ struct ThreadView: View {
       .task(id: conversationID) { members = await store.members(conversationID) }
       // Les gens du fil descendent jusqu'aux bulles : c'est ce qui fait d'un
       // « @Nom » une mention plutôt qu'un mot comme les autres.
-      .environment(\.mentionNames, MentionHighlight.withAgent(members.map(\.name)))
+      .environment(\.mentionNames, MentionHighlight.withAgents(members.map(\.name)))
       .task(id: store.pendingJumpMessageID) {
         guard let target = store.pendingJumpMessageID else { return }
         await consumeJump(target)
