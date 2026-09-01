@@ -23,7 +23,7 @@ let package = Package(
         // testable sans réseau ; l'exécutable ne fait que brancher.
         .target(name: "CorrespondanceAgentKit", dependencies: ["CorrespondanceMatrixClient"]),
         .executableTarget(name: "correspondance-agent", dependencies: ["CorrespondanceAgentKit"]),
-        .executableTarget(name: "correspondance-mcp", dependencies: ["CorrespondanceAgentKit"]),
+        .executableTarget(name: "correspondance-mcp", dependencies: ["CorrespondanceAgentKit", "CorrespondanceCore"]),
         .testTarget(
             name: "CorrespondanceCoreTests",
             dependencies: ["CorrespondanceCore"],

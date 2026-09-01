@@ -752,6 +752,22 @@ public actor MatrixClient {
     )
   }
 
+  /// `GET /user/{u}/rooms/{r}/account_data/{type}`.
+  ///
+  /// Un type jamais écrit rend `404` : c'est une absence, pas une panne — on
+  /// rend un objet vide, comme le ferait un `/sync` qui n'en parle pas.
+  public func roomAccountData(roomID: String, type: String) async throws -> MatrixJSON {
+    let user = try userID()
+    do {
+      return try await request(
+        method: "GET",
+        path: Self.roomAccountDataPath(userID: user, roomID: roomID, type: type)
+      )
+    } catch MatrixError.http(let status, _, _) where status == 404 {
+      return .object([:])
+    }
+  }
+
   /// `PUT /user/{u}/account_data/{type}`.
   public func setAccountData(type: String, content: MatrixJSON) async throws {
     let user = try userID()
