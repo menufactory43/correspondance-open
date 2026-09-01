@@ -770,9 +770,12 @@ public actor MatrixClient {
     ])
   }
 
-  /// Le jeton APNs tel que Sygnal l'attend : de l'hexadécimal minuscule, nu.
+  /// Le jeton APNs tel que Sygnal l'attend : en **base64**, comme Element.
+  /// Sygnal décode le `pushkey` en base64 avant de le tendre à APNs — un jeton
+  /// écrit en hexadécimal devient un jeton d'un autre monde, et chaque push
+  /// meurt en `BadDeviceToken` sans qu'aucun réglage n'y soit pour rien.
   public static func pushkey(fromAPNSToken token: Data) -> String {
-    token.map { String(format: "%02x", $0) }.joined()
+    token.base64EncodedString()
   }
 
   /// `POST /pushers/set` — déclare (ou remplace) le pusher de cet appareil.

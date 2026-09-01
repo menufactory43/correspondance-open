@@ -37,7 +37,7 @@ final class ThreadRecordingUITests: XCTestCase {
   }
 
   /// Glisser vers le haut pose le doigt : la bulle garde l'enregistrement,
-  /// avec sa corbeille et sa flèche d'envoi.
+  /// avec son « Annuler » et sa flèche d'envoi.
   func testGlisserVersLeHautVerrouille() {
     let app = XCUIApplication()
     app.launchArguments = ["-CorrespondanceDemo", "-CorrespondanceDemoScreen", "fil"]
@@ -58,7 +58,7 @@ final class ThreadRecordingUITests: XCTestCase {
     joindre(XCUIScreen.main.screenshot().pngRepresentation, nom: "08-verrouille")
     XCTAssertTrue(
       app.descendants(matching: .any)
-        .matching(NSPredicate(format: "label == %@", "Abandonner le message vocal"))
+        .matching(NSPredicate(format: "label == %@", "Annuler le message vocal"))
         .firstMatch.waitForExistence(timeout: 2),
       "le verrou n'a pas gardé l'enregistrement"
     )

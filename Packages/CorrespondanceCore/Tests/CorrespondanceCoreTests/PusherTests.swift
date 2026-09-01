@@ -54,9 +54,9 @@ final class PusherTests: XCTestCase {
     XCTAssertTrue(dict["kind"] is NSNull)
   }
 
-  func testPushkeyIsLowercaseHexadecimal() {
+  func testPushkeyIsBase64LikeElement() {
     let token = Data([0x00, 0x0f, 0xa1, 0xff])
-    XCTAssertEqual(MatrixClient.pushkey(fromAPNSToken: token), "000fa1ff")
+    XCTAssertEqual(MatrixClient.pushkey(fromAPNSToken: token), "AA+h/w==")
     XCTAssertEqual(MatrixClient.pushkey(fromAPNSToken: Data()), "")
   }
 

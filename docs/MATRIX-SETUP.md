@@ -411,7 +411,7 @@ L'iPhone ne peut pas tenir un `/sync` en permanence : c'est APNs qui le réveill
 APNs il faut un passe-plat qui parle les deux langues — **Sygnal**, le pousseur de matrix.org.
 
 Le chemin complet, dans l'ordre : l'app iOS déclare son pusher au Relais
-(`POST /_matrix/client/v3/pushers/set`, `app_id: com.correspondance.ios`, `pushkey` = jeton APNs) →
+(`POST /_matrix/client/v3/pushers/set`, `app_id: com.correspondance.ios`, `pushkey` = jeton APNs **en base64**, Sygnal le décode ainsi) →
 Synapse, quand une push rule dit « notifie », appelle `http://sygnal:5000/_matrix/push/v1/notify` →
 Sygnal signe un push APNs avec la clé `.p8` → l'iPhone se réveille → l'extension de service va lire
 l'événement et écrit « Alice · WhatsApp : On se voit demain ? ».

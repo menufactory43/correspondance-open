@@ -22,6 +22,7 @@ extension RelayStore {
   /// À appeler après chaque `/sync` : ce qui vient d'arriver sonne, le reste non.
   func postLocalNotificationsForNewMessages() {
     guard !isDemo else { return }
+    openPendingNotificationIfPossible()
     let baseline = notificationBaseline
     defer {
       notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -98,6 +99,18 @@ extension RelayStore {
   /// Ouvre le fil qu'une notification désigne — au retour dans l'app.
   func openConversationFromNotification(_ conversationID: String) {
     scope = .inbox
+    selectedConversationID = conversationID
     Task { await open(conversationID: conversationID) }
+  }
+
+  /// Une notification touchée à froid arrive avant le premier `/sync` : le
+  /// salon qu'elle nomme n'est encore dans aucune liste. Il attend ici, et
+  /// chaque passage de synchronisation retente jusqu'à le trouver.
+  func openPendingNotificationIfPossible() {
+    guard let roomID = NotificationHandler.pendingRoomID,
+          let conversationID = conversationID(ofRoom: roomID)
+    else { return }
+    NotificationHandler.pendingRoomID = nil
+    openConversationFromNotification(conversationID)
   }
 }

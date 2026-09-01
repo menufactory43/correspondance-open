@@ -30,10 +30,6 @@ struct CorrespondanceiOSApp: App {
           push.attach(to: store)
           AppDelegate.push = push
           AppDelegate.store = store
-          // Sans délégué, une notification touchée n'ouvre que l'app, et
-          // aucune bannière ne paraît pendant qu'on s'en sert. Il se pose ici
-          // et pas dans le délégué d'application : il lui faut le magasin.
-          UNUserNotificationCenter.current().delegate = AppDelegate.notificationHandler
         }
         .task {
           await store.start()
@@ -77,6 +73,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
   /// n'est pas isolé au processus principal.
   static let notificationHandler = NotificationHandler()
 
+  /// Le délégué de notifications se pose AVANT la fin du lancement : une
+  /// notification touchée alors que l'app est morte n'est remise qu'à ce
+  /// prix. Posé plus tard, dans la scène, le système ne la livrait jamais —
+  /// l'app s'ouvrait sur rien.
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    UNUserNotificationCenter.current().delegate = Self.notificationHandler
+    return true
+  }
+
   func application(
     _ application: UIApplication,
     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
@@ -100,6 +108,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 /// de l'extension (`room_id`), l'autre du magasin (`conversationID`). On lit
 /// les deux, faute de quoi la moitié des notifications n'ouvriraient rien.
 final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
+  /// Le salon d'une notification touchée avant que le magasin ne le connaisse.
+  @MainActor static var pendingRoomID: String?
+
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification
@@ -116,10 +127,9 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
     // Le push ne nomme qu'un salon ; le magasin, lui, parle en fils.
     let roomID = info["room_id"] as? String
     await MainActor.run {
-      guard let store = AppDelegate.store else { return }
-      guard let conversationID = direct ?? roomID.flatMap({ store.conversationID(ofRoom: $0) })
-      else { return }
-      store.openConversationFromNotification(conversationID)
+      if let direct { AppDelegate.store?.openConversationFromNotification(direct); return }
+      Self.pendingRoomID = roomID
+      AppDelegate.store?.openPendingNotificationIfPossible()
     }
   }
 }

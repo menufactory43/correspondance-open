@@ -18,6 +18,7 @@ struct ThreadComposer: View {
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var isFocused: Bool
 
   @State private var photoItems: [PhotosPickerItem] = []
@@ -29,7 +30,7 @@ struct ThreadComposer: View {
   /// Le doigt tient le micro : l'enregistrement court sous lui.
   @State private var isHolding = false
   /// Le doigt s'est levé sans lâcher l'enregistrement — glissé vers le haut,
-  /// ou tape courte : la bande reste, avec sa corbeille et son envoi.
+  /// ou tape courte : la bande reste, avec son « Annuler » et son envoi.
   @State private var isLocked = false
   /// Où le doigt en est depuis le micro : ce qui fait glisser « Glisser pour annuler ».
   @State private var holdTranslation: CGSize = .zero
@@ -37,6 +38,8 @@ struct ThreadComposer: View {
   /// Ce toucher-ci a COMMENCÉ sur un enregistrement déjà verrouillé : c'est
   /// une tape sur la flèche, pas la suite du maintien qui vient de verrouiller.
   @State private var startedLocked = false
+  /// Le chevron du guide respire vers le haut : c'est lui qui dit « par ici ».
+  @State private var hintBreathes = false
   /// Les gens du groupe, relus à l'ouverture du fil : taper « @ » ne doit pas
   /// attendre le réseau.
   @State private var members: [RelayStore.ThreadMember] = []
@@ -271,21 +274,34 @@ struct ThreadComposer: View {
       .scaleEffect(isHolding ? 1.25 : 1)
       .contentShape(Circle())
       .highPriorityGesture(holdToTalk)
+      // Le doigt se pose et ça enregistre : la main le sent partir.
+      .sensoryFeedback(.impact(weight: .medium), trigger: isHolding) { _, new in new }
       // Le verrou se sent : le doigt peut se lever.
       .sensoryFeedback(.success, trigger: isLocked) { _, new in new }
       .accessibilityLabel(isLocked ? "Envoyer le message vocal" : "Enregistrer un message vocal")
       .accessibilityHint(isLocked ? "" : "Maintenir pour parler, relâcher pour envoyer")
-      // Le cadenas, au-dessus du micro, dit où glisser pour poser le doigt.
-      .overlay(alignment: .top) {
-        if isHolding, !isLocked {
-          Image(systemName: "lock")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(theme.accent)
-            .opacity(lockHintOpacity)
-            .offset(y: -30 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
-            .accessibilityHidden(true)
-        }
-      }
+      .overlay(alignment: .top) { if isHolding, !isLocked { lockGuide } }
+  }
+
+  /// Le guide du geste, en colonne au-dessus du micro : le cadenas où l'on va,
+  /// le chevron qui montre le chemin. Il se révèle à mesure qu'on monte.
+  private var lockGuide: some View {
+    VStack(spacing: 3) {
+      Image(systemName: "lock")
+        .font(.system(size: 12, weight: .semibold))
+      Image(systemName: "chevron.up")
+        .font(.system(size: 11, weight: .semibold))
+        .offset(y: hintBreathes ? -3 : 0)
+    }
+    .foregroundStyle(theme.accent)
+    .opacity(lockHintOpacity)
+    .offset(y: -46 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
+    .onAppear {
+      guard !reduceMotion else { return }
+      withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { hintBreathes = true }
+    }
+    .onDisappear { hintBreathes = false }
+    .accessibilityHidden(true)
   }
 
   /// L'opacité du cadenas : il se révèle à mesure qu'on monte.
@@ -364,24 +380,11 @@ struct ThreadComposer: View {
   }
 
   /// Ce qu'on est en train de dire, À LA PLACE du champ : la durée qui court,
-  /// le niveau du micro, et le geste pour renoncer. La corbeille n'apparaît
+  /// le niveau du micro, et le geste pour renoncer. « Annuler » n'apparaît
   /// qu'une fois le doigt reparti — tant qu'il tient, c'est le glissement qui
   /// renonce.
   private var recordingField: some View {
     HStack(spacing: 8) {
-      if !isHolding {
-        Button {
-          endHold()
-          store.recorder.cancel()
-        } label: {
-          Image(systemName: "trash")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(theme.inkTertiary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Abandonner le message vocal")
-      }
-
       Circle()
         .fill(theme.accent)
         .frame(width: 8, height: 8)
@@ -405,7 +408,7 @@ struct ThreadComposer: View {
       } else {
         // Les derniers relevés, qui défilent : on voit qu'on est entendu.
         HStack(alignment: .center, spacing: 1.5) {
-          ForEach(Array(store.recorder.samples.suffix(40).enumerated()), id: \.offset) { _, value in
+          ForEach(Array(store.recorder.samples.suffix(20).enumerated()), id: \.offset) { _, value in
             Capsule()
               .fill(theme.accent.opacity(0.7))
               .frame(width: 2, height: max(3, value * 18))
@@ -413,6 +416,18 @@ struct ThreadComposer: View {
         }
         .frame(height: 18, alignment: .trailing)
         .frame(maxWidth: .infinity, alignment: .trailing)
+
+        // Le doigt est reparti : c'est le seul moyen de renoncer, et il se lit.
+        Button {
+          store.recorder.cancel()
+          endHold()
+        } label: {
+          Text("Annuler")
+            .font(Typography.meta(typeface))
+            .foregroundStyle(theme.accent)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Annuler le message vocal")
       }
     }
     .padding(.leading, 4)
