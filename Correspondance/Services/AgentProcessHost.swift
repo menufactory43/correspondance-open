@@ -50,7 +50,14 @@ final class AgentProcessHost {
       guard let executable = Self.embeddedAgentURL else { return nil }
       return Launch(
         executable: executable,
-        arguments: ["run", "--agent", agent],
+        // `--watch-parent` : l'agent meurt avec nous, **quelle que soit la
+        // façon dont nous mourons**. `applicationWillTerminate` ne couvre que
+        // la fermeture propre — le seul cas où on n'a besoin de personne. Un
+        // `pkill` sur l'app laissait l'agent vivant et connecté au Relais.
+        arguments: [
+          "run", "--agent", agent,
+          "--watch-parent", String(ProcessInfo.processInfo.processIdentifier),
+        ],
         logURL: URL(fileURLWithPath: "/tmp/correspondance-\(agent).log")
       )
     }

@@ -77,11 +77,30 @@ public enum AgentEvents {
   }
 
   /// Le contenu d'un status : la ligne des moteurs, et l'agent qui la signe.
-  public static func status(body: String, agent: String) -> MatrixJSON {
+  /// Le status porte aussi **la machine et le pid** : c'est ce qui permet à un
+  /// agent qui démarre de savoir si un autre tourne déjà sur le même compte,
+  /// et de distinguer un concurrent vivant de son propre cadavre
+  /// (cf. `SingleInstance`).
+  public static func status(
+    body: String, agent: String,
+    host: String = AgentWire.hostName, pid: Int32 = ProcessInfo.processInfo.processIdentifier
+  ) -> MatrixJSON {
     .object([
       "body": .string(body),
       "agent": .string(agent),
+      AgentWire.StatusKey.host: .string(host),
+      AgentWire.StatusKey.pid: .integer(Int(pid)),
     ])
+  }
+
+  /// Ce qu'un status raconte de l'agent qui l'a posté. `nil` pour un status
+  /// d'avant cette version : on ne peut alors rien conclure, et c'est la
+  /// fenêtre de temps qui tranchera.
+  public static func sighting(in content: MatrixJSON, at date: Date) -> SingleInstance.Sighting? {
+    guard let host = content.value(at: AgentWire.StatusKey.host)?.stringValue,
+          let pid = content.value(at: AgentWire.StatusKey.pid)?.intValue
+    else { return nil }
+    return SingleInstance.Sighting(host: host, pid: Int32(pid), at: date)
   }
 
   /// Le contenu d'une demande de permission : le texte lisible, l'outil, et

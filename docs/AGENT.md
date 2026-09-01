@@ -136,6 +136,60 @@ Si quelqu'un y revient : commencer par renommer le `Label` en
 puis regarder `log stream --predicate 'subsystem == "com.apple.smd"'` pendant un
 `register()`.
 
+## Au plus un agent vivant par compte
+
+Deux agents sur le même compte Matrix, ce sont **deux réponses à chaque message**. Le plan
+le nomme depuis le premier jour ; un essai réel l'a rendu concret : un `pkill` sur l'app a
+laissé l'agent vivant et connecté, et relancer l'app donnait deux agents pendant quelques
+secondes.
+
+Deux mécaniques le tiennent, et elles se complètent.
+
+### 1. L'agent meurt avec l'app — quelle que soit la façon dont elle meurt
+
+`applicationWillTerminate` ne couvre que la fermeture propre : le seul cas où on n'a besoin
+de personne. L'app passe donc son pid à l'agent (`--watch-parent <pid>`), qui vérifie
+toutes les deux secondes que son parent n'a pas changé. Quand l'app meurt — proprement, par
+un crash, par un « Forcer à quitter » — le noyau réattribue l'agent à `launchd`, il le voit
+et s'arrête.
+
+**Pourquoi `getppid()` et pas un tube hérité.** Le tube serait plus immédiat (EOF au lieu
+d'un sondage), mais il passerait par l'entrée standard de l'agent — et sous systemd, cette
+entrée est `/dev/null`, qui rend EOF *tout de suite* : l'agent s'arrêterait au démarrage sur
+le NUC. `getppid()` n'a pas cette ambiguïté, et ne surveille que si on lui a donné un
+parent : un agent lancé par systemd n'en a pas, et n'en cherche pas.
+
+Éprouvé pour de vrai : `infra/agent/tests/orphelin.sh <chemin du binaire>` lance un agent
+sous un parent, tue le parent par `SIGKILL`, et vérifie que l'agent s'en va tout seul (il
+part en une seconde).
+
+### 2. Un second agent refuse de démarrer
+
+L'agent publie son status avec **sa machine et son pid**. Au démarrage, il cherche le status
+le plus récent posté sous son compte et tranche :
+
+- **même machine** : le pid est vérifiable (`kill(pid, 0)`). Vivant → il refuse et le dit ;
+  mort → c'est son propre cadavre, il démarre. C'est le cas d'un redémarrage après chute, et
+  il doit marcher — sinon le surveillant de l'app renoncerait au bout de huit essais.
+- **autre machine** : rien n'est vérifiable à distance, alors une fenêtre de deux minutes
+  tranche. Plus frais que ça, on croit l'autre vivant.
+
+L'app refuse déjà d'activer un second hôte ; le faire **aussi** dans l'agent couvre le cas
+où les deux lanceurs ne se connaissent pas — un `systemctl start` sur le NUC ne sait rien
+d'un clic sur le Mac.
+
+### Ce qui reste : le bail
+
+La réponse complète est un **bail court renouvelé dans la room console** : l'agent le prend
+au démarrage, le renouvelle en tournant, et un second agent qui trouve un bail valide
+s'arrête. C'est l'invariant « au plus une instance vivante » de Buzz, et il a deux mérites
+sur ce qui précède — il couvre deux machines sans fenêtre de temps arbitraire, et il expire
+tout seul si le porteur meurt.
+
+Il n'est pas fait : plus cher (un event d'état à renouveler, une horloge à ne pas trop
+croire) et pas nécessaire tant que les deux mécaniques ci-dessus tiennent les cas réels.
+À reprendre le jour où quelqu'un fera tourner deux hôtes pour de bon.
+
 ## La config vient du Relais
 
 Une **room console** par agent porte sa configuration, event d'état

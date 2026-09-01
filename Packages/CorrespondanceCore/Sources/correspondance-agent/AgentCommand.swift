@@ -126,6 +126,19 @@ struct AgentCommand {
 
     case "run":
       let config = loadConfig()
+      // L'app nous passe son pid : quand elle meurt — proprement, par un crash
+      // ou par un `pkill` — on meurt avec elle. Sans ça l'agent survit,
+      // connecté au Relais, prêt à répondre au nom de son propriétaire, et un
+      // relancement donne deux agents sur le même compte.
+      var surveillance: Task<Void, Never>?
+      if let parent = ParentWatch.expectedParent(in: CommandLine.arguments) {
+        stamp("surveillance du parent \(parent) : je m'arrête s'il disparaît")
+        surveillance = ParentWatch.watch(expected: parent) {
+          FileHandle.standardOutput.write(Data("l'app qui m'a lancé a disparu — je m'arrête\n".utf8))
+          exit(0)
+        }
+      }
+      defer { surveillance?.cancel() }
       let agent = Agent(config: config, backend: makeBackend(config), stateURL: stateURL, log: { stamp($0) })
       do {
         try await agent.run()

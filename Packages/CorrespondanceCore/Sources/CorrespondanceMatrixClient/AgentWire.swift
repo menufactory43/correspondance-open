@@ -51,6 +51,20 @@ public enum AgentWire {
     public static let roomMode = "mode"
   }
 
+  /// Les clés de `fr.correspondance.agent.status`, au-delà du texte lisible.
+  /// La machine et le pid sont ce qui permet de refuser un second agent sur le
+  /// même compte — deux agents, ce sont deux réponses à chaque message.
+  public enum StatusKey {
+    public static let host = "host"
+    public static let pid = "pid"
+  }
+
+  /// Le nom court de cette machine : `umbrel`, pas `umbrel.local`.
+  public static var hostName: String {
+    let nom = ProcessInfo.processInfo.hostName
+    return nom.split(separator: ".").first.map(String.init) ?? nom
+  }
+
   /// Les clés de `fr.correspondance.agent.journal`.
   public enum JournalKey {
     public static let agent = "agent"
