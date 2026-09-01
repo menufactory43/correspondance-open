@@ -1710,6 +1710,15 @@ final class InboxStore {
       let creds = try await matrix.connect(homeserver: url, user: user, password: password)
       isMatrixConnected = true
       matrixStatusFR = "Matrix connecté (\(creds.userID))."
+      // Un Relais neuf n'a aucune conversation : l'inbox serait vide, et on
+      // n'aurait nulle part où parler à cc. La note à soi est cette porte
+      // d'entrée — on la crée une fois, elle est ensuite désignée par
+      // l'account data et le Mac comme l'iPhone tombent sur la même.
+      do {
+        _ = try await matrix.ensureSelfNote()
+      } catch {
+        Self.relayLog.error("note à soi non créée : \(error.localizedDescription, privacy: .public)")
+      }
       startMatrixSync()
     } catch {
       isMatrixConnected = false

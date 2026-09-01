@@ -45,6 +45,17 @@ infra/matrix/essai/essai.sh up
 qui démarrent, « prêt », les comptes `@essai` (propriétaire) et `@cc` (bot), puis un code
 `correspondance://relais/…` avec six mots de vérification.
 
+**Si le Relais d'essai tourne ailleurs que l'app** (sur le NUC, par exemple) : il ne publie
+son port que sur `127.0.0.1`, exprès — un Relais d'essai n'a rien à faire sur le réseau. Il
+faut donc un tunnel, à laisser ouvert pendant tout l'essai :
+
+```bash
+ssh -N -L 8009:127.0.0.1:8009 nuc     # dans un terminal à part
+```
+
+Le code d'appairage émis sur le NUC contient déjà `http://127.0.0.1:8009` : côté Mac, une
+fois le tunnel ouvert, il est juste.
+
 Si `docker` n'est pas là, le script s'arrête et le dit. La prod n'est pas touchée : toutes
 les commandes portent `-p correspondance-essai` (vérifié par
 `infra/matrix/tests/essai-isolation.sh`).
@@ -58,6 +69,19 @@ CORRESPONDANCE_HOME=essai open -a Correspondance
 Depuis Xcode : Product › Scheme › Edit Scheme › Run › Arguments › Environment Variables,
 `CORRESPONDANCE_HOME` = `essai`.
 
+**Le piège qui fait perdre une heure** : deux copies du dépôt (`main` et un worktree)
+partagent le même DerivedData. Un build sur l'une écrase le binaire de l'autre, et on lance
+alors une app **qui n'a pas le code qu'on teste** — sans que rien ne le signale. Donne un
+DerivedData à la branche :
+
+```bash
+xcodebuild -project Correspondance.xcodeproj -scheme Correspondance \
+  -configuration Debug -derivedDataPath /tmp/dd-essai build
+open /tmp/dd-essai/Build/Products/Debug/Correspondance.app --env CORRESPONDANCE_HOME=essai
+```
+
+Au moindre doute sur ce qui tourne : `ls -l` sur le binaire et compare l'heure au build.
+
 **Ce que tu dois voir** : une inbox **vide**, et dans Réglages › Matrix un encart « Essai »
 qui nomme le jeu de données. Si tu vois tes vraies conversations, la variable n'est pas
 passée — ferme l'app et recommence, ne va pas plus loin.
@@ -67,16 +91,27 @@ passée — ferme l'app et recommence, ne va pas plus loin.
 Réglages › Matrix › **Connecter un Relais** : colle le code de l'étape 1.
 
 **Ce que tu dois voir** : les six mots affichés sous le champ, **identiques** à ceux du
-terminal ; puis « Synchronisé avec le Relais ». Si les mots diffèrent, tu appaires autre
-chose que ce que tu viens d'installer — n'y va pas.
+terminal ; puis « Synchronisé avec le Relais », et **une conversation « Note à soi »** dans
+l'inbox. L'app la crée à l'appairage : un Relais neuf n'a aucune conversation, et sans elle
+il n'y aurait nulle part où parler à cc.
+
+Si les mots diffèrent, tu appaires autre chose que ce que tu viens d'installer — n'y va pas.
 
 ### 4. Activer cc
 
 Réglages › Agent › **Sur ce Mac** › « Activer sur ce Mac ».
 
-**Ce que tu dois voir** : « actif sur ce Mac », **ou** « à autoriser dans Réglages Système ›
-Éléments d'ouverture » avec un bouton « Autoriser… » (§ *Vérification manuelle* de
-`docs/AGENT.md` — c'est le point que personne n'a encore éprouvé de bout en bout).
+**Ce que tu dois voir**, dans l'ordre du plus probable : « installé, mais il n'a encore rien
+publié » (l'agent démarre, il n'a pas encore parlé) qui passe à « actif sur ce Mac » après
+son premier status ; **ou** « à autoriser dans Réglages Système › Éléments d'ouverture »
+avec un bouton « Autoriser… » (§ *Vérification manuelle* de `docs/AGENT.md` — c'est le point
+que personne n'a encore éprouvé de bout en bout).
+
+« Actif » n'est jamais une lecture du drapeau de macOS : il faut le service **et** l'amorce
+sur le disque **et** un status récent de l'agent. Si tu vois « installé à moitié », macOS a
+gardé un drapeau d'une installation précédente : « Réparer » refait tout le chemin. Ce cas
+est arrivé au premier essai réel, et l'écran ne proposait alors aucune sortie — c'est
+corrigé.
 
 Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse en moins d'une
 minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent :
