@@ -628,6 +628,16 @@
         "msgtype": "m.text",
         "body": "Et j'ai trouvé la photo du gîte 👇"
        }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$msg-groupe-suite-4",
+       "sender": "@whatsapp_lid-11111111111:correspondance.local",
+       "origin_server_ts": 1756400730000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Parfait, je note tout dans le carnet."
+       }
       }
      ]
     }

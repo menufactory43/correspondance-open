@@ -259,6 +259,14 @@ struct ThreadView: View {
     }
     .scrollDismissesKeyboard(.interactively)
     .defaultScrollAnchor(.bottom, for: .initialOffset)
+    // Le bas reste le bas quand le contenu change de taille. Sans ça, la pile
+    // paresseuse ouvrait le fil sur du vide dès la vingtaine de messages : elle
+    // ESTIME les rangées qu'elle n'a pas mesurées, le fil se posait au bas de
+    // cette estimation, puis la hauteur réelle — plus courte — laissait le
+    // décalage au-delà du dernier message. Plus rien à l'écran, donc plus rien
+    // à mesurer, donc plus de correction : un balayage seul en sortait.
+    // Seulement quand on lit le bas : plus haut, une arrivée ne doit pas tirer.
+    .defaultScrollAnchor(isNearBottom ? .bottom : nil, for: .sizeChanges)
     .scrollPosition($scrollPosition)
     // Quand le bas se rétrécit — clavier qui s'ouvre, citation ou pièces
     // jointes qui coiffent le champ — le fil remonte d'autant : ce qu'on

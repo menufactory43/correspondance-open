@@ -8,6 +8,30 @@ final class ThreadScrollUITests: XCTestCase {
     continueAfterFailure = false
   }
 
+  /// Le fil s'ouvre SUR sa dernière bulle, sans qu'un doigt ait à réveiller la
+  /// pile paresseuse : elle estimait les rangées qu'elle n'avait pas mesurées
+  /// et garait le fil au-delà de son propre bas — écran vide, cf.
+  /// `defaultScrollAnchor(_:for: .sizeChanges)`.
+  func testThreadOpensOnLastBubbleWithoutAnyGesture() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-CorrespondanceDemo", "-CorrespondanceDemoScreen", "fil"]
+    app.launch()
+
+    let last = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@", "Parfait, je note tout dans le carnet."))
+      .firstMatch
+    XCTAssertTrue(last.waitForExistence(timeout: 20), "la dernière bulle n'existe pas")
+    XCTAssertTrue(last.isHittable, "la dernière bulle est dans l'arbre mais pas à l'écran")
+
+    let png = XCUIScreen.main.screenshot().pngRepresentation
+    if let dir = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] {
+      try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("09-fil-ouvert.png"))
+    }
+    let attachment = XCTAttachment(uniformTypeIdentifier: "public.png", name: "09-fil-ouvert", payload: png)
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
   func testChevronAppearsWhenScrolledUpAndReturnsToBottom() {
     let app = XCUIApplication()
     app.launchArguments = ["-CorrespondanceDemo"]

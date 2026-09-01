@@ -521,6 +521,16 @@ struct MessageBubbleView: View {
     return post
   }
 
+  /// Les médias d'un message dans l'ordre de son album, chemins recollés au
+  /// cache : ce que Quick Look ouvrirait. Espace, dans le fil, s'en sert sur la
+  /// bulle survolée sans passer par la mosaïque.
+  static func quickLookURLs(for message: ChatMessage) -> [URL] {
+    message.attachments
+      .map(repaired)
+      .filter { ($0.isImage || $0.isVideo) && !$0.isGIF }
+      .compactMap(\.resolvedFileURL)
+  }
+
   /// Quick Look sur le média touché, les autres du message à portée de flèche.
   private func openMedia(at index: Int) {
     let urls = albumMedia.compactMap(\.resolvedFileURL)

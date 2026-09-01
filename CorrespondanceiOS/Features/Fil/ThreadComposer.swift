@@ -34,6 +34,9 @@ struct ThreadComposer: View {
   /// Où le doigt en est depuis le micro : ce qui fait glisser « Glisser pour annuler ».
   @State private var holdTranslation: CGSize = .zero
   @State private var holdStartedAt = Date()
+  /// Les gens du groupe, relus à l'ouverture du fil : taper « @ » ne doit pas
+  /// attendre le réseau.
+  @State private var members: [RelayStore.ThreadMember] = []
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -55,8 +58,34 @@ struct ThreadComposer: View {
   /// envoie la correction (cf. `RelayStore.send`).
   private var isEditing: Bool { store.editingMessage(conversationID) != nil }
 
+  /// Le « @Nom » en train de s'écrire, et les gens qui y répondent. Le même
+  /// `MentionParser` que le menu du Mac : une seule règle pour les deux
+  /// appareils, et le brouillon envoyé a donc exactement la même forme.
+  /// Seulement dans un groupe : en tête-à-tête, on sait à qui l'on parle.
+  private var mentionToken: MentionParser.Token? {
+    guard store.conversation(conversationID)?.isGroup == true else { return nil }
+    return MentionParser.activeToken(in: store.draftText(conversationID))
+  }
+
+  private var mentionMatches: [MentionCandidate] {
+    guard let mentionToken else { return [] }
+    let candidates = members.map { member in
+      MentionCandidate(
+        id: member.userID,
+        name: member.name,
+        avatar: .avatarStub(
+          network: store.conversation(conversationID)?.network ?? .whatsapp,
+          address: member.userID,
+          title: member.name
+        )
+      )
+    }
+    return MentionParser.matches(candidates, query: mentionToken.query)
+  }
+
   /// Quelque chose coiffe le champ : citation, pièces jointes, micro…
   private var hasStrips: Bool {
+    if !mentionMatches.isEmpty { return true }
     if !store.scheduledMessages(for: conversationID).isEmpty { return true }
     if store.replyTarget(conversationID) != nil { return true }
     if isEditing { return true }
@@ -80,6 +109,7 @@ struct ThreadComposer: View {
       // carte de verre plutôt que de s'appuyer sur un fond de fenêtre.
       if hasStrips {
         VStack(alignment: .leading, spacing: 8) {
+          if !mentionMatches.isEmpty { mentionStrip }
           if !store.scheduledMessages(for: conversationID).isEmpty {
             scheduledStrip
           }
@@ -129,6 +159,7 @@ struct ThreadComposer: View {
       guard store.isDemo, DemoRelay.requestedScreen == .plusTard else { return }
       isPickingSendLater = true
     }
+    .task(id: conversationID) { members = await store.members(conversationID) }
     .fullScreenCover(isPresented: $isTakingPhoto) {
       CameraCapture { url in
         if let url { store.addAttachment(url.path, conversationID: conversationID) }
@@ -372,6 +403,53 @@ struct ThreadComposer: View {
       .font(Typography.meta(typeface))
       .foregroundStyle(theme.inkSecondary)
       .padding(.horizontal, Spacing.xs)
+  }
+
+  /// Les gens qu'on peut désigner, en pastilles qui défilent — le Mac, lui, a
+  /// la place d'une liste et le clavier pour la piloter. Une tape pose
+  /// « @Nom » dans le brouillon, à la place de ce qu'on avait commencé.
+  private var mentionStrip: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 8) {
+        ForEach(mentionMatches) { candidate in
+          Button {
+            insertMention(candidate)
+          } label: {
+            HStack(spacing: 6) {
+              MemberAvatar(
+                conversationID: conversationID,
+                userID: candidate.id,
+                name: candidate.name,
+                size: 24,
+                theme: theme
+              )
+              Text(candidate.name)
+                .font(Typography.meta(typeface))
+                .foregroundStyle(theme.ink)
+                .lineLimit(1)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 10)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(theme.bubbleIn))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Mentionner \(candidate.name)")
+        }
+      }
+      .padding(.horizontal, Spacing.xs)
+    }
+    .frame(height: 36)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Mentionner quelqu'un")
+  }
+
+  private func insertMention(_ candidate: MentionCandidate) {
+    guard let mentionToken else { return }
+    store.setDraft(
+      MentionParser.insert(candidate, replacing: mentionToken, in: store.draftText(conversationID)),
+      conversationID: conversationID
+    )
   }
 
   /// Ce qui attend son heure dans CE fil, au-dessus du champ : sinon un

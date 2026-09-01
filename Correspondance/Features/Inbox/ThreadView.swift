@@ -1,4 +1,5 @@
 import AppKit
+import Quartz
 import SwiftUI
 import UniformTypeIdentifiers
 import CorrespondanceCore
@@ -50,6 +51,10 @@ struct ThreadView: View {
   @State private var missedCount = 0
   /// Un fichier survole le fil : la colonne se borde de pointillé.
   @State private var isDropTargeted = false
+  /// Le moniteur d'Espace. Pas un raccourci de menu : Espace appartient
+  /// d'abord au champ de saisie, et un équivalent-clavier sans modificateur
+  /// le lui volerait dans toute l'app.
+  @State private var quickLookMonitor: Any?
 
   private var theme: WritingTheme { themes.theme }
   private var thread: [ChatMessage] {
@@ -124,6 +129,11 @@ struct ThreadView: View {
           store.attach(urls: urls)
           return true
         } isTargeted: { isDropTargeted = $0 }
+        .onAppear(perform: watchQuickLook)
+        .onDisappear {
+          if let quickLookMonitor { NSEvent.removeMonitor(quickLookMonitor) }
+          quickLookMonitor = nil
+        }
         .overlay {
           if isDropTargeted {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -147,6 +157,30 @@ struct ThreadView: View {
       }
     }
     .background(theme.paper)
+  }
+
+  /// Espace ouvre Quick Look sur la bulle SURVOLÉE — c'est le survol qui
+  /// désigne le message (`selectMessage`), comme pour ⌘R. Le champ de saisie a
+  /// toujours le curseur dans cette fenêtre : c'est donc le BROUILLON qui
+  /// tranche — dès qu'on y a écrit quelque chose, Espace lui revient. Une
+  /// espace en tête de message ne veut rien dire ; une espace au milieu d'une
+  /// phrase, si. Rien à faire non plus quand le panneau est déjà ouvert (Espace
+  /// le referme) ou quand le message ne porte aucune photo.
+  private func watchQuickLook() {
+    guard quickLookMonitor == nil else { return }
+    quickLookMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      guard event.keyCode == 49,
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+            store.draftText.isEmpty,
+            !(QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared().isVisible),
+            let id = store.selectedMessageID,
+            let message = store.messages.first(where: { $0.id == id })
+      else { return event }
+      let urls = MessageBubbleView.quickLookURLs(for: message)
+      guard !urls.isEmpty else { return event }
+      QuickLookPanel.open(urls: urls)
+      return nil
+    }
   }
 
   /// Le fil ne montre plus une bulle isolée par message : les prises de parole

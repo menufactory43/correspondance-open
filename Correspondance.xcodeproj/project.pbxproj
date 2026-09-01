@@ -43,6 +43,7 @@
 		40276C56251E072B800E7657 /* LaunchGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1035547A9E34370159CF87 /* LaunchGate.swift */; };
 		48B99E0231E1D4B751E16E2D /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = CD054E8FAA9E48EC5121F3DF /* Fonts */; };
 		4A52A4BDB65B6CDF95A9679C /* RelayStore+Group.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDFB226BB26FCAB3CCDBDCA /* RelayStore+Group.swift */; };
+		4CFBE18F2F0C8FE85D7BCF63 /* ThreadMentionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFECCF92D699474A01F7C668 /* ThreadMentionUITests.swift */; };
 		5152ABA560F184A04472AB55 /* CorrespondanceiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F4051D4B4D35D826FCBC41 /* CorrespondanceiOSApp.swift */; };
 		5892E9181882ACCB886A08A0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6548D536BB3B22103519FF9A /* RootView.swift */; };
 		5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */; };
@@ -305,6 +306,7 @@
 		CD054E8FAA9E48EC5121F3DF /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = Correspondance/Resources/Fonts; sourceTree = SOURCE_ROOT; };
 		CE1035547A9E34370159CF87 /* LaunchGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchGate.swift; sourceTree = "<group>"; };
 		CF291CB888D9703104F47AB1 /* WindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowChrome.swift; sourceTree = "<group>"; };
+		CFECCF92D699474A01F7C668 /* ThreadMentionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadMentionUITests.swift; sourceTree = "<group>"; };
 		D606EC58D3EE63E98DA4836A /* ConversationAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAvatar.swift; sourceTree = "<group>"; };
 		D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D795885D36B118B751ABF6B2 /* NewGroupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewGroupSheet.swift; sourceTree = "<group>"; };
@@ -631,6 +633,7 @@
 				3D03259AAAF015B7E7C7ED0F /* InboxNavigationUITests.swift */,
 				4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */,
 				8FD91090D22C8F4B9DB00543 /* ThreadMediaUITests.swift */,
+				CFECCF92D699474A01F7C668 /* ThreadMentionUITests.swift */,
 				418C5A9108CB689F2CFD6F9C /* ThreadRecordingUITests.swift */,
 				8389AC7B1B1BBA8D7D6A7F0B /* ThreadScrollUITests.swift */,
 				F8263FFCE5BDC949B3FBEDE7 /* ThreadSearchJumpUITests.swift */,
@@ -1028,6 +1031,7 @@
 				033185C5BA411C7BF93BE797 /* InboxNavigationUITests.swift in Sources */,
 				AA6BA0E7020906B49E8D0389 /* ThreadGesturesUITests.swift in Sources */,
 				B20DA05969A9A5B907CC26E3 /* ThreadMediaUITests.swift in Sources */,
+				4CFBE18F2F0C8FE85D7BCF63 /* ThreadMentionUITests.swift in Sources */,
 				8F04B51130D641967DEDEA84 /* ThreadRecordingUITests.swift in Sources */,
 				02B6048F769F60C78C012557 /* ThreadScrollUITests.swift in Sources */,
 				75296337378E0A5800F75132 /* ThreadSearchJumpUITests.swift in Sources */,
