@@ -104,6 +104,16 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     /// annonce gagne — les adaptateurs ne nomment pas leurs modes pareil.
     public var permissionModes: [String] = ["bypassPermissions", "acceptEdits", "default"]
     public var timeoutSeconds: Int = 600
+    /// La version de l'adaptateur qu'on a **éprouvée**. Elle est posée par
+    /// l'installation, pas cherchée au lancement : le régime de permission par
+    /// défaut d'un adaptateur change d'une version à l'autre (cf. le mode
+    /// `auto` de `claude-agent-acp` dans `docs/SPIKE-acp.md`). Une version
+    /// différente ne bloque pas, elle se signale dans le journal.
+    public var pinnedVersion: String? = "0.16.2"
+    /// Comment l'installer, quand l'app propose de le faire.
+    public var installCommand: String = "npm install -g @zed-industries/claude-code-acp@0.16.2"
+    /// Le silence après lequel un moteur chaud s'éteint.
+    public var idleSeconds: Int = 600
 
     public init() {}
 
@@ -115,17 +125,21 @@ public struct AgentConfig: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
       case command, binary, arguments, defaultCwd, permissionModes, timeoutSeconds
+      case pinnedVersion, installCommand, idleSeconds
     }
 
     public init(from decoder: Decoder) throws {
       let c = try decoder.container(keyedBy: CodingKeys.self)
-      command = try c.decodeIfPresent(String.self, forKey: .command) ?? "claude-code-acp"
+      let defaults = ACPSettings()
+      command = try c.decodeIfPresent(String.self, forKey: .command) ?? defaults.command
       binary = try c.decodeIfPresent(String.self, forKey: .binary)
       arguments = try c.decodeIfPresent([String].self, forKey: .arguments) ?? []
       defaultCwd = try c.decodeIfPresent(String.self, forKey: .defaultCwd)
-      permissionModes = try c.decodeIfPresent([String].self, forKey: .permissionModes)
-        ?? ["bypassPermissions", "acceptEdits", "default"]
-      timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 600
+      permissionModes = try c.decodeIfPresent([String].self, forKey: .permissionModes) ?? defaults.permissionModes
+      timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? defaults.timeoutSeconds
+      pinnedVersion = try c.decodeIfPresent(String.self, forKey: .pinnedVersion) ?? defaults.pinnedVersion
+      installCommand = try c.decodeIfPresent(String.self, forKey: .installCommand) ?? defaults.installCommand
+      idleSeconds = try c.decodeIfPresent(Int.self, forKey: .idleSeconds) ?? defaults.idleSeconds
     }
   }
 

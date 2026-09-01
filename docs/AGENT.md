@@ -101,6 +101,23 @@ Moteurs disponibles :
   rend la permission (`session/request_permission`), la reprise (`session/load`), la
   réponse progressive (`session/update`) et le compte des jetons. **L'abonnement suffit**,
   éprouvé — cf. `docs/SPIKE-acp.md`, qui dit aussi pourquoi le mode se force toujours.
+
+  **La dépendance Node, et sa règle.** L'ACP ajoute un adaptateur Node là où `claude`
+  suffisait. Trois précautions, et le NUC ne bascule pas avant qu'elles tiennent :
+  1. **une version épinglée** dans la config (`acp.pinnedVersion`, `acp.installCommand`) —
+     une version qu'on n'a pas éprouvée se signale dans le journal, parce que le régime de
+     permission par défaut d'un adaptateur change d'une version à l'autre ;
+  2. **l'adaptateur est posé par l'installation** — la cible embarquée pour ce Mac,
+     l'installeur pour un hôte distant — jamais cherché au lancement ;
+  3. **repli automatique sur `ClaudeCodeBackend`** (`FallbackBackend`) si l'adaptateur
+     manque ou ne répond pas : l'agent répond quand même, et le journal le dit. Le repli
+     est collant — on ne réessaie pas l'adaptateur à chaque message — et il ne se
+     déclenche pas sur un tour trop long, qu'on ne rejoue pas ailleurs.
+
+  **Un moteur chaud par conversation.** Un tour froid paie ~2,9 s de démarrage (0,4 s de
+  processus, 2,5 s de `session/load` — mesuré dans `docs/SPIKE-acp.md`). `ACPEnginePool`
+  garde donc un moteur debout par dossier de conversation, quatre au plus, éteint après
+  dix minutes de silence.
 - `claude` (défaut) : Claude Code, `claude -p`, sessions `--resume`, permissions 👍.
 - `hermes` : [Hermes de Nous Research](https://hermes-agent.nousresearch.com) —
   `hermes -z` (un tour, texte seul), reprise `-r`, `session_id` lu dans

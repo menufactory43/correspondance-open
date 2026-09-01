@@ -58,10 +58,25 @@ struct AgentCommand {
       }
       return HermesBackend(settings: config.hermes)
     case .acp:
-      guard ACPBackend.resolveBinary(config.acp) != nil else {
-        fail("`\(config.acp.command)` introuvable — installe l'adaptateur ACP du moteur (npm i -g @zed-industries/claude-code-acp) ou renseigne acp.binary")
+      let acp = ACPBackend(settings: config.acp, log: { stamp($0) })
+      // L'ACP apporte une dépendance neuve (un adaptateur Node) là où `claude`
+      // suffisait. Si `claude` est là, il devient le repli : un hôte sans
+      // adaptateur répond quand même, et le journal le dit. Sans repli
+      // possible, on refuse de démarrer plutôt que de rester muet en silence.
+      guard ClaudeCodeBackend.resolveBinary(config.claude.binary) != nil else {
+        guard ACPBackend.resolveBinary(config.acp) != nil else {
+          fail("ni `\(config.acp.command)` ni `claude` — installe l'adaptateur (\(config.acp.installCommand)) ou Claude Code")
+        }
+        return acp
       }
-      return ACPBackend(settings: config.acp, log: { stamp($0) })
+      if ACPBackend.resolveBinary(config.acp) == nil {
+        stamp("`\(config.acp.command)` introuvable — je réponds par la CLI ; pour l'ACP : \(config.acp.installCommand)")
+      }
+      return FallbackBackend(
+        primary: acp,
+        secondary: ClaudeCodeBackend(settings: config.claude, selfBinary: ClaudeCodeBackend.resolveSelfBinary()),
+        log: { stamp($0) }
+      )
     }
   }
 

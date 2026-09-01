@@ -75,6 +75,32 @@ permissions (→ `session/request_permission`), les sessions `--resume` (→ `se
 bouton « Arrêter » (→ `session/cancel`), et le plafond horaire qui devient un plafond de
 jetons mesuré (→ `usage_update`).
 
+## Ce qu'un tour coûte (mesuré)
+
+Trois tours froids et deux tours chauds sur la même conversation, `claude-code-acp`
+0.16.2, ce Mac. Un tour « froid » relance un processus, comme aujourd'hui ; un tour
+« chaud » réutilise un processus et sa session.
+
+| Étape | Froid | Chaud |
+|---|---|---|
+| processus + `initialize` | 390–454 ms | — (déjà debout) |
+| `session/load` (reprendre la conversation) | 2 392–2 459 ms | — (déjà chargée) |
+| `session/prompt` (« réponds OK ») | 3 690–4 202 ms | 3 750–11 436 ms |
+| **total** | **6,6–7,0 s** | 3,7–11,4 s |
+
+Deux lectures, et la seconde compte plus que la première :
+
+1. **Le démarrage évitable est de ~2,9 s** — 0,4 s de processus, 2,5 s de `session/load`.
+   C'est au-dessus de la seconde : on garde donc **un moteur chaud par conversation**,
+   avec expiration d'inactivité. Le gain est réel, ~30 % d'un tour courant.
+2. **Le temps du modèle domine et varie énormément** (3,7 s à 11,4 s pour la même
+   question triviale). Un tour chaud n'est donc pas « deux fois plus rapide » : il est
+   plus rapide de 2,9 s, sur un total qui reste dicté par le modèle. Aucun chiffre de
+   ce tableau ne doit être cité comme une performance : ce sont des ordres de grandeur,
+   pris une fois, sur une machine.
+
+Reproduire : `node tools/acp-spike/mesure.mjs` et `mesure2.mjs`.
+
 ## Ce qui reste à éprouver
 
 - **Sur Linux, en service** : `npx` suppose Node sur l'hôte. Il faudra épingler une version
