@@ -560,18 +560,36 @@ final class RelayStore {
       // Avant, tout — backfill réseau, pièces jointes une à une — se faisait
       // écran vide ; un groupe plein de photos mettait des secondes à paraître.
       let local = await matrix.messages(conversationID: target)
-      messages[target] = local
+      showLoaded(local, in: target)
       // Le Relais ne complète que les fils encore courts : un fil déjà garni
       // par le magasin n'a rien à redemander à l'ouverture.
       var fresh = local
       if backfill, local.count < Self.shortThreadCount {
         fresh = await matrix.backfill(conversationID: target)
-        messages[target] = fresh
+        showLoaded(fresh, in: target)
       }
       // Les pièces jointes raffinent l'affichage après coup, sans le retenir.
-      messages[target] = await matrix.ensureLocalAttachments(fresh)
+      showLoaded(await matrix.ensureLocalAttachments(fresh), in: target)
     }
   }
+
+  /// Pose la page du magasin dans le fil SANS effacer les bulles en vol.
+  /// Un `/sync` peut rendre la main pendant l'envoi — l'agent se met à
+  /// « écrire » dès qu'on lui parle — et le rafraîchissement remplaçait alors
+  /// la liste : la bulle optimiste, pas encore au magasin, s'évanouissait
+  /// jusqu'à la confirmation du Relais.
+  private func showLoaded(_ list: [ChatMessage], in target: String) {
+    let known = Set(list.map(\.id))
+    let flying = inFlightBubbles.values
+      .filter { $0.conversationID == target && !known.contains($0.id) }
+      .sorted { $0.sentAt < $1.sentAt }
+    messages[target] = list + flying
+  }
+
+  /// Les bulles optimistes dont l'envoi n'est pas encore confirmé, par
+  /// identifiant local. Elles quittent la table quand le Relais a répondu —
+  /// dans un sens ou dans l'autre — ou quand on annule l'envoi.
+  private var inFlightBubbles: [String: ChatMessage] = [:]
 
   /// Le compteur de non-lus s'éteint à l'écran tout de suite ; le Relais suivra
   /// avec son accusé de lecture, au rythme du réseau.
@@ -738,11 +756,13 @@ final class RelayStore {
         localID: localID,
         replyToMessageID: replyID
       )
+      inFlightBubbles.removeValue(forKey: localID)
       await loadMessages(conversationID: conversationID, backfill: false)
     } catch {
       syncError = Self.readable(error)
       // L'envoi a échoué : le texte revient dans le champ plutôt que de
       // disparaître avec la bulle optimiste.
+      inFlightBubbles.removeValue(forKey: localID)
       messages[target]?.removeAll { $0.id == localID }
       localDrafts[conversationID] = text
       pendingAttachments[conversationID] = paths
@@ -815,6 +835,7 @@ final class RelayStore {
     guard let pending = pendingSends.removeValue(forKey: localID) else { return }
     pending.task?.cancel()
     undoableSendIDs.remove(localID)
+    inFlightBubbles.removeValue(forKey: localID)
     messages[pending.target]?.removeAll { $0.id == localID }
     setDraft(pending.text, conversationID: pending.conversationID)
     pendingAttachments[pending.conversationID] = pending.paths
@@ -862,18 +883,18 @@ final class RelayStore {
       localPath: envoi.path
     )
     piece.voice = voice
-    messages[target, default: []].append(
-      ChatMessage(
-        id: localID,
-        conversationID: target,
-        network: conversation.network,
-        text: "",
-        sentAt: .now,
-        isFromMe: true,
-        isPending: true,
-        attachments: [piece]
-      )
+    let optimistic = ChatMessage(
+      id: localID,
+      conversationID: target,
+      network: conversation.network,
+      text: "",
+      sentAt: .now,
+      isFromMe: true,
+      isPending: true,
+      attachments: [piece]
     )
+    inFlightBubbles[localID] = optimistic
+    messages[target, default: []].append(optimistic)
 
     guard !isDemo else { return }
     do {
@@ -883,9 +904,11 @@ final class RelayStore {
         voice: voice,
         localID: localID
       )
+      inFlightBubbles.removeValue(forKey: localID)
       await loadMessages(conversationID: conversationID, backfill: false)
     } catch {
       syncError = Self.readable(error)
+      inFlightBubbles.removeValue(forKey: localID)
       messages[target]?.removeAll { $0.id == localID }
     }
   }
@@ -913,6 +936,7 @@ final class RelayStore {
         MessageAttachment(id: $0, contentType: "", filename: URL(fileURLWithPath: $0).lastPathComponent, localPath: $0)
       }
     )
+    inFlightBubbles[localID] = optimistic
     messages[target, default: []].append(optimistic)
   }
 
