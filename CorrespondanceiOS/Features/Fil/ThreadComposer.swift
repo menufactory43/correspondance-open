@@ -111,12 +111,12 @@ struct ThreadComposer: View {
     return MentionParser.matches(candidates, query: mentionToken.query)
   }
 
-  /// Quelque chose coiffe le champ : citation, pièces jointes, micro…
+  /// Quelque chose coiffe le champ : pièces jointes, mentions, micro… La
+  /// citation et la correction, elles, vivent DANS la pilule : elles font
+  /// partie du message qu'on écrit, pas de ce qui l'entoure.
   private var hasStrips: Bool {
     if !mentionMatches.isEmpty { return true }
     if !store.scheduledMessages(for: conversationID).isEmpty { return true }
-    if store.replyTarget(conversationID) != nil { return true }
-    if isEditing { return true }
     if !store.attachments(conversationID).isEmpty { return true }
     if case .failed = store.recorder.state { return true }
     return false
@@ -133,19 +133,13 @@ struct ThreadComposer: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       // Pas de barre pleine largeur : le composer flotte, comme Signal. Ce qui
-      // coiffe le champ (citation, pièces jointes, micro) prend sa propre
+      // coiffe le champ (pièces jointes, mentions, micro) prend sa propre
       // carte de verre plutôt que de s'appuyer sur un fond de fenêtre.
       if hasStrips {
         VStack(alignment: .leading, spacing: 8) {
           if !mentionMatches.isEmpty { mentionStrip }
           if !store.scheduledMessages(for: conversationID).isEmpty {
             scheduledStrip
-          }
-          if let quoted = store.replyTarget(conversationID) {
-            replyChip(quoted)
-          }
-          if let edited = store.editingMessage(conversationID) {
-            editChip(edited)
           }
           if !store.attachments(conversationID).isEmpty {
             attachmentStrip
@@ -227,6 +221,28 @@ struct ThreadComposer: View {
   // MARK: - Le champ
 
   private var bubble: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      if let quoted = store.replyTarget(conversationID) {
+        replyChip(quoted)
+      }
+      if let edited = store.editingMessage(conversationID) {
+        editChip(edited)
+      }
+      bubbleRow
+    }
+    .padding(.leading, 10)
+    .padding(.trailing, 4)
+    .padding(.vertical, 4)
+    .frame(minHeight: 40)
+    .glassSurface(
+      cornerRadius: 22,
+      fallbackFill: theme.paperSecondary,
+      border: isFocused ? theme.accent.opacity(0.4) : theme.edge
+    )
+  }
+
+  /// Le champ et son bouton, sur une seule ligne.
+  private var bubbleRow: some View {
     HStack(alignment: .bottom, spacing: 6) {
       if isRecordingBubble {
         recordingField
@@ -249,15 +265,6 @@ struct ThreadComposer: View {
 
       trailingControl
     }
-    .padding(.leading, 10)
-    .padding(.trailing, 4)
-    .padding(.vertical, 4)
-    .frame(minHeight: 40)
-    .glassSurface(
-      cornerRadius: 22,
-      fallbackFill: theme.paperSecondary,
-      border: isFocused ? theme.accent.opacity(0.4) : theme.edge
-    )
   }
 
   @ViewBuilder
@@ -583,7 +590,9 @@ struct ThreadComposer: View {
       .buttonStyle(.plain)
       .accessibilityLabel("Ne plus citer ce message")
     }
-    .padding(.horizontal, Spacing.xs)
+    .padding(.leading, 4)
+    .padding(.trailing, 8)
+    .padding(.top, 6)
     // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
     // prend celle que l'encart de bas d'écran lui propose — tout l'écran —
     // et la citation recouvre le fil au lieu de coiffer le champ.
@@ -618,7 +627,9 @@ struct ThreadComposer: View {
       .buttonStyle(.plain)
       .accessibilityLabel("Renoncer à la modification")
     }
-    .padding(.horizontal, Spacing.xs)
+    .padding(.leading, 4)
+    .padding(.trailing, 8)
+    .padding(.top, 6)
     .fixedSize(horizontal: false, vertical: true)
     .accessibilityElement(children: .combine)
   }
