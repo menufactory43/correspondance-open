@@ -44,6 +44,8 @@ struct MessageBubbleView: View {
   var onVotePoll: ((String) -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Les gens du fil : ce sont eux qui font d'un « @Nom » une mention.
+  @Environment(\.mentionNames) private var mentionNames
 
   /// Le curseur est sur cette rangée : les actions rapides se montrent.
   @State private var isHovered = false
@@ -574,7 +576,8 @@ struct MessageBubbleView: View {
     guard !ranges.isEmpty else {
       return LinkedText.render(
         text: displayText,
-        tint: message.isFromMe ? theme.bubbleOutInk : theme.accent
+        tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
+        mentions: mentionNames
       )
     }
     var attributed = AttributedString(displayText)
@@ -588,7 +591,8 @@ struct MessageBubbleView: View {
     return LinkedText.render(
       text: displayText,
       tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
-      base: attributed
+      base: attributed,
+      mentions: mentionNames
     )
   }
 

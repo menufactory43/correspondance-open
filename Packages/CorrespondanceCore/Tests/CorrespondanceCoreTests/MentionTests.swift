@@ -60,4 +60,42 @@ final class MentionTests: XCTestCase {
     let token = MentionParser.activeToken(in: text)!
     XCTAssertEqual(MentionParser.insert(person("Papa"), replacing: token, in: text), "salut @Papa ")
   }
+
+  // MARK: - Surlignage
+
+  private func surligne(_ text: String, _ names: [String]) -> [String] {
+    MentionHighlight.ranges(in: text, names: names).map { String(text[$0]) }
+  }
+
+  func testLaMentionPoseeSeReconnaitAvecSonArobase() {
+    XCTAssertEqual(surligne("salut @Papa ça va", people), ["@Papa"])
+  }
+
+  func testUnNomEnDeuxMotsSeReconnaitEntier() {
+    XCTAssertEqual(surligne("@Hugo Pauline tu viens ?", people), ["@Hugo Pauline"])
+  }
+
+  func testLeNomLePlusLongLEmporte() {
+    XCTAssertEqual(surligne("@Maman maison ce soir", ["Maman", "Maman maison"]), ["@Maman maison"])
+  }
+
+  func testUnNomQuiNEstQuUnDebutNeSeReconnaitPas() {
+    XCTAssertEqual(surligne("@Papale", people), [])
+  }
+
+  func testPlusieursMentionsDansLaMemePhrase() {
+    XCTAssertEqual(surligne("@Papa et @Pastèque", people), ["@Papa", "@Pastèque"])
+  }
+
+  func testLaCasseEtLesAccentsNEmpechentPasDeReconnaitre() {
+    XCTAssertEqual(surligne("coucou @eleonore", ["Éléonore"]), ["@eleonore"])
+  }
+
+  func testUneAdresseEmailNEstPasUneMention() {
+    XCTAssertEqual(surligne("écris à papa@pasteque.fr", people), [])
+  }
+
+  func testSansPersonneConnueRienNEstSurligne() {
+    XCTAssertEqual(surligne("@Papa", []), [])
+  }
 }

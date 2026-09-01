@@ -5,12 +5,14 @@ import CorrespondanceCore
 /// sur macOS, SwiftUI confie l'attribut `.link` à `openURL`.
 public struct LinkedText: View {
   public let text: String
+  /// Les gens du fil : « @Nom » prend alors l'encre de la mention.
+  public var mentions: [String] = []
   /// Couleur des liens — celle du thème, jamais le bleu système : il tranche sur
   /// les six papiers et devient illisible sur les sombres.
   public var tint: Color
 
   public var body: some View {
-    Text(LinkedText.render(text: text, tint: tint))
+    Text(LinkedText.render(text: text, tint: tint, mentions: mentions))
   }
 
   /// Pose liens, couleur et soulignement sur `base` (ou sur le texte nu).
@@ -20,7 +22,9 @@ public struct LinkedText: View {
   /// mais jamais quand un `base` est fourni : ses plages de surlignage désignent
   /// le texte NU, et l'interprétation le raccourcirait sous elles.
   @MainActor
-  public static func render(text: String, tint: Color, base: AttributedString? = nil) -> AttributedString {
+  public static func render(
+    text: String, tint: Color, base: AttributedString? = nil, mentions: [String] = []
+  ) -> AttributedString {
     let interpreted = base == nil ? InlineMarkdown.attributed(text) : nil
     var attributed = base ?? interpreted ?? AttributedString(text)
     let plain = interpreted.map { String($0.characters) } ?? text
@@ -29,6 +33,13 @@ public struct LinkedText: View {
       attributed[bounds].link = link.url
       attributed[bounds].foregroundColor = tint
       attributed[bounds].underlineStyle = .single
+    }
+    // Les « @Nom » du fil : l'encre du thème et le demi-gras. Pas de
+    // soulignement — c'est la marque des liens, et une mention n'en est pas un.
+    for range in MentionHighlight.ranges(in: plain, names: mentions) {
+      guard let bounds = Range(NSRange(range, in: plain), in: attributed) else { continue }
+      attributed[bounds].foregroundColor = tint
+      attributed[bounds].inlinePresentationIntent = .stronglyEmphasized
     }
     // Un lien nommé porte déjà son adresse : il ne lui manque que l'encre.
     for range in attributed.runs.filter({ $0.link != nil }).map(\.range) {
@@ -62,8 +73,9 @@ public struct LinkedText: View {
     return found
   }
 
-  public init(text: String, tint: Color) {
+  public init(text: String, tint: Color, mentions: [String] = []) {
     self.text = text
     self.tint = tint
+    self.mentions = mentions
   }
 }

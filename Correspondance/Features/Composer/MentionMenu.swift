@@ -11,6 +11,9 @@ struct MentionField: ViewModifier {
   var session: ConversationSession?
   var theme: WritingTheme
   var font: Font
+  /// L'interligne du champ : le surlignage se pose DERRIÈRE son texte, il doit
+  /// donc être composé exactement comme lui.
+  var lineSpacing: CGFloat
 
   @Environment(InboxStore.self) private var store
   @State private var selectedIndex = 0
@@ -30,6 +33,17 @@ struct MentionField: ViewModifier {
 
   func body(content: Content) -> some View {
     content
+      // La mention posée se voit dans le champ : `TextField` ne prend que du
+      // texte nu, la bande d'accent se glisse donc derrière lui.
+      .background(alignment: .topLeading) {
+        MentionUnderlay(
+          text: text,
+          names: session?.mentionCandidates.map(\.name) ?? [],
+          tint: theme.accent.opacity(0.16),
+          font: font,
+          lineSpacing: lineSpacing
+        )
+      }
       .onKeyPress(.upArrow) { step(-1) }
       .onKeyPress(.downArrow) { step(1) }
       .onKeyPress(.return) { pick() }
@@ -85,9 +99,12 @@ struct MentionField: ViewModifier {
 extension View {
   /// Taper « @ » dans ce champ ouvre le menu des gens du fil ouvert.
   func mentionMenu(
-    text: Binding<String>, session: ConversationSession?, theme: WritingTheme, font: Font
+    text: Binding<String>, session: ConversationSession?, theme: WritingTheme, font: Font,
+    lineSpacing: CGFloat
   ) -> some View {
-    modifier(MentionField(text: text, session: session, theme: theme, font: font))
+    modifier(
+      MentionField(text: text, session: session, theme: theme, font: font, lineSpacing: lineSpacing)
+    )
   }
 }
 

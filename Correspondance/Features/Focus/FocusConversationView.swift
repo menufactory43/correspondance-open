@@ -257,7 +257,11 @@ struct FocusTranscriptView: View {
                     }
                   }
                   if shouldShowFocusText(message) {
-                    LinkedText(text: message.text, tint: theme.accent)
+                    LinkedText(
+                      text: message.text,
+                      tint: theme.accent,
+                      mentions: live?.mentionCandidates.map(\.name) ?? []
+                    )
                       .font(pageFont)
                       .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
                       // L'interligne DE LETTRE du thème, entier : la page Focus
@@ -563,7 +567,10 @@ struct FocusPageEditor: View {
           .focused($isFocused)
           .frame(maxWidth: .infinity, alignment: .leading)
           // Avant « Entrée = envoyer » et « Échap = quitter » : le menu « @ » a la main.
-          .mentionMenu(text: text, session: session, theme: theme, font: pageFont)
+          .mentionMenu(
+            text: text, session: session, theme: theme, font: pageFont,
+            lineSpacing: theme.lineSpacing(forBodySize: pageBodySize)
+          )
           .onKeyPress(.return) {
             if NSEvent.modifierFlags.contains(.shift) { return .ignored }
             guard canSend, !isSending else { return .handled }

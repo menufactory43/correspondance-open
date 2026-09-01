@@ -116,6 +116,7 @@
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
 		D099FC98DF3CFFDF4196D6BA /* InboxFloatingBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D0AE563D1722592CC227A3 /* InboxFloatingBar.swift */; };
 		D15D7A95318463E9AB25D6BD /* ConversationPillHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */; };
+		D5D194636ECCA227A0CA1491 /* InFlightBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */; };
 		D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
 		D715DF3EF9D0387064702836 /* IMessageAttachmentSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */; };
@@ -317,6 +318,7 @@
 		E9B5F5874770558B125F18B0 /* ReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactionTests.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		ECED9025AA8FF631D0B21DD6 /* RelayLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayLoginView.swift; sourceTree = "<group>"; };
+		EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InFlightBubbleTests.swift; sourceTree = "<group>"; };
 		F05230BF81C295B4DEAB342E /* ConversationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSession.swift; sourceTree = "<group>"; };
 		F182E185A81655BCD5EF0FE6 /* ThreadComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadComposer.swift; sourceTree = "<group>"; };
 		F4B0C9C36993CDABC57044E2 /* RelayStore+Scheduled.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Scheduled.swift"; sourceTree = "<group>"; };
@@ -493,6 +495,7 @@
 				506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */,
 				493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */,
 				23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */,
+				EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */,
 				159B414D35163785B3368CC9 /* QuickReplyTests.swift */,
 				F649DFA9ED32E6540420359B /* QuotedReplyTests.swift */,
 				E9B5F5874770558B125F18B0 /* ReactionTests.swift */,
@@ -971,6 +974,7 @@
 				9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */,
 				FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */,
 				A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */,
+				D5D194636ECCA227A0CA1491 /* InFlightBubbleTests.swift in Sources */,
 				74879E315ECC26508E7130ED /* QuickReplyTests.swift in Sources */,
 				62CF0DE82E8A7D932BB498C5 /* QuotedReplyTests.swift in Sources */,
 				1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */,

@@ -86,3 +86,47 @@ public enum MentionParser {
     text.replacingCharacters(in: token.range, with: "@\(candidate.name) ")
   }
 }
+
+/// LES MENTIONS POSÉES, une fois le nom choisi. Le composer écrit « @Nom » en
+/// texte nu — c'est ce que tous les réseaux transportent — mais rien ne le
+/// distinguait ensuite de la phrase autour : ni dans le champ, ni dans la bulle.
+///
+/// On relit donc le texte avec la liste des gens du fil : ce qui suit un « @ »
+/// et qui porte le nom de quelqu'un est une mention, et prend l'encre.
+public enum MentionHighlight {
+  /// Les plages « @Nom » d'un texte, l'arobase comprise. Le nom le plus long
+  /// d'abord : dans un fil où vivent « Marie » et « Marie Claire »,
+  /// « @Marie Claire » ne se coupe pas en deux.
+  public static func ranges(in text: String, names: [String]) -> [Range<String.Index>] {
+    guard text.contains("@") else { return [] }
+    let sorted = names
+      .filter { !MentionParser.fold($0).isEmpty }
+      .sorted { $0.count > $1.count }
+    guard !sorted.isEmpty else { return [] }
+
+    var found: [Range<String.Index>] = []
+    var cursor = text.startIndex
+    while let at = text[cursor...].firstIndex(of: "@") {
+      cursor = text.index(after: at)
+      // La même règle qu'à la frappe : un « @ » collé à un mot est une adresse
+      // e-mail, pas une mention.
+      guard at == text.startIndex || text[text.index(before: at)].isWhitespace else { continue }
+      let rest = text[cursor...]
+      guard let name = sorted.first(where: { starts(rest, with: $0) }) else { continue }
+      let end = text.index(cursor, offsetBy: name.count)
+      found.append(at..<end)
+      cursor = end
+    }
+    return found
+  }
+
+  /// Le nom entier, et rien de plus : « @Paul » ne prend pas le « ine » de
+  /// « @Pauline ». Casse et accents ignorés, comme le filtre du menu.
+  private static func starts(_ rest: Substring, with name: String) -> Bool {
+    guard rest.count >= name.count else { return false }
+    let end = rest.index(rest.startIndex, offsetBy: name.count)
+    guard MentionParser.fold(String(rest[..<end])) == MentionParser.fold(name) else { return false }
+    if end < rest.endIndex, rest[end].isLetter || rest[end].isNumber { return false }
+    return true
+  }
+}

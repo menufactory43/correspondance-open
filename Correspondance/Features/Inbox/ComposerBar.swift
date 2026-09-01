@@ -155,15 +155,18 @@ struct ComposerBar: View {
       .onChange(of: text) { _, _ in
         if isFocused { store.confirmSelectionAsRead() }
       }
-      .padding(.leading, 2)
-      .padding(.vertical, 4)
       // Avant le « Entrée = envoyer » : quand le menu est ouvert, Entrée choisit.
+      // Avant les marges, aussi : le surlignage de la mention se pose derrière
+      // le texte, et se décalerait d'autant.
       .mentionMenu(
         text: $text,
         session: store.primarySession,
         theme: theme,
-        font: composerFont
+        font: composerFont,
+        lineSpacing: theme.bubbleLineSpacing(forBodySize: Typography.composerSize(themes.textScale))
       )
+      .padding(.leading, 2)
+      .padding(.vertical, 4)
       .onKeyPress(.escape) {
         guard isEditing else { return .ignored }
         store.cancelEditing()

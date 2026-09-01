@@ -41,5 +41,17 @@ final class ThreadMentionUITests: XCTestCase {
       "la mention n'est pas arrivée dans le brouillon"
     )
     XCTAssertTrue(candidate.waitForNonExistence(timeout: 5), "la rangée est restée après le choix")
+
+    // La mention posée se voit dans le champ : « @Clara Nguyen » sur sa bande
+    // d'accent. La capture est là pour qu'on vérifie l'aplomb des deux calques.
+    let posee = XCUIScreen.main.screenshot().pngRepresentation
+    if let dir = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] {
+      try? posee.write(to: URL(fileURLWithPath: dir).appendingPathComponent("11-mention-posee.png"))
+    }
+    let poseeAttachment = XCTAttachment(
+      uniformTypeIdentifier: "public.png", name: "11-mention-posee", payload: posee
+    )
+    poseeAttachment.lifetime = .keepAlways
+    add(poseeAttachment)
   }
 }

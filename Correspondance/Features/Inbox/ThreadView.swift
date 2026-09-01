@@ -157,6 +157,15 @@ struct ThreadView: View {
       }
     }
     .background(theme.paper)
+    // Les gens du fil descendent jusqu'aux bulles : c'est ce qui fait d'un
+    // « @Nom » une mention plutôt qu'un mot comme les autres.
+    .environment(\.mentionNames, mentionNames)
+  }
+
+  /// Les noms qu'on peut mentionner ici — la liste que le menu « @ » du
+  /// composer tient déjà à jour pour la session ouverte.
+  private var mentionNames: [String] {
+    store.primarySession?.mentionCandidates.map(\.name) ?? []
   }
 
   /// Espace ouvre Quick Look sur la bulle SURVOLÉE — c'est le survol qui

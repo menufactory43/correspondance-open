@@ -3315,7 +3315,8 @@ final class InboxStore {
       }
       guard !refreshed.isEmpty else { return }
       let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
-      let recombined = (others + refreshed).sorted { $0.sentAt < $1.sentAt }
+      let recombined = (others + Self.keepingInFlight(refreshed, from: session.messages))
+        .sorted { $0.sentAt < $1.sentAt }
       // Le `/sync` revient dès qu'un événement passe QUELQUE PART — une frappe,
       // un accusé de lecture dans un autre salon. Réécrire le fil à l'identique
       // suffirait à faire refaire son corps et sa mise en page à chaque bulle :
@@ -3329,13 +3330,24 @@ final class InboxStore {
     guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
-    let refreshed = await matrix.ensureLocalAttachments(fetched)
+    let refreshed = Self.keepingInFlight(await matrix.ensureLocalAttachments(fetched), from: session.messages)
     // Même raison qu'au-dessus : un fil identique se réécrit sans rien apporter,
     // et l'observation, elle, y croit.
     if session.messages != refreshed { session.messages = refreshed }
     applySidebarPreview(conversationID: id, from: session.messages)
     recordReplyProof(for: id, in: session.messages)
     if isAttended(id) { clearUnread(for: id) }
+  }
+
+  /// La page du magasin, SANS effacer les bulles en vol. Un `/sync` peut
+  /// rendre la main pendant l'envoi — l'agent se met à « écrire » dès qu'on
+  /// lui parle — et la réécriture du fil faisait disparaître la bulle
+  /// optimiste, pas encore au magasin, jusqu'à la confirmation du Relais.
+  /// Une fois livrée (`isPending` retombé), la copie du Relais la remplace.
+  static func keepingInFlight(_ fresh: [ChatMessage], from current: [ChatMessage]) -> [ChatMessage] {
+    let known = Set(fresh.map(\.id))
+    let flying = current.filter { $0.isPending && $0.isFromMe && !known.contains($0.id) }
+    return flying.isEmpty ? fresh : fresh + flying
   }
 
   /// Ce fil est-il réellement lu par quelqu'un en ce moment ? L'inbox le lit si

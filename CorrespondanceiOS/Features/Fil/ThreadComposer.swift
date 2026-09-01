@@ -29,6 +29,10 @@ private enum MicHaptic {
 
 struct ThreadComposer: View {
   let conversationID: String
+  /// Les gens du groupe, relus à l'ouverture du fil par la vue du fil : taper
+  /// « @ » ne doit pas attendre le réseau, et les bulles ont besoin des mêmes
+  /// noms pour reconnaître une mention.
+  var members: [RelayStore.ThreadMember] = []
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -62,9 +66,6 @@ struct ThreadComposer: View {
   @State private var touchSpent = false
   /// Le chevron du guide respire vers le haut : c'est lui qui dit « par ici ».
   @State private var hintBreathes = false
-  /// Les gens du groupe, relus à l'ouverture du fil : taper « @ » ne doit pas
-  /// attendre le réseau.
-  @State private var members: [RelayStore.ThreadMember] = []
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -181,7 +182,6 @@ struct ThreadComposer: View {
       guard store.isDemo, DemoRelay.requestedScreen == .plusTard else { return }
       isPickingSendLater = true
     }
-    .task(id: conversationID) { members = await store.members(conversationID) }
     .fullScreenCover(isPresented: $isTakingPhoto) {
       CameraCapture { url in
         if let url { store.addAttachment(url.path, conversationID: conversationID) }
@@ -259,6 +259,18 @@ struct ThreadComposer: View {
         .foregroundStyle(theme.ink)
         .lineLimit(1...6)
         .focused($isFocused)
+        // La mention posée se voit dans le champ : `TextField` ne prend que du
+        // texte nu, la bande d'accent se glisse donc derrière lui — avant les
+        // marges, sans quoi elle se décalerait d'autant.
+        .background(alignment: .topLeading) {
+          MentionUnderlay(
+            text: text.wrappedValue,
+            names: members.map(\.name),
+            tint: theme.accent.opacity(0.16),
+            font: Typography.composer(typeface),
+            lineSpacing: theme.bubbleLineSpacing(forBodySize: Typography.composerSize())
+          )
+        }
         .padding(.leading, 4)
         .padding(.vertical, 6)
       }

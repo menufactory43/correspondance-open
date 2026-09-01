@@ -37,6 +37,8 @@ struct MessageBubble: View {
   var onIgnoreProposal: (() -> Void)?
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Les gens du fil : ce sont eux qui font d'un « @Nom » une mention.
+  @Environment(\.mentionNames) private var mentionNames
   @State private var dragOffset: CGFloat = 0
   /// Le seuil de citation est franchi : le doigt l'a senti, on ne le redit pas.
   @State private var hasCrossedThreshold = false
@@ -455,7 +457,8 @@ struct MessageBubble: View {
   private var highlighted: AttributedString {
     LinkedText.render(
       text: displayText,
-      tint: message.isFromMe ? theme.bubbleOutInk : theme.accent
+      tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
+      mentions: mentionNames
     )
   }
 

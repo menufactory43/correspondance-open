@@ -39,6 +39,9 @@ struct ThreadView: View {
   @State private var settledMessageID: String?
   /// Ce qui est arrivé pendant qu'on lisait plus haut.
   @State private var missedCount = 0
+  /// Les gens du fil, relus à son ouverture : le champ en fait le menu « @ »,
+  /// les bulles y reconnaissent les « @Nom » posés.
+  @State private var members: [RelayStore.ThreadMember] = []
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -56,7 +59,7 @@ struct ThreadView: View {
     thread
       .background(theme.paper.ignoresSafeArea())
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        ThreadComposer(conversationID: conversationID)
+        ThreadComposer(conversationID: conversationID, members: members)
       }
       .overlay {
         if let focused {
@@ -96,6 +99,10 @@ struct ThreadView: View {
         openedAt = Date()
         await store.open(conversationID: conversationID)
       }
+      .task(id: conversationID) { members = await store.members(conversationID) }
+      // Les gens du fil descendent jusqu'aux bulles : c'est ce qui fait d'un
+      // « @Nom » une mention plutôt qu'un mot comme les autres.
+      .environment(\.mentionNames, members.map(\.name))
       .task(id: store.pendingJumpMessageID) {
         guard let target = store.pendingJumpMessageID else { return }
         await consumeJump(target)
