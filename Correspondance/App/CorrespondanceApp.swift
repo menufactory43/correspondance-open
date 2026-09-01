@@ -13,6 +13,7 @@ struct CorrespondanceApp: App {
   @NSApplicationDelegateAdaptor(CorrespondanceAppDelegate.self) private var appDelegate
 
   init() {
+    LaunchTrace.mark("main")
     // Pas de restauration d'état AppKit au lancement : l'inbox passait par
     // `NSPersistentUIRestorer` (boucle imbriquée, décodage, seconde passe de
     // layout) pour ne restaurer… rien — il n'y a même pas d'état sauvegardé
@@ -41,6 +42,13 @@ struct CorrespondanceApp: App {
           await LaunchGate.firstWindowOnScreen()
           try? await Task.sleep(for: .milliseconds(500))
           await store.start()
+          if let count = LaunchBench.switchCount {
+            await LaunchGate.firstThreadOnScreen()
+            try? await Task.sleep(for: .seconds(2))
+            let current = store.selectedConversationID
+            let ids = store.activeQueue.map(\.id).filter { $0 != current }.prefix(count)
+            _ = await LaunchBench.run(select: { await store.select($0) }, ids: Array(ids))
+          }
         }
     }
     .defaultSize(width: 1100, height: 760)

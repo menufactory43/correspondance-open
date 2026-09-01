@@ -77,7 +77,7 @@ func marks(pid: pid_t, since: Date) -> [String: Int] {
   return out
 }
 
-struct Sample { var windowCG: Double; var window: Int?; var threadBegin: Int?; var thread: Int? }
+struct Sample { var windowCG: Double; var window: Int?; var threadBegin: Int?; var thread: Int?; var main: Int?; var didFinish: Int? }
 var samples: [String: [Sample]] = [:]
 
 for run in 1...runs {
@@ -86,10 +86,18 @@ for run in 1...runs {
     let cfg = NSWorkspace.OpenConfiguration()
     cfg.activates = true
     // « a+b » : plusieurs drapeaux dans une même variante.
-    if variant != "base" { cfg.environment = ["CORR_EXP": variant.replacingOccurrences(of: "+", with: ",")] }
+    // « nom@/chemin/vers/Autre.app » : la variante lance une AUTRE build — c'est
+    // ainsi qu'on compare un avant et un après dans les mêmes blocs alternés.
+    var name = variant
+    var url = appURL
+    if let at = variant.firstIndex(of: "@") {
+      name = String(variant[..<at])
+      url = URL(fileURLWithPath: String(variant[variant.index(after: at)...]))
+    }
+    if name != "base" { cfg.environment = ["CORR_EXP": name.replacingOccurrences(of: "+", with: ",")] }
     let since = Date()
     let sem = DispatchSemaphore(value: 0)
-    NSWorkspace.shared.openApplication(at: appURL, configuration: cfg) { _, _ in sem.signal() }
+    NSWorkspace.shared.openApplication(at: url, configuration: cfg) { _, _ in sem.signal() }
     let deadline = Date().addingTimeInterval(15)
     var got: Double? = nil
     var pid: pid_t = 0
@@ -108,10 +116,10 @@ for run in 1...runs {
     Thread.sleep(forTimeInterval: 0.5)
     guard let got else { print("\(variant) run \(run): timeout"); continue }
     let m = marks(pid: pid, since: since)
-    let s = Sample(windowCG: got, window: m["window"], threadBegin: m["thread-begin"], thread: m["thread"])
+    let s = Sample(windowCG: got, window: m["window"], threadBegin: m["thread-begin"], thread: m["thread"], main: m["main"], didFinish: m["didFinish"])
     samples[variant, default: []].append(s)
     func fmt(_ v: Int?) -> String { v.map(String.init) ?? "-" }
-    print("\(variant) run \(run): window_cg=\(Int(got)) window=\(fmt(s.window)) thread-begin=\(fmt(s.threadBegin)) first-bubble=\(fmt(m["first-bubble"])) didFinish=\(fmt(m["didFinish"])) frame1=\(fmt(m["frame1"])) thread=\(fmt(s.thread)) full=\(fmt(m["thread-full"]))")
+    print("\(variant) run \(run): main=\(fmt(m["main"])) didFinish=\(fmt(m["didFinish"])) frame1=\(fmt(m["frame1"])) window_cg=\(Int(got)) window=\(fmt(s.window)) thread=\(fmt(s.thread)) full=\(fmt(m["thread-full"]))")
     fflush(stdout)
   }
 }
@@ -127,7 +135,7 @@ func pad(_ s: String, _ n: Int, left: Bool = false) -> String {
   return left ? s + fill : fill + s
 }
 print("\n=== médianes (ms depuis la création du process) ===")
-print([pad("variante", 20, left: true), pad("win_cg", 8), pad("window", 8), pad("t-begin", 8), pad("thread", 8), pad("fil", 8), "  n"].joined())
+print([pad("variante", 20, left: true), pad("main", 8), pad("didFin", 8), pad("win_cg", 8), pad("window", 8), pad("thread", 8), pad("fil", 8), "  n"].joined())
 for variant in variants {
   let xs = samples[variant] ?? []
   // « fil » : de la fenêtre à l'écran (CG) au fil montré.
@@ -137,9 +145,10 @@ for variant in variants {
   }
   print([
     pad(variant, 20, left: true),
+    pad(show(median(xs.compactMap { $0.main.map(Double.init) })), 8),
+    pad(show(median(xs.compactMap { $0.didFinish.map(Double.init) })), 8),
     pad(show(median(xs.map(\.windowCG))), 8),
     pad(show(median(xs.compactMap { $0.window.map(Double.init) })), 8),
-    pad(show(median(xs.compactMap { $0.threadBegin.map(Double.init) })), 8),
     pad(show(median(xs.compactMap { $0.thread.map(Double.init) })), 8),
     pad(show(median(fil)), 8),
     "  \(xs.count)",

@@ -343,6 +343,7 @@ public actor MatrixBridgeService {
 
   /// Les correspondants d'un salon — ni moi, ni le bot, ni mon propre ghost.
   public func members(conversationID: String) -> [Member] {
+    hydrateIfNeeded()
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return [] }
     return model.remoteMembers(selfUserID: selfUserID).map {
       Member(userID: $0.userID, displayName: $0.member.displayName, avatarMXC: $0.member.avatarMXC)
@@ -382,6 +383,7 @@ public actor MatrixBridgeService {
 
   /// L'agent est-il déjà membre (ou invité) de ce fil ?
   public func hasAgent(conversationID: String) -> Bool {
+    hydrateIfNeeded()
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }
     return model.members[agentUserID]?.isActive == true
   }
@@ -404,11 +406,13 @@ public actor MatrixBridgeService {
   /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
   /// pont ne l'annonce (voir `MatrixRoomModel.isNetworkFlaggedRequest`).
   public func networkFlaggedRequestIDs() -> Set<String> {
-    Set(rooms.values.filter(\.isNetworkFlaggedRequest).map(\.conversationID))
+    hydrateIfNeeded()
+    return Set(rooms.values.filter(\.isNetworkFlaggedRequest).map(\.conversationID))
   }
 
   /// « Alice écrit… » pour ce fil, ou `nil` si personne n'écrit.
   public func typingLabel(conversationID: String, now: Date = Date()) -> String? {
+    hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return nil }
     return rooms[roomID]?.typingLabelFR(now: now, selfUserID: selfUserID)
   }
@@ -416,6 +420,7 @@ public actor MatrixBridgeService {
   /// « Vu par Alice et Bruno » pour ce fil de groupe, ou `nil` : en DM le
   /// « Vu » de `Conversation.lastDelivery` dit déjà tout.
   public func seenByLabel(conversationID: String) -> String? {
+    hydrateIfNeeded()
     guard let roomID = roomID(forConversation: conversationID) else { return nil }
     return rooms[roomID]?.seenByLabelFR(selfUserID: selfUserID)
   }
@@ -800,7 +805,12 @@ public actor MatrixBridgeService {
 
   /// Photo d'un participant (`m.room.member` → `avatar_url`) : c'est elle que le
   /// fil pose à gauche des bulles d'un groupe, où chaque bulle a un autre visage.
+  ///
+  /// Relit d'abord le magasin : au lancement, le fil se dessine depuis le disque
+  /// avant la première passe `/sync`, et un actor encore vide répondait « pas de
+  /// photo » — réponse que le Mac mettait en cache pour toute la session.
   public func memberAvatarData(conversationID: String, userID: String) async -> Data? {
+    hydrateIfNeeded()
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }),
           let mxc = model.members[userID]?.avatarMXC, !mxc.isEmpty
     else { return nil }

@@ -192,29 +192,40 @@ struct ContentView: View {
       }
     }
 
-    ToolbarItemGroup(placement: .primaryAction) {
-      if store.selectedConversation != nil {
-        Button("Archiver", systemImage: "archivebox") {
-          Task { await store.archiveSelected() }
-        }
-        .help("Archiver (⌘E)")
-      }
-
-      if !isFocus {
-        Button(
-          store.isLoading || store.isLiveSyncing ? "Synchronisation…" : "Actualiser",
-          systemImage: store.isLoading || store.isLiveSyncing ? "hourglass" : "arrow.clockwise"
-        ) {
-          Task { await store.refresh() }
-        }
-        .disabled(store.isLoading)
-        .help("Actualiser (⌘R)")
-      }
-
-      Button("Focus", systemImage: isFocus ? "rectangle.split.2x1" : "text.aligncenter") {
-        store.setMode(isFocus ? .inbox : .focus)
-      }
-      .help(isFocus ? "Revenir à l’inbox (⌘⇧F)" : "Mode Focus (⌘⇧F)")
+    // Un seul item pour les trois boutons, pas un par bouton : chaque item de
+    // barre est une vue hôte SwiftUI à part entière (graphe, contraintes,
+    // taille minimale), et trois en coûtaient ~25 ms au lancement — mesuré en
+    // blocs alternés, `tools/launch`. Le rendu est le même.
+    ToolbarItem(placement: .primaryAction) {
+      // Espacement nul : les boutons portent déjà leur propre marge, et c'est
+      // ce qui rend l'écart d'un groupe natif (vérifié à la capture d'écran).
+      HStack(spacing: 0) { primaryButtons }
     }
+  }
+
+  @ViewBuilder
+  private var primaryButtons: some View {
+    if store.selectedConversation != nil {
+      Button("Archiver", systemImage: "archivebox") {
+        Task { await store.archiveSelected() }
+      }
+      .help("Archiver (⌘E)")
+    }
+
+    if !isFocus {
+      Button(
+        store.isLoading || store.isLiveSyncing ? "Synchronisation…" : "Actualiser",
+        systemImage: store.isLoading || store.isLiveSyncing ? "hourglass" : "arrow.clockwise"
+      ) {
+        Task { await store.refresh() }
+      }
+      .disabled(store.isLoading)
+      .help("Actualiser (⌘R)")
+    }
+
+    Button("Focus", systemImage: isFocus ? "rectangle.split.2x1" : "text.aligncenter") {
+      store.setMode(isFocus ? .inbox : .focus)
+    }
+    .help(isFocus ? "Revenir à l’inbox (⌘⇧F)" : "Mode Focus (⌘⇧F)")
   }
 }

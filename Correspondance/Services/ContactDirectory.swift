@@ -56,7 +56,12 @@ actor ContactDirectory {
     /// Absent d'un cache d'avant les fiches : optionnel, et reconstruit alors.
     var people: [PersonEntry]?
     var savedAt: Date
+    /// Le jeton d'historique de Contacts au moment de l'index : tant qu'il n'a
+    /// pas bougé, le carnet est le même et l'index se garde tel quel.
+    var historyToken: Data?
   }
+  /// Jeton d'historique du dernier index construit (ou relu du disque).
+  private var indexedHistoryToken: Data?
 
   init() {
     // Chargement sync du cache disque — prêt avant le 1er resolve.
@@ -66,6 +71,7 @@ actor ContactDirectory {
       nameByKey = disk.names
       imagePathByKey = disk.imageFiles
       people = disk.people ?? []
+      indexedHistoryToken = disk.historyToken
     }
   }
 
@@ -280,6 +286,16 @@ actor ContactDirectory {
   private func rebuildIndexFromContacts() async {
     guard await ensureAccess() else { return }
 
+    // Reparcourir tout le carnet — photos comprises, réécrites une à une sur le
+    // disque — coûtait ~200 ms de CPU à chaque lancement, en concurrence avec
+    // la première frame. Contacts tient un jeton qui change à la moindre
+    // modification : s'il est celui de l'index en place, il n'y a rien à refaire.
+    let token = store.currentHistoryToken
+    if let token, token == indexedHistoryToken, !(nameByKey.isEmpty && imagePathByKey.isEmpty) {
+      didIndex = true
+      return
+    }
+
     let keys: [CNKeyDescriptor] = [
       CNContactGivenNameKey as CNKeyDescriptor,
       CNContactFamilyNameKey as CNKeyDescriptor,
@@ -349,13 +365,17 @@ actor ContactDirectory {
       nameByKey = nextNames
       imagePathByKey = nextImages
       people = nextPeople
+      indexedHistoryToken = token
       persistIndex()
     }
     didIndex = true
   }
 
   private func persistIndex() {
-    let disk = DiskIndex(names: nameByKey, imageFiles: imagePathByKey, people: people, savedAt: Date())
+    let disk = DiskIndex(
+      names: nameByKey, imageFiles: imagePathByKey, people: people, savedAt: Date(),
+      historyToken: indexedHistoryToken
+    )
     guard let data = try? JSONEncoder().encode(disk) else { return }
     try? data.write(to: Self.indexURL, options: [.atomic])
   }

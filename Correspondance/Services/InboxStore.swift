@@ -1006,11 +1006,16 @@ final class InboxStore {
       try? await Task.sleep(for: .milliseconds(600))
       guard !Task.isCancelled else { return }
       DraftStore.save(snapshot)
+      draftPersistTask = nil
     }
   }
 
   private func persistDraftsNow() {
-    draftPersistTask?.cancel()
+    // Rien en attente : rien à écrire. Sans cette garde, chaque bascule de fil
+    // réécrivait le fichier des brouillons à l'identique, sur le fil principal.
+    guard let pending = draftPersistTask else { return }
+    pending.cancel()
+    draftPersistTask = nil
     DraftStore.save(drafts)
   }
 
@@ -3514,12 +3519,20 @@ final class InboxStore {
         return []
       }
     case .signal, .whatsapp, .instagram, .selfNote:
+      let began = ContinuousClock.now
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {
         // Fil jamais ouvert, ou connu seulement par la fenêtre du sync initial :
-        // on va chercher l'historique que le bridge a backfillé.
-        cached = await matrix.backfill(conversationID: conversation.id)
+        // on va chercher l'historique que le bridge a backfillé. Mais si le
+        // magasin a déjà de quoi montrer, on le montre — la page remontée du
+        // Relais viendra se poser au-dessus, sans retenir l'ouverture.
+        if cached.isEmpty {
+          cached = await matrix.backfill(conversationID: conversation.id)
+        } else {
+          backfillInBackground(conversation.id)
+        }
       }
+      LaunchTrace.event("fetch-store", Int((ContinuousClock.now - began).ms))
       if cached.isEmpty {
         // Au lancement la session n'est pas encore vérifiée, mais des identifiants
         // existent : ce n'est pas « pas connecté », c'est « pas encore synchronisé ».
@@ -3538,12 +3551,26 @@ final class InboxStore {
           )
         ]
       }
+      let attachmentsBegan = ContinuousClock.now
       let resolved = HiddenMessageStore.visible(
         await matrix.ensureLocalAttachments(cached),
         hiddenIDs: hiddenMessageIDs
       )
+      LaunchTrace.event("fetch-attachments", Int((ContinuousClock.now - attachmentsBegan).ms))
       applySidebarPreview(conversationID: conversation.id, from: resolved)
       return resolved
+    }
+  }
+
+  /// Remonte une page d'historique sans retenir le fil : une fois arrivée, le
+  /// fil ouvert (s'il l'est encore) se relit depuis le magasin.
+  private func backfillInBackground(_ conversationID: String) {
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let before = await matrix.messages(conversationID: conversationID).count
+      let after = await matrix.backfill(conversationID: conversationID).count
+      guard after > before, let session = sessions[conversationID] else { return }
+      await refreshMatrixMessages(into: session)
     }
   }
 

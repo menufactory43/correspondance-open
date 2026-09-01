@@ -93,4 +93,34 @@ final class MatrixBridgeLocalStoreTests: XCTestCase {
     XCTAssertEqual(store.roomCount(), 0)
     XCTAssertNil(store.syncCursor)
   }
+
+  /// Le visage d'un membre se demande à froid : le fil d'un groupe se dessine
+  /// depuis le disque avant la première passe `/sync`, et c'est à ce moment-là
+  /// qu'il réclame ses photos. Un actor qui n'aurait pas encore relu ses salons
+  /// répondrait « personne » — et le Mac gardait cette réponse toute la session.
+  func testMembersAreKnownBeforeAnySyncOrConversationListing() async throws {
+    let store = try LocalStore.inMemory()
+    var model = MatrixRoomModel(roomID: roomID)
+    model.network = .signal
+    model.explicitName = "Les voisins"
+    model.bridgeRoomType = "group"
+    model.members["@signal_1:correspondance.local"] = .init(
+      displayName: "Camille", membership: "join", avatarMXC: "mxc://relais/camille"
+    )
+    model.members[selfUserID] = .init(displayName: "meffysto", membership: "join")
+    store.commit(
+      rooms: [StoredRoom(model: model, selfUserID: selfUserID)],
+      messages: [:], reactions: [:], cursor: .some("s1")
+    )
+    let service = MatrixBridgeService(credentials: nil, store: store)
+
+    // Premier appel de la session, sans `conversations()` ni `/sync` avant lui.
+    // (Sans identifiants, le service ne connaît pas encore « moi » : on cherche
+    // Camille, sans supposer que je sois filtré.)
+    let members = await service.members(conversationID: "signal:\(roomID)")
+    let camille = members.first { $0.userID == "@signal_1:correspondance.local" }
+    XCTAssertEqual(camille?.avatarMXC, "mxc://relais/camille")
+    let hasAgent = await service.hasAgent(conversationID: "signal:\(roomID)")
+    XCTAssertFalse(hasAgent)
+  }
 }

@@ -12,8 +12,11 @@ actor SenderAvatarStore {
 
   private var memory: [String: Data] = [:]
   /// Auteurs dont on sait déjà qu'on n'a pas de photo : sans cette trace, chaque
-  /// passe de placement du fil relancerait la même recherche pour rien.
-  private var known: Set<String> = []
+  /// passe de placement du fil relancerait la même recherche pour rien. Mais
+  /// « pas de photo » se périme — un membre arrivé au `/sync` suivant, un carnet
+  /// enrichi — donc la trace porte sa date et s'efface au bout d'une minute.
+  private var known: [String: Date] = [:]
+  private static let negativeCacheTTL: TimeInterval = 60
   /// Photo d'un participant de salon Matrix. Le store ne connaît pas le service
   /// de pont — `InboxStore` lui prête de quoi la chercher, comme pour les portails.
   private var matrixMemberLoader: (@Sendable (String, String) async -> Data?)?
@@ -44,7 +47,10 @@ actor SenderAvatarStore {
     guard let senderID, !senderID.isEmpty else { return nil }
     let key = "\(conversationID)|\(senderID)"
     if let cached = memory[key] { return cached }
-    if known.contains(key) { return nil }
+    if let missedAt = known[key] {
+      if Date().timeIntervalSince(missedAt) < Self.negativeCacheTTL { return nil }
+      known.removeValue(forKey: key)
+    }
 
     let resolved: Data?
     switch network {
@@ -70,8 +76,11 @@ actor SenderAvatarStore {
       }
     }
 
-    known.insert(key)
-    if let resolved { memory[key] = resolved }
+    if let resolved {
+      memory[key] = resolved
+    } else {
+      known[key] = Date()
+    }
     return resolved
   }
 
@@ -79,6 +88,6 @@ actor SenderAvatarStore {
   func invalidate(conversationID: String) {
     let prefix = "\(conversationID)|"
     memory = memory.filter { !$0.key.hasPrefix(prefix) }
-    known = known.filter { !$0.hasPrefix(prefix) }
+    known = known.filter { !$0.key.hasPrefix(prefix) }
   }
 }

@@ -83,6 +83,13 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
           - "@executable_path/../Frameworks"
+      configs:
+        # Une build Release locale ne porte que l'architecture de la machine :
+        # la tranche x86_64 d'un binaire universel coûtait ~20 ms avant `main`
+        # (mesuré en blocs alternés, `tools/launch`). Une archive de
+        # distribution ignore ce réglage et reste universelle.
+        Release:
+          ONLY_ACTIVE_ARCH: YES
     info:
       path: Correspondance/Info.plist
       properties:

@@ -34,6 +34,18 @@ Build Release d'abord :
   LaunchServices (comme le Dock), mesure process → fenêtre à l'écran
   (`CGWindowList`, colonne `win_cg`) et relit les jalons du journal. `+` combine
   plusieurs drapeaux dans une variante. Colonne `fil` = `thread − win_cg`.
+  Une variante `nom@/chemin/Autre.app` lance une **autre build** : c'est ainsi
+  qu'on compare un avant et un après dans les mêmes blocs alternés
+  (`launchexp <après.app> 8 "avant@/chemin/avant.app,base"`). Colonnes `main`
+  (première ligne Swift, donc le pré-`main`) et `didFin` en plus.
+- `switchbench.sh <app> [runs] [count] [CORR_EXP]` — **le banc de bascule.**
+  Lance l'app avec `CORR_BENCH=switch:<count>` : une fois le premier fil
+  peint, le pilote intégré (`LaunchBench`, `App/LaunchExperiment.swift`) ouvre
+  les `count` premiers fils de la file l'un après l'autre et journalise chaque
+  latence sélection → **premier fil garni** (`BENCH switch …`, catégorie
+  `bench`). La latence réelle par process se relit aussi depuis les jalons
+  `EVENT select` / `EVENT shown n>0` — c'est la mesure qui vaut pour comparer
+  deux builds (le résumé du pilote a changé de définition en septembre 2026).
 - `launchtimer.swift` — l'ancêtre : process → fenêtre seulement, une variante.
 - `wid.swift` / `widall.swift` — numéro de la fenêtre inbox, pour
   `screencapture -x -o -l <id>` (vérité écran ; blanc si la fenêtre est sur un
@@ -73,3 +85,39 @@ Correspondance). Les mesures tuent toute instance de l'app.
   pour ne rien restaurer : désactivée (`ApplePersistenceIgnoreState`, domaine
   volatil). Le cadre de fenêtre et les largeurs de colonnes viennent des
   préférences et survivent — vérifié par un quit propre.
+
+## Septembre 2026 — ce qui a été mesuré, gardé, écarté
+
+Bruit de mesure : deux variantes **identiques** en blocs alternés (8 runs)
+diffèrent de ±20 ms à fenêtre. Rien sous 25 ms n'est un résultat.
+
+Gardé (A/B avant/après, 8 × 2, même minute) :
+- **Un seul item de barre** pour les trois boutons d'action au lieu d'un
+  `ToolbarItemGroup` (trois vues hôtes) : ~25 ms à fenêtre et au fil.
+- **Release locale en `ONLY_ACTIVE_ARCH`** : la tranche x86_64 du binaire
+  universel coûtait ~20 ms avant `main` (173 → 150). L'archive reste universelle.
+- **Bascule de fil** (latence réelle sélection → fil garni, 12 fils) :
+  médiane 135–155 ms → ~74 ms, p90 155–180 → ~110. Trois causes : le
+  `backfill` d'un petit salon retenait l'ouverture derrière le Relais (il
+  se fait désormais en fond quand le magasin a déjà quelque chose à montrer) ;
+  le menu contextuel de CHAQUE ligne recalculait les propositions de rappel
+  via `Calendar` à chaque passe (mémoïsées à la minute) ; le fichier des
+  brouillons se réécrivait à l'identique à chaque bascule.
+- **Index Contacts** : reparcouru entier — photos réécrites sur disque — à
+  chaque lancement (~200 ms CPU hors fil principal, en concurrence avec la
+  première frame). Le jeton d'historique de `CNContactStore` décide désormais.
+
+Écarté (aucun gain hors bruit) : précharger WritingToolsUI hors fil principal
+(`dlopen` en tâche détachée — l'objc runtime sérialise de toute façon) ;
+`defaultSize` égale au cadre sauvegardé ; supprimer les `.commands`.
+Écarté pour cause de régression visible : poser la barre d'outils après la
+première frame (−60 ms à fenêtre, mais les items apparaissent après coup et le
+fil, lui, n'arrive pas plus tôt).
+
+Ce qui reste, par ordre : ~150 ms de pré-`main` (exec, dyld, validation de
+signature, métadonnées) ; ~340 ms de construction AppKit/SwiftUI de la fenêtre
+(menus ~60, `NSSplitViewController` et tailles minimales ~50, cadre restauré et
+premier layout ~75, barre ~35, `NSThemeFrame` ~55) ; le fil ~60 après la
+fenêtre. Le plancher observé d'une app SwiftUI à `NavigationSplitView` sur
+cette machine est ~470 ms à `didFinish` — un rebond de Dock, pas un demi.
+

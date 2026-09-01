@@ -454,6 +454,7 @@ struct ThreadView: View {
       isShowingThread = true
       LaunchTrace.mark("thread")
       LaunchTrace.event("shown", store.messages.count)
+      LaunchBench.noteShown(count: store.messages.count)
       LaunchGate.markThreadPainted()
       if launchTail != nil, !store.messages.isEmpty {
         // La queue est peinte ; le reste du fil monte au-dessus, hors champ.

@@ -27,6 +27,31 @@ public enum SendLaterTime {
   /// Raccourcis proposés à vide, dans l'ordre. Ceux déjà passés disparaissent
   /// (« Ce soir » n'a pas de sens à 22 h).
   public static func suggestions(now: Date = Date(), calendar: Calendar = .current) -> [Suggestion] {
+    // La liste redemande ces propositions pour CHAQUE ligne à chaque passe (le
+    // menu contextuel se construit avec la ligne), et `Calendar` les fait
+    // payer cher. Elles ne changent qu'à la minute : on garde la dernière.
+    let minute = Int(now.timeIntervalSinceReferenceDate / 60)
+    let key = SuggestionsCacheKey(minute: minute, calendar: calendar.identifier, timeZone: calendar.timeZone.identifier)
+    suggestionsCacheLock.lock()
+    let cached = suggestionsCache?.key == key ? suggestionsCache?.value : nil
+    suggestionsCacheLock.unlock()
+    if let cached { return cached }
+    let computed = computeSuggestions(now: now, calendar: calendar)
+    suggestionsCacheLock.lock()
+    suggestionsCache = (key, computed)
+    suggestionsCacheLock.unlock()
+    return computed
+  }
+
+  private struct SuggestionsCacheKey: Equatable {
+    let minute: Int
+    let calendar: Calendar.Identifier
+    let timeZone: String
+  }
+  private static let suggestionsCacheLock = NSLock()
+  nonisolated(unsafe) private static var suggestionsCache: (key: SuggestionsCacheKey, value: [Suggestion])?
+
+  private static func computeSuggestions(now: Date, calendar: Calendar) -> [Suggestion] {
     var result: [Suggestion] = []
     func add(_ title: String, _ date: Date?) {
       guard let date, date > now else { return }
