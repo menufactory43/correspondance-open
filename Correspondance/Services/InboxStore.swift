@@ -3250,8 +3250,12 @@ final class InboxStore {
         }
         existing.preferTitle(incoming.title)
         existing.isGroup = incoming.isGroup
-        // Les accusés viennent du `/sync` : ils font autorité sur l'état local.
-        existing.lastDelivery = incoming.lastDelivery
+        // Les accusés viennent du `/sync` : ils font autorité sur l'état local —
+        // sauf pour effacer : un accusé qui manque sur le MÊME dernier message
+        // n'est pas une information, c'est un trou d'une passe.
+        if incoming.lastDelivery != nil || incoming.lastMessageAt > existing.lastMessageAt {
+          existing.lastDelivery = incoming.lastDelivery
+        }
         existing.lastMessageIsFromMe = incoming.lastMessageIsFromMe
         existing.unreadCount = isOpen ? 0 : max(incoming.unreadCount, heldUnread ? 1 : 0)
         if existing.remoteAvatarID != incoming.remoteAvatarID {

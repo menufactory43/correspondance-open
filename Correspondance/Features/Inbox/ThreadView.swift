@@ -263,10 +263,13 @@ struct ThreadView: View {
           // là de « Envoi… » à « Vu », à hauteur constante — un bouton qui
           // prenait une ligne sous la bulle puis s'en allait faisait sauter
           // tout le fil, ancré en bas, à chaque changement d'état.
-          if let last = thread.last, last.isFromMe,
-             let delivery = store.selectedConversation?.lastDelivery
-               ?? (store.canUndoSend(last.id) ? MessageDelivery.sending : nil)
-          {
+          // Et elle se déduit du dernier message du fil, pas seulement de la
+          // ligne d'inbox : celle-ci se réécrit à chaque `/sync` — une frappe
+          // qui dit « écrit… » suffit — et un accusé absent le temps d'un
+          // aller-retour faisait clignoter la ligne, donc sauter le fil.
+          if let last = thread.last, last.isFromMe {
+            let delivery = store.selectedConversation?.lastDelivery
+              ?? (last.isPending || store.canUndoSend(last.id) ? .sending : .sent)
             DeliveryReceiptLabel(
               delivery: delivery,
               seenBy: store.selectedConversationID.flatMap { store.seenByLabel($0) },

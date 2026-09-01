@@ -487,9 +487,8 @@ struct ThreadView: View {
     guard let last = messages.last, last.isFromMe else { return nil }
     // Un envoi en sursis n'a pas encore d'accusé : la ligne dit « Envoi… »
     // dès la bulle, pour ne pas apparaître après coup.
-    guard let delivery = conversation?.lastDelivery
-      ?? (last.isPending || store.canUndoSend(last.id) ? MessageDelivery.sending : nil)
-    else { return nil }
+    let delivery = conversation?.lastDelivery
+      ?? (last.isPending || store.canUndoSend(last.id) ? MessageDelivery.sending : .sent)
     // Dans un groupe, le détail des lecteurs remplace le « Vu » anonyme.
     if delivery == .read, let seenBy = store.seenByLabel(conversationID) { return seenBy }
     return delivery.labelFR
