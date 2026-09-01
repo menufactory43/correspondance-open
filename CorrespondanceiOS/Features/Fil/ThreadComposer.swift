@@ -586,13 +586,16 @@ struct ThreadComposer: View {
       } label: {
         Image(systemName: "xmark.circle.fill")
           .foregroundStyle(theme.inkTertiary)
+          // Une croix de dix-sept points au bord d'une pilule : le doigt la
+          // manque. La zone de toucher fait la taille d'un bouton.
+          .frame(width: 32, height: 32)
+          .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Ne plus citer ce message")
     }
     .padding(.leading, 4)
-    .padding(.trailing, 8)
-    .padding(.top, 6)
+    .padding(.top, 2)
     // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
     // prend celle que l'encart de bas d'écran lui propose — tout l'écran —
     // et la citation recouvre le fil au lieu de coiffer le champ.
@@ -623,13 +626,16 @@ struct ThreadComposer: View {
       } label: {
         Image(systemName: "xmark.circle.fill")
           .foregroundStyle(theme.inkTertiary)
+          // Une croix de dix-sept points au bord d'une pilule : le doigt la
+          // manque. La zone de toucher fait la taille d'un bouton.
+          .frame(width: 32, height: 32)
+          .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Renoncer à la modification")
     }
     .padding(.leading, 4)
-    .padding(.trailing, 8)
-    .padding(.top, 6)
+    .padding(.top, 2)
     .fixedSize(horizontal: false, vertical: true)
     .accessibilityElement(children: .combine)
   }

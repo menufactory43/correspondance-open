@@ -67,6 +67,31 @@ final class ThreadGesturesUITests: XCTestCase {
     let frame = cancel.frame
     XCTAssertGreaterThan(frame.minY, app.frame.height * 0.5, "la citation a envahi l'écran")
     XCTAssertTrue(app.buttons["Actions de la conversation"].isHittable)
+
+    // La croix, dans la pilule du champ, retire la citation.
+    cancel.tap()
+    XCTAssertTrue(cancel.waitForNonExistence(timeout: 5), "la croix n'a pas retiré la citation")
+  }
+
+  /// La croix de la citation répond aussi le clavier levé : c'est là qu'on
+  /// s'en sert, en plein message.
+  func testQuoteCancelWorksWithKeyboardUp() {
+    let app = XCUIApplication()
+    openGroup(app)
+    app.textFields.firstMatch.tap()
+
+    let bubble = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@", "Reçu,"))
+      .allElementsBoundByIndex
+      .last
+    XCTAssertNotNil(bubble, "aucune bulle reçue dans le fil")
+    bubble!.swipeRight()
+
+    let cancel = app.buttons["Ne plus citer ce message"]
+    XCTAssertTrue(cancel.waitForExistence(timeout: 5), "le balayage n'a pas cité le message")
+    snapshot(app, "03b-citation-clavier")
+    cancel.tap()
+    XCTAssertTrue(cancel.waitForNonExistence(timeout: 5), "la croix n'a pas retiré la citation")
   }
 
   /// Le balayage EN COURS : la flèche paraît dans la marge libérée. La capture
