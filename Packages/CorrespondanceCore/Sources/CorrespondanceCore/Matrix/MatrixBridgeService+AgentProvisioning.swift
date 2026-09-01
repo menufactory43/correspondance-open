@@ -35,9 +35,16 @@ extension MatrixBridgeService {
     }
   }
 
-  public enum AgentProvisioningError: LocalizedError {
+  public enum AgentProvisioningError: LocalizedError, Equatable {
     case notServerAdmin
     case notConnected
+    /// Un agent tourne déjà ailleurs sur ce compte. Deux agents, ce sont deux
+    /// réponses : on refuse, et on dit où est le premier.
+    case agentDejaVivant(hote: String)
+    /// Les identifiants qu'on s'apprêtait à écrire ne marchent pas. On ne pose
+    /// **jamais** une amorce qu'on n'a pas essayée : l'agent partirait en
+    /// boucle démarrage/arrêt, ce qui ressemble à un plantage sans en être un.
+    case identifiantsRefuses(detail: String)
 
     public var errorDescription: String? {
       switch self {
@@ -45,6 +52,12 @@ extension MatrixBridgeService {
         "ce compte n'est pas administrateur du Relais — c'est lui qui crée les comptes des agents"
       case .notConnected:
         "pas encore connecté au Relais"
+      case .agentDejaVivant(let hote):
+        "cc tourne déjà sur « \(hote) ». Deux agents sur le même compte répondraient deux fois — "
+          + "arrête celui-là avant d'en activer un ici."
+      case .identifiantsRefuses(let detail):
+        "le Relais refuse les identifiants de cc (\(detail)). Rien n'a été installé — "
+          + "le compte existe peut-être avec un autre mot de passe."
       }
     }
   }
@@ -57,36 +70,104 @@ extension MatrixBridgeService {
 
   /// Crée (ou retrouve) le compte de l'agent et rend son amorce.
   ///
-  /// Si le compte existe déjà et qu'on a son mot de passe au Trousseau, on ne
-  /// touche à rien : un agent qui tourne sur le NUC continue de tourner. Sinon
-  /// on pose un mot de passe neuf — `logout_devices: false`, donc les sessions
-  /// existantes survivent, mais elles ne pourront plus se reconnecter avec
-  /// l'ancien secret, et c'est dit dans l'app.
+  /// Quatre étapes, et aucune ne suppose le résultat de la précédente. C'est la
+  /// leçon d'un vrai incident : l'app avait écrit une amorce avec un mot de
+  /// passe qu'elle n'avait **jamais posé sur le serveur** — le compte existait
+  /// déjà, le secret venait d'un autre Relais, et l'agent tournait en boucle
+  /// « démarre, refusé, redémarre ».
+  ///
+  /// 1. **Un agent vit-il ailleurs ?** Un status de moins de deux minutes venu
+  ///    d'une autre machine : on refuse, en nommant l'hôte.
+  /// 2. **Le compte existe-t-il ?** S'il existe et qu'aucun agent ne vit, on
+  ///    repose un mot de passe neuf — `logout_devices: false`, donc les
+  ///    sessions survivent — et on l'écrit dans le journal. C'est un choix, pas
+  ///    un silence.
+  /// 3. **Les identifiants marchent-ils ?** On se connecte une fois. C'est la
+  ///    seule preuve qui vaille.
+  /// 4. Alors seulement, l'amorce.
   public func provisionAgent(named agent: String) async throws -> AgentBootstrap {
     guard isConnected else { throw AgentProvisioningError.notConnected }
     guard await client.isServerAdmin(userID: currentUserID) else {
       throw AgentProvisioningError.notServerAdmin
     }
     let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
-    let existing = await client.userExists(userID)
-    let known = AgentSecretStore.password(for: agent)
-
-    let password: String
-    if existing, let known {
-      password = known
-    } else {
-      password = AgentSecretStore.generatePassword()
-      try await client.provisionUser(
-        userID: userID, password: password, displayName: agent, admin: false
-      )
-      AgentSecretStore.save(password: password, for: agent)
-    }
     guard let homeserver = await client.currentCredentials?.homeserver else {
       throw AgentProvisioningError.notConnected
     }
-    return AgentBootstrap(
-      homeserver: homeserver, user: agent, password: password, owner: currentUserID
-    )
+
+    // 1. Un agent vivant ailleurs ? Le plan le prévoyait depuis le premier
+    //    jour ; c'est aussi ce qui évite tout le détour ci-dessous.
+    if let ailleurs = await liveAgentElsewhere(named: agent) {
+      throw AgentProvisioningError.agentDejaVivant(hote: ailleurs)
+    }
+
+    // 2. Le compte, et son mot de passe.
+    let existe = await client.userExists(userID)
+    var motDePasse = AgentSecretStore.password(for: agent)
+    if !existe || motDePasse == nil {
+      let neuf = AgentSecretStore.generatePassword()
+      try await client.provisionUser(userID: userID, password: neuf, displayName: agent, admin: false)
+      AgentSecretStore.save(password: neuf, for: agent)
+      motDePasse = neuf
+      print("agent : compte \(userID) — \(existe ? "mot de passe reposé" : "créé")")
+    }
+    guard var secret = motDePasse else {
+      throw AgentProvisioningError.identifiantsRefuses(detail: "aucun mot de passe")
+    }
+
+    // 3. La preuve : on se connecte. Un secret retrouvé au Trousseau peut très
+    //    bien venir d'un autre Relais — c'est exactement ce qui s'est produit.
+    if await !credentialsWork(homeserver: homeserver, user: agent, password: secret) {
+      // Le secret ne vaut rien ici : on en repose un, une fois, puis on
+      // revérifie. Si ça échoue encore, on renonce sans rien écrire.
+      let neuf = AgentSecretStore.generatePassword()
+      do {
+        try await client.provisionUser(userID: userID, password: neuf, displayName: agent, admin: false)
+      } catch {
+        throw AgentProvisioningError.identifiantsRefuses(detail: error.localizedDescription)
+      }
+      guard await credentialsWork(homeserver: homeserver, user: agent, password: neuf) else {
+        throw AgentProvisioningError.identifiantsRefuses(detail: "le Relais refuse encore après réinitialisation")
+      }
+      AgentSecretStore.save(password: neuf, for: agent)
+      secret = neuf
+      print("agent : mot de passe de \(userID) reposé — l'ancien ne marchait plus")
+    }
+
+    // 4. Seulement maintenant.
+    return AgentBootstrap(homeserver: homeserver, user: agent, password: secret, owner: currentUserID)
+  }
+
+  /// Les identifiants ouvrent-ils vraiment une session ? Un client jetable,
+  /// pour ne pas toucher à la nôtre.
+  private func credentialsWork(homeserver: URL, user: String, password: String) async -> Bool {
+    let essai = MatrixClient(credentials: nil)
+    do {
+      _ = try await essai.login(homeserver: homeserver, user: user, password: password)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /// Un agent de ce nom tourne-t-il sur une **autre** machine ? Rend le nom de
+  /// l'hôte, s'il s'est annoncé il y a moins de deux minutes.
+  ///
+  /// C'est le status que l'agent poste dans sa console : il porte sa machine et
+  /// son pid depuis qu'on refuse de démarrer à deux.
+  public func liveAgentElsewhere(named agent: String) async -> String? {
+    guard let roomID = try? await findAgentConsole(agent: agent) else { return nil }
+    let agentID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
+    guard let messages = try? await client.roomMessages(roomID: roomID, limit: 40) else { return nil }
+    let ici = AgentWire.hostName
+    for event in messages.chunk
+    where event.type == AgentWire.statusType && event.sender == agentID {
+      guard let hote = event.content?.value(at: AgentWire.StatusKey.host)?.stringValue else { continue }
+      guard hote != ici else { return nil }  // c'est nous, ou notre propre cadavre
+      guard Date().timeIntervalSince(event.sentAt) < 120 else { return nil }
+      return hote
+    }
+    return nil
   }
 
   /// Le compte de cet agent existe-t-il déjà, et connaît-on son secret ?

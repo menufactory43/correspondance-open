@@ -57,6 +57,14 @@ public enum CorrespondanceHome {
     return "\(defaultFolder)-\(name)"
   }
 
+  /// Le suffixe que **tout** ce qui vit au Trousseau doit porter pendant un
+  /// essai. Un seul endroit : la session Matrix et le mot de passe de l'agent
+  /// se sont déjà désynchronisés une fois, et l'app a écrit une amorce fausse.
+  public static var trialSuffix: String {
+    guard let name = resolvedName(from: ProcessInfo.processInfo.environment) else { return "" }
+    return ".\(name)"
+  }
+
   /// Le service du Trousseau. Suffixé pendant un essai : la vraie session reste
   /// où elle est, intacte, et on la retrouve en relançant sans la variable.
   public static func keychainService(environment: [String: String] = ProcessInfo.processInfo.environment)

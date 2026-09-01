@@ -8,7 +8,15 @@ import Security
 /// `0600`). Il ne passe **jamais** par une room : le Relais garderait en clair,
 /// dans sa base, de quoi se faire passer pour l'agent.
 public enum AgentSecretStore {
-  private static let service = "app.correspondance.agent"
+  /// Le service suit `CORRESPONDANCE_HOME`, **comme la session Matrix**.
+  ///
+  /// Sans ça, un essai et la production partageaient le mot de passe de `cc` :
+  /// activer sur le Relais d'essai enregistrait un secret, puis activer sur le
+  /// vrai Relais retrouvait ce secret pour un compte qui n'en voulait pas, et
+  /// l'app écrivait une amorce garantie fausse. C'est exactement l'accident que
+  /// « les deux moitiés bougent ensemble » devait empêcher — cette moitié-ci
+  /// avait été oubliée.
+  private static var service: String { "app.correspondance.agent" + CorrespondanceHome.trialSuffix }
 
   private static func query(agent: String) -> [String: Any] {
     var query: [String: Any] = [
