@@ -111,11 +111,15 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
   /// Le salon d'une notification touchée avant que le magasin ne le connaisse.
   @MainActor static var pendingRoomID: String?
 
+  /// App active, le push se tait : la notification locale, elle, sait quel
+  /// fil est à l'écran, quel salon est muet, et regroupe les rafales. Le push
+  /// n'a de raison d'être que quand l'app ne tourne pas.
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification
   ) async -> UNNotificationPresentationOptions {
-    [.banner, .sound, .list]
+    let isRemote = notification.request.content.userInfo["room_id"] != nil
+    return isRemote ? [] : [.banner, .sound, .list]
   }
 
   func userNotificationCenter(

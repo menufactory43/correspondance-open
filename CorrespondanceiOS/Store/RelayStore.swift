@@ -837,6 +837,11 @@ final class RelayStore {
   /// dans deux fils à la fois.
   let recorder = VoiceRecorder()
 
+  /// Le doigt tient le micro (ou vient de le verrouiller). Le fil s'en sert
+  /// pour retirer la pilule ↓ : elle occupe exactement la place où le guide du
+  /// verrou monte, et deux pastilles superposées ne se lisent pas.
+  var isHoldingMic = false
+
   /// Envoie ce qu'on vient d'enregistrer. La bulle apparaît tout de suite, le
   /// fichier part ensuite — la même discipline que le texte.
   func sendVoiceMessage(_ url: URL, voice: VoiceNote, conversationID: String) async {

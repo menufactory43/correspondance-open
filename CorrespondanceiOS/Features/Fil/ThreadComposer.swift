@@ -13,6 +13,20 @@ import UniformTypeIdentifiers
 /// geste : un appui commence, le suivant envoie. Le brouillon se range à chaque frappe
 /// (`RelayStore.setDraft`) et part au Relais une seconde après la dernière,
 /// comme sur le Mac.
+/// Ce que la main sent pendant le geste du micro : le doigt qui se pose, le
+/// verrou qui prend, le message qu'on abandonne, celui qui part.
+private enum MicHaptic {
+  case held, locked, cancelled, sent
+
+  var feedback: SensoryFeedback {
+    switch self {
+    case .held, .sent: .impact(weight: .medium)
+    case .locked: .success
+    case .cancelled: .warning
+    }
+  }
+}
+
 struct ThreadComposer: View {
   let conversationID: String
 
@@ -25,8 +39,12 @@ struct ThreadComposer: View {
   @State private var isImportingFile = false
   @State private var isTakingPhoto = false
   @State private var isPickingSendLater = false
-  /// Le compte des départs : ce qui fait vibrer le téléphone quand ça part.
-  @State private var sentCount = 0
+  /// Ce que la main doit sentir, et le compte qui le déclenche. UN SEUL canal
+  /// pour tout le composer : deux `sensoryFeedback` dont l'état bascule dans
+  /// la même passe (verrouiller lève le doigt ET pose le verrou) s'annulent
+  /// l'un l'autre sur l'appareil, et le verrou ne se sentait pas.
+  @State private var hapticTick = 0
+  @State private var hapticKind = MicHaptic.held
   /// Le doigt tient le micro : l'enregistrement court sous lui.
   @State private var isHolding = false
   /// Le doigt s'est levé sans lâcher l'enregistrement — glissé vers le haut,
@@ -141,8 +159,9 @@ struct ThreadComposer: View {
     .padding(.horizontal, Spacing.sm)
     .padding(.top, 8)
     .padding(.bottom, 8)
-    // Le message part : la main le sent partir.
-    .sensoryFeedback(.impact(weight: .medium), trigger: sentCount)
+    // Le seul canal d'haptique du composer, posé sur une vue qui ne change
+    // jamais d'identité : le micro, lui, se transforme sous le doigt.
+    .sensoryFeedback(trigger: hapticTick) { _, _ in hapticKind.feedback }
     .onChange(of: photoItems) { _, items in
       guard !items.isEmpty else { return }
       Task { await importPhotos(items) }
@@ -245,7 +264,7 @@ struct ThreadComposer: View {
     } else if store.canSend(conversationID) {
       Button {
         isFocused = false
-        sentCount += 1
+        haptic(.sent)
         Task { await store.send(conversationID: conversationID) }
       } label: {
         Image(systemName: "arrow.up")
@@ -274,19 +293,17 @@ struct ThreadComposer: View {
       .scaleEffect(isHolding ? 1.25 : 1)
       .contentShape(Circle())
       .highPriorityGesture(holdToTalk)
-      // Le doigt se pose et ça enregistre : la main le sent partir.
-      .sensoryFeedback(.impact(weight: .medium), trigger: isHolding) { _, new in new }
-      // Le verrou se sent : le doigt peut se lever.
-      .sensoryFeedback(.success, trigger: isLocked) { _, new in new }
       .accessibilityLabel(isLocked ? "Envoyer le message vocal" : "Enregistrer un message vocal")
       .accessibilityHint(isLocked ? "" : "Maintenir pour parler, relâcher pour envoyer")
       .overlay(alignment: .top) { if isHolding, !isLocked { lockGuide } }
   }
 
-  /// Le guide du geste, en colonne au-dessus du micro : le cadenas où l'on va,
-  /// le chevron qui montre le chemin. Il se révèle à mesure qu'on monte.
+  /// Le guide du geste, au-dessus du micro : le cadenas où l'on va, le chevron
+  /// qui montre le chemin. Une pastille de verre, exactement celle de la
+  /// pilule ↓ du fil (même largeur, même fond, même bord) — c'est la même
+  /// famille d'objets flottants, et elle occupe la même place.
   private var lockGuide: some View {
-    VStack(spacing: 3) {
+    VStack(spacing: 4) {
       Image(systemName: "lock")
         .font(.system(size: 12, weight: .semibold))
       Image(systemName: "chevron.up")
@@ -294,8 +311,11 @@ struct ThreadComposer: View {
         .offset(y: hintBreathes ? -3 : 0)
     }
     .foregroundStyle(theme.accent)
+    .frame(width: 38)
+    .padding(.vertical, 9)
+    .glassSurface(cornerRadius: 19, fallbackFill: theme.paperSecondary, border: theme.edge)
     .opacity(lockHintOpacity)
-    .offset(y: -46 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
+    .offset(y: -58 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
     .onAppear {
       guard !reduceMotion else { return }
       withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { hintBreathes = true }
@@ -328,8 +348,10 @@ struct ThreadComposer: View {
           }
           isHolding = true
           isLocked = false
+          store.isHoldingMic = true
           holdStartedAt = Date()
           isFocused = false
+          haptic(.held)
           Task { await store.recorder.start() }
         }
         guard isHolding, !isLocked else { return }
@@ -338,6 +360,9 @@ struct ThreadComposer: View {
         case .recording: break
         case .locked: lock()
         case .cancelled:
+          // Le message part à la corbeille sans qu'on regarde l'écran : la
+          // main doit le savoir.
+          haptic(.cancelled)
           store.recorder.cancel()
           endHold()
         }
@@ -365,17 +390,27 @@ struct ThreadComposer: View {
     isLocked = true
     isHolding = false
     holdTranslation = .zero
+    store.isHoldingMic = true
+    haptic(.locked)
   }
 
   private func endHold() {
     isHolding = false
     isLocked = false
     holdTranslation = .zero
+    store.isHoldingMic = false
+  }
+
+  /// Une seule vibration à la fois, sur le canal unique : le compteur monte,
+  /// la nature dit ce que la main sent.
+  private func haptic(_ kind: MicHaptic) {
+    hapticKind = kind
+    hapticTick += 1
   }
 
   private func sendRecording() {
     guard let taken = store.recorder.stop() else { return }
-    sentCount += 1
+    haptic(.sent)
     Task { await store.sendVoiceMessage(taken.url, voice: taken.voice, conversationID: conversationID) }
   }
 
@@ -419,6 +454,7 @@ struct ThreadComposer: View {
 
         // Le doigt est reparti : c'est le seul moyen de renoncer, et il se lit.
         Button {
+          haptic(.cancelled)
           store.recorder.cancel()
           endHold()
         } label: {

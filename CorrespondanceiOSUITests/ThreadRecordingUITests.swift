@@ -65,6 +65,50 @@ final class ThreadRecordingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Actions de la conversation"].exists, "le fil a disparu après le verrou")
   }
 
+  /// La pilule ↓ et le guide du verrou visent le même coin : tant que le doigt
+  /// tient le micro, la pilule s'efface — sinon deux pastilles se recouvrent.
+  func testLaPiluleSEfaceQuandOnTientLeMicro() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-CorrespondanceDemo"]
+    app.launch()
+
+    let group = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label BEGINSWITH %@", "Vacances 2026,"))
+      .firstMatch
+    XCTAssertTrue(group.waitForExistence(timeout: 20), "la file n'a pas affiché « Vacances 2026 »")
+    group.tap()
+
+    // Remonter d'abord : la pilule est là, et c'est elle qui doit disparaître.
+    let chevron = app.buttons["Aller au dernier message"]
+    app.swipeDown()
+    app.swipeDown()
+    XCTAssertTrue(chevron.waitForExistence(timeout: 5), "le chevron n'est pas apparu en remontant")
+
+    let mic = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label == %@", "Enregistrer un message vocal"))
+      .firstMatch
+    XCTAssertTrue(mic.waitForExistence(timeout: 5), "pas de micro dans le composer")
+
+    let start = mic.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+    let pendantLeMaintien = XCTestExpectation(description: "regarder pendant le maintien")
+    var piluleVisible = true
+    var data: Data?
+    DispatchQueue.global().asyncAfter(deadline: .now() + 1.4) {
+      piluleVisible = chevron.exists
+      data = XCUIScreen.main.screenshot().pngRepresentation
+      pendantLeMaintien.fulfill()
+    }
+    start.press(
+      forDuration: 0.6,
+      thenDragTo: start.withOffset(CGVector(dx: 0, dy: -20)),
+      withVelocity: .slow,
+      thenHoldForDuration: 1.6
+    )
+    wait(for: [pendantLeMaintien], timeout: 10)
+    joindre(data, nom: "10-maintien-sans-pilule")
+    XCTAssertFalse(piluleVisible, "la pilule ↓ est restée sous le guide du verrou")
+  }
+
   /// Les captures partent dans le rapport, et sur le disque quand on le demande.
   private func joindre(_ data: Data?, nom: String) {
     guard let data else { return }

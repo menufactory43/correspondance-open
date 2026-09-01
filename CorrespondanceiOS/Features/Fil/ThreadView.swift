@@ -299,7 +299,8 @@ struct ThreadView: View {
     // Le chevron au-dessus du bouton d'envoi : il n'apparaît que lorsqu'on
     // a quitté le bas du fil, et un appui y ramène.
     .overlay(alignment: .bottomTrailing) {
-      if !isNearBottom {
+      // Pas pendant qu'on parle : le guide du verrou monte à cet endroit-là.
+      if !isNearBottom, !store.recorder.isRecording, !store.isHoldingMic {
         ScrollToBottomButton(unreadCount: missedCount, theme: theme) {
           scrollToBottom(duration: 0.3)
         }
