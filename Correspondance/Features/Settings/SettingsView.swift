@@ -200,11 +200,16 @@ struct SettingsAgentPane: View {
   /// L'état du service sur ce Mac — dont « à autoriser », qu'il faut montrer.
   @State private var hote: AgentLocalHost.State = .absent
   @State private var peutProvisionner = false
+  /// La commande à coller sur une autre machine — vivante dix minutes.
+  @State private var commandeDistante: String?
+  @State private var commandeExpireA: Date?
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       consoleCard
       hoteCard
+
+      hoteDistantCard
 
       if let console, let config = console.config {
         reglagesCard(console: console, config: config)
@@ -283,6 +288,45 @@ struct SettingsAgentPane: View {
         ) { EmptyView() }
       }
     }
+  }
+
+  /// L'hôte distant : un NUC, un VPS, un Raspberry. L'app crée le compte et
+  /// rend **une** commande à coller — elle ne peut pas aller installer un
+  /// binaire chez quelqu'un, et elle ne prétend pas le faire.
+  private var hoteDistantCard: some View {
+    SettingsCard(
+      title: "Sur une autre machine",
+      footnote: "La commande contient le mot de passe de l'agent : elle se colle dans un terminal, "
+        + "jamais dans une conversation. Elle périme en dix minutes."
+    ) {
+      SettingsRow(
+        label: "Hôte distant",
+        detail: commandeDetail,
+        systemImage: "server.rack"
+      ) {
+        if let commandeDistante {
+          Button("Copier") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(commandeDistante, forType: .string)
+          }
+        } else {
+          Button("Préparer la commande") { Task { await preparerCommande() } }
+            .disabled(!peutProvisionner)
+        }
+      }
+    }
+  }
+
+  private var commandeDetail: String {
+    guard let commandeDistante else {
+      return peutProvisionner
+        ? "24/7, Mac fermé — une commande à coller en SSH"
+        : "il faut être administrateur du Relais pour créer un agent"
+    }
+    if let expire = commandeExpireA, expire <= Date() {
+      return "la commande a expiré — reprends-en une"
+    }
+    return commandeDistante
   }
 
   private var etatDetail: String {
@@ -417,6 +461,21 @@ struct SettingsAgentPane: View {
       return
     }
     console = ouverte
+  }
+
+  /// Crée le compte du bot et rend la commande d'installation. Le jeton porte
+  /// l'amorce : il n'y a pas de serveur pour la servir, et c'est sa péremption
+  /// courte qui borne la fuite.
+  private func preparerCommande() async {
+    isActivating = true
+    defer { isActivating = false }
+    erreur = nil
+    guard let jeton = await store.remoteAgentToken() else {
+      erreur = "le Relais n'a pas voulu créer le compte de l'agent"
+      return
+    }
+    commandeDistante = jeton.installCommand()
+    commandeExpireA = jeton.expiresAt
   }
 
   /// Corrige la config et l'écrit. On recharge derrière : ce que l'écran montre

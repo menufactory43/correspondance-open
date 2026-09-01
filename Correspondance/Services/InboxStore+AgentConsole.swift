@@ -63,6 +63,21 @@ extension InboxStore {
     }
   }
 
+  /// Le jeton d'amorce d'un hôte distant : le compte est créé sur le Relais,
+  /// et la commande qui va avec porte l'amorce. Elle périme en dix minutes.
+  func remoteAgentToken() async -> AgentBootstrapToken? {
+    do {
+      let bootstrap = try await matrix.provisionAgent(named: agentName)
+      // La console est ouverte au passage : l'agent distant y trouvera sa
+      // configuration dès qu'il se connectera.
+      await activateAgentConsole()
+      return AgentBootstrapToken(bootstrap: bootstrap)
+    } catch {
+      Self.relayLog.error("jeton d'amorce impossible : \(error.localizedDescription, privacy: .public)")
+      return nil
+    }
+  }
+
   func deactivateAgentOnThisMac() {
     try? AgentLocalHost.uninstall(agent: agentName)
   }
