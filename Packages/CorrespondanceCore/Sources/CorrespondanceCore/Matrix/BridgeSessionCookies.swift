@@ -58,28 +58,26 @@ public struct BridgeSessionCookies: Equatable, Sendable {
       cookieDomain: "instagram.com"
     )
 
-    /// Messenger se connecte sur **messenger.com**, pas facebook.com. Le pont expose
-    /// bien un flow `facebook` (cookies de facebook.com), mais il retombe sur le
-    /// compte Facebook actif du navigateur : un compte désactivé « Messenger gardé »,
-    /// ou un second profil au même e-mail, le fait dérailler. messenger.com se connecte
-    /// au compte Messenger lui-même, quel que soit l'état du compte Facebook — et sert
-    /// aussi bien un compte Facebook ordinaire. C'est le flow `messenger` côté pont.
+    /// Messenger se connecte sur **facebook.com**. Le pont expose deux flux web —
+    /// `facebook` (cookies facebook.com) et `messenger` (cookies messenger.com) — et
+    /// on a d'abord pris messenger.com, en pensant qu'il éviterait de retomber sur un
+    /// autre profil. En pratique c'est l'inverse : messenger.com mure la connexion
+    /// derrière une vérification en deux étapes qui échoue (« ce contenu n'est pas
+    /// disponible »), tandis que la session Facebook du compte, elle, reste vivante sur
+    /// facebook.com. C'est donc là qu'on récolte les cookies, avec le flux `facebook`.
     ///
-    /// Mêmes trois cookies que la famille Facebook (`FBRequiredCookies` de
-    /// `pkg/messagix/cookies`) : `c_user` (l'identifiant du compte), `xs` (la session
-    /// elle-même) et `datr` (l'empreinte du navigateur, sans laquelle Meta considère la
-    /// session suspecte) — mais posés sur le domaine messenger.com, pas facebook.com.
-    /// L'URL porte `?no_redirect=true`, celle que le connecteur attend (`login.go`),
-    /// pour que messenger.com ne renvoie pas vers facebook.com en cours de route.
+    /// Trois cookies suffisent — `FBRequiredCookies` de `pkg/messagix/cookies` :
+    /// `c_user` (l'identifiant du compte), `xs` (la session elle-même) et `datr`
+    /// (l'empreinte du navigateur, sans laquelle Meta considère la session suspecte).
     public static let messenger = Profile(
       network: .messenger,
-      loginURL: URL(string: "https://www.messenger.com/?no_redirect=true")!,
+      loginURL: URL(string: "https://www.facebook.com/login/")!,
       requiredNames: ["c_user", "xs", "datr"],
       // Le pont ne déclare aucun cookie « optionnel » pour la famille Facebook, mais
-      // messenger.com pose `wd` (taille de fenêtre) et `sb`/`fr` : on les laisse passer
+      // facebook.com pose `wd` (taille de fenêtre), `sb`, `fr`… : on les laisse passer
       // s'ils sont là — ils sont rejoués tels quels dans l'en-tête `Cookie`, aucun ne bloque.
       optionalNames: ["sb", "fr", "presence", "wd", "oo", "dpr"],
-      cookieDomain: "messenger.com"
+      cookieDomain: "facebook.com"
     )
 
     /// Profil d'un réseau, ou `nil` s'il ne se connecte pas par session de navigateur.

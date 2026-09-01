@@ -107,10 +107,9 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     supportsPhonePairing: false,
     // Quatre flows chez mautrix-facebook : cookies facebook.com, cookies
     // messenger.com, et deux API Messenger Lite par mot de passe. On prend
-    // `messenger` : la fenêtre récolte les cookies de messenger.com, qui se
-    // connecte au compte Messenger sans dépendre de l'état du compte Facebook
-    // (un compte désactivé « Messenger gardé » fait dérailler le flow facebook.com).
-    webLoginFlowID: "messenger",
+    // `facebook` : c'est sur facebook.com que la session du compte reste
+    // joignable — messenger.com mure sa connexion derrière une 2FA qui échoue.
+    webLoginFlowID: "facebook",
     // Même prudence que pour Instagram : tant que le départ d'un groupe n'a pas
     // été vu remonter jusqu'à Messenger, on ne propose pas le geste.
     relaysGroupLeave: false

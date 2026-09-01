@@ -23,9 +23,9 @@ final class MatrixBridgeMessengerTests: XCTestCase {
     // `pm` est l'alias de `start-chat` : un identifiant Meta, jamais un numéro.
     XCTAssertEqual(messenger.startChatCommand(identifier: "100012345678901"), "pm 100012345678901")
     // mautrix-facebook annonce quatre flows de connexion : sans en nommer un,
-    // bridgev2 refuse d'ouvrir la tentative. On prend `messenger` (messenger.com),
-    // qui ne dépend pas de l'état du compte Facebook.
-    XCTAssertEqual(messenger.webLoginFlowID, "messenger")
+    // bridgev2 refuse d'ouvrir la tentative. On prend `facebook` (facebook.com),
+    // là où la session du compte reste joignable.
+    XCTAssertEqual(messenger.webLoginFlowID, "facebook")
   }
 
   /// Les quatre orthographes sous lesquelles le pont peut s'annoncer dans `m.bridge`.
@@ -136,8 +136,8 @@ final class MatrixBridgeMessengerTests: XCTestCase {
       .awaitingCookies("Enter a JSON object with your cookies, or a cURL command copied from browser devtools.")
     )
     XCTAssertEqual(
-      MatrixBridgeService.loginStep(inBotMessage: "Login URL: <https://www.messenger.com/?no_redirect=true>"),
-      .awaitingCookies("Login URL: <https://www.messenger.com/?no_redirect=true>")
+      MatrixBridgeService.loginStep(inBotMessage: "Login URL: <https://www.facebook.com/>"),
+      .awaitingCookies("Login URL: <https://www.facebook.com/>")
     )
     guard case .success = MatrixBridgeService.loginStep(
       inBotMessage: "Logged in as Camille Roy (100012345678901)"
