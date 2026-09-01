@@ -269,7 +269,10 @@ struct ComposerPlusTray: View {
         }
         if let onInviteAgent {
           ComposerCircleButton(
-            systemImage: "pencil.line",
+            // L'étincelle de cc, pas le crayon : le crayon est la voix
+            // « brouillon » une fois cc présent, et un même dessin pour deux
+            // gestes faisait cliquer « inviter » en croyant régler.
+            systemImage: "sparkles",
             helpText: "Inviter cc dans cette conversation",
             theme: theme,
             iconSize: 15,

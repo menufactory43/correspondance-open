@@ -424,6 +424,27 @@ public struct MatrixSyncParser: Sendable {
     let msgtype = content.string(at: "msgtype") ?? "m.text"
     var body = content.string(at: "body") ?? ""
 
+    // Le bot d'un pont qui parle dans un portail n'est pas un correspondant :
+    // « relay now set », « message not bridged » sont des événements, en
+    // anglais. Ils s'écrivent en ligne d'événement, traduits quand on les
+    // connaît — vu en vrai, l'avis prenait la bulle et le visage du contact.
+    if let sender = event.sender, MatrixIdentity.isBridgeBot(sender), !body.isEmpty {
+      model.messagesByID[eventID] = ChatMessage(
+        id: eventID,
+        conversationID: model.conversationID,
+        network: network,
+        text: "",
+        sentAt: event.sentAt,
+        isFromMe: false,
+        senderID: sender,
+        senderName: "Pont",
+        systemEventText: MatrixBridgeNotice.systemText(for: body)
+      )
+      model.markWritten(eventID)
+      if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+      return
+    }
+
     // `m.in_reply_to` : mautrix-whatsapp le bridge dans les deux sens.
     // Le corps embarque un repli « > <@x> texte » qu'il faut retirer de l'affichage.
     var replyTo: QuotedMessage?
