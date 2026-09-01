@@ -58,7 +58,11 @@ public enum AgentWire {
     public static let sender = "sender"
     public static let prompt = "prompt"
     public static let tools = "tools"
-    public static let seconds = "seconds"
+    /// La durée du tour, en **millisecondes entières**. Jamais des secondes
+    /// décimales : Matrix refuse les flottants, et c'est ce qui a empêché le
+    /// journal de s'écrire pendant tout ce temps. Les millisecondes gardent la
+    /// précision d'un tour court sans jamais produire de virgule.
+    public static let durationMs = "duration_ms"
     public static let tokens = "tokens"
   }
 

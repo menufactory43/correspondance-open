@@ -85,6 +85,18 @@ extension MatrixBridgeService {
     return roomID
   }
 
+  /// Invite l'agent dans un salon quelconque — la note à soi, à l'activation.
+  /// Idempotent en pratique : un agent déjà membre fait répondre `403` à
+  /// Synapse, ce qui n'est pas une erreur ici.
+  public func inviteAgentToRoom(_ roomID: String, agent: String = MatrixIdentity.agentName) async throws {
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
+    do {
+      try await client.invite(roomID: roomID, userID: userID)
+    } catch MatrixError.http(let status, _, _) where status == 403 {
+      // Déjà membre, ou déjà invité : c'est le résultat qu'on voulait.
+    }
+  }
+
   /// Écrit la configuration. L'agent la relit à son prochain `/sync` : changer
   /// un palier d'outils ne demande ni SSH ni redémarrage.
   public func writeAgentConfig(_ config: AgentConsoleConfig, in roomID: String) async throws {
@@ -117,7 +129,7 @@ extension MatrixBridgeService {
             sender: content.string(at: AgentWire.JournalKey.sender) ?? "",
             prompt: content.string(at: AgentWire.JournalKey.prompt) ?? "",
             tools: content.value(at: AgentWire.JournalKey.tools)?.arrayValue?.compactMap(\.stringValue) ?? [],
-            seconds: content.value(at: AgentWire.JournalKey.seconds)?.doubleValue ?? 0,
+            seconds: (content.value(at: AgentWire.JournalKey.durationMs)?.intValue).map { Double($0) / 1000 } ?? 0,
             tokens: content.value(at: AgentWire.JournalKey.tokens)?.intValue,
             at: event.sentAt
           )

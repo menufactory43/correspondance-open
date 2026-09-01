@@ -35,9 +35,11 @@ public enum AgentEvents {
       // dans un journal que d'autres appareils synchronisent.
       AgentWire.JournalKey.prompt: .string(String(prompt.prefix(200))),
       AgentWire.JournalKey.tools: .array(tools.map(MatrixJSON.string)),
-      AgentWire.JournalKey.seconds: .number((seconds * 10).rounded() / 10),
+      // Des millisecondes **entières** : Matrix refuse les flottants, et une
+      // durée en secondes décimales (`5.4`) faisait échouer tout l'event.
+      AgentWire.JournalKey.durationMs: .integer(Int((seconds * 1000).rounded())),
     ]
-    if let tokens { fields[AgentWire.JournalKey.tokens] = .number(Double(tokens)) }
+    if let tokens { fields[AgentWire.JournalKey.tokens] = .integer(tokens) }
     return .object(fields)
   }
 

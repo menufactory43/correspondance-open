@@ -305,6 +305,25 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Le garde qui manquait : **aucun flottant ne part vers Synapse**.
+  ///
+  /// Le JSON canonique de Matrix ne connaît que des entiers ; un `5.4` fait
+  /// répondre `400 Bad JSON value: float` et l'event est perdu. C'était le cas
+  /// du journal des tours — un des trois garde-fous de la pleine permission —
+  /// qui n'a jamais réussi à s'écrire.
+  ///
+  /// On échoue donc **ici**, chez nous, avec le champ nommé, plutôt que de
+  /// laisser un 400 obscur revenir du serveur.
+  static func refuseLesFlottants(in content: MatrixJSON, type: String) throws {
+    let fautifs = content.nonIntegerNumberPaths()
+    guard fautifs.isEmpty else {
+      throw MatrixError.decoding(
+        "\(type) : Matrix n'accepte pas de flottant — \(fautifs.joined(separator: ", ")). "
+          + "Arrondis (des millisecondes entières, par exemple)."
+      )
+    }
+  }
+
   /// Un event de salon d'un type quelconque — nos propres types
   /// (`fr.correspondance.agent.*`), que les ponts mautrix ne relaient pas :
   /// ce qui s'y dit reste entre le Relais et ses clients.
@@ -315,6 +334,7 @@ public actor MatrixClient {
     content: MatrixJSON,
     transactionID: String = UUID().uuidString
   ) async throws -> String? {
+    try Self.refuseLesFlottants(in: content, type: type)
     guard !ledger.isUsed(transactionID) else { return nil }
     let json = try await request(
       method: "PUT",
@@ -339,6 +359,7 @@ public actor MatrixClient {
     stateKey: String = "",
     content: MatrixJSON
   ) async throws -> String? {
+    try Self.refuseLesFlottants(in: content, type: type)
     let json = try await request(
       method: "PUT",
       path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/state/\(Self.escape(type))/\(Self.escape(stateKey))",
