@@ -53,8 +53,9 @@ extension MatrixBridgeService {
       case .notConnected:
         "pas encore connecté au Relais"
       case .agentDejaVivant(let hote):
-        "cc tourne déjà sur « \(hote) ». Deux agents sur le même compte répondraient deux fois — "
-          + "arrête celui-là avant d'en activer un ici."
+        "cc tourne déjà sur \(hote). Deux agents sur le même compte répondraient deux fois — "
+          + "arrête celui-là d'abord. Si c'est déjà fait, le Relais met jusqu'à un quart d'heure "
+          + "à le voir disparaître."
       case .identifiantsRefuses(let detail):
         "le Relais refuse les identifiants de cc (\(detail)). Rien n'a été installé — "
           + "le compte existe peut-être avec un autre mot de passe."
@@ -204,16 +205,23 @@ public enum AgentSessions {
   public static let silenceMax: TimeInterval = 15 * 60
 
   /// La première session vivante qui n'est pas de cette machine, décrite pour
-  /// l'erreur : « Correspondance agent · umbrel, vue il y a 37 s ».
+  /// l'erreur : « umbrel (vu il y a 37 s) », ou, pour une session d'hier qui ne
+  /// dit pas sa machine, « une autre machine (session « Correspondance (agent) »,
+  /// vue il y a 12 min) ».
   public static func elsewhere(_ devices: [MatrixClient.UserDevice], here: String, now: Date) -> String? {
     let mine = MatrixClient.agentDeviceDisplayName(host: here)
+    let prefixe = MatrixClient.agentDeviceDisplayName(host: "")
     for device in devices {
       guard let seen = device.lastSeen else { continue }
       let age = now.timeIntervalSince(seen)
       guard age >= 0, age < silenceMax else { continue }
       if device.displayName == mine { continue }
-      let nom = device.displayName ?? "session \(device.deviceID)"
-      return "\(nom), vue il y a \(Int(age)) s"
+      let depuis = age < 90 ? "il y a \(Int(age)) s" : "il y a \(Int(age / 60)) min"
+      if let nom = device.displayName, nom.hasPrefix(prefixe) {
+        return "\(nom.dropFirst(prefixe.count)) (vu \(depuis))"
+      }
+      let nom = device.displayName ?? "sans nom, \(device.deviceID)"
+      return "une autre machine (session « \(nom) », vue \(depuis))"
     }
     return nil
   }

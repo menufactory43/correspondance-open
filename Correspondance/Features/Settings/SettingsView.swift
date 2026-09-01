@@ -553,12 +553,13 @@ struct SettingsAgentPane: View {
     isActivating = true
     defer { isActivating = false }
     erreur = nil
-    guard let jeton = await store.remoteAgentToken() else {
-      erreur = "le Relais n'a pas voulu créer le compte de l'agent"
-      return
+    switch await store.remoteAgentToken() {
+    case .success(let jeton):
+      commandeDistante = jeton.installCommand()
+      commandeExpireA = jeton.expiresAt
+    case .failure(let raison):
+      erreur = raison.localizedDescription
     }
-    commandeDistante = jeton.installCommand()
-    commandeExpireA = jeton.expiresAt
   }
 
   /// Corrige la config et l'écrit. On recharge derrière : ce que l'écran montre

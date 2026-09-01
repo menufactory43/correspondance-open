@@ -17,7 +17,7 @@ final class AgentSessionsTests: XCTestCase {
 
   func testUnAgentDHierSansStatusEstQuandMemeVuParSaSession() {
     let devices = [device("Correspondance (agent)", seenAgo: 37)]
-    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "Correspondance (agent), vue il y a 37 s")
+    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "une autre machine (session « Correspondance (agent) », vue il y a 37 s)")
   }
 
   func testMaPropreSessionNeCompteJamais() {
@@ -27,7 +27,7 @@ final class AgentSessionsTests: XCTestCase {
 
   func testUneSessionDUneAutreMachineRefuse() {
     let devices = [device(MatrixClient.agentDeviceDisplayName(host: "umbrel"), seenAgo: 5)]
-    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "Correspondance agent · umbrel, vue il y a 5 s")
+    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "umbrel (vu il y a 5 s)")
   }
 
   func testUnCadavreNeBloquePas() {
@@ -37,7 +37,7 @@ final class AgentSessionsTests: XCTestCase {
 
   func testUneSessionSansNomEstNommeeParSonIdentifiant() {
     let devices = [device(nil, seenAgo: 10, id: "QHKAKFMBOB")]
-    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "session QHKAKFMBOB, vue il y a 10 s")
+    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "une autre machine (session « sans nom, QHKAKFMBOB », vue il y a 10 s)")
   }
 
   func testLeCadavreEtLeVivantMelanges() {
@@ -46,6 +46,11 @@ final class AgentSessionsTests: XCTestCase {
       device(MatrixClient.agentDeviceDisplayName(host: "mon-mac"), seenAgo: 96),
       device("Correspondance (agent)", seenAgo: 37),
     ]
-    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "Correspondance (agent), vue il y a 37 s")
+    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "une autre machine (session « Correspondance (agent) », vue il y a 37 s)")
+  }
+
+  func testUnAgeLongSeDitEnMinutes() {
+    let devices = [device("Correspondance (agent)", seenAgo: 750)]
+    XCTAssertEqual(AgentSessions.elsewhere(devices, here: "mon-mac", now: now), "une autre machine (session « Correspondance (agent) », vue il y a 12 min)")
   }
 }
