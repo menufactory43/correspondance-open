@@ -15,6 +15,50 @@ Mac (Correspondance) ──Tailscale──► Synapse ─────┤
 Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
 pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
+## Installer un Relais ailleurs (`install.sh`)
+
+Le montage décrit plus bas est celui du NUC de meffysto, avec ses adresses. Pour poser un
+Relais **ailleurs** — sur un Mac, sur une machine Linux, sur un VPS — il y a une commande :
+
+```bash
+infra/matrix/install.sh --target this-mac
+infra/matrix/install.sh --target linux
+infra/matrix/install.sh --target ssh --host nuc
+infra/matrix/install.sh --target ssh --host vps --dry-run   # montre sans rien faire
+```
+
+Elle enchaîne : prérequis (moteur de conteneurs, Tailscale) → Synapse et les ponts →
+adaptateur ACP épinglé → **code d'appairage**. L'app le lit dans « Connecter un Relais »,
+et six mots permettent de vérifier qu'on appaire bien cette machine-là.
+
+`install.sh` **ne remplace pas `bootstrap.sh`** : il l'appelle. `bootstrap.sh` tourne en
+production et reste la pièce qui pose Synapse et les ponts ; `install.sh` fait ce qu'il ne
+faisait pas — détecter l'hôte, poser les prérequis, épingler l'adaptateur, finir sur le
+code d'appairage.
+
+### Ce qui est vérifié, et ce qui ne l'est pas
+
+**Vérifié, et rejouable** : `infra/matrix/tests/install-plan.sh` éprouve le plan produit
+pour les trois cibles (18 contrôles) — que la pile est posée localement ou par SSH selon la
+cible, que la version de l'adaptateur est épinglée, que le code d'appairage vient en
+dernier, qu'une cible inconnue ou un `--target ssh` sans `--host` sont refusés. `pair.sh`
+est éprouvé sur ses refus (jeton illisible, jeton périmé).
+
+**Jamais tourné sur une vraie machine** : l'installation complète. Ni `--target this-mac`,
+ni `--target linux`, ni `--target ssh` n'ont posé un Synapse pour de bon depuis ce script.
+Ce qui reste à découvrir la première fois, et qu'il faudra corriger sur pièces :
+
+- l'installation du moteur de conteneurs sur un Mac vierge (le script s'arrête et dit quoi
+  installer — il ne l'installe pas tout seul, exprès) ;
+- `bootstrap.sh --remote` exécuté sur macOS : il a été écrit pour Debian, et
+  `docker-compose` 1.29 y est supposé ;
+- l'adresse publique quand Tailscale n'est pas là (il faut alors `PUBLIC_URL=`) ;
+- la création du compte propriétaire par `pair.sh` quand le compte existe déjà — le chemin
+  de repose du mot de passe n'a jamais été emprunté.
+
+Autrement dit : le squelette et les décisions sont éprouvés, la pose ne l'est pas. À faire
+tourner une première fois sur une machine jetable avant de le donner à quelqu'un.
+
 ## 0. Ce qui tourne déjà, et où
 
 Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — jamais `docker compose`) :

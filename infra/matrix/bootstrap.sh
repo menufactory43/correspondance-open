@@ -46,6 +46,7 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/docker-compose.yml" \
     "$HERE/bootstrap.sh" \
     "$HERE/merge-overrides.py" \
+    "$HERE/pair.sh" \
     "$HERE/templates" \
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
