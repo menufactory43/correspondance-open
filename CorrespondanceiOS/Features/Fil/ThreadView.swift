@@ -96,6 +96,10 @@ struct ThreadView: View {
         openedAt = Date()
         await store.open(conversationID: conversationID)
       }
+      .task(id: store.pendingJumpMessageID) {
+        guard let target = store.pendingJumpMessageID else { return }
+        await consumeJump(target)
+      }
   }
 
   @ToolbarContentBuilder
@@ -149,6 +153,11 @@ struct ThreadView: View {
   private var thread: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 10) {
+        if store.isLoadingOlder {
+          ProgressView()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+        }
         Color.clear.frame(height: 4)
 
         ForEach(groups) { group in
@@ -156,8 +165,9 @@ struct ThreadView: View {
             timeSeparator(separator, network: group.networkOrigin)
           }
           // La photo de l'auteur dans la marge d'une prise de parole reçue,
-          // comme sur le Mac : en bas du groupe, en face de la dernière bulle.
-          HStack(alignment: .bottom, spacing: 8) {
+          // comme sur le Mac : sur le bord bas de la dernière bulle, pas sous
+          // ce qui la suit — cf. `VerticalAlignment.bubbleBottom`.
+          HStack(alignment: .bubbleBottom, spacing: 8) {
             if !group.isFromMe, let first = group.messages.first, !first.isSystemEvent {
               MessageAvatarView(
                 message: first,
@@ -274,6 +284,9 @@ struct ThreadView: View {
         if nearBottom { missedCount = 0 }
         withAnimation(.easeOut(duration: 0.2)) { isNearBottom = nearBottom }
       }
+      // Remonter jusqu'en haut, c'est demander la suite : le Relais complète
+      // au-dessus et la lecture ne bouge pas d'un pouce.
+      if new.isScrollable, new.distanceToTop <= 400 { Task { await loadOlder() } }
     }
     // Le chevron au-dessus du bouton d'envoi : il n'apparaît que lorsqu'on
     // a quitté le bas du fil, et un appui y ramène.
@@ -343,7 +356,10 @@ struct ThreadView: View {
     Task { @MainActor in
       for _ in 0..<3 {
         try? await Task.sleep(for: .milliseconds(Int(duration * 1000) + 80))
-        guard metrics.distanceToBottom > 60 else { return }
+        // Dans les DEUX sens : une rangée plus petite que son estimation — un
+        // vocal, une photo absente — laissait le fil garé SOUS son propre bas,
+        // écran vide, et la correction ne regardait que le manque.
+        guard abs(metrics.distanceToBottom) > 60 else { return }
         withAnimation(.easeOut(duration: 0.15)) {
           scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
         }
@@ -359,6 +375,35 @@ struct ThreadView: View {
       && message.id != settledMessageID
       && message.sentAt > openedAt
       && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
+  }
+
+  /// Une page de plus au-dessus, sans perdre sa page : on vise l'ancien
+  /// premier message par le haut, sans animation — comme le Mac le fait avec
+  /// « Voir les messages précédents ».
+  private func loadOlder() async {
+    guard !store.isLoadingOlder, let anchor = messages.first?.id else { return }
+    await store.loadOlder(conversationID: conversationID)
+    guard messages.first?.id != anchor else { return }
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { scrollPosition.scrollTo(id: anchor, anchor: .top) }
+  }
+
+  /// Un résultat de recherche vise un message : le fil s'y rend. S'il est hors
+  /// de la fenêtre chargée, on va d'abord le chercher — comme le Mac élargit
+  /// la sienne pour ⌘F.
+  private func consumeJump(_ messageID: String) async {
+    // La recherche part de la fiche du fil : elle se referme avec elle,
+    // sinon on sauterait derrière une feuille.
+    isShowingInfo = false
+    if !messages.contains(where: { $0.id == messageID }) {
+      await store.loadOlder(conversationID: conversationID)
+    }
+    // Le fil vient de s'ouvrir : il se pose d'abord en bas. On saute après.
+    try? await Task.sleep(for: .milliseconds(350))
+    guard store.pendingJumpMessageID == messageID else { return }
+    store.pendingJumpMessageID = nil
+    jumpTo(messageID)
   }
 
   /// Le saut vers un message cité : on y va, on le surligne, l'éclat s'éteint.
@@ -390,6 +435,8 @@ struct ThreadView: View {
 
     /// Ce qui reste à descendre. Zéro quand on est posé en bas.
     var distanceToBottom: CGFloat { contentHeight - visibleMaxY + insetBottom }
+    /// Ce qui reste à remonter. Zéro quand on touche le premier message.
+    var distanceToTop: CGFloat { visibleMaxY - visibleHeight }
     /// La cible `scrollTo(y:)` qui repose le dernier message sur le composer.
     var bottomScrollTarget: CGFloat { offsetY + distanceToBottom + insetTop }
     /// Un fil qui tient à l'écran n'a pas de bas où descendre.

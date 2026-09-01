@@ -2471,6 +2471,53 @@ final class InboxStore {
     session.pendingAttachmentPaths.append(contentsOf: paths)
   }
 
+  /// Ce que ⌘V dépose dans le fil : des fichiers, ou une image sans fichier —
+  /// une capture d'écran n'a AUCUN fichier derrière elle, on lui en écrit un,
+  /// en PNG, dans le dossier d'envoi que Messages sait lire (cf.
+  /// `IMessageSender.readableCopy`).
+  ///
+  /// Rend `false` quand le presse-papiers n'a que du texte : ⌘V garde alors
+  /// son sens ordinaire, et le champ colle le mot.
+  @discardableResult
+  func attachFromPasteboard(into session: ConversationSession? = nil) -> Bool {
+    guard let session = session ?? primarySession else { return false }
+    let board = NSPasteboard.general
+    if let text = board.string(forType: .string), !text.isEmpty { return false }
+    if let urls = board.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+      session.pendingAttachmentPaths.append(contentsOf: urls.map(\.path))
+      return true
+    }
+    let images = (board.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage]) ?? []
+    let paths = images.compactMap(Self.writePNG)
+    guard !paths.isEmpty else { return false }
+    session.pendingAttachmentPaths.append(contentsOf: paths)
+    return true
+  }
+
+  /// Déposer des fichiers sur le fil : ils rejoignent la bande d'aperçus.
+  func attach(urls: [URL], into session: ConversationSession? = nil) {
+    guard let session = session ?? primarySession else { return }
+    session.pendingAttachmentPaths.append(contentsOf: urls.map(\.path))
+  }
+
+  /// Une image sans fichier devient un PNG nommé, pour qu'on la reconnaisse
+  /// dans la bande d'aperçus comme dans la conversation d'en face.
+  private nonisolated static func writePNG(_ image: NSImage) -> String? {
+    guard let tiff = image.tiffRepresentation,
+          let bitmap = NSBitmapImageRep(data: tiff),
+          let data = bitmap.representation(using: .png, properties: [:])
+    else { return nil }
+    let box = IMessageSender.outgoingDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    do {
+      try FileManager.default.createDirectory(at: box, withIntermediateDirectories: true)
+      let url = box.appendingPathComponent("Image collée.png")
+      try data.write(to: url)
+      return url.path
+    } catch {
+      return nil
+    }
+  }
+
   /// Envoyer le brouillon de l'inbox.
   func sendDraft() async {
     guard let session = primarySession else { return }

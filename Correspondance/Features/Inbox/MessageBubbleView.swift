@@ -161,6 +161,8 @@ struct MessageBubbleView: View {
             .offset(x: message.isFromMe ? -8 : 8, y: ReactionPills.overhang)
           }
         }
+        // C'est CE bord-là que le visage du groupe regarde — cf. `.bubbleBottom`.
+        .bubbleBottomGuide(position)
         // Le débord se réserve, sinon la suite passerait par-dessus.
         .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
@@ -418,7 +420,7 @@ struct MessageBubbleView: View {
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 420, alignment: .leading)
+    .frame(maxWidth: 420, alignment: message.isFromMe ? .trailing : .leading)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
 
     if let onQuoteTap {

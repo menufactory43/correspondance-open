@@ -24,6 +24,14 @@ public struct AudioMessageView: View {
   @State private var transcript: String?
   @State private var isTranscribing = false
   @State private var transcriptError: String?
+  /// Le glissement en cours sur l'onde : le ticker lui laisse la main.
+  @State private var isScrubbing = false
+  /// L'allure choisie vaut pour les vocaux suivants : on ne la repose pas à
+  /// chaque bulle — c'est une préférence d'écoute, pas un réglage de message.
+  @AppStorage("vocalPlaybackRate") private var storedRate: Double = 1
+
+  /// La largeur de l'onde — et donc l'échelle du glissement.
+  private static let waveformWidth: CGFloat = 140
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 6) {
@@ -44,6 +52,8 @@ public struct AudioMessageView: View {
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Message \(attachment.isVoiceNote ? "vocal" : "audio"), \(timeLabel)")
   }
+
+  private var speed: PlaybackSpeed { PlaybackSpeed(rawValue: storedRate) ?? .normale }
 
   private var controls: some View {
     HStack(spacing: 8) {
@@ -66,12 +76,15 @@ public struct AudioMessageView: View {
           ProgressView(value: fraction)
             .progressViewStyle(.linear)
             .tint(isFromMe ? theme.bubbleOutInk : theme.accent)
-            .frame(width: 140)
+            .frame(width: Self.waveformWidth)
         }
-        Text(failed ? "Audio illisible" : timeLabel)
-          .font(Typography.meta(typeface))
-          .foregroundStyle(isFromMe ? theme.bubbleOutInk.opacity(0.8) : theme.inkSecondary)
-          .monospacedDigit()
+        HStack(spacing: 6) {
+          Text(failed ? "Audio illisible" : timeLabel)
+            .font(Typography.meta(typeface))
+            .foregroundStyle(isFromMe ? theme.bubbleOutInk.opacity(0.8) : theme.inkSecondary)
+            .monospacedDigit()
+          if !failed { speedButton }
+        }
       }
 
       if attachment.isVoiceNote {
@@ -95,8 +108,71 @@ public struct AudioMessageView: View {
           .frame(width: 2, height: max(3, value * 22))
       }
     }
-    .frame(width: 140, height: 22, alignment: .leading)
-    .accessibilityHidden(true)
+    .frame(width: Self.waveformWidth, height: 22, alignment: .leading)
+    // L'onde EST la barre de position : on y pose le doigt et on cherche.
+    // La hauteur de prise dépasse celle du tracé — 22 pt de barres, c'est
+    // trop mince pour un pouce.
+    .contentShape(Rectangle().inset(by: -8))
+    .gesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { value in
+          isScrubbing = true
+          seek(toFraction: value.location.x / Self.waveformWidth)
+        }
+        .onEnded { _ in isScrubbing = false }
+    )
+    // Sans souris ni doigt : deux gestes de VoiceOver, cinq secondes chacun.
+    .accessibilityElement()
+    .accessibilityLabel("Position dans le message vocal")
+    .accessibilityValue(timeLabel)
+    .accessibilityAdjustableAction { direction in
+      seek(by: direction == .increment ? 5 : -5)
+    }
+  }
+
+  /// L'allure d'écoute, qui tourne : 1× → 1,5× → 2×.
+  private var speedButton: some View {
+    Button {
+      storedRate = speed.next.rawValue
+      applyRate()
+    } label: {
+      Text(speed.label)
+        .font(Typography.meta(typeface))
+        .monospacedDigit()
+        // Pas de fondu enchaîné entre deux allures : « 1,5× » et « 2× » se
+        // superposeraient le temps de la transition.
+        .contentTransition(.identity)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(
+          Capsule().fill((isFromMe ? theme.bubbleOutInk : theme.accent).opacity(0.16))
+        )
+        .foregroundStyle(isFromMe ? theme.bubbleOutInk : theme.accent)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Vitesse d'écoute : \(speed.label). Toucher pour changer.")
+  }
+
+  /// Viser un instant : le lecteur se monte si besoin, et l'affichage suit
+  /// pendant qu'on glisse — sans attendre le prochain battement du ticker.
+  private func seek(toFraction target: Double) {
+    prepare()
+    guard let player, player.duration > 0 else { return }
+    let time = min(max(target, 0), 1) * player.duration
+    player.currentTime = time
+    elapsed = time
+  }
+
+  private func seek(by seconds: Double) {
+    prepare()
+    guard let player, player.duration > 0 else { return }
+    seek(toFraction: (player.currentTime + seconds) / player.duration)
+  }
+
+  private func applyRate() {
+    guard let player else { return }
+    player.enableRate = true
+    player.rate = Float(speed.rawValue)
   }
 
   /// « Lire » : la transcription, sur l'appareil quand il sait le faire.
@@ -193,6 +269,7 @@ public struct AudioMessageView: View {
       failed = true
       return
     }
+    loaded.enableRate = true
     loaded.prepareToPlay()
     player = loaded
     duration = loaded.duration
@@ -209,6 +286,7 @@ public struct AudioMessageView: View {
     }
     // Relire depuis le début quand la lecture précédente est allée au bout.
     if player.currentTime >= player.duration - 0.05 { player.currentTime = 0 }
+    applyRate()
     player.play()
     isPlaying = true
     startTicker()
@@ -220,7 +298,7 @@ public struct AudioMessageView: View {
     ticker?.cancel()
     ticker = Task { @MainActor in
       while !Task.isCancelled, let player, player.isPlaying {
-        elapsed = player.currentTime
+        if !isScrubbing { elapsed = player.currentTime }
         try? await Task.sleep(for: .milliseconds(120))
       }
       guard !Task.isCancelled else { return }

@@ -191,6 +191,8 @@ struct MessageBubble: View {
           .offset(x: message.isFromMe ? -8 : 8, y: ReactionPills.overhang)
         }
       }
+      // C'est CE bord-là que le visage du groupe regarde — cf. `.bubbleBottom`.
+      .bubbleBottomGuide(position)
       // Le débord se réserve, sinon la suite passerait par-dessus.
       .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
@@ -295,7 +297,7 @@ struct MessageBubble: View {
       }
     }
     .padding(.leading, 2)
-    .frame(maxWidth: 420, alignment: .leading)
+    .frame(maxWidth: 420, alignment: message.isFromMe ? .trailing : .leading)
     // Le trait d'accent n'a pas de hauteur à lui : sans ce garde-fou, il
     // prend toute celle qu'on lui propose et la citation avale la bulle —
     // le texte du message se tronquait derrière elle. Même parade que le

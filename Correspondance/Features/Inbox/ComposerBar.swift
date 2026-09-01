@@ -27,6 +27,11 @@ struct ComposerBar: View {
   @State private var dictation = ComposerDictationController()
   /// Tiroir du « + » ouvert. Se referme dès qu'on choisit, ou qu'on reprend l'écriture.
   @State private var isTrayExpanded = false
+  /// Le guetteur de ⌘V. `onPasteCommand` ne sert à rien ici : le champ de
+  /// texte avale le collage avant nous, même quand le presse-papiers n'a pas
+  /// un mot à donner. On l'intercepte donc en amont, et on ne le garde que
+  /// s'il porte une image ou un fichier.
+  @State private var pasteMonitor: Any?
 
   private var canSend: Bool {
     !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachmentPaths.isEmpty
@@ -82,7 +87,12 @@ struct ComposerBar: View {
       .padding(.top, 8)
       .padding(.bottom, 10)
     }
-    .onDisappear { dictation.stop() }
+    .onAppear(perform: watchPaste)
+    .onDisappear {
+      dictation.stop()
+      if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+      pasteMonitor = nil
+    }
     .onChange(of: text) { _, _ in
       if isTrayExpanded { isTrayExpanded = false }
       dictation.noteTextChanged()
@@ -165,6 +175,17 @@ struct ComposerBar: View {
         send()
         return .handled
       }
+
+      // Le palette de caractères du système (⌘⌃Espace) : le bouton dit
+      // seulement qu'elle existe.
+      ComposerCircleButton(
+        systemImage: "face.smiling",
+        helpText: "Emoji et symboles (⌘⌃Espace)",
+        theme: theme,
+        size: ComposerMetrics.innerControl,
+        iconSize: 14,
+        action: { NSApp.orderFrontCharacterPalette(nil) }
+      )
 
       if showsVoiceButton {
         ComposerCircleButton(
@@ -298,6 +319,17 @@ struct ComposerBar: View {
       .foregroundStyle(theme.inkSecondary)
       .padding(.horizontal, Spacing.md)
       .padding(.top, 8)
+  }
+
+  private func watchPaste() {
+    guard pasteMonitor == nil else { return }
+    pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      guard event.modifierFlags.contains(.command),
+            event.charactersIgnoringModifiers?.lowercased() == "v",
+            store.attachFromPasteboard()
+      else { return event }
+      return nil
+    }
   }
 
   private func startOrStopDictation() {

@@ -121,6 +121,7 @@ enum DemoRelay {
         hue: hue
       )
     }
+    seedVoice(mxc: "mxc://correspondance.local/demo-vocal-1", seconds: 7)
     seed(
       mxc: "mxc://correspondance.local/demo-reel-1",
       contentType: "image/jpeg",
@@ -129,6 +130,33 @@ enum DemoRelay {
       size: CGSize(width: 540, height: 960),
       hue: 0.72
     )
+  }
+
+  /// Le vocal de démonstration : un WAV écrit ici même, une phrase sifflée
+  /// dont l'amplitude monte et retombe. Un vrai fichier, parce que la bulle
+  /// mesure sa durée avec AVFoundation et ne saurait rien faire d'un leurre.
+  private static func seedVoice(mxc: String, seconds: Double) {
+    guard MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: "audio/wav") == nil
+    else { return }
+    let rate = 16_000
+    let count = Int(Double(rate) * seconds)
+    var samples = Data(capacity: count * 2)
+    for index in 0..<count {
+      let t = Double(index) / Double(rate)
+      let envelope = 0.35 * abs(sin(t * 1.7)) * (0.5 + 0.5 * sin(t * 0.6))
+      let value = Int16(max(-1, min(1, sin(t * 2 * .pi * 220) * envelope)) * 32_000)
+      withUnsafeBytes(of: value.littleEndian) { samples.append(contentsOf: $0) }
+    }
+    var wav = Data()
+    func append(_ text: String) { wav.append(contentsOf: Array(text.utf8)) }
+    func append32(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { wav.append(contentsOf: $0) } }
+    func append16(_ value: UInt16) { withUnsafeBytes(of: value.littleEndian) { wav.append(contentsOf: $0) } }
+    append("RIFF"); append32(UInt32(36 + samples.count)); append("WAVE")
+    append("fmt "); append32(16); append16(1); append16(1)
+    append32(UInt32(rate)); append32(UInt32(rate * 2)); append16(2); append16(16)
+    append("data"); append32(UInt32(samples.count))
+    wav.append(samples)
+    MatrixAttachmentStore.store(data: wav, forMXC: mxc, contentType: "audio/wav")
   }
 
   private static func seed(mxc: String, contentType: String, size: CGSize, hue: Double) {

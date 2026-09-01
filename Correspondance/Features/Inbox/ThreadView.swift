@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import CorrespondanceCore
 import CorrespondanceUI
 
@@ -47,6 +48,8 @@ struct ThreadView: View {
   @State private var flashedMessageID: String?
   /// Ce qui est arrivé pendant qu'on lisait plus haut.
   @State private var missedCount = 0
+  /// Un fichier survole le fil : la colonne se borde de pointillé.
+  @State private var isDropTargeted = false
 
   private var theme: WritingTheme { themes.theme }
   private var thread: [ChatMessage] {
@@ -113,6 +116,20 @@ struct ThreadView: View {
           )
           .popover(isPresented: sendLaterPickerPresented, arrowEdge: .top) {
             SendLaterPicker()
+          }
+        }
+        // Déposer un fichier n'importe où sur le fil vaut le joindre : c'est
+        // toute la colonne qui accueille, pas un rectangle à viser.
+        .dropDestination(for: URL.self) { urls, _ in
+          store.attach(urls: urls)
+          return true
+        } isTargeted: { isDropTargeted = $0 }
+        .overlay {
+          if isDropTargeted {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+              .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+              .padding(Spacing.xs)
+              .allowsHitTesting(false)
           }
         }
         .sheet(isPresented: forwardSheetPresented) {
@@ -331,8 +348,9 @@ struct ThreadView: View {
       && first?.isSystemEvent != true
     // La photo se pose EN BAS de la prise de parole, en face de la dernière
     // bulle : c'est là que Messages, WhatsApp et Telegram la mettent, et c'est
-    // la bulle la plus récente que l'œil cherche à attribuer.
-    HStack(alignment: .bottom, spacing: ThreadMetrics.avatarSpacing) {
+    // la bulle la plus récente que l'œil cherche à attribuer. Sur son BORD, pas
+    // sous ce qui la suit — cf. `VerticalAlignment.bubbleBottom`.
+    HStack(alignment: .bubbleBottom, spacing: ThreadMetrics.avatarSpacing) {
       if showsAvatar, let first {
         MessageAvatarView(
           message: first,

@@ -202,7 +202,7 @@ struct SearchSheet: View {
 
   private func messageRow(_ message: ChatMessage, in conversation: Conversation?) -> some View {
     Button {
-      if let conversation { open(conversation.id) }
+      if let conversation { open(conversation.id, jumpingTo: message.id) }
     } label: {
       VStack(alignment: .leading, spacing: 5) {
         HStack(spacing: 5) {
@@ -300,7 +300,10 @@ struct SearchSheet: View {
     .listRowBackground(Color.clear)
   }
 
-  private func open(_ conversationID: String) {
+  /// Ouvrir la conversation — et, quand c'est un message qu'on a touché, s'y
+  /// rendre : le fil vise l'identifiant et le surligne à l'arrivée.
+  private func open(_ conversationID: String, jumpingTo messageID: String? = nil) {
+    store.pendingJumpMessageID = messageID
     store.selectedConversationID = conversationID
     Task { await store.open(conversationID: conversationID) }
     dismiss()

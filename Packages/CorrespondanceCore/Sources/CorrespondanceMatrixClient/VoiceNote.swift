@@ -66,3 +66,26 @@ public enum VoiceNoteKeys {
   /// Durée et forme d'onde (MSC1767).
   public static let audio = "org.matrix.msc1767.audio"
 }
+
+/// Les trois allures d'écoute d'un vocal, dans l'ordre où le bouton les fait
+/// tourner. Deux fois plus vite, c'est ce que WhatsApp et Telegram offrent :
+/// un message d'une minute s'écoute en trente secondes sans devenir inaudible.
+public enum PlaybackSpeed: Double, CaseIterable, Sendable {
+  case normale = 1
+  case rapide = 1.5
+  case double = 2
+
+  /// L'allure suivante ; après la dernière on revient au début.
+  public var next: PlaybackSpeed {
+    let all = Self.allCases
+    guard let index = all.firstIndex(of: self) else { return .normale }
+    return all[(index + 1) % all.count]
+  }
+
+  /// « 1× », « 1,5× » — la virgule française, comme partout ailleurs dans l'app.
+  public var label: String {
+    rawValue == rawValue.rounded()
+      ? "\(Int(rawValue))×"
+      : String(rawValue).replacingOccurrences(of: ".", with: ",") + "×"
+  }
+}

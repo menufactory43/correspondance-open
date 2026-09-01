@@ -78,6 +78,8 @@ public enum MatrixAttachmentStore {
     case "video/mp4": "mp4"
     case "video/quicktime": "mov"
     case "audio/ogg": "ogg"
+    case "audio/mp4", "audio/m4a", "audio/aac": "m4a"
+    case "audio/wav", "audio/x-wav": "wav"
     case "application/pdf": "pdf"
     default: "bin"
     }

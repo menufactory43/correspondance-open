@@ -184,6 +184,76 @@
          }
         }
        }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$msg-alice-vocal",
+       "sender": "@whatsapp_lid-19876543210:correspondance.local",
+       "origin_server_ts": 1756400730000,
+       "content": {
+        "msgtype": "m.audio",
+        "body": "Message vocal",
+        "url": "mxc://correspondance.local/demo-vocal-1",
+        "info": {
+         "mimetype": "audio/wav",
+         "size": 224044,
+         "duration": 7000
+        },
+        "org.matrix.msc3245.voice": {},
+        "org.matrix.msc1767.audio": {
+         "duration": 7000,
+         "waveform": [
+          256,
+          379,
+          510,
+          630,
+          722,
+          771,
+          764,
+          697,
+          573,
+          402,
+          309,
+          517,
+          706,
+          855,
+          943,
+          959,
+          899,
+          769,
+          584,
+          365,
+          374,
+          584,
+          753,
+          863,
+          903,
+          874,
+          781,
+          640,
+          470,
+          293,
+          381,
+          512,
+          600,
+          640,
+          632,
+          585,
+          510,
+          420,
+          331,
+          259,
+          318,
+          354,
+          367,
+          361,
+          343,
+          318,
+          293,
+          273
+         ]
+        }
+       }
       }
      ]
     }
@@ -282,8 +352,19 @@
       }
      ]
     },
-    "ephemeral": { "events": [ { "type": "m.typing", "content": { "user_ids": ["@whatsapp_lid-22222222222:correspondance.local"] } } ] },
-      "timeline": {
+    "ephemeral": {
+     "events": [
+      {
+       "type": "m.typing",
+       "content": {
+        "user_ids": [
+         "@whatsapp_lid-22222222222:correspondance.local"
+        ]
+       }
+      }
+     ]
+    },
+    "timeline": {
      "limited": false,
      "events": [
       {

@@ -57,11 +57,20 @@ public final class VoiceRecorder {
       return false
     }
     #if os(iOS)
-    do {
-      let session = AVAudioSession.sharedInstance()
-      try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.duckOthers, .defaultToSpeaker])
-      try session.setActive(true)
-    } catch {
+    // HORS de l'acteur principal : sur un appareil sans entrée audio — un
+    // simulateur — `setActive` peut rester une demi-minute sans rendre la
+    // main, et c'est toute l'interface qui s'arrête avec lui.
+    let ready = await Task.detached(priority: .userInitiated) { () -> Bool in
+      do {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.duckOthers, .defaultToSpeaker])
+        try session.setActive(true)
+        return true
+      } catch {
+        return false
+      }
+    }.value
+    guard ready else {
       state = .failed("Le micro n'a pas pu démarrer.")
       return false
     }
@@ -74,24 +83,31 @@ public final class VoiceRecorder {
       AVNumberOfChannelsKey: 1,
       AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
     ]
-    do {
-      let recorder = try AVAudioRecorder(url: url, settings: settings)
+    // Monter le magnétophone hors de l'acteur principal, pour la même raison
+    // que la session : `record()` attend le matériel.
+    let started = await Task.detached(priority: .userInitiated) { () -> Started? in
+      guard let recorder = try? AVAudioRecorder(url: url, settings: settings) else { return nil }
       recorder.isMeteringEnabled = true
-      guard recorder.record() else {
-        state = .failed("Le micro n'a pas pu démarrer.")
-        return false
-      }
-      self.recorder = recorder
-      fileURL = url
-      samples = []
-      duration = 0
-      state = .recording
-      startTicker()
-      return true
-    } catch {
+      guard recorder.record() else { return nil }
+      return Started(recorder: recorder)
+    }.value
+    guard let started else {
       state = .failed("Le micro n'a pas pu démarrer.")
       return false
     }
+    recorder = started.recorder
+    fileURL = url
+    samples = []
+    duration = 0
+    state = .recording
+    startTicker()
+    return true
+  }
+
+  /// `AVAudioRecorder` n'est pas `Sendable` ; il ne quitte pourtant ce fil que
+  /// pour être rangé ici, et personne d'autre ne le touche entre-temps.
+  private struct Started: @unchecked Sendable {
+    let recorder: AVAudioRecorder
   }
 
   /// Arrête et rend le fichier avec sa forme d'onde. `nil` si l'enregistrement
@@ -138,7 +154,10 @@ public final class VoiceRecorder {
 
   private func deactivateSession() {
     #if os(iOS)
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    // Comme l'activation : rendre la session peut attendre le matériel.
+    Task.detached(priority: .utility) {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
     #endif
   }
 

@@ -19,6 +19,8 @@ public enum BubblePosition: Sendable, Equatable {
   var continuesBelow: Bool { self == .first || self == .middle }
   /// Vrai quand une bulle du même auteur la précède.
   var continuesAbove: Bool { self == .middle || self == .last }
+  /// La dernière bulle d'une prise de parole : celle que l'avatar regarde.
+  public var endsGroup: Bool { self == .last || self == .alone }
 }
 
 /// Les quatre rayons d'une bulle, dans l'ordre où SwiftUI les demande.

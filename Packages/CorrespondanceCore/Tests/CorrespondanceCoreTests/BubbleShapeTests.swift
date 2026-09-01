@@ -37,4 +37,11 @@ final class BubbleShapeTests: XCTestCase {
     XCTAssertEqual(BubblePosition(index: 1, count: 3), .middle)
     XCTAssertEqual(BubblePosition(index: 2, count: 3), .last)
   }
+
+  func testSeuleLaDerniereBulleFermeLaPriseDeParole() {
+    XCTAssertTrue(BubblePosition.alone.endsGroup)
+    XCTAssertTrue(BubblePosition.last.endsGroup)
+    XCTAssertFalse(BubblePosition.first.endsGroup)
+    XCTAssertFalse(BubblePosition.middle.endsGroup)
+  }
 }

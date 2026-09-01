@@ -69,6 +69,14 @@ final class RelayStore {
   /// Le fil montré en Focus. Séparé du précédent : passer en Focus puis revenir
   /// ne doit pas déplacer la sélection de l'inbox.
   var focusConversationID: String?
+  /// Le message qu'un résultat de recherche vise : le fil s'y rend dès qu'il
+  /// l'a sous la main, et l'efface en arrivant.
+  var pendingJumpMessageID: String?
+  /// Une page d'historique est en route : le fil montre son attente en tête.
+  private(set) var isLoadingOlder = false
+  /// Les fils dont le Relais n'a plus rien à donner : inutile de le relancer
+  /// à chaque fois qu'on effleure le haut.
+  private var exhaustedThreadIDs: Set<String> = []
 
   // MARK: - Composer
 
@@ -522,6 +530,24 @@ final class RelayStore {
       await matrix.markRead(conversationID: target)
     }
     markLocallyRead(conversationID)
+  }
+
+  /// Remonter d'une page : ce que le défilement demande en approchant du haut.
+  /// Le Relais rend le fil entier tel qu'il le connaît — on ne garde donc que
+  /// s'il a vraiment grandi, et on cesse de demander quand il ne bouge plus.
+  func loadOlder(conversationID: String) async {
+    guard !isDemo, !isLoadingOlder, !exhaustedThreadIDs.contains(conversationID) else { return }
+    isLoadingOlder = true
+    defer { isLoadingOlder = false }
+    var grew = false
+    for target in relayTargets(of: conversationID) {
+      let before = messages[target]?.count ?? 0
+      let fresh = await matrix.backfill(conversationID: target)
+      guard fresh.count > before else { continue }
+      messages[target] = await matrix.ensureLocalAttachments(fresh)
+      grew = true
+    }
+    if !grew { exhaustedThreadIDs.insert(conversationID) }
   }
 
   /// En dessous, un fil passe pour court : le Relais est alors interrogé une
