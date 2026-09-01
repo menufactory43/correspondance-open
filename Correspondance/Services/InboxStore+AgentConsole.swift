@@ -105,6 +105,51 @@ extension InboxStore {
     try? AgentLocalHost.uninstall(agent: agentName)
   }
 
+  // MARK: - La voix de cc dans le fil ouvert
+
+  /// La voix de cc dans le fil ouvert, ou `nil` s'il n'y est pas : le tiroir
+  /// « + » n'affiche alors rien de plus qu'« Inviter cc ».
+  func agentVoiceInSelectedConversation() async -> AgentSettings.Mode? {
+    guard let conversation = selectedConversation, conversation.network.livesOnRelay,
+          await matrix.hasAgent(conversationID: conversation.id),
+          let roomID = await matrix.roomID(ofConversation: conversation.id)
+    else { return nil }
+    guard let console = await loadAgentConsole(), let config = console.config else {
+      // Pas de console écrite : l'agent tourne sur son config.json, dont le
+      // défaut est le brouillon. On dit ce qu'on sait, pas ce qu'on espère.
+      return .draft
+    }
+    return config.voice(in: roomID)
+  }
+
+  /// Pose la voix de cc dans le fil ouvert, et allume ou éteint le relais du
+  /// pont dans le même geste : à voix haute sans relais, le pont refuse le
+  /// message et cc parle dans le vide. Rend la voix effective, ou `nil` si
+  /// rien n'est parti — l'écran ne montre jamais un réglage qui n'a pas quitté
+  /// l'app.
+  func setAgentVoice(_ mode: AgentSettings.Mode) async -> AgentSettings.Mode? {
+    guard let conversation = selectedConversation,
+          let roomID = await matrix.roomID(ofConversation: conversation.id)
+    else { return nil }
+    guard let console = await activateAgentConsole(), let config = console.config else {
+      lastErrorMessage = "la console de cc n'est pas joignable — le réglage n'est pas parti"
+      return nil
+    }
+    guard await writeAgentConsoleConfig(config.settingVoice(mode, in: roomID), in: console.roomID) else {
+      lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
+      return nil
+    }
+    do {
+      let portail = try await matrix.setPortalRelay(conversationID: conversation.id, enabled: mode == .direct)
+      if portail {
+        Self.relayLog.info("relais du pont \(mode == .direct ? "allumé" : "éteint", privacy: .public) dans \(roomID, privacy: .public)")
+      }
+    } catch {
+      lastErrorMessage = "cc répondra \(mode == .direct ? "à voix haute" : "en brouillon"), mais le pont n'a pas pris la commande de relais : \(error.localizedDescription)"
+    }
+    return mode
+  }
+
   /// Écrit une configuration corrigée dans la console. Le retour dit si c'est
   /// parti : l'écran ne prétend pas avoir réglé ce qui n'a pas quitté l'app.
   @discardableResult

@@ -403,6 +403,16 @@ public enum MatrixIdentity {
   /// donc une mention comme une autre — et elle doit se voir comme telle.
   public static let agentName = "cc"
 
+  /// Les agents que l'app sait reconnaître par leur localpart. Un expéditeur
+  /// de cette liste n'est ni le contact ni un fantôme de pont : il a sa propre
+  /// tête dans le fil, jamais celle de la personne à qui l'on écrit.
+  public static let knownAgents: [String] = ["cc", "hermes"]
+
+  public static func isAgent(_ userID: String) -> Bool {
+    guard userID.hasPrefix("@"), let colon = userID.firstIndex(of: ":") else { return false }
+    return knownAgents.contains(String(userID[userID.index(after: userID.startIndex)..<colon]))
+  }
+
   /// Le MXID de l'agent « cc » : il vit sur le même Relais que soi.
   public static func agentUserID(sameServerAs selfUserID: String) -> String {
     agentUserID(named: agentName, sameServerAs: selfUserID)

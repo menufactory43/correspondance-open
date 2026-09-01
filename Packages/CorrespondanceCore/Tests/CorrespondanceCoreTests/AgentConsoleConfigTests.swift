@@ -71,4 +71,34 @@ final class AgentConsoleConfigTests: XCTestCase {
       "@ailleurs:autre.tld"
     )
   }
+
+  // MARK: - La voix par conversation
+
+  func testSansReglageDeRoomLaVoixEstCelleParDefaut() {
+    var config = AgentConsoleConfig(agent: "cc")
+    config.defaultMode = .direct
+    XCTAssertEqual(config.voice(in: "!une:local"), .direct)
+  }
+
+  func testLaVoixDUneRoomPrimeSurLeDefaut() {
+    var config = AgentConsoleConfig(agent: "cc")
+    config.defaultMode = .direct
+    let reglee = config.settingVoice(.draft, in: "!une:local")
+    XCTAssertEqual(reglee.voice(in: "!une:local"), .draft)
+    XCTAssertEqual(reglee.voice(in: "!autre:local"), .direct, "les autres rooms gardent le défaut")
+  }
+
+  func testPoserLaVoixNeTouchePasAuDepotLie() {
+    var config = AgentConsoleConfig(agent: "cc")
+    config.rooms["!une:local"] = .init(cwd: "/Users/moi/projets/app", mode: nil)
+    let reglee = config.settingVoice(.direct, in: "!une:local")
+    XCTAssertEqual(reglee.rooms["!une:local"]?.cwd, "/Users/moi/projets/app")
+    XCTAssertEqual(reglee.rooms["!une:local"]?.mode, .direct)
+  }
+
+  func testLaVoixSurvitALAllerRetourJSON() {
+    let config = AgentConsoleConfig(agent: "cc").settingVoice(.direct, in: "!une:local")
+    let relue = AgentConsoleConfig(content: config.content())
+    XCTAssertEqual(relue?.voice(in: "!une:local"), .direct)
+  }
 }

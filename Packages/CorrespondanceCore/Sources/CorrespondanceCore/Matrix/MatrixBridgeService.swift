@@ -407,6 +407,31 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Allume ou éteint le **relais** d'un portail : c'est ce qui permet à cc de
+  /// parler à voix haute dans une conversation WhatsApp ou Signal. Sans lui, le
+  /// pont refuse tout message qui ne vient pas de mon compte — « You're not
+  /// logged in (relay not set) », vu en vrai. Avec, il part depuis mon compte,
+  /// signé par le pont (« 🤖 cc : … », `message_formats`). La commande se donne
+  /// dans le portail lui-même ; le pont la lit et ne la relaie pas. Rend `false`
+  /// quand le fil n'est pas un portail : il n'y a alors rien à allumer.
+  /// Ce fil est-il un portail de pont ? Un agent n'y parle à voix haute que
+  /// si le relais du pont est allumé (`setPortalRelay`).
+  public func isPortal(conversationID: String) -> Bool {
+    guard let roomID = roomID(forConversation: conversationID) else { return false }
+    return rooms[roomID]?.network?.bridge != nil
+  }
+
+  @discardableResult
+  public func setPortalRelay(conversationID: String, enabled: Bool) async throws -> Bool {
+    guard let roomID = roomID(forConversation: conversationID) else {
+      throw MatrixError.decoding("salon introuvable pour \(conversationID)")
+    }
+    guard let network = rooms[roomID]?.network, let bridge = network.bridge else { return false }
+    let command = "\(bridge.commandPrefix) \(enabled ? "set-relay" : "unset-relay")"
+    _ = try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
+    return true
+  }
+
   /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun
   /// pont ne l'annonce (voir `MatrixRoomModel.isNetworkFlaggedRequest`).
   public func networkFlaggedRequestIDs() -> Set<String> {

@@ -12,6 +12,9 @@ struct ComposerBar: View {
   var onAttach: () -> Void
   var onSendLater: () -> Void = {}
   var onInviteAgent: (() -> Void)?
+  /// La voix de cc dans ce fil, quand il y est ; `nil` sinon.
+  var agentVoice: AgentSettings.Mode? = nil
+  var onToggleAgentVoice: (() -> Void)? = nil
   /// « Gérer le groupe… » — nommer, ajouter, retirer. `nil` quand le fil n'est
   /// pas un groupe, ou qu'aucun de ces gestes n'est relayé par son pont.
   var onManageGroup: (() -> Void)?
@@ -77,6 +80,8 @@ struct ComposerBar: View {
           onAttach: onAttach,
           onSendLater: onSendLater,
           onInviteAgent: onInviteAgent,
+          agentVoice: agentVoice,
+          onToggleAgentVoice: onToggleAgentVoice,
           onManageGroup: onManageGroup
         )
         .padding(.bottom, 2)

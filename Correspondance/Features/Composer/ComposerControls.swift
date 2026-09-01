@@ -208,6 +208,11 @@ struct ComposerPlusTray: View {
   var onSendLater: (() -> Void)?
   /// « Inviter cc » : présent seulement quand le fil peut l'accueillir.
   var onInviteAgent: (() -> Void)?
+  /// Une fois cc dans le fil, le même bouton dit sa voix ici — brouillon ou
+  /// voix haute — et la bascule. C'est le réglage **par conversation** ; celui
+  /// des Réglages n'est que le défaut.
+  var agentVoice: AgentSettings.Mode? = nil
+  var onToggleAgentVoice: (() -> Void)? = nil
   /// « Gérer le groupe » : nommer, ajouter, retirer. Présent seulement sur un
   /// groupe dont le pont relaie au moins un de ces gestes.
   var onManageGroup: (() -> Void)?
@@ -219,7 +224,7 @@ struct ComposerPlusTray: View {
   /// La largeur du tiroir suit le nombre de boutons qu'il cache.
   private var trayWidth: CGFloat {
     let buttons = 1 + (offersSendLater ? 1 : 0) + (onInviteAgent != nil ? 1 : 0)
-      + (onManageGroup != nil ? 1 : 0)
+      + (onToggleAgentVoice != nil ? 1 : 0) + (onManageGroup != nil ? 1 : 0)
     return ComposerMetrics.control * CGFloat(buttons) + Self.itemSpacing * CGFloat(buttons - 1)
   }
   /// Sans « plus tard », l'état « programmé » n'existe pas pour ce composer.
@@ -269,6 +274,18 @@ struct ComposerPlusTray: View {
             theme: theme,
             iconSize: 15,
             action: { choose(onInviteAgent) }
+          )
+        }
+        if let onToggleAgentVoice, let agentVoice {
+          ComposerCircleButton(
+            systemImage: agentVoice == .direct ? "megaphone" : "pencil.line",
+            helpText: agentVoice == .direct
+              ? "cc répond à voix haute ici, le correspondant le lit — passer en brouillon"
+              : "cc propose des brouillons ici, visibles de toi seul — passer à voix haute",
+            theme: theme,
+            iconSize: 15,
+            isActive: agentVoice == .direct,
+            action: { choose(onToggleAgentVoice) }
           )
         }
         if let onManageGroup {

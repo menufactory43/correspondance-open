@@ -91,6 +91,22 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     return .object(fields)
   }
 
+  /// La voix de l'agent dans une room : ce qu'elle dit elle-même, sinon le
+  /// défaut. C'est ce que le tiroir « + » d'une conversation affiche.
+  public func voice(in roomID: String) -> AgentSettings.Mode {
+    rooms[roomID]?.mode ?? defaultMode ?? .draft
+  }
+
+  /// La même config avec la voix de cette room posée. Le dépôt lié, s'il y en
+  /// a un, ne bouge pas : ce sont deux réglages sur la même ligne.
+  public func settingVoice(_ mode: AgentSettings.Mode, in roomID: String) -> AgentConsoleConfig {
+    var copy = self
+    var binding = copy.rooms[roomID] ?? RoomBinding()
+    binding.mode = mode
+    copy.rooms[roomID] = binding
+    return copy
+  }
+
   /// Les paliers d'outils tels que l'app les propose. Les listes exactes vivent
   /// côté agent (`AgentConfig.Presets`) : ici on ne manipule que leur nom.
   public enum ToolPreset: String, CaseIterable, Identifiable, Sendable {

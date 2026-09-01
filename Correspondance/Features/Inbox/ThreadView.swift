@@ -38,6 +38,9 @@ struct ThreadView: View {
   /// Le tiroir du « + » propose « Inviter cc » — seulement quand le fil est au
   /// Relais et que cc n'y est pas déjà.
   @State private var canInviteAgent = false
+  /// La voix de cc dans ce fil, quand il y est : brouillon ou voix haute. Le
+  /// même bouton du tiroir, une fois cc invité, la bascule.
+  @State private var agentVoice: AgentSettings.Mode?
   /// Le compte de messages pour lequel une expansion est programmée : si le
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
@@ -109,8 +112,21 @@ struct ThreadView: View {
             onSendLater: { store.toggleSendLaterPicker() },
             onInviteAgent: canInviteAgent ? {
               canInviteAgent = false
-              Task { await store.inviteAgent() }
+              Task {
+                await store.inviteAgent()
+                agentVoice = await store.agentVoiceInSelectedConversation()
+              }
             } : nil,
+            agentVoice: agentVoice,
+            onToggleAgentVoice: agentVoice.map { current in
+              {
+                Task {
+                  if let posee = await store.setAgentVoice(current == .direct ? .draft : .direct) {
+                    agentVoice = posee
+                  }
+                }
+              }
+            },
             onManageGroup: store.selectedConversationID.flatMap { id in
               store.canManageGroup(id) ? { store.presentGroupSheet(id) } : nil
             },
@@ -356,6 +372,7 @@ struct ThreadView: View {
       }
       .task(id: store.selectedConversationID) {
         canInviteAgent = await store.agentInvitable()
+        agentVoice = await store.agentVoiceInSelectedConversation()
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         LaunchTrace.event("select")

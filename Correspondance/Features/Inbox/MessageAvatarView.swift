@@ -23,6 +23,14 @@ struct MessageAvatarView: View {
         Image(platformImage: image)
           .resizable()
           .scaledToFill()
+      } else if let glyph = agentGlyph {
+        // Un agent ou le bot du pont a sa propre tête : jamais celle de la
+        // personne à qui l'on écrit, même en tête-à-tête — vu en vrai, cc et
+        // l'avertissement du pont portaient le visage de la correspondante.
+        Circle().fill(glyph.color)
+        Image(systemName: glyph.symbol)
+          .font(.system(size: size * 0.46, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.95))
       } else {
         Circle().fill(fallbackColor)
         Text(initials)
@@ -45,8 +53,28 @@ struct MessageAvatarView: View {
     "\(conversation?.id ?? message.conversationID)|\(authorKey)"
   }
 
+  /// Le glyphe d'un expéditeur qui n'est ni moi ni un humain du réseau : un
+  /// agent (chacun le sien), ou le bot de gestion d'un pont.
+  private var agentGlyph: (symbol: String, color: Color)? {
+    guard let sender = message.senderID else { return nil }
+    if MatrixIdentity.isAgent(sender) {
+      let localpart = sender.dropFirst().prefix { $0 != ":" }
+      switch localpart {
+      case "cc": return ("sparkles", Color(red: 0.30, green: 0.62, blue: 0.72))
+      case "hermes": return ("wind", Color(red: 0.72, green: 0.45, blue: 0.85))
+      default: return ("cpu", Color(red: 0.45, green: 0.50, blue: 0.60))
+      }
+    }
+    if MatrixIdentity.isBridgeBot(sender) {
+      return ("arrow.left.arrow.right", Color(red: 0.55, green: 0.58, blue: 0.62))
+    }
+    return nil
+  }
+
   private func load() async {
     image = nil
+    // Un agent ou un bot ne porte jamais l'image du fil.
+    if agentGlyph != nil { return }
     // En tête-à-tête, l'auteur *est* le fil : on emprunte l'image déjà résolue
     // (carnet d'adresses, portail, mosaïque) plutôt que d'en chercher une autre.
     if let conversation, !conversation.isGroup {
