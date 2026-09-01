@@ -89,6 +89,17 @@ final class SeenByTests: XCTestCase {
     XCTAssertEqual(model.delivery(selfUserID: moi), .sent)
   }
 
+  /// Le pluriel a coûté un défaut : seul « cc » était écarté, donc un salon où
+  /// vivait un second agent affichait « Vu » dès que celui-là avait synchronisé
+  /// — un accusé de lecture pour personne.
+  func testAucunAgentNEstUnLecteur() {
+    var model = groupe(members: ["@a:relais": "Alice"])
+    model.members["@hermes:relais"] = .init(displayName: "hermes", membership: "join")
+    model.readMarkerByUser["@hermes:relais"] = "$moi"
+    XCTAssertNil(model.seenByLabelFR(selfUserID: moi))
+    XCTAssertEqual(model.delivery(selfUserID: moi), .sent)
+  }
+
   func testEnDMLeDetailSeTait() {
     var model = groupe(members: ["@a:relais": "Alice"])
     model.bridgeRoomType = "dm"

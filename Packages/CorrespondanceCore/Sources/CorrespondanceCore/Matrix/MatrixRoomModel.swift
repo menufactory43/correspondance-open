@@ -253,14 +253,17 @@ public struct MatrixRoomModel: Sendable {
     return readersOfLastOutgoingMessage(selfUserID: selfUserID).isEmpty ? .sent : .read
   }
 
-  /// Qui a lu mon dernier message sortant — moi, les bots et l'agent « cc »
-  /// exclus. La lecture de l'agent est celle d'un robot : elle ne vaut pas
-  /// un « Vu » de quelqu'un.
+  /// Qui a lu mon dernier message sortant — moi, les bots et **les agents**
+  /// exclus. La lecture d'un agent est celle d'un robot : elle ne vaut pas un
+  /// « Vu » de quelqu'un.
+  ///
+  /// Le pluriel a coûté un défaut : seul « cc » était écarté, donc un salon où
+  /// vivait un second agent affichait « Vu » dès que celui-là avait synchronisé
+  /// — un accusé de lecture pour personne.
   public func readersOfLastOutgoingMessage(selfUserID: String) -> [String] {
     guard let mine = lastOutgoingMessage else { return [] }
-    let agentID = MatrixIdentity.agentUserID(sameServerAs: selfUserID)
     return readMarkerByUser.compactMap { userID, eventID in
-      guard userID != selfUserID, userID != agentID,
+      guard userID != selfUserID, !MatrixIdentity.isAgent(userID),
             !MatrixIdentity.isBridgeBot(userID),
             // Le marqueur vaut « lu jusqu'ici » : il suffit qu'il ait atteint mon message.
             let marker = messagesByID[eventID],
