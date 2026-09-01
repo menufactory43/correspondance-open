@@ -2,33 +2,34 @@ import AppKit
 import SwiftUI
 
 /// **Une fenêtre ne s'ouvre jamais plus grande que l'écran qui l'accueille, ni
-/// hors de ses limites.**
+/// hors de ses limites — et elle ne le devient pas non plus.**
 ///
-/// Ça paraît évident et pourtant : sur un profil neuf, la fenêtre principale
-/// s'est ouverte en 1440 × 2142 sur un écran de 1440 × 869, posée à
-/// `y = -1273`. Le champ de saisie était hors de l'écran — on ne pouvait
-/// littéralement pas envoyer de message. Deux causes possibles, et la borne les
-/// couvre toutes les deux :
+/// Sur un profil neuf, la fenêtre principale s'ouvrait à une taille normale
+/// puis **devenait géante une fois le contenu chargé** : 1100 × 2142 sur un
+/// écran de 1440 × 869, posée à `y = -1273`, champ de saisie hors de l'écran.
+/// Personne ne pouvait envoyer de message.
 ///
-/// - **au premier lancement**, sans cadre enregistré, SwiftUI peut dimensionner
-///   la fenêtre sur la hauteur *idéale* du contenu, et une liste de
-///   conversations sans hauteur bornée donne exactement ce genre de nombre ;
-/// - **à un lancement suivant**, un cadre enregistré sur un écran plus grand
-///   (un profil migré, un moniteur débranché) raconte une taille qui n'existe
-///   plus.
+/// Ce détail — « puis » — est toute l'affaire. Une garde qui s'exécute au
+/// montage borne une fenêtre vide, et SwiftUI la redimensionne ensuite sur la
+/// hauteur *idéale* du contenu dès que les conversations arrivent. La règle
+/// était juste ; c'est le moment qui ne l'était pas.
 ///
-/// Le défaut n'était invisible que par chance : tout le monde ici a un cadre
-/// sain enregistré depuis des mois. Il a fallu un profil vierge pour le voir.
+/// D'où trois défenses, et il en faut trois :
+///
+/// 1. `contentMaxSize` : **AppKit lui-même** refuse de dépasser l'écran, sans
+///    qu'on ait à courir après un redimensionnement ;
+/// 2. l'observation de `didResize` / `didMove` / `didChangeScreen` : ce qui
+///    déborde quand même est ramené, à chaque fois, pas une fois ;
+/// 3. la borne sur le cadre restauré, pour un profil migré depuis un écran plus
+///    grand.
 enum WindowFrameGuard {
 
-  /// Le cadre qu'on accepte, à partir de celui qu'on nous propose.
-  ///
-  /// Pure, et c'est le point : la règle s'éprouve avec un écran de 1440 × 869
-  /// et un cadre de 1440 × 2142, sans ouvrir la moindre fenêtre.
+  /// Le cadre qu'on accepte, à partir de celui qu'on nous propose. Pure : la
+  /// règle s'éprouve sans ouvrir la moindre fenêtre.
   ///
   /// - `frame` : ce que la fenêtre voudrait (contenu idéal, ou cadre restauré) ;
   /// - `visible` : `visibleFrame` de l'écran — déjà amputé du Dock et de la
-  ///   barre de menus, c'est bien lui qu'il faut, pas `frame` ;
+  ///   barre de menus, c'est bien lui qu'il faut ;
   /// - `minimum` : ce en dessous de quoi la fenêtre devient inutilisable.
   static func clamp(_ frame: CGRect, visible: CGRect, minimum: CGSize) -> CGRect {
     // La taille d'abord : jamais plus que l'écran, jamais moins que le
@@ -38,54 +39,160 @@ enum WindowFrameGuard {
     let hauteur = max(min(frame.height, visible.height), min(minimum.height, visible.height))
 
     // Puis la position : le cadre tient dans l'écran, sans déborder d'un côté
-    // ni de l'autre. `max(visible.minX, …)` passe en second pour qu'un écran
-    // plus petit que la fenêtre colle au bord haut-gauche plutôt qu'au bas.
+    // ni de l'autre.
     let x = max(visible.minX, min(frame.origin.x, visible.maxX - largeur))
     let y = max(visible.minY, min(frame.origin.y, visible.maxY - hauteur))
 
     return CGRect(x: x, y: y, width: largeur, height: hauteur)
   }
 
-  /// Le cadre proposé tient-il déjà ? Sert à ne pas bouger une fenêtre saine —
-  /// on ne repositionne que ce qui déborde.
+  /// Le cadre tient-il déjà ? Sert à ne pas bouger une fenêtre saine.
   static func fits(_ frame: CGRect, visible: CGRect) -> Bool {
     frame.width <= visible.width && frame.height <= visible.height
-      && visible.contains(CGPoint(x: frame.minX, y: frame.minY))
-      && visible.contains(CGPoint(x: frame.maxX - 1, y: frame.maxY - 1))
+      && frame.minX >= visible.minX && frame.minY >= visible.minY
+      && frame.maxX <= visible.maxX && frame.maxY <= visible.maxY
+  }
+
+  /// Le cadre à poser, ou `nil` s'il n'y a rien à faire. C'est la décision que
+  /// prend l'observateur à chaque redimensionnement.
+  static func adjustment(for frame: CGRect, visible: CGRect, minimum: CGSize) -> CGRect? {
+    guard !fits(frame, visible: visible) else { return nil }
+    let borne = clamp(frame, visible: visible, minimum: minimum)
+    return borne == frame ? nil : borne
   }
 }
 
-/// Pose la borne sur la vraie `NSWindow`.
+/// Ce que le gardien a besoin de savoir d'une fenêtre.
 ///
-/// AppKit restaure le cadre enregistré **après** le premier passage de mise en
-/// page, et SwiftUI peut le redimensionner encore après : on repasse donc
-/// quelques fois, comme `SettingsWindowSizer`. Une fois la fenêtre saine, on ne
-/// touche plus à rien — elle appartient à l'utilisateur.
-struct WindowFrameGuardView: NSViewRepresentable {
-  var minimum: NSSize = NSSize(width: 720, height: 480)
+/// Une couture, et pas une abstraction gratuite : créer une vraie `NSWindow`
+/// dans le harnais de test injecté **fait planter le processus** (exit 139), ce
+/// qui emportait toute la suite sans qu'aucune ligne ne le dise. Avec ce
+/// protocole, le scénario réel — saine au montage, puis agrandie par le
+/// contenu — s'éprouve sans AppKit.
+@MainActor
+protocol WindowFrameTarget: AnyObject {
+  var currentFrame: CGRect { get }
+  var currentContentMaxSize: CGSize { get set }
+  func contentSize(forFrame frame: CGRect) -> CGSize
+  func applyFrame(_ frame: CGRect)
+}
 
-  func makeNSView(context: Context) -> NSView {
-    let view = NSView(frame: .zero)
-    schedule(view)
-    return view
+@MainActor
+extension NSWindow: WindowFrameTarget {
+  var currentFrame: CGRect { frame }
+  var currentContentMaxSize: CGSize {
+    get { contentMaxSize }
+    set { contentMaxSize = newValue }
+  }
+  func contentSize(forFrame frame: CGRect) -> CGSize { contentRect(forFrameRect: frame).size }
+  func applyFrame(_ frame: CGRect) { setFrame(frame, display: true) }
+}
+
+/// Tient la borne **dans la durée**.
+@MainActor
+final class WindowFrameKeeper {
+  private weak var target: (any WindowFrameTarget)?
+  private weak var window: NSWindow?
+  private let minimum: NSSize
+  private let visibleFrame: () -> CGRect
+  private var observers: [NSObjectProtocol] = []
+  /// Notre propre `setFrame` déclenche `didResize` : sans ce drapeau, on
+  /// s'observerait soi-même.
+  private var enCoursDAjustement = false
+
+  init(target: any WindowFrameTarget, minimum: NSSize, visibleFrame: @escaping () -> CGRect) {
+    self.target = target
+    self.window = target as? NSWindow
+    self.minimum = minimum
+    self.visibleFrame = visibleFrame
   }
 
-  func updateNSView(_ nsView: NSView, context: Context) {}
+  convenience init(window: NSWindow, minimum: NSSize, visibleFrame: @escaping () -> CGRect) {
+    self.init(target: window, minimum: minimum, visibleFrame: visibleFrame)
+  }
 
-  private func schedule(_ view: NSView) {
-    for delay in [0.0, 0.05, 0.2, 0.5, 1.0] {
-      DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-        apply(to: view.window)
-      }
+  /// On retire les observateurs à la main : un `deinit` ne peut pas toucher à
+  /// un état isolé sur l'acteur principal. Appelé quand la fenêtre se ferme.
+  func stop() {
+    for observer in observers { NotificationCenter.default.removeObserver(observer) }
+    observers.removeAll()
+  }
+
+  func start() {
+    apply()
+    let centre = NotificationCenter.default
+    for nom in [
+      NSWindow.didResizeNotification,
+      NSWindow.didMoveNotification,
+      NSWindow.didChangeScreenNotification,
+    ] {
+      observers.append(
+        centre.addObserver(forName: nom, object: window, queue: .main) { [weak self] _ in
+          self?.apply()
+        }
+      )
     }
   }
 
-  private func apply(to window: NSWindow?) {
-    guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
-    let actuel = window.frame
-    guard !WindowFrameGuard.fits(actuel, visible: visible) else { return }
-    let borne = WindowFrameGuard.clamp(actuel, visible: visible, minimum: minimum)
-    guard borne != actuel else { return }
-    window.setFrame(borne, display: true)
+  /// Pose la borne, et **arme AppKit** pour qu'il refuse de la dépasser.
+  func apply() {
+    guard let target, !enCoursDAjustement else { return }
+    let visible = visibleFrame()
+
+    // 1. AppKit refuse désormais lui-même : c'est ce qui empêche SwiftUI de
+    //    demander la hauteur idéale du contenu quand les conversations
+    //    arrivent. Une garde qui court après le redimensionnement arrive
+    //    toujours trop tard ; une borne posée sur la fenêtre, non.
+    let maxContenu = target.contentSize(forFrame: visible)
+    if target.currentContentMaxSize != maxContenu { target.currentContentMaxSize = maxContenu }
+
+    // 2. Et ce qui déborde déjà revient dans l'écran.
+    guard let borne = WindowFrameGuard.adjustment(
+      for: target.currentFrame, visible: visible, minimum: minimum
+    ) else { return }
+    enCoursDAjustement = true
+    target.applyFrame(borne)
+    enCoursDAjustement = false
+  }
+}
+
+/// Pose le gardien sur la fenêtre qui porte cette vue.
+struct WindowFrameGuardView: NSViewRepresentable {
+  var minimum: NSSize = NSSize(width: 720, height: 480)
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
+
+  final class Coordinator {
+    var keeper: WindowFrameKeeper?
+  }
+
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView(frame: .zero)
+    attach(view, coordinator: context.coordinator)
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    attach(nsView, coordinator: context.coordinator)
+  }
+
+  /// La fenêtre n'existe pas encore au premier passage : on réessaie quelques
+  /// fois, puis le gardien prend le relais **pour toute la vie de la fenêtre**.
+  private func attach(_ view: NSView, coordinator: Coordinator) {
+    guard coordinator.keeper == nil else {
+      coordinator.keeper?.apply()
+      return
+    }
+    guard let window = view.window else {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        attach(view, coordinator: coordinator)
+      }
+      return
+    }
+    let keeper = WindowFrameKeeper(window: window, minimum: minimum) { [weak window] in
+      (window?.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+    }
+    coordinator.keeper = keeper
+    keeper.start()
   }
 }

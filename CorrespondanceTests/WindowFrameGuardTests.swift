@@ -93,4 +93,108 @@ final class WindowFrameGuardTests: XCTestCase {
     )
     XCTAssertEqual(borne.size, postIt.size)
   }
+
+  // MARK: - Le scénario réel : elle grandit APRÈS
+
+  /// Une fenêtre de laboratoire. Créer une vraie `NSWindow` ici faisait planter
+  /// le harnais injecté (exit 139) et emportait toute la suite en silence.
+  @MainActor
+  final class FenetreSimulee: WindowFrameTarget {
+    var currentFrame: CGRect
+    var currentContentMaxSize = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    /// La barre de titre : le contenu est un peu plus court que le cadre.
+    let hauteurTitre: CGFloat = 28
+    private(set) var cadresPoses: [CGRect] = []
+
+    init(frame: CGRect) {
+      currentFrame = frame
+    }
+
+    func contentSize(forFrame frame: CGRect) -> CGSize {
+      CGSize(width: frame.width, height: max(0, frame.height - hauteurTitre))
+    }
+
+    func applyFrame(_ frame: CGRect) {
+      currentFrame = frame
+      cadresPoses.append(frame)
+    }
+  }
+
+  /// Le vrai défaut, celui qu'aucun test sur la fonction pure n'attrape : la
+  /// fenêtre s'ouvre saine, **puis** SwiftUI la redimensionne sur la hauteur
+  /// idéale du contenu quand les conversations arrivent.
+  @MainActor
+  func testUneFenetreQuiGranditApresLeMontageEstRamenee() {
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 869)
+    let fenetre = FenetreSimulee(frame: CGRect(x: 100, y: 60, width: 1100, height: 760))
+    let gardien = WindowFrameKeeper(
+      target: fenetre, minimum: NSSize(width: 720, height: 480), visibleFrame: { visible }
+    )
+
+    gardien.apply()
+    XCTAssertTrue(WindowFrameGuard.fits(fenetre.currentFrame, visible: visible), "saine au montage")
+    XCTAssertTrue(fenetre.cadresPoses.isEmpty, "on ne touche pas à une fenêtre saine")
+
+    // Le contenu arrive, SwiftUI pousse la hauteur idéale : 2142 px.
+    fenetre.currentFrame = CGRect(x: 216, y: -1273, width: 1100, height: 2142)
+    gardien.apply()
+
+    XCTAssertTrue(
+      WindowFrameGuard.fits(fenetre.currentFrame, visible: visible),
+      "la fenêtre doit RESTER dans l'écran : \(fenetre.currentFrame)"
+    )
+    XCTAssertLessThanOrEqual(fenetre.currentFrame.height, visible.height)
+    XCTAssertGreaterThanOrEqual(fenetre.currentFrame.minY, visible.minY)
+  }
+
+  /// La défense qui n'arrive jamais trop tard : AppKit refuse de lui-même.
+  @MainActor
+  func testAppKitSeVoitInterdireDeDepasserLEcran() {
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 869)
+    let fenetre = FenetreSimulee(frame: CGRect(x: 0, y: 0, width: 1100, height: 760))
+
+    WindowFrameKeeper(
+      target: fenetre, minimum: NSSize(width: 720, height: 480), visibleFrame: { visible }
+    ).apply()
+
+    XCTAssertLessThanOrEqual(fenetre.currentContentMaxSize.height, visible.height)
+    XCTAssertLessThanOrEqual(fenetre.currentContentMaxSize.width, visible.width)
+    XCTAssertNotEqual(fenetre.currentContentMaxSize.height, CGFloat.greatestFiniteMagnitude, "la borne est posée")
+  }
+
+  /// Le contenu grandit deux fois de suite : la borne tient à chaque fois, pas
+  /// seulement la première.
+  @MainActor
+  func testLaBorneTientAChaqueAgrandissement() {
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 869)
+    let fenetre = FenetreSimulee(frame: CGRect(x: 0, y: 0, width: 1100, height: 700))
+    let gardien = WindowFrameKeeper(
+      target: fenetre, minimum: NSSize(width: 720, height: 480), visibleFrame: { visible }
+    )
+    gardien.apply()
+
+    for hauteur in [1500.0, 2142.0, 4000.0] {
+      fenetre.currentFrame = CGRect(x: 0, y: -500, width: 1100, height: hauteur)
+      gardien.apply()
+      XCTAssertTrue(
+        WindowFrameGuard.fits(fenetre.currentFrame, visible: visible),
+        "après une poussée à \(hauteur) : \(fenetre.currentFrame)"
+      )
+    }
+  }
+
+  /// Rien ne bouge quand rien ne déborde : on ne repositionne pas une fenêtre
+  /// que l'utilisateur vient de placer.
+  func testAucunAjustementQuandLeCadreTient() {
+    let sain = CGRect(x: 100, y: 60, width: 1100, height: 760)
+    XCTAssertNil(WindowFrameGuard.adjustment(for: sain, visible: ecran, minimum: minimum))
+  }
+
+  func testUnAjustementEstProposeQuandCaDeborde() {
+    let deborde = CGRect(x: 216, y: -1273, width: 1100, height: 2142)
+    let borne = try! XCTUnwrap(
+      WindowFrameGuard.adjustment(for: deborde, visible: ecran, minimum: minimum)
+    )
+    XCTAssertTrue(WindowFrameGuard.fits(borne, visible: ecran))
+  }
 }
