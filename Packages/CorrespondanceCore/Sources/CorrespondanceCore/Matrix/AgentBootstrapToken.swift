@@ -95,10 +95,19 @@ public struct AgentBootstrapToken: Sendable, Equatable {
     self.expiresAt = Date(timeIntervalSince1970: exp)
   }
 
+  /// Où vit l'installeur : un dépôt public qui ne porte que le script et les
+  /// binaires, le code restant privé. `correspondance.app` viendra devant, en
+  /// redirection, sans rien changer ici.
+  public static let installerURL =
+    "https://github.com/menufactory43/correspondance-releases/releases/latest/download/install.sh"
+
   /// La commande à coller sur l'hôte. Une seule ligne, un seul jeton.
-  public func installCommand(
-    installerURL: String = "https://correspondance.app/agent/install.sh"
-  ) -> String {
-    "curl -fsSL \(installerURL) | sh -s -- \(encoded())"
+  ///
+  /// Pas de `curl | sh` : testé sur le NUC avec un domaine qui n'existait pas,
+  /// `curl` échoue, `sh` lit un script vide et sort en 0 — « installé » sans
+  /// rien avoir fait. Ici, le `&&` arrête tout si le téléchargement échoue.
+  public func installCommand(installerURL: String = Self.installerURL) -> String {
+    "curl -fsSL \(installerURL) -o /tmp/correspondance-install.sh"
+      + " && sh /tmp/correspondance-install.sh \(encoded())"
   }
 }

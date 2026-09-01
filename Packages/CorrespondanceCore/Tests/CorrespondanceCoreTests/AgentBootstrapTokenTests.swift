@@ -56,8 +56,10 @@ final class AgentBootstrapTokenTests: XCTestCase {
 
   func testLaCommandeTientSurUneLigne() {
     let commande = jeton().installCommand()
-    XCTAssertTrue(commande.hasPrefix("curl -fsSL "))
-    XCTAssertTrue(commande.contains("| sh -s -- "))
+    XCTAssertTrue(commande.hasPrefix("curl -fsSL https://github.com/"))
+    // Jamais `curl | sh` : un téléchargement raté y devient un succès silencieux.
+    XCTAssertFalse(commande.contains("| sh"), commande)
+    XCTAssertTrue(commande.contains(" && sh "), commande)
     XCTAssertFalse(commande.contains("\n"))
   }
 

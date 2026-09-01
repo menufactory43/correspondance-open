@@ -2,7 +2,11 @@
 # Installe l'agent « cc » sur cette machine, à partir du jeton d'amorce que
 # l'app a affiché.
 #
-#   curl -fsSL https://correspondance.app/agent/install.sh | sh -s -- <jeton>
+#   curl -fsSL https://github.com/menufactory43/correspondance-releases/releases/latest/download/install.sh \
+#     -o /tmp/correspondance-install.sh && sh /tmp/correspondance-install.sh <jeton>
+#
+# Pas de `curl | sh` : un domaine absent y fait un script vide, et `sh` d'un
+# script vide sort en 0 — la commande disait « installé » sans rien faire.
 #
 # Ce qu'il fait, dans cet ordre : lire le jeton, refuser s'il a expiré, poser
 # l'amorce en 0600, installer le binaire, poser le service (systemd utilisateur
@@ -18,7 +22,7 @@ TOKEN="${1:-}"
 AGENT="${CORRESPONDANCE_AGENT:-cc}"
 if [ "$AGENT" = "cc" ]; then HOME_DIR="$HOME/.correspondance-agent"; else HOME_DIR="$HOME/.correspondance-$AGENT"; fi
 BIN_DIR="$HOME/.local/bin"
-RELEASES="${CORRESPONDANCE_RELEASES:-https://github.com/meffysto/correspondance/releases/latest/download}"
+RELEASES="${CORRESPONDANCE_RELEASES:-https://github.com/menufactory43/correspondance-releases/releases/latest/download}"
 # La version de l'adaptateur ACP est épinglée : le régime de permission par
 # défaut d'un adaptateur change d'une version à l'autre (cf. docs/SPIKE-acp.md).
 ACP_PACKAGE="${CORRESPONDANCE_ACP:-@zed-industries/claude-code-acp@0.16.2}"
@@ -104,6 +108,13 @@ echo "→ Service"
 case "$(uname -s)" in
   Linux)
     mkdir -p "$HOME/.config/systemd/user"
+    # L'unité d'avant l'installeur s'appelait « correspondance-agent » et lançait
+    # cc sans --agent. Laissée en place, elle redémarrerait au boot à côté de la
+    # nouvelle : deux cc, dont un qui refuse de démarrer toutes les dix secondes.
+    if [ "$AGENT" = "cc" ] && systemctl --user cat correspondance-agent.service >/dev/null 2>&1; then
+      echo "   (ancienne unité correspondance-agent trouvée : arrêtée et désactivée)"
+      systemctl --user disable --now correspondance-agent.service >/dev/null 2>&1 || true
+    fi
     UNIT="$HOME/.config/systemd/user/correspondance-$AGENT.service"
     cat > "$UNIT" <<UNITEOF
 [Unit]
@@ -157,6 +168,29 @@ PLISTEOF
   *) echo "!! système non prévu" >&2; exit 1 ;;
 esac
 
+# La preuve, pas la promesse : on attend que l'agent dise « connecté comme »
+# dans son journal. Sans ça, « installé » voudrait dire « fichiers posés ».
+echo "→ Attente du premier signe de vie (30 s au plus)"
+VU=""
+i=0
+while [ $i -lt 15 ]; do
+  case "$(uname -s)" in
+    Linux) LOG="$(journalctl --user -u "correspondance-$AGENT" --since '-2 min' --no-pager 2>/dev/null || true)" ;;
+    *)     LOG="$(cat "/tmp/correspondance-$AGENT.log" 2>/dev/null || true)" ;;
+  esac
+  case "$LOG" in
+    *"connecté comme"*) VU=oui; break ;;
+    *"identifiants refusés"*|*"M_FORBIDDEN"*) echo "!! le Relais refuse les identifiants du jeton — reprends-en un dans l'app" >&2; exit 1 ;;
+    *"tourne déjà"*|*"un autre agent"*) echo "!! un autre $USER_NAME tourne ailleurs et celui-ci refuse de démarrer — arrête l'autre d'abord (dans l'app : Arrêter)" >&2; exit 1 ;;
+  esac
+  sleep 2; i=$((i+1))
+done
+if [ -z "$VU" ]; then
+  echo "!! $USER_NAME est installé mais ne s'est pas connecté en 30 s — journal :" >&2
+  printf '%s\n' "$LOG" | tail -12 >&2
+  exit 1
+fi
+
 echo
-echo "✓ $USER_NAME installé. Vérifie ses moteurs : $BIN_DIR/correspondance-agent doctor --agent $AGENT"
-echo "  Puis, depuis l'app : @$AGENT ping dans ta note à soi."
+echo "✓ $USER_NAME est connecté au Relais depuis cette machine ($(hostname -s 2>/dev/null || hostname))."
+echo "  Depuis l'app : @$AGENT ping dans ta note à soi. Moteurs : $BIN_DIR/correspondance-agent doctor --agent $AGENT"
