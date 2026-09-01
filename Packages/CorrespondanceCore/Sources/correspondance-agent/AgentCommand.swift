@@ -7,6 +7,7 @@ import Foundation
 //   correspondance-agent init            écrit ~/.correspondance-agent/config.json
 //   correspondance-agent rooms           liste les rooms rejointes (pour la config)
 //   correspondance-agent run             tourne (défaut)
+//   correspondance-agent run --agent hermes   tourne sur ~/.correspondance-hermes
 //   correspondance-agent ask "…"         un tour du moteur sans Matrix (diagnostic)
 //   correspondance-agent doctor          quels moteurs la machine sait lancer
 //   CORRESPONDANCE_AGENT_HOME=/chemin    change le dossier de config/état
@@ -15,8 +16,12 @@ import Foundation
 // `Task` y hériterait de l'acteur principal — bloqué dès qu'on l'attend.
 @main
 struct AgentCommand {
-  static let home = ProcessInfo.processInfo.environment["CORRESPONDANCE_AGENT_HOME"].map { URL(fileURLWithPath: $0) }
-    ?? AgentConfig.defaultDirectory
+  /// Quel agent, et où vit son amorce. `--agent hermes` d'abord (c'est ce
+  /// qu'un plist statique de LaunchAgent sait passer), `CORRESPONDANCE_AGENT_HOME`
+  /// ensuite (le montage historique du NUC), le défaut enfin.
+  static let resolved = AgentHome.resolve(arguments: CommandLine.arguments)
+  static var agent: String { resolved.agent }
+  static var home: URL { resolved.directory }
   static var configURL: URL { home.appending(path: "config.json") }
   static var stateURL: URL { home.appending(path: "state.json") }
 

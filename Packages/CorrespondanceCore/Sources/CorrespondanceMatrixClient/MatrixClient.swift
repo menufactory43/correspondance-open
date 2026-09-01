@@ -447,6 +447,55 @@ public actor MatrixClient {
     )
   }
 
+  /// Suis-je administrateur de ce Relais ? L'app le vérifie **avant** de
+  /// promettre quoi que ce soit : sans ce pouvoir, « Activer cc » ne peut pas
+  /// créer le compte du bot, et il vaut mieux le dire que d'échouer à mi-chemin.
+  public func isServerAdmin(userID: String) async -> Bool {
+    let json = try? await request(
+      method: "GET",
+      path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
+      body: nil
+    )
+    return json?.value(at: "admin")?.boolValue == true
+  }
+
+  /// Crée (ou met à jour) le compte d'un bot — c'est ainsi qu'« Activer cc »
+  /// remplace un `register_new_matrix_user` en SSH.
+  ///
+  /// `logout_devices: false` est **capital** : sans lui, poser un mot de passe
+  /// déconnecte toutes les sessions existantes du bot — un clic sur ce Mac
+  /// tuerait l'agent qui tourne sur le NUC.
+  public func provisionUser(
+    userID: String,
+    password: String,
+    displayName: String? = nil,
+    admin: Bool = false
+  ) async throws {
+    var body: [String: MatrixJSON] = [
+      "password": .string(password),
+      "admin": .bool(admin),
+      "deactivated": .bool(false),
+      "logout_devices": .bool(false),
+    ]
+    if let displayName { body["displayname"] = .string(displayName) }
+    _ = try await request(
+      method: "PUT",
+      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+      body: .object(body)
+    )
+  }
+
+  /// Ce compte existe-t-il déjà sur le Relais ? Pour ne pas réinitialiser le
+  /// mot de passe d'un bot qui tourne très bien.
+  public func userExists(_ userID: String) async -> Bool {
+    let json = try? await request(
+      method: "GET",
+      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+      body: nil
+    )
+    return json?.value(at: "name")?.stringValue != nil
+  }
+
   /// Retire un event — c'est ainsi qu'on retire une réaction.
   @discardableResult
   public func redact(

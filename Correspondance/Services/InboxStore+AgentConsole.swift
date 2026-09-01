@@ -42,6 +42,31 @@ extension InboxStore {
     }
   }
 
+  /// Ce Mac peut-il créer des agents ? Il faut être administrateur du Relais —
+  /// on le vérifie avant de proposer, pas après avoir échoué.
+  func canProvisionAgents() async -> Bool {
+    await matrix.canProvisionAgents()
+  }
+
+  /// « Activer sur ce Mac » : le compte du bot sur le Relais, l'amorce sur le
+  /// disque, le service dans macOS, et la console ouverte. Rend l'état du
+  /// service — dont « à autoriser », qu'il faut montrer et pas espérer.
+  func activateAgentOnThisMac() async -> Result<AgentLocalHost.State, Error> {
+    do {
+      let bootstrap = try await matrix.provisionAgent(named: agentName)
+      let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: agentName)
+      await activateAgentConsole()
+      return .success(state)
+    } catch {
+      Self.relayLog.error("activation locale impossible : \(error.localizedDescription, privacy: .public)")
+      return .failure(error)
+    }
+  }
+
+  func deactivateAgentOnThisMac() {
+    try? AgentLocalHost.uninstall(agent: agentName)
+  }
+
   /// Écrit une configuration corrigée dans la console. Le retour dit si c'est
   /// parti : l'écran ne prétend pas avoir réglé ce qui n'a pas quitté l'app.
   @discardableResult

@@ -197,10 +197,14 @@ struct SettingsAgentPane: View {
   @State private var isLoading = false
   @State private var isActivating = false
   @State private var erreur: String?
+  /// L'état du service sur ce Mac — dont « à autoriser », qu'il faut montrer.
+  @State private var hote: AgentLocalHost.State = .absent
+  @State private var peutProvisionner = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       consoleCard
+      hoteCard
 
       if let console, let config = console.config {
         reglagesCard(console: console, config: config)
@@ -236,6 +240,47 @@ struct SettingsAgentPane: View {
         } else {
           Button("Rafraîchir") { Task { await recharger() } }
         }
+      }
+    }
+  }
+
+  /// L'hôte « Ce Mac » : l'agent tourne à côté de l'app, sur l'abonnement de
+  /// cette machine. Pas de serveur à louer, pas de SSH — mais il s'endort avec
+  /// le Mac, et l'écran le dit plutôt que de le laisser découvrir.
+  private var hoteCard: some View {
+    SettingsCard(
+      title: "Sur ce Mac",
+      footnote: "cc tournera à côté de l'app, sur le `claude` déjà connecté ici. "
+        + "Il dort quand le Mac dort : pour un cc joignable depuis l'iPhone à toute heure, "
+        + "il lui faut une machine allumée."
+    ) {
+      SettingsRow(
+        label: "Service",
+        detail: hote.labelFR,
+        systemImage: "gearshape.2"
+      ) {
+        switch hote {
+        case .attenteApprobation:
+          Button("Autoriser…") { AgentLocalHost.openLoginItemsSettings() }
+        case .actif:
+          Button("Désactiver") {
+            store.deactivateAgentOnThisMac()
+            hote = AgentLocalHost.state(agent: store.agentName)
+          }
+        case .absent:
+          Button("Activer sur ce Mac") { Task { await activerLocalement() } }
+            .disabled(!peutProvisionner || isActivating)
+        case .introuvable:
+          EmptyView()
+        }
+      }
+
+      if !peutProvisionner, hote == .absent {
+        SettingsRow(
+          label: "Compte du Relais",
+          detail: "ce compte n'est pas administrateur du Relais — c'est lui qui crée les comptes des agents",
+          systemImage: "exclamationmark.triangle"
+        ) { EmptyView() }
       }
     }
   }
@@ -344,6 +389,23 @@ struct SettingsAgentPane: View {
     defer { isLoading = false }
     erreur = nil
     console = await store.loadAgentConsole()
+    hote = AgentLocalHost.state(agent: store.agentName)
+    peutProvisionner = await store.canProvisionAgents()
+  }
+
+  /// Crée le compte du bot, pose son amorce, enregistre le service. macOS peut
+  /// demander une approbation : on la montre, on ne l'espère pas.
+  private func activerLocalement() async {
+    isActivating = true
+    defer { isActivating = false }
+    erreur = nil
+    switch await store.activateAgentOnThisMac() {
+    case .success(let etat):
+      hote = etat
+      console = await store.loadAgentConsole()
+    case .failure(let raison):
+      erreur = raison.localizedDescription
+    }
   }
 
   private func activer() async {

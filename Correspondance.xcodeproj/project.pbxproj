@@ -18,6 +18,7 @@
 		07B6C02B1DE1EC005EB56849 /* matrix-sync-instagram.json in Resources */ = {isa = PBXBuildFile; fileRef = 97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */; };
 		09407B8BC2003E1E1793E51D /* RelayLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECED9025AA8FF631D0B21DD6 /* RelayLoginView.swift */; };
 		0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */; };
+		0FAC592A7C8307E415C94859 /* AgentLocalHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31AB92201C9D559702DC4BB /* AgentLocalHostTests.swift */; };
 		1473C4F2298AE3C138B95AAA /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */; };
 		14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 225E93B93CBA37AE52390551 /* NewConversationSheet.swift */; };
 		15C8828B50F32EC031BA25E8 /* RelayStore+Scheduled.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B0C9C36993CDABC57044E2 /* RelayStore+Scheduled.swift */; };
@@ -143,6 +144,7 @@
 		F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */; };
 		F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B38B0A2FFD77B5B638F0F /* MessageBubble.swift */; };
 		FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBED963D2D0FDDC25F5A0072 /* FocusView.swift */; };
+		FB906E79A0021105489C55C5 /* AgentLocalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */; };
 		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
@@ -285,6 +287,7 @@
 		9EA8F1CF8DC543061AE69B1F /* CameraCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCapture.swift; sourceTree = "<group>"; };
 		A1517D91065CD3D975BAE16E /* SettingsWindowSizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowSizer.swift; sourceTree = "<group>"; };
 		A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SenderAvatarStore.swift; sourceTree = "<group>"; };
+		A31AB92201C9D559702DC4BB /* AgentLocalHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalHostTests.swift; sourceTree = "<group>"; };
 		A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAccountsPane.swift; sourceTree = "<group>"; };
 		A75FE8F29C63BB7A4379AADA /* NewGroupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewGroupSheet.swift; sourceTree = "<group>"; };
 		AA76B9F9792DFFD335C3F85C /* ContactBook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactBook.swift; sourceTree = "<group>"; };
@@ -316,6 +319,7 @@
 		D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectory.swift; sourceTree = "<group>"; };
 		DE05DF5AB0829B0A55A79DD4 /* IMessageSummaryInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSummaryInfo.swift; sourceTree = "<group>"; };
 		E637F86CB35FBFE62AD7A64C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalHost.swift; sourceTree = "<group>"; };
 		E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-whatsapp.json"; sourceTree = "<group>"; };
 		E9B5F5874770558B125F18B0 /* ReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactionTests.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
@@ -488,6 +492,7 @@
 			isa = PBXGroup;
 			children = (
 				1B9AA16D44F45044FBAFD516 /* Fixtures */,
+				A31AB92201C9D559702DC4BB /* AgentLocalHostTests.swift */,
 				95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */,
 				830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */,
 				3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */,
@@ -705,6 +710,7 @@
 		D7CEA1208299922740812CBD /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */,
 				D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */,
 				73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */,
 				F05230BF81C295B4DEAB342E /* ConversationSession.swift */,
@@ -803,6 +809,7 @@
 			buildPhases = (
 				E1932BFAE807797A54C87061 /* Sources */,
 				C84BE8061D3051A37A0DEA11 /* Embed Resources */,
+				0CE527D1E2F569B1545F2958 /* Embed correspondance-agent */,
 				F1CBB850AC822DD73ED3DB22 /* Frameworks */,
 			);
 			buildRules = (
@@ -942,6 +949,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0CE527D1E2F569B1545F2958 /* Embed correspondance-agent */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed correspondance-agent";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nAPP=\"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}\"\nmkdir -p \"$APP/MacOS\" \"$APP/Library/LaunchAgents\"\ncp -f \"${SRCROOT}/Correspondance/Resources/LaunchAgents/app.correspondance.agent.plist\" \\\n  \"$APP/Library/LaunchAgents/app.correspondance.agent.plist\"\n# Le binaire vient du paquet Swift. On le construit dans un dossier à\n# part pour ne pas mêler ses artefacts à ceux d'Xcode.\nBUILD_DIR=\"${SRCROOT}/Packages/CorrespondanceCore/.build-agent\"\nSWIFT_CONF=$([ \"${CONFIGURATION}\" = \"Release\" ] && echo release || echo debug)\nif ! xcrun swift build --package-path \"${SRCROOT}/Packages/CorrespondanceCore\" \\\n      --product correspondance-agent -c \"$SWIFT_CONF\" \\\n      --scratch-path \"$BUILD_DIR\" > /tmp/correspondance-agent-build.log 2>&1; then\n  echo \"warning: correspondance-agent non construit — voir /tmp/correspondance-agent-build.log\"\n  tail -5 /tmp/correspondance-agent-build.log\n  exit 0\nfi\nBIN=$(xcrun swift build --package-path \"${SRCROOT}/Packages/CorrespondanceCore\" \\\n      --product correspondance-agent -c \"$SWIFT_CONF\" --scratch-path \"$BUILD_DIR\" \\\n      --show-bin-path 2>/dev/null)/correspondance-agent\nif [ -f \"$BIN\" ]; then\n  cp -f \"$BIN\" \"$APP/MacOS/correspondance-agent\"\n  echo \"Embedded agent: $BIN\"\nelse\n  echo \"warning: binaire de l'agent introuvable ($BIN)\"\nfi\n";
+		};
 		C84BE8061D3051A37A0DEA11 /* Embed Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -968,6 +994,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0FAC592A7C8307E415C94859 /* AgentLocalHostTests.swift in Sources */,
 				EEB24836FDC67C64A30C1376 /* AvatarStoreReadinessTests.swift in Sources */,
 				5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */,
 				B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */,
@@ -1050,6 +1077,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB906E79A0021105489C55C5 /* AgentLocalHost.swift in Sources */,
 				95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */,
 				C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */,
 				D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */,

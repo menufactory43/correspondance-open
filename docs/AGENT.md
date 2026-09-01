@@ -64,6 +64,60 @@ scripts/agent-e2e.sh "question"              # test de bout en bout via la note 
 Config : `~/.correspondance-agent/config.json` (NUC, 0600 — contient le mot de passe
 Matrix de cc). État (token, sessions Claude, position de sync) : `state.json` à côté.
 
+## L'hôte « Ce Mac » (phase 2)
+
+L'app embarque l'agent : le binaire dans `Contents/MacOS/correspondance-agent`, son plist
+dans `Contents/Library/LaunchAgents/app.correspondance.agent.plist` — `SMAppService` ne le
+cherche que là. Un plist est statique : il ne connaît ni `~`, ni les variables de la
+session, d'où `--agent cc`, dont le binaire déduit son dossier (`AgentHome`). L'ancien
+dossier de `cc` est conservé (`~/.correspondance-agent`) : le NUC ne perd pas son état.
+
+« Activer sur ce Mac » enchaîne, dans cet ordre :
+
+1. **Vérifier le pouvoir** — `GET /_synapse/admin/v1/users/<moi>/admin`. Sans ce pouvoir,
+   l'app le dit au lieu d'échouer à mi-chemin.
+2. **Créer le compte du bot** — `PUT /_synapse/admin/v2/users/@cc:…` avec un mot de passe
+   tiré au hasard, **`logout_devices: false`** : sans lui, poser un mot de passe déconnecte
+   toutes les sessions du bot, et un clic ici tuerait l'agent qui tourne sur le NUC. Un
+   compte qui existe déjà et dont on a le secret au Trousseau n'est pas retouché.
+3. **Poser l'amorce** — `~/.correspondance-agent/config.json` en `0600` (dossier `0700`),
+   trois lignes : `homeserver`, `user`, `password`, plus le propriétaire. Le mot de passe
+   va aussi au Trousseau (`app.correspondance.agent`), jamais dans une room.
+4. **Enregistrer le service** — `SMAppService.agent(plistName:).register()`.
+5. **Ouvrir la console** et y écrire la configuration.
+
+### Vérification manuelle — non éprouvée de bout en bout
+
+Tout ce qui précède est éprouvé sauf **l'approbation dans Éléments d'ouverture** : elle
+demande une main humaine et une app signée lancée hors Xcode. La procédure exacte :
+
+1. `xcodebuild -project Correspondance.xcodeproj -scheme Correspondance -configuration Release build`,
+   puis lancer l'app depuis le Finder (pas depuis Xcode : le service enregistré par une
+   app lancée par Xcode porte un chemin de DerivedData qui bougera).
+2. Vérifier que l'agent est bien embarqué :
+   `ls Correspondance.app/Contents/MacOS/correspondance-agent` et
+   `ls Correspondance.app/Contents/Library/LaunchAgents/`.
+3. Réglages › Agent › **Sur ce Mac** doit dire « pas installé sur ce Mac », et
+   « Activer sur ce Mac » doit être cliquable — s'il est grisé, le compte connecté n'est
+   pas administrateur du Relais, et la ligne au-dessous le dit.
+4. Cliquer **Activer sur ce Mac**. Attendu : la ligne passe à « actif sur ce Mac », **ou**
+   à « à autoriser dans Réglages Système › Éléments d'ouverture » avec un bouton
+   « Autoriser… ».
+5. Si c'est le second cas : cliquer « Autoriser… » (macOS ouvre
+   Réglages Système › Général › Ouverture et extensions › Éléments d'ouverture), activer
+   « Correspondance », revenir, cliquer « Rafraîchir ». Attendu : « actif sur ce Mac ».
+6. Vérifier que l'agent tourne vraiment :
+   `launchctl print gui/$UID/app.correspondance.agent | head -20` et
+   `tail -f /tmp/correspondance-agent.log` — on doit y lire « connecté comme @cc:… »
+   puis la ligne des moteurs.
+7. Depuis l'app, dans la note à soi : `@cc ping`. Attendu : une réponse en moins d'une
+   minute, et un tour de plus dans « Derniers tours ».
+
+**Ce qui reste à voir la première fois** : macOS peut exiger l'approbation *après* le
+premier `register()` sans le dire ; le plist embarqué doit être signé avec l'app (il l'est,
+il fait partie du bundle) ; et une app déplacée dans le Finder après enregistrement peut
+faire perdre le service — auquel cas « Désactiver » puis « Activer » le repose.
+
 ## La config vient du Relais
 
 Une **room console** par agent porte sa configuration, event d'état
