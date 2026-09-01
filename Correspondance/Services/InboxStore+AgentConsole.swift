@@ -56,10 +56,29 @@ extension InboxStore {
       let bootstrap = try await matrix.provisionAgent(named: agentName)
       let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: agentName)
       await activateAgentConsole()
+      await inviteAgentToSelfNote()
       return .success(state)
     } catch {
       Self.relayLog.error("activation locale impossible : \(error.localizedDescription, privacy: .public)")
       return .failure(error)
+    }
+  }
+
+  /// Invite cc dans la note à soi.
+  ///
+  /// C'est le trou entre « actif » et « utilisable » : sans ça, on active un
+  /// agent et on n'a nulle part où lui parler. La note à soi est l'endroit
+  /// naturel — un tête-à-tête avec soi-même, où l'agent répond à voix haute
+  /// puisqu'il n'y a personne à ménager.
+  ///
+  /// L'agent ne rejoint que sur invitation d'un propriétaire : c'est
+  /// précisément celle-ci.
+  func inviteAgentToSelfNote() async {
+    do {
+      let roomID = try await matrix.ensureSelfNote()
+      try await matrix.inviteAgentToRoom(roomID)
+    } catch {
+      Self.relayLog.error("cc non invité dans la note à soi : \(error.localizedDescription, privacy: .public)")
     }
   }
 

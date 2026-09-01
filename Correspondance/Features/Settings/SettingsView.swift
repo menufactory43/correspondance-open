@@ -282,10 +282,15 @@ struct SettingsAgentPane: View {
         }
       }
 
-      if case .silencieux = hote {
+      // Un seul énoncé du même fait. Deux lignes qui se contredisent — « il n'a
+      // pas encore publié » au-dessus de « il n'a rien publié depuis un
+      // moment » — sont pires qu'une seule ligne fausse : on ne sait plus
+      // laquelle croire. La ligne du dessous n'apparaît donc que pour un
+      // silence *daté*, et elle ne redit pas ce que l'état vient de dire.
+      if case .silencieux(let depuis) = hote, depuis != nil {
         SettingsRow(
-          label: "Signe de vie",
-          detail: "cc tourne mais n'a rien publié depuis un moment. Son journal dira pourquoi.",
+          label: "Journal",
+          detail: "Son journal dira pourquoi il s'est tu.",
           systemImage: "waveform.path"
         ) { journalBouton }
       }
@@ -492,6 +497,15 @@ struct SettingsAgentPane: View {
       // On ne garde pas l'état rendu par l'installation : il ne connaît pas le
       // status de l'agent, qui n'a pas encore eu le temps de parler.
       await recharger()
+      // Et on attend qu'il parle. Sans ça, l'écran reste sur « il n'a pas
+      // encore publié » jusqu'à ce qu'on le rouvre — alors que l'agent s'est
+      // annoncé cinq secondes plus tard. Six essais, dix secondes en tout :
+      // au-delà, c'est un vrai problème et l'état le dira.
+      for _ in 0..<6 {
+        if case .actif = hote { break }
+        try? await Task.sleep(for: .seconds(2))
+        await recharger()
+      }
     case .failure(let raison):
       erreur = raison.localizedDescription
     }

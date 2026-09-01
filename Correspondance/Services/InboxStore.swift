@@ -2037,6 +2037,18 @@ final class InboxStore {
       // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
       // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
       await self.reloadRelayState()
+      // La note à soi, garantie à **chaque** connexion et pas seulement au
+      // premier appairage : quelqu'un d'déjà appairé — c'est-à-dire tout le
+      // monde dès la deuxième version — ne l'aurait jamais eue. `ensureSelfNote`
+      // est idempotente : elle ne crée que si l'account data ne désigne rien.
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        do {
+          _ = try await self.matrix.ensureSelfNote()
+        } catch {
+          Self.relayLog.error("note à soi non garantie : \(error.localizedDescription, privacy: .public)")
+        }
+      }
       // Et ce que le Relais dit avoir rejoint, comparé à la base : un portail
       // créé pendant que le Mac dormait n'apparaît dans aucun `/sync`
       // incrémental. En arrière-plan — la boucle ne l'attend pas.
