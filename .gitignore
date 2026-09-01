@@ -15,6 +15,7 @@ DerivedData/
 
 # Build
 build/
+.build-*/
 *.ipa
 *.dSYM.zip
 *.dSYM

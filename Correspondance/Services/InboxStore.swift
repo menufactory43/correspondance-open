@@ -1710,6 +1710,15 @@ final class InboxStore {
       let creds = try await matrix.connect(homeserver: url, user: user, password: password)
       isMatrixConnected = true
       matrixStatusFR = "Matrix connecté (\(creds.userID))."
+      // Un Relais neuf n'a aucune conversation : l'inbox serait vide, et on
+      // n'aurait nulle part où parler à cc. La note à soi est cette porte
+      // d'entrée — on la crée une fois, elle est ensuite désignée par
+      // l'account data et le Mac comme l'iPhone tombent sur la même.
+      do {
+        _ = try await matrix.ensureSelfNote()
+      } catch {
+        Self.relayLog.error("note à soi non créée : \(error.localizedDescription, privacy: .public)")
+      }
       startMatrixSync()
     } catch {
       isMatrixConnected = false
@@ -2028,6 +2037,18 @@ final class InboxStore {
       // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
       // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
       await self.reloadRelayState()
+      // La note à soi, garantie à **chaque** connexion et pas seulement au
+      // premier appairage : quelqu'un d'déjà appairé — c'est-à-dire tout le
+      // monde dès la deuxième version — ne l'aurait jamais eue. `ensureSelfNote`
+      // est idempotente : elle ne crée que si l'account data ne désigne rien.
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        do {
+          _ = try await self.matrix.ensureSelfNote()
+        } catch {
+          Self.relayLog.error("note à soi non garantie : \(error.localizedDescription, privacy: .public)")
+        }
+      }
       // Et ce que le Relais dit avoir rejoint, comparé à la base : un portail
       // créé pendant que le Mac dormait n'apparaît dans aucun `/sync`
       // incrémental. En arrière-plan — la boucle ne l'attend pas.

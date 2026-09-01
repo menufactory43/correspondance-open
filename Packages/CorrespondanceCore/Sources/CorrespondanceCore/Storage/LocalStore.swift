@@ -20,12 +20,12 @@ public final class LocalStore: @unchecked Sendable {
 
   /// Le dossier de l'app — `~/Library/Application Support/Correspondance` sur
   /// Mac, le conteneur équivalent sur iPhone.
+  ///
+  /// Déplaçable par `CORRESPONDANCE_HOME`, le temps d'un essai : la base d'un
+  /// Relais d'essai ne doit pas se mélanger aux vraies conversations
+  /// (cf. `CorrespondanceHome`).
   public static func applicationSupportDirectory() -> URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let directory = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    return directory
+    CorrespondanceHome.directory()
   }
 
   public static func defaultURL() -> URL {

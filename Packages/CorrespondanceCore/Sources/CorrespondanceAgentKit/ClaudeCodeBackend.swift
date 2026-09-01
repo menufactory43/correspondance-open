@@ -5,11 +5,18 @@ public struct AgentTurn: Sendable, Equatable {
   public var text: String
   public var sessionID: String?
   public var isError: Bool
+  /// Les outils employés pendant le tour — la matière du journal de la room
+  /// console. Vide pour un moteur qui ne les rapporte pas (la CLI en direct).
+  public var tools: [String]
+  /// Les jetons consommés, quand le moteur les compte.
+  public var tokens: Int?
 
-  public init(text: String, sessionID: String?, isError: Bool = false) {
+  public init(text: String, sessionID: String?, isError: Bool = false, tools: [String] = [], tokens: Int? = nil) {
     self.text = text
     self.sessionID = sessionID
     self.isError = isError
+    self.tools = tools
+    self.tokens = tokens
   }
 }
 
@@ -102,6 +109,9 @@ public struct ClaudeCodeBackend: AgentBackend {
     var args = ["-p", "--output-format", "json"]
     if let sessionID { args += ["--resume", sessionID] }
     if !settings.allowedTools.isEmpty { args += ["--allowedTools", settings.allowedTools.joined(separator: ",")] }
+    // Le régime se pose explicitement — un défaut de CLI peut changer de
+    // version en version, et « pleine permission » doit être dit, pas espéré.
+    if !settings.permissionMode.isEmpty { args += ["--permission-mode", settings.permissionMode] }
     if let model = settings.model { args += ["--model", model] }
     if !settings.systemPrompt.isEmpty { args += ["--append-system-prompt", settings.systemPrompt] }
     if let permission {

@@ -49,6 +49,32 @@ cp -R ~/Library/Developer/Xcode/DerivedData/Correspondance-*/Build/Products/Debu
 ```
 Vérifie `codesign -dv /Applications/Correspondance.app 2>&1 | grep TeamIdentifier` → doit afficher `AKMNXGVVGX`, pas `not set`.
 
+### Essayer sans toucher à ses vraies conversations
+
+`CORRESPONDANCE_HOME` déplace **d'un bloc** le dossier de données et l'entrée du Trousseau :
+
+```bash
+CORRESPONDANCE_HOME=essai open -a Correspondance
+# ou, depuis Xcode : Product › Scheme › Edit Scheme › Run › Arguments › Environment Variables
+```
+
+| | Sans la variable | `CORRESPONDANCE_HOME=essai` |
+| --- | --- | --- |
+| Données | `~/Library/Application Support/Correspondance` | `…/Correspondance-essai` |
+| Session Matrix (Trousseau) | `app.correspondance.matrix` | `app.correspondance.matrix.essai` |
+
+Les deux bougent ensemble, jamais l'une sans l'autre : une base déplacée avec le Trousseau
+d'origine écraserait la vraie session au premier appairage. C'est le symétrique de
+`CORRESPONDANCE_AGENT_HOME`, qui déplace l'amorce d'un agent depuis toujours.
+
+**Sans la variable, rien ne change** — mêmes chemins qu'avant, au caractère près. Réglages ›
+Matrix affiche un encart « Essai » quand elle est posée, pour qu'on ne croie jamais regarder
+ses vraies conversations. Pour tout effacer : supprimer `…/Correspondance-essai` et l'entrée
+`app.correspondance.matrix.essai` du Trousseau.
+
+La marche à suivre complète (Relais d'essai, appairage, agent, MCP) est dans
+`docs/MATRIX-SETUP.md` § « Essayer de bout en bout ».
+
 ## Dictée
 
 Le micro du composer passe par **[Dictus](https://www.getdictus.com)** (libre, MIT, transcription 100 % locale) s'il est installé dans `/Applications` — Correspondance le pilote par sa CLI (`--toggle-transcription` / `--cancel`), Dictus colle le texte dans le champ. Désactivable dans Réglages → Dictée ; sans Dictus, la reconnaissance vocale d'Apple prend le relais.

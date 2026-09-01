@@ -33,11 +33,7 @@ actor ContactDirectory {
   }
 
   private nonisolated static var supportDirectory: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir
+    CorrespondanceHome.directory()
   }
 
   private nonisolated static var indexURL: URL {

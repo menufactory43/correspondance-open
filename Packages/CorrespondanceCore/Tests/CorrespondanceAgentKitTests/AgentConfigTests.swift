@@ -20,7 +20,50 @@ final class AgentConfigTests: XCTestCase {
     XCTAssertEqual(loaded.trigger, "@cc")
     XCTAssertEqual(loaded.defaultMode, .draft)
     XCTAssertEqual(loaded.hourlyCap, 30)
-    XCTAssertEqual(loaded.claude.allowedTools, ["Read", "Grep", "Glob"])
+    // Le défaut est le palier plein : un agent invité par son propriétaire a
+    // ses outils, et c'est le dossier de la room qui borne le risque.
+    XCTAssertEqual(loaded.claude.allowedTools, AgentConfig.Presets.executer)
+    XCTAssertEqual(loaded.claude.permissionMode, "bypassPermissions")
+  }
+
+  /// Les paliers sont versionnés : l'app en règle un par agent, elle
+  /// n'assemble pas une liste d'outils à la main.
+  func testLesPaliersDOutilsSeNommentEtSeRetrouvent() {
+    XCTAssertEqual(AgentConfig.Presets.named("lire"), AgentConfig.Presets.lire)
+    XCTAssertEqual(AgentConfig.Presets.named("écrire"), AgentConfig.Presets.ecrire)
+    XCTAssertEqual(AgentConfig.Presets.named("plein"), AgentConfig.Presets.executer)
+    XCTAssertNil(AgentConfig.Presets.named("inconnu"))
+
+    XCTAssertEqual(AgentConfig.Presets.name(of: AgentConfig.Presets.lire), "lire")
+    XCTAssertEqual(AgentConfig.Presets.name(of: AgentConfig.Presets.executer), "exécuter")
+    XCTAssertEqual(AgentConfig.Presets.name(of: ["Read", "Bash(git *)"]), "sur mesure")
+    // Écrire contient lire : un palier n'enlève jamais ce que le précédent donnait.
+    XCTAssertTrue(Set(AgentConfig.Presets.lire).isSubset(of: Set(AgentConfig.Presets.ecrire)))
+  }
+
+  /// Une config d'hier, avec sa liste blanche et son moteur `claude`, doit
+  /// continuer de marcher telle quelle — le NUC tourne dessus.
+  func testUneConfigDHierResteLisible() throws {
+    let json = """
+      {"homeserver":"http://relais:8008","user":"cc","password":"p","owners":["@g:s"],
+       "backend":"claude","claude":{"allowedTools":["Read","Grep"],"permission":{"enabled":true}}}
+      """
+    let config = try JSONDecoder().decode(AgentConfig.self, from: Data(json.utf8))
+    XCTAssertEqual(config.backend, .claude)
+    XCTAssertEqual(config.claude.allowedTools, ["Read", "Grep"])
+    XCTAssertTrue(config.claude.permission.enabled)
+    XCTAssertEqual(config.acp.command, "claude-code-acp", "le moteur ACP a ses défauts sans être écrit")
+  }
+
+  func testLeMoteurACPSeChoisitDansLaConfig() throws {
+    let json = """
+      {"homeserver":"http://relais:8008","user":"cc","password":"p","owners":["@g:s"],
+       "backend":"acp","acp":{"command":"codex-acp","permissionModes":["dontAsk"]}}
+      """
+    let config = try JSONDecoder().decode(AgentConfig.self, from: Data(json.utf8))
+    XCTAssertEqual(config.backend, .acp)
+    XCTAssertEqual(config.acp.command, "codex-acp")
+    XCTAssertEqual(config.acp.resolvedMode(available: ["default", "dontAsk"]), "dontAsk")
   }
 
   func testMinimalJSONGetsDefaults() throws {

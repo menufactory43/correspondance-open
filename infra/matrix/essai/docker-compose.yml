@@ -1,0 +1,63 @@
+# Correspondance — Relais d'ESSAI : Synapse seul, isolé de la prod.
+#
+# Ce fichier n'existe que pour éprouver l'appairage, l'agent et le serveur MCP
+# sans toucher au vrai Relais. Quatre isolations, et il en faut quatre :
+#
+#   1. `server_name` distinct        → correspondance.essai (pas .local)
+#   2. projet et conteneurs distincts → correspondance-essai-* (jamais correspondance-*)
+#   3. port publié 8009              → la prod garde 8008
+#   4. volumes et base à part        → ./data/, un volume Docker nommé à part
+#
+# **Pas de ponts, exprès.** Les ponts mautrix sont des sessions d'appareil lié :
+# un second pont sur le même compte WhatsApp débrancherait le vrai. Rien de ce
+# qu'on éprouve ici n'en a besoin — l'appairage, l'agent et le MCP se
+# contentent d'un homeserver.
+#
+# Écoute en loopback : un Relais d'essai n'a rien à faire sur le réseau.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: correspondance-essai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: matrix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-essai}
+      POSTGRES_DB: synapse
+      # Synapse exige C/C.UTF-8 pour le collationnement.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - essai-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matrix -d synapse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - essai
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    container_name: correspondance-essai-synapse
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SYNAPSE_CONFIG_DIR: /data
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      UID: "1000"
+      GID: "1000"
+    volumes:
+      - ./data:/data
+    ports:
+      # 8009, jamais 8008 : la prod ne doit pas être atteignable par erreur, et
+      # l'inverse non plus.
+      - "127.0.0.1:8009:8008"
+    networks:
+      - essai
+
+volumes:
+  essai-postgres:
+
+networks:
+  essai:

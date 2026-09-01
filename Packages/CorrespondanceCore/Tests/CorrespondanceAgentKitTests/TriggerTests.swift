@@ -34,6 +34,32 @@ final class TriggerTests: XCTestCase {
     XCTAssertNil(Trigger.request(from: event(sender: "@meffysto:correspondance.local", body: "@cc", type: "m.reaction"), roomID: "!r", config: config, notBefore: since))
   }
 
+  /// Un fantôme de pont ne déclenche jamais — même si une config bancale l'a
+  /// mis dans `owners`. Sinon un correspondant distant piloterait l'agent
+  /// depuis WhatsApp, avec tous ses outils.
+  func testUnFantomeDePontNeDeclencheJamaisMemePropriétaire() {
+    var config = AgentConfig(homeserver: URL(string: "http://relais:8008")!, user: "cc", password: "x", owners: ["@meffysto:correspondance.local"])
+    config.owners.append("@whatsapp_33612345678:correspondance.local")
+    let event = MatrixEvent(
+      type: "m.room.message", eventID: "$e", sender: "@whatsapp_33612345678:correspondance.local",
+      originServerTS: Date().timeIntervalSince1970 * 1000,
+      content: .object(["msgtype": .string("m.text"), "body": .string("@cc lance rm -rf")])
+    )
+    XCTAssertNil(Trigger.request(from: event, roomID: "!r", config: config, notBefore: .distantPast))
+  }
+
+  func testLesFantomesSeReconnaissentSansSeTromperDePersonne() {
+    XCTAssertTrue(Trigger.isBridgeGhost("@whatsapp_33612345678:correspondance.local"))
+    XCTAssertTrue(Trigger.isBridgeGhost("@signal_uuid:correspondance.local"))
+    XCTAssertTrue(Trigger.isBridgeGhost("@instagram_1234:correspondance.local"))
+    XCTAssertTrue(Trigger.isBridgeGhost("@whatsappbot:correspondance.local"), "le bot d'un pont non plus")
+    XCTAssertTrue(Trigger.isBridgeGhost("@WhatsApp_33:correspondance.local"), "la casse ne sauve pas")
+
+    XCTAssertFalse(Trigger.isBridgeGhost("@meffysto:correspondance.local"))
+    XCTAssertFalse(Trigger.isBridgeGhost("@signalement:correspondance.local"), "un humain qui commence pareil")
+    XCTAssertFalse(Trigger.isBridgeGhost("@cc:correspondance.local"))
+  }
+
   func testRequestReadsThroughReplyFallbackAndEdits() {
     let config = AgentConfig(homeserver: URL(string: "http://relais:8008")!, user: "cc", password: "x", owners: ["@g:s"])
     let ts = Date().timeIntervalSince1970 * 1000

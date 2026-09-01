@@ -3,7 +3,11 @@ import Security
 
 /// Stockage Trousseau (un seul compte pour l'instant).
 public enum MatrixCredentialStore {
-  private static let service = "app.correspondance.matrix"
+  /// Le service du Trousseau — suffixé pendant un essai
+  /// (`CORRESPONDANCE_HOME`), pour qu'une session d'essai n'écrase jamais la
+  /// vraie. C'est l'autre moitié du déplacement : déplacer la base sans
+  /// déplacer le Trousseau ferait exactement l'accident qu'on veut éviter.
+  private static var service: String { CorrespondanceHome.keychainService() }
   private static let account = "default"
 
   /// Groupe d'accès du Trousseau, quand la session doit être lisible par une

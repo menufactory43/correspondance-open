@@ -173,8 +173,13 @@ public enum ConversationStateCodec {
   public static func reminderContent(_ reminder: ConversationReminder?) -> MatrixJSON {
     guard let reminder else { return .object([:]) }
     return .object([
-      "wake_at": .number(reminder.wakeAt.timeIntervalSince1970 * 1000),
-      "set_at": .number(reminder.setAt.timeIntervalSince1970 * 1000),
+      // Arrondies : `timeIntervalSince1970 * 1000` porte presque toujours une
+      // fraction, et Matrix refuse les flottants dans un event. Ça n'a jamais
+      // gêné ici (l'account data d'un salon est plus tolérante que la timeline)
+      // mais un rappel à la milliseconde près n'a aucun sens, et la même valeur
+      // finirait par passer dans un event un jour.
+      "wake_at": .integer(Int((reminder.wakeAt.timeIntervalSince1970 * 1000).rounded())),
+      "set_at": .integer(Int((reminder.setAt.timeIntervalSince1970 * 1000).rounded())),
     ])
   }
 

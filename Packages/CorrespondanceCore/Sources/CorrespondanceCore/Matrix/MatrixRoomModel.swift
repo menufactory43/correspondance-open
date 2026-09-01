@@ -405,7 +405,14 @@ public enum MatrixIdentity {
 
   /// Le MXID de l'agent « cc » : il vit sur le même Relais que soi.
   public static func agentUserID(sameServerAs selfUserID: String) -> String {
-    "@\(agentName):\(String(selfUserID.split(separator: ":").last ?? ""))"
+    agentUserID(named: agentName, sameServerAs: selfUserID)
+  }
+
+  /// Le MXID d'un agent quelconque — un Relais peut en porter plusieurs
+  /// (`cc` sur Claude, `hermes` sur le sien), chacun avec sa console.
+  public static func agentUserID(named name: String, sameServerAs selfUserID: String) -> String {
+    if name.hasPrefix("@") { return name }
+    return "@\(name):\(String(selfUserID.split(separator: ":").last ?? ""))"
   }
 
   /// Réseau du bot de gestion, quand ce MXID en est un.

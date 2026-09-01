@@ -15,6 +15,227 @@ Mac (Correspondance) ──Tailscale──► Synapse ─────┤
 Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
 pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
+## Essayer de bout en bout, sans rien risquer
+
+Tout ce qui suit tourne **à côté** de la prod, jamais dedans : un Synapse d'essai sur le
+port 8009, un jeu de données et une session à part. Ton Relais, tes conversations et tes
+ponts ne sont touchés à aucune étape. Compter vingt minutes.
+
+Deux isolations, et elles sont indépendantes :
+
+| | Prod | Essai |
+| --- | --- | --- |
+| Relais | `correspondance.local`, port 8008, avec les ponts | `correspondance.essai`, port 8009, Synapse seul |
+| Projet Docker | `correspondance-matrix` | `correspondance-essai` |
+| Données de l'app | `~/Library/Application Support/Correspondance` | `…/Correspondance-essai` |
+| Session (Trousseau) | `app.correspondance.matrix` | `app.correspondance.matrix.essai` |
+
+**Pas de ponts dans l'essai, exprès** : un pont mautrix est une session d'appareil lié, un
+second pont sur le même compte WhatsApp débrancherait le vrai. Rien de ce qu'on éprouve
+ici n'en a besoin.
+
+### 1. Monter le Relais d'essai
+
+```bash
+infra/matrix/essai/essai.sh --dry-run up   # facultatif : montre sans rien faire
+infra/matrix/essai/essai.sh up
+```
+
+**Ce que tu dois voir** : la configuration générée, les conteneurs `correspondance-essai-*`
+qui démarrent, « prêt », les comptes `@essai` (propriétaire) et `@cc` (bot), puis un code
+`correspondance://relais/…` avec six mots de vérification.
+
+**Si le Relais d'essai tourne ailleurs que l'app** (sur le NUC, par exemple) : il ne publie
+son port que sur `127.0.0.1`, exprès — un Relais d'essai n'a rien à faire sur le réseau. Il
+faut donc un tunnel, à laisser ouvert pendant tout l'essai :
+
+```bash
+ssh -N -L 8009:127.0.0.1:8009 nuc     # dans un terminal à part
+```
+
+Le code d'appairage émis sur le NUC contient déjà `http://127.0.0.1:8009` : côté Mac, une
+fois le tunnel ouvert, il est juste.
+
+Si `docker` n'est pas là, le script s'arrête et le dit. La prod n'est pas touchée : toutes
+les commandes portent `-p correspondance-essai` (vérifié par
+`infra/matrix/tests/essai-isolation.sh`).
+
+### 2. Lancer l'app sur le jeu d'essai
+
+```bash
+CORRESPONDANCE_HOME=essai open -a Correspondance
+```
+
+Depuis Xcode : Product › Scheme › Edit Scheme › Run › Arguments › Environment Variables,
+`CORRESPONDANCE_HOME` = `essai`.
+
+**Le piège qui fait perdre une heure** : deux copies du dépôt (`main` et un worktree)
+partagent le même DerivedData. Un build sur l'une écrase le binaire de l'autre, et on lance
+alors une app **qui n'a pas le code qu'on teste** — sans que rien ne le signale. Donne un
+DerivedData à la branche :
+
+```bash
+xcodebuild -project Correspondance.xcodeproj -scheme Correspondance \
+  -configuration Debug -derivedDataPath /tmp/dd-essai build
+open /tmp/dd-essai/Build/Products/Debug/Correspondance.app --env CORRESPONDANCE_HOME=essai
+```
+
+Au moindre doute sur ce qui tourne : `ls -l` sur le binaire et compare l'heure au build.
+
+**Ce que tu dois voir** : une inbox **vide**, et dans Réglages › Matrix un encart « Essai »
+qui nomme le jeu de données. Si tu vois tes vraies conversations, la variable n'est pas
+passée — ferme l'app et recommence, ne va pas plus loin.
+
+### 3. S'appairer
+
+Réglages › Matrix › **Connecter un Relais** : colle le code de l'étape 1.
+
+**Ce que tu dois voir** : les six mots affichés sous le champ, **identiques** à ceux du
+terminal ; puis « Synchronisé avec le Relais », et **une conversation « Note à soi »** dans
+l'inbox. L'app la crée à l'appairage : un Relais neuf n'a aucune conversation, et sans elle
+il n'y aurait nulle part où parler à cc.
+
+Si les mots diffèrent, tu appaires autre chose que ce que tu viens d'installer — n'y va pas.
+
+### 4. Activer cc
+
+Réglages › Agent › **Sur ce Mac** › « Activer sur ce Mac ».
+
+**Ce que tu dois voir** : « démarré, il n'a pas encore publié son premier status », qui
+passe à « actif — cc répond tant que Correspondance est ouverte » dans la minute.
+
+cc tourne **dans l'app**, comme processus enfant : il redémarre s'il tombe, il s'arrête
+quand tu quittes Correspondance. Il n'y a plus ni approbation macOS ni Éléments d'ouverture
+— l'enquête qui a mené à ce choix est dans `docs/AGENT.md`, § « Pourquoi cc ne tourne pas
+en LaunchAgent ».
+
+« Actif » n'est jamais une lecture d'un drapeau : il faut le binaire dans le bundle, le
+processus vivant, l'amorce sur le disque **et** un status récent. Les autres états ont
+chacun leur sortie — « l'amorce n'est pas sur le disque » → *Réparer* ; « muet depuis… » →
+le journal ; « cette build n'embarque pas l'agent » → *Pourquoi ?*.
+
+Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse en moins d'une
+minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent s'ouvre depuis les
+réglages, ou `tail -f /tmp/correspondance-cc.log`.
+
+**Attention, un dossier n'est pas isolé** : « Activer sur ce Mac » écrit l'amorce de `cc`
+dans `~/.correspondance-agent/`, et `CORRESPONDANCE_HOME` ne le déplace pas — il ne déplace
+que les données de l'**app**. Vérifie qu'il est libre avant :
+
+```bash
+ls ~/.correspondance-agent/config.json 2>/dev/null && echo "OCCUPÉ — ne pas activer cc ici"
+```
+
+S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans agent
+local.
+
+### 5. Brancher `correspondance-mcp` dans Claude Desktop
+
+```bash
+swift build --package-path Packages/CorrespondanceCore --product correspondance-mcp -c release
+swift build --package-path Packages/CorrespondanceCore --product correspondance-mcp -c release --show-bin-path
+```
+
+Dans `~/Library/Application Support/Claude/claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "correspondance-essai": {
+      "command": "/CHEMIN/RENDU/PAR/show-bin-path/correspondance-mcp",
+      "env": {
+        "CORRESPONDANCE_MCP_CONFIG": "/Users/TOI/.correspondance-agent/config.json"
+      }
+    }
+  }
+}
+```
+
+Vérifie d'abord en ligne de commande — c'est plus rapide qu'un redémarrage de Claude :
+
+```bash
+CORRESPONDANCE_MCP_CONFIG=~/.correspondance-agent/config.json   /CHEMIN/correspondance-mcp --doctor
+```
+
+**Ce que tu dois voir** : `✓ connecté comme @cc:correspondance.essai — N conversation(s)`,
+puis `envoi : aucune conversation autorisée (on propose des brouillons)`.
+
+Redémarre Claude Desktop, puis demande-lui : « qu'est-ce qui attend une réponse ? », « lis
+la conversation !… », « prépare une réponse ». **Ce que tu dois voir** : la file, les
+messages encadrés par un avertissement disant que c'est de la donnée, et un brouillon qui
+apparaît dans l'app **sans que rien ne parte**. Demande-lui d'envoyer pour de bon : il doit
+**refuser** et renvoyer vers `draft_reply`.
+
+Pour autoriser l'envoi dans une conversation précise, ajoute à `env` :
+`"CORRESPONDANCE_MCP_SEND": "!salon:correspondance.essai"`.
+
+### 6. Tout effacer
+
+```bash
+infra/matrix/essai/essai.sh destroy
+rm -rf ~/Library/Application\ Support/Correspondance-essai
+```
+
+Puis, dans Trousseau d'accès, supprimer l'entrée **`app.correspondance.matrix.essai`** —
+celle sans suffixe est ta vraie session, ne la touche pas. Et si tu as activé cc :
+Réglages › Agent › « Désactiver », ou `rm -rf ~/.correspondance-agent`.
+
+`destroy` n'agit que sur le projet `correspondance-essai` : la prod est hors de portée par
+construction, pas par prudence.
+
+### Ce qui n'a jamais tourné
+
+Le squelette est éprouvé (`infra/matrix/tests/essai-isolation.sh`, 24 contrôles : les
+quatre isolations, l'absence de pont, la garde du projet sur chaque commande docker,
+l'effacement). **La pose elle-même n'a jamais tourné** : aucun `essai.sh up` n'a démarré un
+Synapse pour de bon depuis ce dépôt. À découvrir la première fois — la génération de
+`homeserver.yaml` et son passage à Postgres, le temps de démarrage réel, et la création des
+comptes par `register_new_matrix_user` dans ce conteneur-là.
+
+## Installer un Relais ailleurs (`install.sh`)
+
+Le montage décrit plus bas est celui du NUC de meffysto, avec ses adresses. Pour poser un
+Relais **ailleurs** — sur un Mac, sur une machine Linux, sur un VPS — il y a une commande :
+
+```bash
+infra/matrix/install.sh --target this-mac
+infra/matrix/install.sh --target linux
+infra/matrix/install.sh --target ssh --host nuc
+infra/matrix/install.sh --target ssh --host vps --dry-run   # montre sans rien faire
+```
+
+Elle enchaîne : prérequis (moteur de conteneurs, Tailscale) → Synapse et les ponts →
+adaptateur ACP épinglé → **code d'appairage**. L'app le lit dans « Connecter un Relais »,
+et six mots permettent de vérifier qu'on appaire bien cette machine-là.
+
+`install.sh` **ne remplace pas `bootstrap.sh`** : il l'appelle. `bootstrap.sh` tourne en
+production et reste la pièce qui pose Synapse et les ponts ; `install.sh` fait ce qu'il ne
+faisait pas — détecter l'hôte, poser les prérequis, épingler l'adaptateur, finir sur le
+code d'appairage.
+
+### Ce qui est vérifié, et ce qui ne l'est pas
+
+**Vérifié, et rejouable** : `infra/matrix/tests/install-plan.sh` éprouve le plan produit
+pour les trois cibles (18 contrôles) — que la pile est posée localement ou par SSH selon la
+cible, que la version de l'adaptateur est épinglée, que le code d'appairage vient en
+dernier, qu'une cible inconnue ou un `--target ssh` sans `--host` sont refusés. `pair.sh`
+est éprouvé sur ses refus (jeton illisible, jeton périmé).
+
+**Jamais tourné sur une vraie machine** : l'installation complète. Ni `--target this-mac`,
+ni `--target linux`, ni `--target ssh` n'ont posé un Synapse pour de bon depuis ce script.
+Ce qui reste à découvrir la première fois, et qu'il faudra corriger sur pièces :
+
+- l'installation du moteur de conteneurs sur un Mac vierge (le script s'arrête et dit quoi
+  installer — il ne l'installe pas tout seul, exprès) ;
+- `bootstrap.sh --remote` exécuté sur macOS : il a été écrit pour Debian, et
+  `docker-compose` 1.29 y est supposé ;
+- l'adresse publique quand Tailscale n'est pas là (il faut alors `PUBLIC_URL=`) ;
+- la création du compte propriétaire par `pair.sh` quand le compte existe déjà — le chemin
+  de repose du mot de passe n'a jamais été emprunté.
+
+Autrement dit : le squelette et les décisions sont éprouvés, la pose ne l'est pas. À faire
+tourner une première fois sur une machine jetable avant de le donner à quelqu'un.
+
 ## 0. Ce qui tourne déjà, et où
 
 Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — jamais `docker compose`) :

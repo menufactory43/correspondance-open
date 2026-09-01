@@ -33,9 +33,19 @@ public struct AgentConfig: Codable, Sendable, Equatable {
 
   public var claude: ClaudeSettings = ClaudeSettings()
   public var hermes: HermesSettings = HermesSettings()
+  public var acp: ACPSettings = ACPSettings()
 
   /// Réglages par room : dans quel dépôt travailler, et si l'agent envoie ou propose.
   public var rooms: [String: RoomBinding] = [:]
+
+  /// Les autres agents du Relais (`@hermes:…`). Une room où l'un d'eux est
+  /// présent est un **atelier** : mention obligatoire, budget de salon, et un
+  /// agent n'y déclenche pas un agent (cf. `Atelier`). Vide — le défaut — veut
+  /// dire qu'il n'y a pas d'atelier, et rien ne change.
+  public var peers: [String] = []
+
+  /// Le budget de tours par heure et par atelier, en plus du plafond de l'agent.
+  public var atelierBudget: Int = 20
 
   public init(homeserver: URL, user: String, password: String, owners: [String]) {
     self.homeserver = homeserver
@@ -47,7 +57,8 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   // Tout ce qui a une valeur par défaut est facultatif dans le fichier : un
   // `config.json` de quatre lignes doit suffire.
   private enum CodingKeys: String, CodingKey {
-    case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, backend, claude, hermes, rooms
+    case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, backend, claude, hermes, acp, rooms
+    case peers, atelierBudget
   }
 
   public init(from decoder: Decoder) throws {
@@ -62,7 +73,10 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     backend = try c.decodeIfPresent(Backend.self, forKey: .backend) ?? .claude
     claude = try c.decodeIfPresent(ClaudeSettings.self, forKey: .claude) ?? ClaudeSettings()
     hermes = try c.decodeIfPresent(HermesSettings.self, forKey: .hermes) ?? HermesSettings()
+    acp = try c.decodeIfPresent(ACPSettings.self, forKey: .acp) ?? ACPSettings()
     rooms = try c.decodeIfPresent([String: RoomBinding].self, forKey: .rooms) ?? [:]
+    peers = try c.decodeIfPresent([String].self, forKey: .peers) ?? []
+    atelierBudget = try c.decodeIfPresent(Int.self, forKey: .atelierBudget) ?? 20
   }
 
   /// Le Matrix ID complet du bot, déduit du `server_name` d'un propriétaire.
@@ -79,6 +93,101 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   public enum Backend: String, Codable, Sendable {
     case claude
     case hermes
+    /// N'importe quel moteur qui parle l'Agent Client Protocol : Claude Code par
+    /// son adaptateur, `codex-acp`, `goose acp`. Un moteur de plus est une
+    /// entrée de catalogue, pas un backend de plus.
+    case acp
+  }
+
+  /// Le moteur ACP : la commande à lancer, et le régime qu'on lui impose.
+  /// C'est l'esquisse du catalogue des moteurs — une entrée, pas du code.
+  public struct ACPSettings: Codable, Sendable, Equatable {
+    /// Le nom de l'exécutable cherché aux endroits habituels (`~/.local/bin`,
+    /// `/opt/homebrew/bin`…) — le `PATH` d'un LaunchAgent est vide.
+    public var command: String = "claude-code-acp"
+    /// Un chemin absolu qui court-circuite la recherche.
+    public var binary: String?
+    public var arguments: [String] = []
+    public var defaultCwd: String?
+    /// Le mode de permission à poser après chaque `session/new`. **Jamais le
+    /// défaut du moteur** : `claude-agent-acp` 0.70.0 démarre en `auto`, où un
+    /// classifieur tranche à notre place (cf. `docs/SPIKE-acp.md`).
+    /// Les candidats sont essayés dans l'ordre, le premier que le moteur
+    /// annonce gagne — les adaptateurs ne nomment pas leurs modes pareil.
+    public var permissionModes: [String] = ["bypassPermissions", "acceptEdits", "default"]
+    public var timeoutSeconds: Int = 600
+    /// La version de l'adaptateur qu'on a **éprouvée**. Elle est posée par
+    /// l'installation, pas cherchée au lancement : le régime de permission par
+    /// défaut d'un adaptateur change d'une version à l'autre (cf. le mode
+    /// `auto` de `claude-agent-acp` dans `docs/SPIKE-acp.md`). Une version
+    /// différente ne bloque pas, elle se signale dans le journal.
+    public var pinnedVersion: String? = "0.16.2"
+    /// Comment l'installer, quand l'app propose de le faire.
+    public var installCommand: String = "npm install -g @zed-industries/claude-code-acp@0.16.2"
+    /// Le silence après lequel un moteur chaud s'éteint.
+    public var idleSeconds: Int = 600
+
+    public init() {}
+
+    /// Le mode à poser, parmi ceux que ce moteur annonce.
+    public func resolvedMode(available: [String]) -> String? {
+      guard !available.isEmpty else { return permissionModes.first }
+      return permissionModes.first(where: available.contains)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case command, binary, arguments, defaultCwd, permissionModes, timeoutSeconds
+      case pinnedVersion, installCommand, idleSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      let defaults = ACPSettings()
+      command = try c.decodeIfPresent(String.self, forKey: .command) ?? defaults.command
+      binary = try c.decodeIfPresent(String.self, forKey: .binary)
+      arguments = try c.decodeIfPresent([String].self, forKey: .arguments) ?? []
+      defaultCwd = try c.decodeIfPresent(String.self, forKey: .defaultCwd)
+      permissionModes = try c.decodeIfPresent([String].self, forKey: .permissionModes) ?? defaults.permissionModes
+      timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? defaults.timeoutSeconds
+      pinnedVersion = try c.decodeIfPresent(String.self, forKey: .pinnedVersion) ?? defaults.pinnedVersion
+      installCommand = try c.decodeIfPresent(String.self, forKey: .installCommand) ?? defaults.installCommand
+      idleSeconds = try c.decodeIfPresent(Int.self, forKey: .idleSeconds) ?? defaults.idleSeconds
+    }
+  }
+
+  /// Les paliers d'outils, versionnés. Le défaut est désormais le palier
+  /// **plein** : un agent invité par son propriétaire a ses outils, et ce qui
+  /// borne le risque est le dossier de la room, pas une liste blanche
+  /// (cf. `docs/PLAN-relais-agents.md`, « pleine permission »).
+  public enum Presets {
+    /// Lire seulement — pour un agent qu'on invite chez des tiers.
+    public static let lire = ["Read", "Grep", "Glob", "WebFetch", "WebSearch"]
+    /// Lire et écrire dans le dossier lié, sans exécuter.
+    public static let ecrire = lire + ["Edit", "Write", "NotebookEdit"]
+    /// Tout, `Bash` compris. Le défaut.
+    public static let executer: [String] = []
+
+    /// Une liste vide veut dire « aucune restriction » côté `claude -p`.
+    public static let defaut = executer
+
+    public static func named(_ name: String) -> [String]? {
+      switch name {
+      case "lire": lire
+      case "ecrire", "écrire": ecrire
+      case "executer", "exécuter", "plein": executer
+      default: nil
+      }
+    }
+
+    /// Le nom du palier d'une liste d'outils — ce que l'app affiche.
+    public static func name(of tools: [String]) -> String {
+      switch tools {
+      case executer: "exécuter"
+      case ecrire: "écrire"
+      case lire: "lire"
+      default: "sur mesure"
+      }
+    }
   }
 
   public struct HermesSettings: Codable, Sendable, Equatable {
@@ -130,9 +239,14 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     public var binary: String?
     /// Répertoire de travail quand la room n'en fixe pas.
     public var defaultCwd: String?
-    /// Outils autorisés sans question en mode `-p`. Tout le reste est refusé,
-    /// pas demandé : on n'est pas devant le terminal.
-    public var allowedTools: [String] = ["Read", "Grep", "Glob"]
+    /// Outils autorisés sans question en mode `-p`. Vide — le défaut — veut
+    /// dire « pas de liste blanche » : c'est `permissionMode` qui décide, et il
+    /// vaut `bypassPermissions` (cf. `Presets`).
+    public var allowedTools: [String] = Presets.defaut
+    /// Le régime posé sur la session, jamais subi. `bypassPermissions` : un
+    /// agent invité par son propriétaire a ses outils. Ce qui borne le risque
+    /// est le dossier de la room, pas une question à laquelle on répondrait oui.
+    public var permissionMode: String = "bypassPermissions"
     public var model: String?
     /// Ajouté au prompt système de Claude Code. Dit à Claude qui il est ici.
     public var systemPrompt: String = ClaudeSettings.defaultSystemPrompt
@@ -145,14 +259,15 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     public init() {}
 
     private enum CodingKeys: String, CodingKey {
-      case binary, defaultCwd, allowedTools, model, systemPrompt, timeoutSeconds, permission
+      case binary, defaultCwd, allowedTools, permissionMode, model, systemPrompt, timeoutSeconds, permission
     }
 
     public init(from decoder: Decoder) throws {
       let c = try decoder.container(keyedBy: CodingKeys.self)
       binary = try c.decodeIfPresent(String.self, forKey: .binary)
       defaultCwd = try c.decodeIfPresent(String.self, forKey: .defaultCwd)
-      allowedTools = try c.decodeIfPresent([String].self, forKey: .allowedTools) ?? ["Read", "Grep", "Glob"]
+      allowedTools = try c.decodeIfPresent([String].self, forKey: .allowedTools) ?? Presets.defaut
+      permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode) ?? "bypassPermissions"
       model = try c.decodeIfPresent(String.self, forKey: .model)
       systemPrompt = try c.decodeIfPresent(String.self, forKey: .systemPrompt) ?? Self.defaultSystemPrompt
       timeoutSeconds = try c.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? 300

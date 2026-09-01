@@ -63,11 +63,53 @@ targets:
           echo "Embedded fonts + AppIcon.icns into $RES"
           ls -la "$RES" || true
           ls -la "$DEST_FONTS" || true
+      # L'agent embarqué : le binaire dans Contents/MacOS, son plist dans
+      # Contents/Library/LaunchAgents — SMAppService ne le cherche que là.
+      # C'est ce qui rend « Activer cc » possible sans SSH ni Docker.
+      - name: Embed correspondance-agent
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          APP="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}"
+          mkdir -p "$APP/MacOS" "$APP/Library/LaunchAgents"
+          cp -f "${SRCROOT}/Correspondance/Resources/LaunchAgents/app.correspondance.agent.plist" \
+            "$APP/Library/LaunchAgents/app.correspondance.agent.plist"
+          # Le binaire vient du paquet Swift. On le construit dans un dossier à
+          # part pour ne pas mêler ses artefacts à ceux d'Xcode.
+          BUILD_DIR="${SRCROOT}/Packages/CorrespondanceCore/.build-agent"
+          SWIFT_CONF=$([ "${CONFIGURATION}" = "Release" ] && echo release || echo debug)
+          # Un échec de construction FAIT ÉCHOUER LE BUILD. Auparavant on
+          # sortait en 0 avec un simple « warning » : l'app gardait alors le
+          # binaire précédent, Xcode affichait BUILD SUCCEEDED, et on testait du
+          # vieux code sans le savoir. Un binaire périmé qui a l'air frais coûte
+          # des heures — une build rouge en coûte cinq minutes.
+          if ! xcrun swift build --package-path "${SRCROOT}/Packages/CorrespondanceCore" \
+                --product correspondance-agent -c "$SWIFT_CONF" \
+                --scratch-path "$BUILD_DIR" > /tmp/correspondance-agent-build.log 2>&1; then
+            echo "error: correspondance-agent n'a pas pu être construit — l'app embarquerait un binaire périmé"
+            tail -20 /tmp/correspondance-agent-build.log
+            exit 1
+          fi
+          BIN=$(xcrun swift build --package-path "${SRCROOT}/Packages/CorrespondanceCore" \
+                --product correspondance-agent -c "$SWIFT_CONF" --scratch-path "$BUILD_DIR" \
+                --show-bin-path 2>/dev/null)/correspondance-agent
+          if [ -f "$BIN" ]; then
+            cp -f "$BIN" "$APP/MacOS/correspondance-agent"
+            echo "Embedded agent: $BIN"
+          else
+            echo "error: binaire de l'agent introuvable ($BIN)"
+            exit 1
+          fi
     dependencies:
       - package: CorrespondanceCore
         product: CorrespondanceCore
       - package: CorrespondanceCore
         product: CorrespondanceUI
+      # Le contrat de sortie de l'agent (`AgentExit`) : le surveillant a besoin
+      # de savoir quelles chutes se relancent et lesquelles ne se réparent pas
+      # toutes seules. Un contrat partagé, jamais recopié.
+      - package: CorrespondanceCore
+        product: CorrespondanceAgentKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance

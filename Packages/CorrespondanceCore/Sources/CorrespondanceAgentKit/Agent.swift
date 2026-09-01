@@ -4,7 +4,15 @@ import Foundation
 /// La boucle de « cc » : un `/sync` sans fin, et pour chaque ordre d'un
 /// propriétaire, un tour de Claude dont la réponse revient là où l'ordre a été donné.
 public actor Agent {
+  /// La config du fichier — l'amorce, et le repli tant que le Relais n'a rien dit.
   public let config: AgentConfig
+  /// La config vivante : le fichier revu par l'event d'état de la room console.
+  /// C'est elle qu'on lit partout ; changer un réglage dans l'app prend effet
+  /// au `/sync` suivant, sans SSH ni redémarrage.
+  private var live: AgentConfig
+  /// La room console de cet agent, découverte par l'event de config qu'elle
+  /// porte — l'app n'a pas à nous dire laquelle c'est.
+  private var consoleRoomID: String?
   private let client: MatrixClient
   private let backend: any AgentBackend
   private let stateURL: URL
@@ -17,6 +25,15 @@ public actor Agent {
   private var members: [String: Set<String>] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
+  /// Ce qui est arrivé pendant qu'un tour était en vol. À la fin du tour, tout
+  /// ce qui attend part **ensemble** — comme `buzz-acp`. On ne poste jamais de
+  /// bulle pour dire qu'on attend : ça remplirait la file au lieu de la vider,
+  /// et ça perdait la demande.
+  private var enAttente: [String: [AgentRequest]] = [:]
+  /// Les tours consommés par atelier dans l'heure — un budget de salon, en plus
+  /// du plafond de l'agent : deux agents qui se répondent brûleraient une
+  /// fenêtre d'abonnement en une nuit.
+  private var atelierBudgets: [String: HourlyCap] = [:]
   /// Les demandes de permission posées dans une room, en attente d'un 👍 —
   /// clef : l'event de la question ; valeur : où écrire la décision.
   private var pendingPermissions: [String: PendingPermission] = [:]
@@ -34,6 +51,15 @@ public actor Agent {
   /// On ne rejoue pas l'historique : seuls les ordres postérieurs comptent —
   /// avec dix minutes de marge pour un ordre donné pendant un redémarrage.
   private let notBefore: Date
+  /// Depuis quand ce processus tourne — le status le dit, pour qu'on sache
+  /// *où* et *depuis quand* sans ouvrir un terminal.
+  private let startedAt = Date()
+  /// La ligne de status, scannée une fois : elle est reposée à chaque arrivée
+  /// dans une room, et rescanner à chaque fois coûterait un `--version` par moteur.
+  private var statusLine: String?
+  /// Pourquoi le journal ne peut pas s'exercer, quand c'est le cas. Le status
+  /// le porte : sans ça, un garde-fou absent resterait invisible pour l'app.
+  private var journalIndisponible: String?
 
   public init(
     config: AgentConfig,
@@ -43,6 +69,7 @@ public actor Agent {
     log: @escaping @Sendable (String) -> Void = { print($0) }
   ) {
     self.config = config
+    self.live = config
     self.backend = backend
     self.stateURL = stateURL
     self.state = AgentState.load(from: stateURL)
@@ -84,21 +111,90 @@ public actor Agent {
 
   // MARK: - Boucle
 
+  /// Un autre agent tourne-t-il déjà sur ce compte ? On regarde le status le
+  /// plus récent qu'on ait posté — l'event porte la machine et le pid.
+  ///
+  /// Deux agents sur le même compte, ce sont deux réponses à chaque message.
+  /// L'app refuse déjà d'activer un second hôte ; le faire **aussi** ici couvre
+  /// le cas où les deux lanceurs ne se connaissent pas (un `systemctl start`
+  /// sur le NUC ne sait rien d'un clic sur le Mac).
+  private func verifyOnlyInstance() async throws {
+    let moi = SingleInstance.Sighting(
+      host: AgentWire.hostName, pid: ProcessInfo.processInfo.processIdentifier, at: Date()
+    )
+    var dernier: SingleInstance.Sighting?
+    guard let joined = try? await client.joinedRooms() else {
+      // On n'a pas pu vérifier : on démarre quand même (mieux vaut un agent
+      // qu'aucun), mais on le dit — c'est une protection qui n'a pas pu jouer.
+      log("⚠ impossible de vérifier qu'aucun autre agent ne tourne : le Relais n'a pas répondu")
+      return
+    }
+    for roomID in joined {
+      guard let messages = try? await client.roomMessages(roomID: roomID, limit: 30) else { continue }
+      for event in messages.chunk
+      where event.type == AgentEvents.statusType && event.sender == config.botUserID {
+        guard let vu = AgentEvents.sighting(in: event.content ?? .object([:]), at: event.sentAt) else {
+          continue
+        }
+        if dernier == nil || vu.at > dernier!.at { dernier = vu }
+      }
+    }
+    if case .refuse(let raison) = SingleInstance.verdict(sighting: dernier, moi: moi) {
+      log("démarrage refusé : \(raison)")
+      throw AgentError.dejaEnCours(raison)
+    }
+  }
+
+  /// Trouve la room console en **interrogeant l'état des rooms**, sans
+  /// dépendre du `/sync`.
+  ///
+  /// C'est le correctif d'un bug qui a rendu le journal muet : la découverte ne
+  /// passait que par `absorbRemoteConfig`, donc par un event d'état — or Matrix
+  /// n'envoie l'état complet qu'au **premier** `/sync`. Dès que `state.json`
+  /// existait (c'est-à-dire à tous les redémarrages), les syncs étaient
+  /// incrémentaux, la config n'était jamais revue, et `consoleRoomID` restait
+  /// `nil` pour toujours. Le status, lui, parcourait les rooms directement :
+  /// d'où un agent qui s'annonçait dans sa console mais n'y journalisait rien.
+  private func discoverConsole() async {
+    guard let joined = try? await client.joinedRooms() else {
+      log("⚠ \(AgentJournal.sansConsole) (le Relais n'a pas répondu à la recherche)")
+      journalIndisponible = AgentJournal.sansConsole
+      return
+    }
+    for roomID in joined {
+      guard let content = try? await client.roomState(roomID: roomID, type: AgentEvents.configType),
+            let remote = AgentRemoteConfig(content: content),
+            remote.agent == config.user, remote.isReadable
+      else { continue }
+      consoleRoomID = roomID
+      live = config.applying(remote)
+      cap = HourlyCap(limit: live.hourlyCap)
+      log("console trouvée : \(roomID)")
+      return
+    }
+    // Un garde-fou qui ne peut pas s'exercer doit le dire — ici, et dans le
+    // status que l'app affiche.
+    log("⚠ \(AgentJournal.sansConsole)")
+  }
+
   public func run() async throws {
     let credentials = try await ensureLoggedIn()
+    try await verifyOnlyInstance()
+    await discoverConsole()
     var backoff: TimeInterval = 2
     if state.nextBatch == nil {
       // Premier lancement : on prend l'état, on note où on en est, on ne
       // relit pas les timelines — l'agent ne répond qu'à ce qui vient.
       let initial = try await client.sync(since: nil, timeoutMilliseconds: 0)
       absorbMembers(from: initial)
+      absorbRemoteConfig(from: initial)
       absorbSettings(from: initial)
       await acceptInvites(in: initial)
       state.nextBatch = initial.nextBatch
       try persist()
       log("état initial reçu — \(initial.rooms?.join?.count ?? 0) rooms")
     }
-    log("à l'écoute de « \(config.trigger) » pour \(config.owners.joined(separator: ", ")) — plafond \(config.hourlyCap)/h")
+    log("à l'écoute de « \(live.trigger) » pour \(live.owners.joined(separator: ", ")) — plafond \(live.hourlyCap)/h")
 
     // La machine des moteurs, c'est celle-ci : on scanne, et on le dit dans
     // les rooms en tête-à-tête (la note à soi en tête) — l'app le lit dans les
@@ -110,13 +206,18 @@ public actor Agent {
         let response = try await client.sync(since: state.nextBatch, timeoutMilliseconds: 30_000)
         backoff = 2
         absorbMembers(from: response)
+        absorbRemoteConfig(from: response)
         absorbSettings(from: response)
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
-            guard let request = Trigger.request(from: event, roomID: roomID, config: config, notBefore: notBefore)
+            if isAtelier(roomID) {
+              if let request = atelierRequest(from: event, roomID: roomID) { dispatch(request) }
+              continue
+            }
+            guard let request = Trigger.request(from: event, roomID: roomID, config: live, notBefore: notBefore)
             else { continue }
             dispatch(request)
           }
@@ -142,13 +243,17 @@ public actor Agent {
           && event.string(at: "state_key") == config.botUserID
           && event.string(at: "content.membership") == "invite"
       }?.string(at: "sender")
-      guard let inviter, config.owners.contains(inviter) else {
+      guard let inviter, live.owners.contains(inviter) else {
         log("invitation ignorée dans \(roomID) (par \(inviter ?? "inconnu"))")
         continue
       }
       do {
         _ = try await client.join(roomID: roomID)
         log("rejoint \(roomID) sur invitation de \(inviter)")
+        // Un status à l'arrivée : sans ça, un bot invité après le démarrage
+        // reste muet dans les réglages jusqu'au prochain redémarrage.
+        members[roomID] = nil
+        await publishStatus(in: [roomID])
       } catch {
         log("impossible de rejoindre \(roomID) : \(error.localizedDescription)")
       }
@@ -180,8 +285,42 @@ public actor Agent {
       }
       members[roomID] = set
     }
-    let allowed = Set(config.owners + [config.botUserID])
+    let allowed = Set(live.owners + [live.botUserID])
     return (members[roomID] ?? []).isSubset(of: allowed)
+  }
+
+  /// La config que l'app a écrite dans la room console, quand ce `/sync` la
+  /// porte. Le fichier de l'hôte reste le repli : un event minuscule ne
+  /// remplace pas une config, il la corrige champ par champ.
+  private func absorbRemoteConfig(from response: MatrixSyncResponse) {
+    for (roomID, room) in response.rooms?.join ?? [:] {
+      let events = (room.state?.events ?? []) + (room.timeline?.events ?? [])
+      for event in events where event.type == AgentEvents.configType {
+        guard let content = event.content, let remote = AgentRemoteConfig(content: content) else { continue }
+        guard remote.agent == config.user else { continue }
+        guard remote.isReadable else {
+          log("config v\(remote.version) reçue dans \(roomID) — trop récente pour moi (v\(AgentRemoteConfig.currentVersion)), je garde la mienne")
+          continue
+        }
+        guard let sender = event.sender, config.owners.contains(sender) else {
+          // Une config écrite par quelqu'un d'autre qu'un propriétaire : jamais.
+          // C'est ce qui empêche un tiers dans une room de reconfigurer l'agent.
+          //
+          // On lit les propriétaires du **fichier**, pas ceux du Relais : qui a
+          // le droit de reconfigurer est ancré dans l'amorce, sur l'hôte. Un
+          // event peut élargir qui *déclenche* l'agent, jamais qui le *règle*.
+          log("config ignorée dans \(roomID) : écrite par \(event.sender ?? "inconnu")")
+          continue
+        }
+        consoleRoomID = roomID
+        let updated = config.applying(remote)
+        if updated != live {
+          live = updated
+          cap = HourlyCap(limit: updated.hourlyCap)
+          log("config reçue du Relais (\(roomID)) : déclencheur « \(updated.trigger) », moteur \(updated.backend.rawValue), palier \(AgentConfig.Presets.name(of: updated.claude.allowedTools)), plafond \(updated.hourlyCap)/h")
+        }
+      }
+    }
   }
 
   /// Le réglage que l'app a écrit, quand ce `/sync` en parle. Un `/sync` qui
@@ -196,11 +335,72 @@ public actor Agent {
 
   func mode(for roomID: String) async -> AgentConfig.RoomMode {
     await AgentMode.resolve(
-      roomMode: config.rooms[roomID]?.mode,
+      roomMode: live.rooms[roomID]?.mode,
       isPrivateWithOwners: isPrivateWithOwners(roomID),
       accountDataDefault: accountDefaultMode,
-      configuredDefault: config.defaultMode
+      configuredDefault: live.defaultMode
     )
+  }
+
+  // MARK: - Ateliers
+
+  /// Un salon où l'un des autres agents du Relais est présent. Sans pair
+  /// déclaré, il n'y a pas d'atelier et rien ne change.
+  private func isAtelier(_ roomID: String) -> Bool {
+    guard !live.peers.isEmpty, let membres = members[roomID] else { return false }
+    return !membres.isDisjoint(with: Set(live.peers))
+  }
+
+  /// Les règles d'un atelier : mention obligatoire (n'importe où dans le
+  /// message), un agent ne déclenche pas un agent sauf délégation nommée par un
+  /// propriétaire, et un budget de tours par salon. Cf. `Atelier`.
+  private func atelierRequest(from event: MatrixEvent, roomID: String) -> AgentRequest? {
+    guard event.type == "m.room.message",
+          let eventID = event.eventID,
+          let sender = event.sender,
+          !Trigger.isBridgeGhost(sender),
+          event.sentAt >= notBefore
+    else { return nil }
+    let msgtype = event.content?.string(at: "msgtype") ?? "m.text"
+    guard msgtype == "m.text" || msgtype == "m.notice" else { return nil }
+    let body = event.content?.string(at: "m.new_content.body")
+      ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
+
+    let budget = atelierBudgets[roomID] ?? HourlyCap(limit: live.atelierBudget)
+    let contexte = Atelier.Context(
+      agents: Set(live.peers),
+      owners: Set(live.owners),
+      turnsThisHour: budget.limit - budget.remaining(),
+      budget: live.atelierBudget
+    )
+    // Une délégation : un propriétaire a chargé un agent d'en appeler un autre.
+    let delegation = Atelier.delegationTarget(
+      in: body, among: Set(live.peers + [live.botUserID]),
+      triggers: [live.botUserID: live.trigger]
+    ) == live.botUserID
+
+    switch Atelier.decide(
+      agent: live.botUserID, sender: sender, body: body, trigger: live.trigger,
+      context: contexte, isDelegation: delegation
+    ) {
+    case .respond:
+      var reserve = budget
+      guard reserve.admit() else {
+        log("[\(roomID)] budget de l'atelier épuisé (\(live.atelierBudget)/h)")
+        atelierBudgets[roomID] = reserve
+        return nil
+      }
+      atelierBudgets[roomID] = reserve
+      let prompt = Trigger.prompt(in: body, trigger: live.trigger) ?? body
+      return AgentRequest(
+        roomID: roomID, eventID: eventID, sender: sender, prompt: prompt, sentAt: event.sentAt
+      )
+    case .ignore(let raison):
+      if raison != .notMentioned {
+        log("[\(roomID)] ignoré (\(raison.rawValue)) — \(sender)")
+      }
+      return nil
+    }
   }
 
   // MARK: - Un tour
@@ -209,20 +409,52 @@ public actor Agent {
     Task { await self.handle(request) }
   }
 
-  private func handle(_ request: AgentRequest) async {
-    guard !busyRooms.contains(request.roomID) else {
-      await reply("Je suis encore sur ta demande précédente ici — une à la fois.", to: request)
+  private func handle(_ arrivee: AgentRequest) async {
+    // Un tour est déjà en vol ici : la demande attend, et elle partira avec les
+    // autres. Aucune bulle — le « écrit… » dit déjà qu'on travaille, et une
+    // bulle de refus remplissait la file en perdant la demande.
+    guard !busyRooms.contains(arrivee.roomID) else {
+      enAttente[arrivee.roomID, default: []].append(arrivee)
+      log("[\(arrivee.roomID)] mise en attente (\(enAttente[arrivee.roomID]?.count ?? 0) en file)")
       return
     }
+    busyRooms.insert(arrivee.roomID)
+    defer { busyRooms.remove(arrivee.roomID) }
+
+    var aTraiter = [arrivee]
+    // Tant qu'il reste quelque chose, on enchaîne : ce qui est arrivé pendant
+    // le tour part au tour suivant, fusionné.
+    while !aTraiter.isEmpty {
+      await runTurn(aTraiter)
+      aTraiter = enAttente.removeValue(forKey: arrivee.roomID) ?? []
+    }
+  }
+
+  /// Un tour : un lot de demandes, un appel au moteur, une réponse.
+  ///
+  /// Le plafond horaire se prend **ici**, au moment où le tour part — pas quand
+  /// une demande entre dans la file. Deux messages coup sur coup coûtent donc
+  /// un seul tour, ce qui est tout l'intérêt du lot.
+  private func runTurn(_ requests: [AgentRequest]) async {
+    guard let lot = RequestBatch.merge(requests) else { return }
+    let request = lot.reply
+
     guard cap.admit() else {
       let wait = Int((cap.nextSlot() ?? 0) / 60) + 1
-      await reply("Plafond horaire atteint (\(config.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
+      await reply("Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
       return
     }
-    busyRooms.insert(request.roomID)
-    defer { busyRooms.remove(request.roomID) }
 
-    let prompt = request.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : request.prompt
+    if !lot.dropped.isEmpty {
+      // Une perte se dit dans le journal, jamais dans la conversation.
+      log("[\(request.roomID)] ⚠ \(lot.dropped.count) demande(s) trop anciennes écartées du lot (prompt trop long)")
+    }
+    if lot.count > 1 {
+      log("[\(request.roomID)] \(lot.count) demandes fusionnées en un tour")
+    }
+
+    let startedTurn = Date()
+    let prompt = lot.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : lot.prompt
     log("[\(request.roomID)] \(request.sender) → « \(prompt.prefix(80)) »")
 
     let typing = Task { [client] in
@@ -240,7 +472,7 @@ public actor Agent {
     // les porte dans la room, un 👍 y répond. Sans permission activée : rien.
     var spool: URL?
     var watcher: Task<Void, Never>?
-    if config.claude.permission.enabled {
+    if live.claude.permission.enabled {
       let dir = stateURL.deletingLastPathComponent().appending(path: "permissions/\(UUID().uuidString)")
       try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
@@ -256,7 +488,12 @@ public actor Agent {
     }
 
     do {
-      let cwd = config.rooms[request.roomID]?.cwd
+      // Jamais `~` : un tour travaille dans le dossier de sa room tant qu'aucun
+      // dépôt n'est lié. C'est le rayon d'explosion, et c'est le garde-fou qui
+      // remplace la question qu'on ne pose plus.
+      let cwd = Workspace.prepare(
+        Workspace.directory(agent: live.user, roomID: request.roomID, binding: live.rooms[request.roomID]?.cwd)
+      )
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
@@ -265,9 +502,43 @@ public actor Agent {
       let text = turn.text.isEmpty ? "(Claude n'a rien répondu.)" : turn.text
       await reply(text, to: request)
       log("[\(request.roomID)] ← \(text.count) caractères\(turn.isError ? " (erreur)" : "")")
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
     } catch {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
+    }
+  }
+
+  // MARK: - Journal
+
+  /// Chaque tour laisse une trace dans la room console : qui a demandé, quoi,
+  /// quels outils ont servi, combien de temps. Depuis qu'on donne la pleine
+  /// permission, c'est ce qui rend l'agent relisible — et c'est le troisième
+  /// garde-fou avec le dossier borné et les propriétaires seuls.
+  ///
+  /// On n'invente pas un endroit où déverser ce que les gens se disent : sans
+  /// console, rien n'est posté. Mais **on le dit** — un garde-fou qui ne peut
+  /// pas s'exercer et qui se tait est pire qu'un garde-fou absent, parce que
+  /// personne ne sait qu'il manque.
+  private func journal(_ request: AgentRequest, seconds: Double, tools: [String], tokens: Int?) async {
+    let carnet = AgentJournal(consoleRoomID: consoleRoomID) { [client] roomID, type, content in
+      try await client.sendEvent(roomID: roomID, type: type, content: content)
+    }
+    let issue = await carnet.record(
+      agent: live.user, roomID: request.roomID, sender: request.sender,
+      prompt: request.prompt, tools: tools, seconds: seconds, tokens: tokens
+    )
+    switch issue {
+    case .written:
+      journalIndisponible = nil
+    case .impossible(let raison):
+      // Une fois dans le journal local, et dans le status : l'app doit pouvoir
+      // le montrer sans qu'on aille lire un fichier sur la machine.
+      if journalIndisponible != raison {
+        log("⚠ \(raison)")
+        journalIndisponible = raison
+        statusLine = nil  // le prochain status portera l'avertissement
+      }
     }
   }
 
@@ -276,13 +547,31 @@ public actor Agent {
   /// Scanne les moteurs et poste `fr.correspondance.agent.status` dans chaque
   /// room en tête-à-tête avec les propriétaires. Les ponts ignorent ce type,
   /// et on ne le poste de toute façon jamais devant des tiers.
-  private func publishStatus() async {
-    let config = self.config
-    let scan = await Task.detached { EngineScan.scan(config: config) }.value
-    let line = scan.statusLine(backend: config.backend)
-    log("moteurs : \(line)")
-    guard let joined = try? await client.joinedRooms() else { return }
-    for roomID in joined {
+  private func publishStatus(in rooms: [String]? = nil) async {
+    let config = self.live
+    if statusLine == nil {
+      let scan = await Task.detached { EngineScan.scan(config: config) }.value
+      var ligne = scan.statusLine(
+        backend: config.backend, agent: config.user, host: EngineScan.hostName, since: startedAt
+      )
+      // Un garde-fou qui manque se voit dans les réglages, pas seulement dans
+      // un fichier sur la machine de l'agent.
+      if journalIndisponible != nil { ligne += " · ⚠ journal indisponible" }
+      statusLine = ligne
+      log("moteurs : \(statusLine ?? "")")
+    }
+    guard let line = statusLine else { return }
+    let targets: [String]
+    if let rooms {
+      targets = rooms
+    } else {
+      guard let joined = try? await client.joinedRooms() else {
+        log("⚠ status non publié : le Relais n'a pas répondu — l'app dira que cc est muet")
+        return
+      }
+      targets = joined
+    }
+    for roomID in targets {
       guard await isPrivateWithOwners(roomID) else { continue }
       do {
         try await client.sendEvent(
@@ -347,7 +636,7 @@ public actor Agent {
           let target = event.content?.string(at: "m.relates_to.event_id"),
           let pending = pendingPermissions[target]
     else { return false }
-    guard let sender = event.sender, config.owners.contains(sender),
+    guard let sender = event.sender, live.owners.contains(sender),
           let key = event.content?.string(at: "m.relates_to.key")
     else { return true } // la question est à nous, mais pas la réaction : on l'ignore
     let allow: Bool
@@ -369,6 +658,16 @@ public actor Agent {
   private func reply(_ text: String, to request: AgentRequest) async {
     let mode = await mode(for: request.roomID)
     do {
+      // Dans un atelier, le tour se déroule dans un thread : seul le résultat
+      // remonte, et le salon reste lisible à trois moteurs.
+      if isAtelier(request.roomID), mode == .direct {
+        try await client.sendEvent(
+          roomID: request.roomID,
+          type: "m.room.message",
+          content: AgentEvents.threadedText(text, root: request.eventID, lastEventID: request.eventID)
+        )
+        return
+      }
       switch mode {
       case .direct:
         // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un

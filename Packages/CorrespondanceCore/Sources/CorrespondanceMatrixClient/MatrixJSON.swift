@@ -86,6 +86,41 @@ public enum MatrixJSON: Codable, Hashable, Sendable {
     return nil
   }
 
+  // MARK: - Ce que Matrix refuse
+
+  /// **Matrix n'accepte aucun flottant dans un event.** Le JSON canonique
+  /// (spécification, § Canonical JSON) ne connaît que des entiers ; Synapse
+  /// répond `400 Bad JSON value: float` et l'event est perdu.
+  ///
+  /// Ce n'est pas un caprice d'un event particulier : c'est une règle du
+  /// protocole, et c'est pourquoi elle se vérifie ici, une fois, plutôt que
+  /// dans chaque constructeur de contenu. Éprouvé au prix fort — le journal des
+  /// tours, l'un des trois garde-fous de la pleine permission, n'a jamais
+  /// réussi à s'écrire à cause d'une durée en secondes décimales.
+  ///
+  /// Rend les chemins fautifs, pour que le message dise *quoi* corriger.
+  public func nonIntegerNumberPaths(prefix: String = "") -> [String] {
+    switch self {
+    case .number(let value):
+      let entier = value.rounded() == value && value.isFinite
+      return entier ? [] : [prefix.isEmpty ? "(racine)" : prefix]
+    case .array(let items):
+      return items.enumerated().flatMap { index, item in
+        item.nonIntegerNumberPaths(prefix: "\(prefix)[\(index)]")
+      }
+    case .object(let fields):
+      return fields.sorted { $0.key < $1.key }.flatMap { key, value in
+        value.nonIntegerNumberPaths(prefix: prefix.isEmpty ? key : "\(prefix).\(key)")
+      }
+    case .null, .bool, .string:
+      return []
+    }
+  }
+
+  /// Un entier, tel que Matrix l'accepte. À préférer à `.number(Double(x))`
+  /// quand la valeur vient d'un calcul : une durée, un horodatage, un compte.
+  public static func integer(_ value: Int) -> MatrixJSON { .number(Double(value)) }
+
   public var boolValue: Bool? {
     if case .bool(let v) = self { return v }
     return nil

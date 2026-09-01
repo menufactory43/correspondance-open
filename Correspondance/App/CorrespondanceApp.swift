@@ -52,6 +52,33 @@ struct CorrespondanceApp: App {
         }
     }
     .defaultSize(width: 1100, height: 760)
+    // **C'est cette ligne qui règle la fenêtre géante**, et elle seule.
+    //
+    // Sans elle, SwiftUI dimensionne la fenêtre sur la hauteur *idéale* du
+    // contenu au premier lancement — une liste de conversations n'en a pas de
+    // raisonnable, d'où les 2142 pixels observés sur un écran de 869 — et
+    // `.defaultSize` ne sert à rien. `contentMinSize` laisse la fenêtre libre
+    // au-dessus du minimum de la vue, comme celle d'une conversation détachée.
+    //
+    // Il y a eu ici, pendant trois commits, une garde qui ramenait la fenêtre
+    // dans l'écran à chaque redimensionnement. Elle est partie, et l'enquête
+    // vaut d'être gardée :
+    //
+    // - elle a **tué l'app au lancement**, par intermittence : son `setFrame`
+    //   tombait parfois pendant la passe de contraintes d'AppKit, qui lève
+    //   alors `_postWindowNeedsUpdateConstraints` — une exception Objective-C
+    //   qu'aucun `@try/@catch` posé autour de l'écriture ne peut rattraper,
+    //   puisqu'elle survient plus tard, dans le cycle d'affichage ;
+    // - et elle ne protégeait de rien de démontré : avec un cadre enregistré
+    //   de 1100 × 2142 restauré sur un écran de 1440 × 869, l'app **sans**
+    //   garde ouvre une fenêtre de 1100 × 790, mesurée. C'est `contentMinSize`
+    //   qui fait le travail.
+    //
+    // Entre une protection non démontrée qui tue l'app et pas de protection,
+    // on choisit pas de protection. Si le cas revient, la seule voie sûre est
+    // de répondre à `windowWillResize(_:to:)` — AppKit *demande* une taille au
+    // lieu qu'on lui en impose une — jamais un `setFrame` asynchrone.
+    .windowResizability(.contentMinSize)
     .commands { CorrespondanceCommands(store: store, themes: themes) }
 
     // Une conversation, sa fenêtre. Rappeler la même valeur ne crée pas une
@@ -99,5 +126,13 @@ final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     true
+  }
+
+  /// cc s'arrête avec l'app. Un agent orphelin qui continuerait de répondre au
+  /// nom de quelqu'un après la fermeture serait pire qu'un agent mort — et
+  /// c'est le prix assumé de « Sur ce Mac » : pour un cc joignable jour et
+  /// nuit, il faut une autre machine.
+  func applicationWillTerminate(_ notification: Notification) {
+    AgentProcessHost.shared.stop()
   }
 }

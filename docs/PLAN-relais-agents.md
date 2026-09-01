@@ -59,7 +59,8 @@ couture avec les outils.**
 C'est exactement ce que `AgentBackend` essaie d'être — avec, aujourd'hui, un parseur de
 `claude -p --output-format stream-json` d'un côté et le piège d'`hermes -z` de l'autre, payé
 au tir. Et ACP apporte plus qu'un format : **`session/request_permission` est une méthode du
-protocole**, appelée par l'agent vers le client. C'est notre carte 👍, standardisée — avec
+protocole**, appelée par l'agent vers le client — on y répond `allow_always` (décision
+« pleine permission », plus bas), mais elle reste le point de contrôle si on change d'avis — avec
 `session/load` pour la reprise, `session/cancel` pour le bouton « Arrêter », et
 `session/update` pour la réponse progressive. Les quatre choses qu'on bricole, dans un
 protocole que trois moteurs parlent déjà.
@@ -163,27 +164,43 @@ palier d'outils par défaut
 Ajouter `goose` devient une entrée, pas un `AgentBackend`. Et le champ « hook de permission »
 n'est pas décoratif : c'est lui qui décide de ce que l'app a le droit de promettre.
 
-### Trois niveaux d'honnêteté sur les outils
+### Décision : pleine permission, et ce qui borne vraiment le risque
 
-Faire tourner la CLI, c'est laisser à l'IA **son harnais** : sa mémoire, ses compétences, ses
-outils, son routage de modèles. C'est le bon marché — on ne réécrit pas Claude Code — mais il
-a une contrepartie : **on ne possède pas la couche outils**, donc la carte 👍 ne s'applique
-pas partout. Hermes le montre : ses outils se règlent dans sa propre config, il n'y a pas de
-crochet d'approbation, notre spool est ignoré. L'app doit donc afficher, par moteur, lequel
-des trois régimes s'applique :
+**Pas de carte 👍.** Un agent invité par son propriétaire a tous ses outils ; on répond
+`allow_always` à `session/request_permission` et on force le mode permissif après chaque
+`session/new`. La carte de permission sort de la phase 0, et avec elle le spool de fichiers et
+le serveur MCP d'approbation.
 
-- **Contrôlé** — le moteur nous rend la décision (`--permission-prompt-tool` chez Claude Code,
-  `session/request_permission` en ACP). La carte 👍 marche.
-- **Pré-réglé** — les outils sont fixés dans la config du moteur, avant l'invitation. Rien à
-  demander en cours de route, et il faut le dire.
-- **Ouvert** — aucune limite lisible. À n'inviter que dans une room console.
+Ce qui borne le risque n'est de toute façon pas la carte — c'est ce triptyque, et il reste :
 
-Un cadenas uniforme sur trois régimes différents serait un mensonge d'interface.
+1. **Un dossier par room, jamais `~`.** Le `cwd` d'un tour est `~/Correspondance/<agent>/<room>`
+   tant qu'aucun dépôt n'est lié. C'est le seul vrai rayon d'explosion.
+2. **Seuls les propriétaires déclenchent**, et un fantôme de pont ne déclenche jamais.
+3. **Le journal des tours** dans la room console : qui, quoi, quels outils, combien de temps.
 
-**La règle qui découle de tout ça** : *Correspondance règle le dehors — qui déclenche, où ça
-tourne, quand, combien de fois, devant qui. Le moteur règle le dedans — comment il pense, avec
-quels outils, avec quelle mémoire.* Les réglages de l'app ne doivent jamais faire semblant de
-commander le dedans.
+Le risque assumé, dit franchement : le prompt d'un tour contient du texte écrit par d'autres
+(le message cité, un fil ponté). Avec `Bash` ouvert, c'est un chemin d'exécution. La parade
+n'est pas une question posée à l'utilisateur — il dirait oui — mais le dossier borné et le
+contenu tiers rendu comme **donnée marquée, jamais comme instruction**.
+
+### Ce que les moteurs permettent, et qui varie
+
+Le catalogue doit quand même noter le régime de chaque moteur, non pour demander mais pour
+savoir **ce qu'on force** :
+
+| Régime | Ce que ça veut dire | Ce qu'on en fait |
+|---|---|---|
+| **Contrôlé** | le moteur nous rend la décision (`session/request_permission`) | on répond `allow_always` |
+| **Pré-réglé** | les outils sont fixés dans la config du moteur (Hermes) | on le configure serré une fois, avant l'invitation |
+| **Ouvert** | aucune limite lisible | à n'inviter que dans une room console |
+
+Et la leçon du spike : **le défaut d'un adaptateur peut être « un modèle décide à ta place »** —
+`claude-agent-acp` 0.70.0 démarre en mode `auto` et a exécuté un `Bash` sans rien demander. Le
+catalogue ne note donc pas « ce moteur demande la permission » mais « dans ce mode, vérifié à
+cette version », et le mode se force explicitement après chaque `session/new`.
+
+**La règle qui domine** : *Correspondance règle le dehors — qui déclenche, où ça tourne, dans
+quel dossier, quand, combien, devant qui. Le moteur règle le dedans.*
 
 ### Le renversement : `correspondance-mcp`
 
@@ -369,7 +386,7 @@ celui de la valeur pour un tiers.
 - **Sortie** : quelqu'un qui n'a jamais ouvert un terminal colle une commande, scanne un QR, lie WhatsApp, et voit sa file.
 
 ### A — Les agents, comme prévu (phases 0–4 existantes)
-- Inchangé : carte 👍, room console, hôte « Ce Mac » en un clic, hôte distant assisté, moteur API.
+- Room console, hôte « Ce Mac » en un clic, hôte distant assisté, moteur API — et `ACPBackend` à la place du parseur `stream-json`.
 - Ajouts issus de la recherche : **portée par room**, **filtre des fantômes de ponts**, **politique d'auteur à quatre modes visible dans l'app**, **un thread par tour**, **file et batch par room**, **« Arrêter » et « Nouvelle session »**.
 - Bascule **ACP** d'`AgentBackend` (après la vérification `claude-agent-acp` × abonnement), qui rend `codex` et `goose` gratuits.
 
@@ -396,7 +413,7 @@ celui de la valeur pour un tiers.
 1. **Héberger, ou pas ?** Les trois portes couvrent « local » et « distant chez lui ». « Distant chez toi » (multi-tenant Synapse + ponts, facturation, sessions WhatsApp qui expirent) est un métier, pas une phase. Concevoir le code d'appairage maintenant pour que la porte existe ; ne pas l'ouvrir avant dix utilisateurs sur les deux premières.
 2. **Le E2EE avant ou après les ateliers ?** Après, si le Relais reste chez chacun. Avant, si tu héberges — et alors c'est la première ligne du plan.
 3. **La demi-journée ACP × abonnement.** `claude-agent-acp` exige une clé ; `claude-code-acp` prétend reprendre la session de `~/.claude` ; Zed conseille la CLI pour garder les limites de l'abonnement. À éprouver, pas à lire. Le résultat décide si ACP remplace `ClaudeCodeBackend` ou s'y ajoute — et rien d'autre dans le plan n'en dépend.
-4. **Hermes en CLI, en ACP, ou en pair ?** Hermes a sa propre passerelle Matrix *et* trois chemins d'intégration à Buzz. Trois options, donc : l'appeler en CLI (`HermesBackend` d'aujourd'hui), le lancer en ACP s'il l'expose, ou le laisser se connecter seul au Relais et ne faire que l'inviter — moins de code, moins de contrôle : ses outils ne passent pas par la carte 👍.
+4. **Hermes en CLI, en ACP, ou en pair ?** Hermes a sa propre passerelle Matrix *et* trois chemins d'intégration à Buzz. Trois options, donc : l'appeler en CLI (`HermesBackend` d'aujourd'hui), le lancer en ACP s'il l'expose, ou le laisser se connecter seul au Relais et ne faire que l'inviter — moins de code, et ses outils se règlent chez lui.
 4. **La mention dans un tête-à-tête.** Taper `@cc` dans un fil qui ne contient que cc est une friction que Grok Bot n'a pas. La supprimer en tête-à-tête, la garder ailleurs ?
 
 ---

@@ -5,12 +5,43 @@ import Foundation
 /// proposition, que Correspondance rend comme un brouillon, et la demande de
 /// permission, qu'un 👍 d'un propriétaire tranche.
 public enum AgentEvents {
-  public static let proposalType = "fr.correspondance.agent.proposal"
-  public static let permissionType = "fr.correspondance.agent.permission"
+  public static let proposalType = AgentWire.proposalType
+  public static let permissionType = AgentWire.permissionType
   /// Ce que l'agent sait de sa machine — posté au démarrage dans ses rooms en
   /// tête-à-tête (la note à soi en tête). La présence est éteinte sur le
   /// Relais, exprès : ce petit event est son remplaçant.
-  public static let statusType = "fr.correspondance.agent.status"
+  public static let statusType = AgentWire.statusType
+
+  /// La configuration de l'agent, event **d'état** de sa room console : écrite
+  /// par l'app, lue par l'agent au démarrage et suivie à chaque `/sync`. Sur
+  /// l'hôte il ne reste que l'amorce. Cf. `AgentRemoteConfig`.
+  public static let configType = AgentWire.configType
+
+  /// Le journal d'un tour dans la room console : qui a demandé, quels outils
+  /// ont servi, combien de temps. Depuis la pleine permission, c'est ce qui
+  /// rend un agent relisible — « cet agent a fait ça », pas « il s'est passé
+  /// quelque chose ».
+  public static let journalType = AgentWire.journalType
+
+  public static func journal(
+    agent: String, roomID: String, sender: String, prompt: String,
+    tools: [String], seconds: Double, tokens: Int?
+  ) -> MatrixJSON {
+    var fields: [String: MatrixJSON] = [
+      AgentWire.JournalKey.agent: .string(agent),
+      AgentWire.JournalKey.room: .string(roomID),
+      AgentWire.JournalKey.sender: .string(sender),
+      // Assez pour reconnaître le tour, pas assez pour recopier la conversation
+      // dans un journal que d'autres appareils synchronisent.
+      AgentWire.JournalKey.prompt: .string(String(prompt.prefix(200))),
+      AgentWire.JournalKey.tools: .array(tools.map(MatrixJSON.string)),
+      // Des millisecondes **entières** : Matrix refuse les flottants, et une
+      // durée en secondes décimales (`5.4`) faisait échouer tout l'event.
+      AgentWire.JournalKey.durationMs: .integer(Int((seconds * 1000).rounded())),
+    ]
+    if let tokens { fields[AgentWire.JournalKey.tokens] = .integer(tokens) }
+    return .object(fields)
+  }
 
   /// Le contenu d'une proposition : le texte, l'agent qui le signe, et le
   /// message auquel il répond — pour que l'app la place au bon endroit du fil.
@@ -24,12 +55,52 @@ public enum AgentEvents {
     ])
   }
 
+  /// Une réponse **dans un thread** (MSC3440) : le travail d'un tour se déroule
+  /// là, et seul le résultat remonte dans le fil. Dans un atelier à trois
+  /// moteurs, c'est ce qui rend le salon lisible — et dans une inbox humaine,
+  /// c'est ce qui empêche un tour de trois minutes de pousser la conversation
+  /// de quelqu'un hors de l'écran.
+  ///
+  /// `m.in_reply_to` avec `is_falling_back` : les clients qui ignorent les
+  /// threads voient une réponse citée ordinaire, pas un message orphelin.
+  public static func threadedText(_ text: String, root: String, lastEventID: String) -> MatrixJSON {
+    .object([
+      "msgtype": .string("m.text"),
+      "body": .string(text),
+      "m.relates_to": .object([
+        "rel_type": .string("m.thread"),
+        "event_id": .string(root),
+        "is_falling_back": .bool(true),
+        "m.in_reply_to": .object(["event_id": .string(lastEventID)]),
+      ]),
+    ])
+  }
+
   /// Le contenu d'un status : la ligne des moteurs, et l'agent qui la signe.
-  public static func status(body: String, agent: String) -> MatrixJSON {
+  /// Le status porte aussi **la machine et le pid** : c'est ce qui permet à un
+  /// agent qui démarre de savoir si un autre tourne déjà sur le même compte,
+  /// et de distinguer un concurrent vivant de son propre cadavre
+  /// (cf. `SingleInstance`).
+  public static func status(
+    body: String, agent: String,
+    host: String = AgentWire.hostName, pid: Int32 = ProcessInfo.processInfo.processIdentifier
+  ) -> MatrixJSON {
     .object([
       "body": .string(body),
       "agent": .string(agent),
+      AgentWire.StatusKey.host: .string(host),
+      AgentWire.StatusKey.pid: .integer(Int(pid)),
     ])
+  }
+
+  /// Ce qu'un status raconte de l'agent qui l'a posté. `nil` pour un status
+  /// d'avant cette version : on ne peut alors rien conclure, et c'est la
+  /// fenêtre de temps qui tranchera.
+  public static func sighting(in content: MatrixJSON, at date: Date) -> SingleInstance.Sighting? {
+    guard let host = content.value(at: AgentWire.StatusKey.host)?.stringValue,
+          let pid = content.value(at: AgentWire.StatusKey.pid)?.intValue
+    else { return nil }
+    return SingleInstance.Sighting(host: host, pid: Int32(pid), at: date)
   }
 
   /// Le contenu d'une demande de permission : le texte lisible, l'outil, et

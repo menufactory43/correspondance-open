@@ -21,11 +21,7 @@ public enum DraftStore {
   }
 
   private static var fileURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("drafts.json")
+    CorrespondanceHome.file("drafts.json")
   }
 
   public static func load() -> [String: Draft] {

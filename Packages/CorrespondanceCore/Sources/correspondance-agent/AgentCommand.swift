@@ -7,6 +7,7 @@ import Foundation
 //   correspondance-agent init            écrit ~/.correspondance-agent/config.json
 //   correspondance-agent rooms           liste les rooms rejointes (pour la config)
 //   correspondance-agent run             tourne (défaut)
+//   correspondance-agent run --agent hermes   tourne sur ~/.correspondance-hermes
 //   correspondance-agent ask "…"         un tour du moteur sans Matrix (diagnostic)
 //   correspondance-agent doctor          quels moteurs la machine sait lancer
 //   CORRESPONDANCE_AGENT_HOME=/chemin    change le dossier de config/état
@@ -15,8 +16,12 @@ import Foundation
 // `Task` y hériterait de l'acteur principal — bloqué dès qu'on l'attend.
 @main
 struct AgentCommand {
-  static let home = ProcessInfo.processInfo.environment["CORRESPONDANCE_AGENT_HOME"].map { URL(fileURLWithPath: $0) }
-    ?? AgentConfig.defaultDirectory
+  /// Quel agent, et où vit son amorce. `--agent hermes` d'abord (c'est ce
+  /// qu'un plist statique de LaunchAgent sait passer), `CORRESPONDANCE_AGENT_HOME`
+  /// ensuite (le montage historique du NUC), le défaut enfin.
+  static let resolved = AgentHome.resolve(arguments: CommandLine.arguments)
+  static var agent: String { resolved.agent }
+  static var home: URL { resolved.directory }
   static var configURL: URL { home.appending(path: "config.json") }
   static var stateURL: URL { home.appending(path: "state.json") }
 
@@ -25,6 +30,22 @@ struct AgentCommand {
     f.dateFormat = "HH:mm:ss"
     // Non tamponné : sous systemd ou Docker, le journal doit suivre en direct.
     FileHandle.standardOutput.write(Data("\(f.string(from: Date())) \(line)\n".utf8))
+  }
+
+  /// Quel binaire suis-je, et de quand ?
+  ///
+  /// Écrit à chaque démarrage parce que la question « est-ce que je teste bien
+  /// le code que je viens d'écrire ? » a déjà coûté un essai : un binaire
+  /// embarqué d'une build précédente donne les symptômes d'un défaut réparé.
+  static func binaryStamp() -> String {
+    let chemin = ClaudeCodeBackend.resolveSelfBinary() ?? CommandLine.arguments.first ?? "?"
+    let attributs = try? FileManager.default.attributesOfItem(atPath: chemin)
+    let date = attributs?[.modificationDate] as? Date
+    let formatter = DateFormatter()
+    formatter.dateFormat = "d MMM HH:mm"
+    formatter.locale = Locale(identifier: "fr_FR")
+    let quand = date.map { formatter.string(from: $0) } ?? "date inconnue"
+    return "binaire : \(chemin) (compilé le \(quand))"
   }
 
   static func fail(_ message: String) -> Never {
@@ -57,6 +78,26 @@ struct AgentCommand {
         fail("`hermes` introuvable — installe Hermes (Nous Research) ou renseigne hermes.binary")
       }
       return HermesBackend(settings: config.hermes)
+    case .acp:
+      let acp = ACPBackend(settings: config.acp, log: { stamp($0) })
+      // L'ACP apporte une dépendance neuve (un adaptateur Node) là où `claude`
+      // suffisait. Si `claude` est là, il devient le repli : un hôte sans
+      // adaptateur répond quand même, et le journal le dit. Sans repli
+      // possible, on refuse de démarrer plutôt que de rester muet en silence.
+      guard ClaudeCodeBackend.resolveBinary(config.claude.binary) != nil else {
+        guard ACPBackend.resolveBinary(config.acp) != nil else {
+          fail("ni `\(config.acp.command)` ni `claude` — installe l'adaptateur (\(config.acp.installCommand)) ou Claude Code")
+        }
+        return acp
+      }
+      if ACPBackend.resolveBinary(config.acp) == nil {
+        stamp("`\(config.acp.command)` introuvable — je réponds par la CLI ; pour l'ACP : \(config.acp.installCommand)")
+      }
+      return FallbackBackend(
+        primary: acp,
+        secondary: ClaudeCodeBackend(settings: config.claude, selfBinary: ClaudeCodeBackend.resolveSelfBinary()),
+        log: { stamp($0) }
+      )
     }
   }
 
@@ -101,11 +142,31 @@ struct AgentCommand {
 
     case "run":
       let config = loadConfig()
+      // L'app nous passe son pid : quand elle meurt — proprement, par un crash
+      // ou par un `pkill` — on meurt avec elle. Sans ça l'agent survit,
+      // connecté au Relais, prêt à répondre au nom de son propriétaire, et un
+      // relancement donne deux agents sur le même compte.
+      var surveillance: Task<Void, Never>?
+      if let parent = ParentWatch.expectedParent(in: CommandLine.arguments) {
+        stamp("surveillance du parent \(parent) : je m'arrête s'il disparaît")
+        surveillance = ParentWatch.watch(expected: parent) {
+          FileHandle.standardOutput.write(Data("l'app qui m'a lancé a disparu — je m'arrête\n".utf8))
+          exit(0)
+        }
+      }
+      defer { surveillance?.cancel() }
+      stamp(binaryStamp())
       let agent = Agent(config: config, backend: makeBackend(config), stateURL: stateURL, log: { stamp($0) })
       do {
         try await agent.run()
       } catch {
-        fail(error.localizedDescription)
+        // Le code de sortie dit à l'app **s'il faut relancer**. Un mot de passe
+        // refusé par le Relais ne se répare pas tout seul : insister huit fois
+        // ne ferait que remplir le journal en donnant l'illusion d'un plantage.
+        let code = AgentExit.code(for: error)
+        if let raison = AgentExit.raisonFR(code) { stamp("arrêt définitif : \(raison)") }
+        FileHandle.standardError.write(Data("correspondance-agent : \(error.localizedDescription)\n".utf8))
+        exit(code)
       }
 
     // Quels moteurs cette machine sait lancer, et si celui de la config est là.

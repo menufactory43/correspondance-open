@@ -12,11 +12,32 @@ struct SettingsMatrixPane: View {
   @State private var matrixUser = "meffysto"
   @State private var matrixPassword = ""
   @State private var isConnecting = false
+  /// Le code que l'installeur du Relais a affiché — c'est le chemin normal.
+  /// Le formulaire au-dessous reste pour qui préfère tout taper.
+  @State private var codeAppairage = ""
+  @State private var motsDeVerification: [String] = []
+  @State private var erreurCode: String?
 
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
+      // Sur un jeu de données d'essai, on le dit avant tout le reste : personne
+      // ne doit croire qu'il regarde ses vraies conversations.
+      if let essai = CorrespondanceHome.name {
+        SettingsCard(
+          title: "Essai",
+          footnote: "Données et session à part (`CORRESPONDANCE_HOME=\(essai)`). "
+            + "Tes vraies conversations sont intactes ailleurs — relance sans la variable pour les retrouver."
+        ) {
+          SettingsRow(
+            label: "Jeu de données",
+            detail: "Correspondance-\(essai)",
+            systemImage: "flask"
+          ) { EmptyView() }
+        }
+      }
+
       SettingsCard(title: "État") {
         SettingsRow(
           label: "Homeserver",
@@ -60,7 +81,44 @@ struct SettingsMatrixPane: View {
           }
         }
       } else {
-        SettingsCard(title: "Connexion") {
+        SettingsCard(
+          title: "Connecter un Relais",
+          footnote: "L'installeur du Relais affiche ce code à la fin. Il contient un mot de passe : "
+            + "il se colle, il ne se poste pas. Il périme en quinze minutes."
+        ) {
+          VStack(alignment: .leading, spacing: Spacing.xs) {
+            TextField("correspondance://relais/…", text: $codeAppairage)
+              .textFieldStyle(.roundedBorder)
+              .onSubmit { appairer() }
+
+            if !motsDeVerification.isEmpty {
+              Text("Vérification : \(motsDeVerification.joined(separator: " "))")
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkSecondary)
+              Text("Ces six mots doivent être ceux que l'installeur a affichés.")
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkTertiary)
+            }
+            if let erreurCode {
+              Text(erreurCode)
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkSecondary)
+            }
+          }
+          .padding(.horizontal, Spacing.sm)
+          .padding(.vertical, Spacing.xs)
+
+          HStack {
+            Spacer()
+            Button(isConnecting ? "Connexion…" : "Connecter") { appairer() }
+              .keyboardShortcut(.defaultAction)
+              .disabled(isConnecting || codeAppairage.isEmpty)
+          }
+          .padding(.horizontal, Spacing.sm)
+          .padding(.bottom, Spacing.xs)
+        }
+
+        SettingsCard(title: "Ou à la main") {
           VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField("Homeserver", text: $homeserver)
             TextField("Identifiant", text: $matrixUser)
@@ -91,6 +149,33 @@ struct SettingsMatrixPane: View {
     let pending = store.relayQueue.count
     guard pending > 0 else { return "Synchronisé avec le Relais." }
     return "Synchronisé avec le Relais · \(pending) en attente"
+  }
+
+  /// Lit le code, montre les six mots, puis se connecte. On affiche
+  /// l'empreinte **avant** de se connecter : c'est là qu'elle sert.
+  private func appairer() {
+    erreurCode = nil
+    guard let code = RelayPairingCode(encoded: codeAppairage) else {
+      motsDeVerification = []
+      erreurCode = "ce code n'est pas lisible — recopie-le en entier, ou scanne-le"
+      return
+    }
+    guard !code.isExpired() else {
+      motsDeVerification = []
+      erreurCode = "ce code a expiré — relance `pair.sh` sur le Relais pour en avoir un autre"
+      return
+    }
+    motsDeVerification = code.fingerprintWords()
+    isConnecting = true
+    Task {
+      await store.connectMatrix(
+        homeserver: code.homeserver.absoluteString,
+        user: code.userID,
+        password: code.password
+      )
+      codeAppairage = ""
+      isConnecting = false
+    }
   }
 
   private func connect() {

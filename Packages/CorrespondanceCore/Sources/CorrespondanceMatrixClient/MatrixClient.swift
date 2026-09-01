@@ -305,6 +305,25 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Le garde qui manquait : **aucun flottant ne part vers Synapse**.
+  ///
+  /// Le JSON canonique de Matrix ne connaît que des entiers ; un `5.4` fait
+  /// répondre `400 Bad JSON value: float` et l'event est perdu. C'était le cas
+  /// du journal des tours — un des trois garde-fous de la pleine permission —
+  /// qui n'a jamais réussi à s'écrire.
+  ///
+  /// On échoue donc **ici**, chez nous, avec le champ nommé, plutôt que de
+  /// laisser un 400 obscur revenir du serveur.
+  static func refuseLesFlottants(in content: MatrixJSON, type: String) throws {
+    let fautifs = content.nonIntegerNumberPaths()
+    guard fautifs.isEmpty else {
+      throw MatrixError.decoding(
+        "\(type) : Matrix n'accepte pas de flottant — \(fautifs.joined(separator: ", ")). "
+          + "Arrondis (des millisecondes entières, par exemple)."
+      )
+    }
+  }
+
   /// Un event de salon d'un type quelconque — nos propres types
   /// (`fr.correspondance.agent.*`), que les ponts mautrix ne relaient pas :
   /// ce qui s'y dit reste entre le Relais et ses clients.
@@ -315,6 +334,7 @@ public actor MatrixClient {
     content: MatrixJSON,
     transactionID: String = UUID().uuidString
   ) async throws -> String? {
+    try Self.refuseLesFlottants(in: content, type: type)
     guard !ledger.isUsed(transactionID) else { return nil }
     let json = try await request(
       method: "PUT",
@@ -322,6 +342,29 @@ public actor MatrixClient {
       body: content
     )
     ledger.markUsed(transactionID)
+    return json.string(at: "event_id")
+  }
+
+  /// Un event **d'état** : il n'a pas d'historique, il a une valeur courante.
+  /// C'est la forme d'une configuration — la room console d'un agent porte la
+  /// sienne, et l'agent la relit à chaque `/sync` (`fr.correspondance.agent.config`).
+  ///
+  /// Pas de `txnId` ici : l'état s'écrase, il ne se rejoue pas. Deux écritures
+  /// identiques laissent la même valeur, ce qui est exactement l'idempotence
+  /// qu'on veut.
+  @discardableResult
+  public func sendStateEvent(
+    roomID: String,
+    type: String,
+    stateKey: String = "",
+    content: MatrixJSON
+  ) async throws -> String? {
+    try Self.refuseLesFlottants(in: content, type: type)
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/state/\(Self.escape(type))/\(Self.escape(stateKey))",
+      body: content
+    )
     return json.string(at: "event_id")
   }
 
@@ -423,6 +466,55 @@ public actor MatrixClient {
       path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
       body: .object(["user_id": .string(userID)])
     )
+  }
+
+  /// Suis-je administrateur de ce Relais ? L'app le vérifie **avant** de
+  /// promettre quoi que ce soit : sans ce pouvoir, « Activer cc » ne peut pas
+  /// créer le compte du bot, et il vaut mieux le dire que d'échouer à mi-chemin.
+  public func isServerAdmin(userID: String) async -> Bool {
+    let json = try? await request(
+      method: "GET",
+      path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
+      body: nil
+    )
+    return json?.value(at: "admin")?.boolValue == true
+  }
+
+  /// Crée (ou met à jour) le compte d'un bot — c'est ainsi qu'« Activer cc »
+  /// remplace un `register_new_matrix_user` en SSH.
+  ///
+  /// `logout_devices: false` est **capital** : sans lui, poser un mot de passe
+  /// déconnecte toutes les sessions existantes du bot — un clic sur ce Mac
+  /// tuerait l'agent qui tourne sur le NUC.
+  public func provisionUser(
+    userID: String,
+    password: String,
+    displayName: String? = nil,
+    admin: Bool = false
+  ) async throws {
+    var body: [String: MatrixJSON] = [
+      "password": .string(password),
+      "admin": .bool(admin),
+      "deactivated": .bool(false),
+      "logout_devices": .bool(false),
+    ]
+    if let displayName { body["displayname"] = .string(displayName) }
+    _ = try await request(
+      method: "PUT",
+      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+      body: .object(body)
+    )
+  }
+
+  /// Ce compte existe-t-il déjà sur le Relais ? Pour ne pas réinitialiser le
+  /// mot de passe d'un bot qui tourne très bien.
+  public func userExists(_ userID: String) async -> Bool {
+    let json = try? await request(
+      method: "GET",
+      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+      body: nil
+    )
+    return json?.value(at: "name")?.stringValue != nil
   }
 
   /// Retire un event — c'est ainsi qu'on retire une réaction.
@@ -679,6 +771,22 @@ public actor MatrixClient {
       path: Self.roomAccountDataPath(userID: user, roomID: roomID, type: type),
       body: content
     )
+  }
+
+  /// `GET /user/{u}/rooms/{r}/account_data/{type}`.
+  ///
+  /// Un type jamais écrit rend `404` : c'est une absence, pas une panne — on
+  /// rend un objet vide, comme le ferait un `/sync` qui n'en parle pas.
+  public func roomAccountData(roomID: String, type: String) async throws -> MatrixJSON {
+    let user = try userID()
+    do {
+      return try await request(
+        method: "GET",
+        path: Self.roomAccountDataPath(userID: user, roomID: roomID, type: type)
+      )
+    } catch MatrixError.http(let status, _, _) where status == 404 {
+      return .object([:])
+    }
   }
 
   /// `PUT /user/{u}/account_data/{type}`.

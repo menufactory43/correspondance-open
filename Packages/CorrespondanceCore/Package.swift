@@ -10,6 +10,8 @@ let package = Package(
         .library(name: "CorrespondanceUI", targets: ["CorrespondanceUI"]),
         .library(name: "CorrespondanceAgentKit", targets: ["CorrespondanceAgentKit"]),
         .executable(name: "correspondance-agent", targets: ["correspondance-agent"]),
+        // L'inbox comme outil : un serveur MCP que Claude Desktop ou Zed lancent.
+        .executable(name: "correspondance-mcp", targets: ["correspondance-mcp"]),
     ],
     targets: [
         // Le client Matrix REST, Foundation pur : compile sous Linux pour l'agent.
@@ -21,6 +23,7 @@ let package = Package(
         // testable sans réseau ; l'exécutable ne fait que brancher.
         .target(name: "CorrespondanceAgentKit", dependencies: ["CorrespondanceMatrixClient"]),
         .executableTarget(name: "correspondance-agent", dependencies: ["CorrespondanceAgentKit"]),
+        .executableTarget(name: "correspondance-mcp", dependencies: ["CorrespondanceAgentKit", "CorrespondanceCore"]),
         .testTarget(
             name: "CorrespondanceCoreTests",
             dependencies: ["CorrespondanceCore"],
