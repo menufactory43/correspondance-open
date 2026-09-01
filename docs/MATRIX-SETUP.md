@@ -15,6 +15,148 @@ Mac (Correspondance) ──Tailscale──► Synapse ─────┤
 Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
 pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
+## Essayer de bout en bout, sans rien risquer
+
+Tout ce qui suit tourne **à côté** de la prod, jamais dedans : un Synapse d'essai sur le
+port 8009, un jeu de données et une session à part. Ton Relais, tes conversations et tes
+ponts ne sont touchés à aucune étape. Compter vingt minutes.
+
+Deux isolations, et elles sont indépendantes :
+
+| | Prod | Essai |
+| --- | --- | --- |
+| Relais | `correspondance.local`, port 8008, avec les ponts | `correspondance.essai`, port 8009, Synapse seul |
+| Projet Docker | `correspondance-matrix` | `correspondance-essai` |
+| Données de l'app | `~/Library/Application Support/Correspondance` | `…/Correspondance-essai` |
+| Session (Trousseau) | `app.correspondance.matrix` | `app.correspondance.matrix.essai` |
+
+**Pas de ponts dans l'essai, exprès** : un pont mautrix est une session d'appareil lié, un
+second pont sur le même compte WhatsApp débrancherait le vrai. Rien de ce qu'on éprouve
+ici n'en a besoin.
+
+### 1. Monter le Relais d'essai
+
+```bash
+infra/matrix/essai/essai.sh --dry-run up   # facultatif : montre sans rien faire
+infra/matrix/essai/essai.sh up
+```
+
+**Ce que tu dois voir** : la configuration générée, les conteneurs `correspondance-essai-*`
+qui démarrent, « prêt », les comptes `@essai` (propriétaire) et `@cc` (bot), puis un code
+`correspondance://relais/…` avec six mots de vérification.
+
+Si `docker` n'est pas là, le script s'arrête et le dit. La prod n'est pas touchée : toutes
+les commandes portent `-p correspondance-essai` (vérifié par
+`infra/matrix/tests/essai-isolation.sh`).
+
+### 2. Lancer l'app sur le jeu d'essai
+
+```bash
+CORRESPONDANCE_HOME=essai open -a Correspondance
+```
+
+Depuis Xcode : Product › Scheme › Edit Scheme › Run › Arguments › Environment Variables,
+`CORRESPONDANCE_HOME` = `essai`.
+
+**Ce que tu dois voir** : une inbox **vide**, et dans Réglages › Matrix un encart « Essai »
+qui nomme le jeu de données. Si tu vois tes vraies conversations, la variable n'est pas
+passée — ferme l'app et recommence, ne va pas plus loin.
+
+### 3. S'appairer
+
+Réglages › Matrix › **Connecter un Relais** : colle le code de l'étape 1.
+
+**Ce que tu dois voir** : les six mots affichés sous le champ, **identiques** à ceux du
+terminal ; puis « Synchronisé avec le Relais ». Si les mots diffèrent, tu appaires autre
+chose que ce que tu viens d'installer — n'y va pas.
+
+### 4. Activer cc
+
+Réglages › Agent › **Sur ce Mac** › « Activer sur ce Mac ».
+
+**Ce que tu dois voir** : « actif sur ce Mac », **ou** « à autoriser dans Réglages Système ›
+Éléments d'ouverture » avec un bouton « Autoriser… » (§ *Vérification manuelle* de
+`docs/AGENT.md` — c'est le point que personne n'a encore éprouvé de bout en bout).
+
+Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse en moins d'une
+minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent :
+`tail -f /tmp/correspondance-agent.log`.
+
+**Attention, un dossier n'est pas isolé** : « Activer sur ce Mac » écrit l'amorce de `cc`
+dans `~/.correspondance-agent/`, et `CORRESPONDANCE_HOME` ne le déplace pas — il ne déplace
+que les données de l'**app**. Sur ton Mac ce dossier est libre (ton agent tourne sur le
+NUC), donc l'essai peut s'y installer sans rien écraser. Vérifie-le avant :
+
+```bash
+ls ~/.correspondance-agent/config.json 2>/dev/null && echo "OCCUPÉ — ne pas activer cc ici"
+```
+
+S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans
+agent local.
+
+### 5. Brancher `correspondance-mcp` dans Claude Desktop
+
+```bash
+swift build --package-path Packages/CorrespondanceCore --product correspondance-mcp -c release
+swift build --package-path Packages/CorrespondanceCore --product correspondance-mcp -c release --show-bin-path
+```
+
+Dans `~/Library/Application Support/Claude/claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "correspondance-essai": {
+      "command": "/CHEMIN/RENDU/PAR/show-bin-path/correspondance-mcp",
+      "env": {
+        "CORRESPONDANCE_MCP_CONFIG": "/Users/TOI/.correspondance-agent/config.json"
+      }
+    }
+  }
+}
+```
+
+Vérifie d'abord en ligne de commande — c'est plus rapide qu'un redémarrage de Claude :
+
+```bash
+CORRESPONDANCE_MCP_CONFIG=~/.correspondance-agent/config.json   /CHEMIN/correspondance-mcp --doctor
+```
+
+**Ce que tu dois voir** : `✓ connecté comme @cc:correspondance.essai — N conversation(s)`,
+puis `envoi : aucune conversation autorisée (on propose des brouillons)`.
+
+Redémarre Claude Desktop, puis demande-lui : « qu'est-ce qui attend une réponse ? », « lis
+la conversation !… », « prépare une réponse ». **Ce que tu dois voir** : la file, les
+messages encadrés par un avertissement disant que c'est de la donnée, et un brouillon qui
+apparaît dans l'app **sans que rien ne parte**. Demande-lui d'envoyer pour de bon : il doit
+**refuser** et renvoyer vers `draft_reply`.
+
+Pour autoriser l'envoi dans une conversation précise, ajoute à `env` :
+`"CORRESPONDANCE_MCP_SEND": "!salon:correspondance.essai"`.
+
+### 6. Tout effacer
+
+```bash
+infra/matrix/essai/essai.sh destroy
+rm -rf ~/Library/Application\ Support/Correspondance-essai
+```
+
+Puis, dans Trousseau d'accès, supprimer l'entrée **`app.correspondance.matrix.essai`** —
+celle sans suffixe est ta vraie session, ne la touche pas. Et si tu as activé cc :
+Réglages › Agent › « Désactiver », ou `rm -rf ~/.correspondance-agent`.
+
+`destroy` n'agit que sur le projet `correspondance-essai` : la prod est hors de portée par
+construction, pas par prudence.
+
+### Ce qui n'a jamais tourné
+
+Le squelette est éprouvé (`infra/matrix/tests/essai-isolation.sh`, 24 contrôles : les
+quatre isolations, l'absence de pont, la garde du projet sur chaque commande docker,
+l'effacement). **La pose elle-même n'a jamais tourné** : aucun `essai.sh up` n'a démarré un
+Synapse pour de bon depuis ce dépôt. À découvrir la première fois — la génération de
+`homeserver.yaml` et son passage à Postgres, le temps de démarrage réel, et la création des
+comptes par `register_new_matrix_user` dans ce conteneur-là.
+
 ## Installer un Relais ailleurs (`install.sh`)
 
 Le montage décrit plus bas est celui du NUC de meffysto, avec ses adresses. Pour poser un
