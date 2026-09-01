@@ -379,6 +379,9 @@ Les phases 0–5 de `PLAN-agents.md` tiennent. Trois chantiers s'y greffent ; l'
 celui de la valeur pour un tiers.
 
 ### R — Créer un Relais, puis s'y appairer (4–5 jours)
+> **2 sept. 2026** : état réel, inspection de Beeper, sécurité, et l'ordre retenu (minimum de
+> cinq jours, puis réserve) dans `docs/PLAN-relais-un-clic.md`. La carte « hébergé » est
+> abandonnée (question 1 tranchée : on n'héberge jamais).
 - **Écran d'accueil** à trois cartes : j'ai déjà un Relais / en créer un / hébergé (grisé).
 - `bootstrap.sh` devient un **installeur publié en release**, une commande, trois hôtes (ce Mac, Linux, VPS) : il pose ses dépendances lui-même, crée le compte propriétaire, pose Tailscale s'il manque, et finit sur un **code d'appairage** (QR + six mots, usage unique, dix minutes).
 - Dans l'app : scanner / coller → vérification admin → premier `/sync` → fiche Relais en lecture (adresse, version, santé, ponts).
