@@ -179,6 +179,9 @@ public actor MatrixBridgeService {
     guard await client.isConfigured else { throw MatrixError.notConfigured }
     hydrateIfNeeded()
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
+    // Le chiffrement, s'il est compilé **et** demandé. Sans les deux, cet appel
+    // ne fait rien et le /sync qui suit est celui d'avant.
+    if let ligne = await MatrixChiffrement.brancher(sur: client) { print("[Correspondance] \(ligne)") }
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     // Avant `apply` : c'est l'état d'avant la passe qui dit jusqu'où remonter.

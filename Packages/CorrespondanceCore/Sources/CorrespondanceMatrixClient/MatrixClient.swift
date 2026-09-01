@@ -10,6 +10,20 @@ public actor MatrixClient {
   private let session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
   private var ledger = MatrixTransactionLedger()
+  /// La machine crypto, si le drapeau du chiffrement est levé et qu'on l'a
+  /// branchée. `nil` par défaut : le client est alors celui d'avant, au bit près.
+  var cryptoEngine: MatrixCryptoEngine?
+  var salonsChiffresConnus: Set<String> = []
+  var salonsClairsConnus: Set<String> = []
+  var journalCrypto = MatrixCryptoJournal()
+  /// La dernière erreur de chiffrement, pour le journal. Une clé pas encore
+  /// reçue n'est pas une panne : on la note et on continue.
+  public internal(set) var journalCryptoErreur: String?
+  /// Les `to_device` que la machine a lus au dernier `/sync`, en clair — c'est
+  /// là qu'on voit passer un `m.room_key`.
+  public internal(set) var journalCryptoToDevice: [String] = []
+  /// Les `to_device` **avant** déchiffrement, tels que le serveur les livre.
+  public internal(set) var journalCryptoToDeviceBruts: [String] = []
 
   public init(credentials: MatrixCredentials? = nil) {
     self.credentials = credentials
@@ -123,11 +137,17 @@ public actor MatrixClient {
     if let since { items.append(URLQueryItem(name: "since", value: since)) }
     if let filter { items.append(URLQueryItem(name: "filter", value: filter)) }
     let data = try await rawRequest(method: "GET", path: "/_matrix/client/v3/sync", query: items)
+    let reponse: MatrixSyncResponse
     do {
-      return try JSONDecoder().decode(MatrixSyncResponse.self, from: data)
+      reponse = try JSONDecoder().decode(MatrixSyncResponse.self, from: data)
     } catch {
       throw MatrixError.decoding("sync — \(error.localizedDescription)")
     }
+    // Le chiffrement se règle **ici**, avant que quiconque voie la réponse :
+    // le reste du pipeline ne connaît que des `m.room.message`. Sans moteur
+    // branché, cet appel rend la réponse telle quelle.
+    guard cryptoEngine != nil else { return reponse }
+    return await appliquerChiffrement(reponse)
   }
 
   // MARK: - Salons
@@ -267,16 +287,30 @@ public actor MatrixClient {
   /// Un salon privé dont je suis le seul membre — la note à soi. Aucune
   /// invitation : personne d'autre n'y entre, et rien n'est chiffré (le
   /// Relais est privé, cf. ADR 0001).
-  public func createSelfRoom(name: String) async throws -> String {
-    let body: MatrixJSON = .object([
+  ///
+  /// `chiffre:` pose un `m.room.encryption` **à la création** — un salon ne se
+  /// chiffre pas après coup sans laisser un morceau d'historique en clair.
+  /// Faux par défaut : c'est le drapeau du chantier E qui le lèvera.
+  public func createSelfRoom(name: String, chiffre: Bool = false) async throws -> String {
+    var champs: [String: MatrixJSON] = [
       "preset": .string("private_chat"),
       "name": .string(name),
       "visibility": .string("private"),
-    ])
-    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
+    ]
+    if chiffre {
+      champs["initial_state"] = .array([
+        .object([
+          "type": .string("m.room.encryption"),
+          "state_key": .string(""),
+          "content": .object(["algorithm": .string("m.megolm.v1.aes-sha2")]),
+        ])
+      ])
+    }
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: .object(champs))
     guard let roomID = json.string(at: "room_id") else {
       throw MatrixError.decoding("createRoom sans room_id")
     }
+    if chiffre { salonsChiffresConnus.insert(roomID) }
     return roomID
   }
 
@@ -305,6 +339,14 @@ public actor MatrixClient {
       if let replyFallback {
         content["body"] = .string("> <\(replyFallback.sender)> \(replyFallback.text)\n\n\(text)")
       }
+    }
+    // Sans moteur crypto, le chemin d'avant, inchangé. Avec, on passe par
+    // `sendEvent`, qui sait chiffrer.
+    if cryptoEngine != nil {
+      return try await sendEvent(
+        roomID: roomID, type: "m.room.message", content: .object(content),
+        transactionID: transactionID
+      )
     }
     let json = try await request(
       method: "PUT",
@@ -346,10 +388,18 @@ public actor MatrixClient {
   ) async throws -> String? {
     try Self.refuseLesFlottants(in: content, type: type)
     guard !ledger.isUsed(transactionID) else { return nil }
+    // Salon chiffré : le contenu part en `m.room.encrypted`, la clé de salon
+    // ayant d'abord été portée aux appareils des membres.
+    var typeEnvoye = type
+    var corps = content
+    if cryptoEngine != nil, type != "m.room.encrypted", await salonEstChiffre(roomID) {
+      corps = try await chiffrerPourEnvoi(roomID: roomID, type: type, content: content)
+      typeEnvoye = "m.room.encrypted"
+    }
     let json = try await request(
       method: "PUT",
-      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(type))/\(Self.escape(transactionID))",
-      body: content
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(typeEnvoye))/\(Self.escape(transactionID))",
+      body: corps
     )
     ledger.markUsed(transactionID)
     return json.string(at: "event_id")
@@ -1028,7 +1078,7 @@ public actor MatrixClient {
   // MARK: - Transport
 
   @discardableResult
-  private func request(
+  func request(
     method: String,
     path: String,
     query: [URLQueryItem] = [],
@@ -1052,7 +1102,7 @@ public actor MatrixClient {
     }
   }
 
-  private func rawRequest(
+  func rawRequest(
     method: String,
     path: String,
     query: [URLQueryItem] = [],

@@ -59,6 +59,10 @@ dire "écrit $RELAIS_DIR/continuwuity.toml"
 # ---------------------------------------------------------------- les ponts
 # Chaque pont écrit son propre config par défaut (-e), puis on applique nos choix
 # par-dessus — même mécanique que bootstrap.sh, mais sans conteneur et en SQLite.
+# Le chiffrement des portails est un choix, pas un défaut caché : il se lit ici.
+CHIFFREMENT_PONTS="${CHIFFREMENT_PONTS:-1}"
+CHIFFREMENT_PONTS_OUI=$([[ "$CHIFFREMENT_PONTS" == "1" ]] && echo true || echo false)
+
 pont() {
   local nom="$1" port="$2" as_token="$3" hs_token="$4" prefixe="$5" bot="$6"
   local dir="$SPIKE_HOME/mautrix-$nom"
@@ -103,11 +107,27 @@ bridge:
     '${SERVER_NAME}': user
     '${MATRIX_ADMIN}': admin
 
-# Le client Swift n'a pas de machine Olm : un portail chiffré serait illisible.
+# Le chiffrement des portails. Phase 2 : le client Swift **a** désormais une
+# machine Olm (derrière le drapeau CORRESPONDANCE_CRYPTO), donc « allow » et
+# « default » passent à vrai — le salon de gestion et les portails deviennent
+# chiffrés, et le pont y parle en Megolm.
+#
+# « require: false » reste : exiger le chiffrement ferait taire le pont vis-à-vis
+# de tout client sans machine crypto, c'est-à-dire l'app dont le drapeau est
+# éteint. On chiffre par défaut, on n'interdit pas le clair.
+#
+# CHIFFREMENT_PONTS=0 rend la configuration d'avant, pour comparer.
 encryption:
-  allow: false
-  default: false
+  allow: ${CHIFFREMENT_PONTS_OUI}
+  default: ${CHIFFREMENT_PONTS_OUI}
   require: false
+  # Le pont chiffre pour tous les appareils du compte, vérifiés ou non : sans
+  # ça, une app non vérifiée ne lirait jamais la réponse à « help » (§ 5).
+  allow_key_sharing: true
+  verification_levels:
+    receive: unverified
+    send: unverified
+    share: unverified
 
 # Double puppeting : hors sujet pour le spike, et il suppose une registration
 # supplémentaire chez le homeserver.
@@ -127,8 +147,15 @@ EOF
   python3 "$HERE/../matrix/merge-overrides.py" "$dir/config.yaml" "$dir/overrides.yaml"
   chmod 600 "$dir/config.yaml"
 
-  dire "mautrix-$nom : registration"
-  "$bin" -c "$dir/config.yaml" -g -r "$dir/registration.yaml" >/dev/null 2>&1 || true
+  # `-g` **retire de nouveaux jetons** dans config.yaml : le relancer sur une
+  # pile déjà enregistrée fait répondre au pont « The as_token was not accepted »
+  # jusqu'à ce qu'on ré-enregistre l'appservice. On ne le fait donc qu'une fois.
+  if [[ -f "$dir/registration.yaml" ]]; then
+    dire "mautrix-$nom : registration déjà là, conservée (jetons inchangés)"
+  else
+    dire "mautrix-$nom : registration"
+    "$bin" -c "$dir/config.yaml" -g -r "$dir/registration.yaml" >/dev/null 2>&1 || true
+  fi
   [[ -f "$dir/registration.yaml" ]] || mourir "mautrix-$nom : registration.yaml absent"
   chmod 600 "$dir/registration.yaml"
 }

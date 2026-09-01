@@ -7,11 +7,41 @@ public struct MatrixSyncResponse: Decodable, Sendable {
   /// Account data global du compte : `m.push_rules` (d'où vient la sourdine)
   /// et nos propres clés (`fr.correspondance.merged_contacts`).
   public var accountData: AccountData?
+  /// Les messages d'appareil à appareil : c'est par là que les clés de salon
+  /// arrivent. Ignoré tant que la machine crypto n'est pas branchée.
+  public var toDevice: ToDevice?
+  /// Les comptes dont les appareils ont changé depuis le dernier `/sync`.
+  public var deviceLists: DeviceLists?
+  /// Combien de clés à usage unique le serveur détient encore pour nous.
+  public var deviceOneTimeKeysCount: [String: Int]?
+  public var deviceUnusedFallbackKeyTypes: [String]?
 
   public enum CodingKeys: String, CodingKey {
     case nextBatch = "next_batch"
     case rooms
     case accountData = "account_data"
+    case toDevice = "to_device"
+    case deviceLists = "device_lists"
+    case deviceOneTimeKeysCount = "device_one_time_keys_count"
+    case deviceUnusedFallbackKeyTypes = "device_unused_fallback_key_types"
+  }
+
+  /// Les `to_device` ne sont pas des events de salon : ni `event_id`, ni
+  /// horodatage. On les garde en JSON brut, tels que la machine crypto les veut.
+  public struct ToDevice: Decodable, Sendable {
+    public var events: [MatrixJSON]?
+
+    public init(events: [MatrixJSON]? = nil) { self.events = events }
+  }
+
+  public struct DeviceLists: Decodable, Sendable {
+    public var changed: [String]?
+    public var left: [String]?
+
+    public init(changed: [String]? = nil, left: [String]? = nil) {
+      self.changed = changed
+      self.left = left
+    }
   }
 
   public struct AccountData: Decodable, Sendable {
@@ -119,10 +149,18 @@ public struct MatrixSyncResponse: Decodable, Sendable {
     public init(notificationCount: Int? = nil) { self.notificationCount = notificationCount }
   }
 
-  public init(nextBatch: String, rooms: Rooms? = nil, accountData: AccountData? = nil) {
+  public init(
+    nextBatch: String, rooms: Rooms? = nil, accountData: AccountData? = nil,
+    toDevice: ToDevice? = nil, deviceLists: DeviceLists? = nil,
+    deviceOneTimeKeysCount: [String: Int]? = nil, deviceUnusedFallbackKeyTypes: [String]? = nil
+  ) {
     self.nextBatch = nextBatch
     self.rooms = rooms
     self.accountData = accountData
+    self.toDevice = toDevice
+    self.deviceLists = deviceLists
+    self.deviceOneTimeKeysCount = deviceOneTimeKeysCount
+    self.deviceUnusedFallbackKeyTypes = deviceUnusedFallbackKeyTypes
   }
 }
 
