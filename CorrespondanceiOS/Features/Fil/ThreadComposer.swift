@@ -9,8 +9,8 @@ import UniformTypeIdentifiers
 /// **+** à gauche (Photos / Caméra / Fichier), le champ « Répondre sur
 /// {Réseau} » au centre, le micro à droite : on le MAINTIENT pour parler, on
 /// relâche pour envoyer, on glisse à gauche pour renoncer et vers le haut pour
-/// poser le doigt (cf. `VoiceHoldGesture`). Une tape courte garde l'ancien
-/// geste : un appui commence, le suivant envoie. Le brouillon se range à chaque frappe
+/// poser le doigt (cf. `VoiceHoldGesture`). Une tape courte ne fait rien :
+/// le micro se tient, il ne se tape pas. Le brouillon se range à chaque frappe
 /// (`RelayStore.setDraft`) et part au Relais une seconde après la dernière,
 /// comme sur le Mac.
 /// Ce que la main sent pendant le geste du micro : le doigt qui se pose, le
@@ -47,8 +47,8 @@ struct ThreadComposer: View {
   @State private var hapticKind = MicHaptic.held
   /// Le doigt tient le micro : l'enregistrement court sous lui.
   @State private var isHolding = false
-  /// Le doigt s'est levé sans lâcher l'enregistrement — glissé vers le haut,
-  /// ou tape courte : la bande reste, avec son « Annuler » et son envoi.
+  /// Le doigt s'est levé sans lâcher l'enregistrement — glissé vers le haut :
+  /// la bande reste, avec son « Annuler » et son envoi.
   @State private var isLocked = false
   /// Où le doigt en est depuis le micro : ce qui fait glisser « Glisser pour annuler ».
   @State private var holdTranslation: CGSize = .zero
@@ -375,10 +375,11 @@ struct ThreadComposer: View {
           return
         }
         guard isHolding else { return }
-        // Une tape, pas un maintien : l'ancien geste garde la main — la bande
-        // reste ouverte, et c'est le second appui qui enverra.
+        // Une tape, pas un maintien : on n'a rien voulu dire. Le micro se
+        // tient ; une tape n'enregistre pas, ne verrouille pas, n'envoie pas.
         if Date().timeIntervalSince(holdStartedAt) < VoiceHoldGesture.tapDuration {
-          lock()
+          store.recorder.cancel()
+          endHold()
           return
         }
         endHold()

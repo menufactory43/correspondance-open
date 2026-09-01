@@ -9,8 +9,8 @@ import Foundation
 public enum VoiceHoldGesture {
   /// Assez loin pour qu'aucun tremblement de pouce n'abandonne un message.
   public static let threshold: CGFloat = 80
-  /// En deçà, ce n'était pas un maintien mais une tape : l'ancien geste
-  /// (taper pour démarrer, retaper pour envoyer) garde alors la main.
+  /// En deçà, ce n'était pas un maintien mais une tape : rien ne part, rien
+  /// ne reste — le micro se tient, il ne se tape pas.
   public static let tapDuration: TimeInterval = 0.35
 
   public enum Outcome: Equatable {

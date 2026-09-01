@@ -31,6 +31,12 @@ public final class VoiceRecorder {
   private var recorder: AVAudioRecorder?
   private var ticker: Task<Void, Never>?
   private var fileURL: URL?
+  /// Chaque `stop`/`cancel` tourne la page : un `start` encore en route —
+  /// la session audio met du temps à s'ouvrir — voit qu'on l'a devancé et
+  /// range ce qu'il a monté au lieu d'enregistrer dans le vide. Sans ça, une
+  /// tape brève lâche le micro avant que le démarrage n'aboutisse, et
+  /// l'enregistrement part quand même.
+  private var generation = 0
 
   public init() {}
 
@@ -59,7 +65,9 @@ public final class VoiceRecorder {
   @discardableResult
   public func start() async -> Bool {
     guard state != .recording else { return true }
+    let ticket = generation
     guard await Self.requestPermission() else {
+      guard ticket == generation else { return false }
       state = .failed("Le micro est refusé. Réglages › Correspondance › Micro.")
       return false
     }
@@ -77,6 +85,10 @@ public final class VoiceRecorder {
         return false
       }
     }.value
+    guard ticket == generation else {
+      deactivateSession()
+      return false
+    }
     guard ready else {
       state = .failed("Le micro n'a pas pu démarrer.")
       return false
@@ -98,6 +110,12 @@ public final class VoiceRecorder {
       guard recorder.record() else { return nil }
       return Started(recorder: recorder)
     }.value
+    guard ticket == generation else {
+      started?.recorder.stop()
+      try? FileManager.default.removeItem(at: url)
+      deactivateSession()
+      return false
+    }
     guard let started else {
       state = .failed("Le micro n'a pas pu démarrer.")
       return false
@@ -120,6 +138,7 @@ public final class VoiceRecorder {
   /// Arrête et rend le fichier avec sa forme d'onde. `nil` si l'enregistrement
   /// est trop court pour être un message, ou s'il n'a jamais démarré.
   public func stop() -> (url: URL, voice: VoiceNote)? {
+    generation += 1
     ticker?.cancel()
     ticker = nil
     guard let recorder, let fileURL else {
@@ -146,6 +165,7 @@ public final class VoiceRecorder {
 
   /// Abandonne : le fichier part avec le geste.
   public func cancel() {
+    generation += 1
     ticker?.cancel()
     ticker = nil
     recorder?.stop()
