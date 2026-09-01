@@ -35,6 +35,10 @@ struct CorrespondanceApp: App {
       ContentView()
         .environment(store)
         .environment(themes)
+        // Une fenêtre ne s'ouvre jamais plus grande que son écran. Sur un
+        // profil neuf, celle-ci s'ouvrait en 1440 × 2142 sur 1440 × 869 : le
+        // champ de saisie était hors de l'écran.
+        .background(WindowFrameGuardView(minimum: NSSize(width: 720, height: 480)))
         .task {
           // Fenêtre visible → puis demande Contacts (sinon pas dans Confidentialité).
           // Visible pour de vrai, pas « après 500 ms » : sinon Contacts, la sonde
@@ -52,6 +56,12 @@ struct CorrespondanceApp: App {
         }
     }
     .defaultSize(width: 1100, height: 760)
+    // Sans ça, SwiftUI dimensionne la fenêtre sur la hauteur *idéale* du
+    // contenu au premier lancement — une liste de conversations n'en a pas de
+    // raisonnable — et `.defaultSize` ne sert plus à rien. `contentMinSize`
+    // laisse la fenêtre libre au-dessus du minimum de la vue, comme celle
+    // d'une conversation détachée.
+    .windowResizability(.contentMinSize)
     .commands { CorrespondanceCommands(store: store, themes: themes) }
 
     // Une conversation, sa fenêtre. Rappeler la même valeur ne crée pas une
@@ -65,6 +75,8 @@ struct CorrespondanceApp: App {
       DetachedConversationWindow(conversationID: conversationID)
         .environment(store)
         .environment(themes)
+        // Elle a son propre cadre enregistré, donc le même risque.
+        .background(WindowFrameGuardView(minimum: NSSize(width: 240, height: 180)))
     }
     .defaultSize(width: 520, height: 640)
     // `contentMinSize` : la fenêtre peut descendre jusqu'au post-it que la vue

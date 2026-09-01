@@ -68,9 +68,11 @@ struct SettingsWindowSizer: NSViewRepresentable {
     // On grandit vers le bas et la droite : la barre de titre ne doit pas
     // plonger sous le bord haut de l'écran.
     frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-    if let visible = window.screen?.visibleFrame {
-      frame.origin.x = max(visible.minX, min(frame.origin.x, visible.maxX - frame.width))
-      frame.origin.y = max(visible.minY, min(frame.origin.y, visible.maxY - frame.height))
+    // Et jamais plus grand que l'écran : cette fenêtre bornait sa position mais
+    // pas sa taille, donc une taille idéale démesurée la faisait déborder —
+    // le même défaut que celui de la fenêtre principale sur un profil neuf.
+    if let visible = (window.screen ?? NSScreen.main)?.visibleFrame {
+      frame = WindowFrameGuard.clamp(frame, visible: visible, minimum: minSize)
     }
     window.setFrame(frame, display: true)
   }
