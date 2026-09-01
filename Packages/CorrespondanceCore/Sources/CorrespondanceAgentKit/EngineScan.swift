@@ -102,6 +102,37 @@ public struct EngineScan: Sendable, Equatable {
     return lines.joined(separator: "\n")
   }
 
+  /// Ce que l'agent répond quand son moteur n'est pas là.
+  ///
+  /// Se taire était le pire des choix : on écrit « @cc … », rien ne revient, et
+  /// il faut aller lire un journal sur une autre machine pour apprendre que
+  /// `hermes` n'a jamais été installé. Un agent qui ne peut pas répondre doit
+  /// **dire pourquoi**, avec l'endroit et le geste — c'est encore vider la
+  /// file, pas la remplir : une réponse close une demande, un silence non.
+  ///
+  /// Pure, donc éprouvée : c'est un message qu'on lit dans une conversation.
+  public static func absenceFR(engine: String, host: String) -> String {
+    var lignes = ["\(engine) n'est pas installé sur \(host) : je ne peux pas répondre."]
+    if let geste = installationFR[engine] {
+      lignes.append("Là-bas : \(geste)")
+    }
+    lignes.append(
+      "Ou change mon moteur depuis Réglages › Agents — le réglage part par ma console, "
+        + "sans SSH ni redémarrage."
+    )
+    return lignes.joined(separator: "\n")
+  }
+
+  /// Le geste d'installation par moteur. Volontairement court : c'est une
+  /// bulle dans une conversation, pas une page de documentation.
+  public static let installationFR: [String: String] = [
+    "claude": "npm install -g @anthropic-ai/claude-code, puis `claude` une fois pour ouvrir la session.",
+    "hermes": "l'installeur d'Hermes pose son binaire dans ~/.local/bin.",
+    "claude-code-acp": "npm install -g @zed-industries/claude-code-acp",
+    "codex-acp": "npm install -g @zed-industries/codex-acp",
+    "goose": "brew install block-goose-cli",
+  ]
+
   public func isPresent(_ backend: AgentConfig.Backend) -> Bool {
     let name = configuredEngine ?? backend.rawValue
     return engines.first { $0.name == name }?.isPresent == true

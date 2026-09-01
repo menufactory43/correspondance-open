@@ -33,4 +33,26 @@ final class EngineScanTests: XCTestCase {
     XCTAssertFalse(scan(claude: true, hermes: false).isPresent(.hermes))
     XCTAssertTrue(scan(claude: true, hermes: false).isPresent(.claude))
   }
+
+  // MARK: - Quand le moteur n'est pas là
+
+  /// Le défaut qu'on répare : l'agent se taisait. On écrivait « @cc … », rien
+  /// ne revenait, et il fallait aller lire un journal sur une autre machine
+  /// pour apprendre que le moteur n'avait jamais été installé.
+  func testUnMoteurAbsentDitOuEtQuoiFaire() {
+    let message = EngineScan.absenceFR(engine: "hermes", host: "umbrel")
+    XCTAssertTrue(message.contains("hermes"), message)
+    XCTAssertTrue(message.contains("umbrel"), "il faut dire sur quelle machine")
+    XCTAssertTrue(message.contains("~/.local/bin"), "et le geste qui répare")
+    XCTAssertTrue(message.contains("Réglages"), "ou l'autre issue")
+  }
+
+  /// Un moteur qu'on ne connaît pas garde une réponse utile : l'endroit et
+  /// l'autre issue. Un message vide serait un silence de plus.
+  func testUnMoteurInconnuDitQuandMemeOuEtLAutreIssue() {
+    let message = EngineScan.absenceFR(engine: "moteur-du-futur", host: "umbrel")
+    XCTAssertTrue(message.contains("moteur-du-futur"), message)
+    XCTAssertTrue(message.contains("umbrel"), message)
+    XCTAssertTrue(message.contains("Réglages"), message)
+  }
 }
