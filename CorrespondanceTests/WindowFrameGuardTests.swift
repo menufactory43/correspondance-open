@@ -101,7 +101,24 @@ final class WindowFrameGuardTests: XCTestCase {
   @MainActor
   final class FenetreSimulee: WindowFrameTarget {
     var currentFrame: CGRect
-    var currentContentMaxSize = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    /// Ce que le contenu exige. La barre latérale, la liste et le fil ont
+    /// chacun leur largeur minimale : leur somme peut dépasser l'écran.
+    var currentContentMinSize: CGSize = .zero
+    /// **Elle refuse ce qu'AppKit refuse.** La version précédente acceptait
+    /// tout, et c'est exactement pour ça qu'elle n'a pas vu venir le `SIGABRT`
+    /// au lancement : une fenêtre de laboratoire trop complaisante ne prouve
+    /// rien du comportement qui compte.
+    var currentContentMaxSize = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude) {
+      didSet {
+        if currentContentMaxSize.width < currentContentMinSize.width
+          || currentContentMaxSize.height < currentContentMinSize.height {
+          aLeve = true
+        }
+      }
+    }
+    /// Vrai si on a posé un maximum sous le minimum — dans la vraie vie, l'app
+    /// serait morte ici.
+    private(set) var aLeve = false
     /// La barre de titre : le contenu est un peu plus court que le cadre.
     let hauteurTitre: CGFloat = 28
     private(set) var cadresPoses: [CGRect] = []
@@ -196,5 +213,66 @@ final class WindowFrameGuardTests: XCTestCase {
       WindowFrameGuard.adjustment(for: deborde, visible: ecran, minimum: minimum)
     )
     XCTAssertTrue(WindowFrameGuard.fits(borne, visible: ecran))
+  }
+
+  // MARK: - La garde ne doit jamais tuer l'app
+
+  /// Le plantage au lancement : `contentMaxSize` posé à la taille de l'écran
+  /// devenait plus petit que le `contentMinSize` du contenu, AppKit levait, et
+  /// l'app mourait d'un `SIGABRT`. La propriété qui l'aurait attrapé sans
+  /// AppKit : **jamais un maximum sous le minimum**, quelles que soient les
+  /// entrées.
+  func testLeMaximumNEstJamaisSousLeMinimum() {
+    let ecrans = [
+      CGSize(width: 1440, height: 869), CGSize(width: 640, height: 400),
+      CGSize(width: 3840, height: 2160), CGSize(width: 100, height: 100), .zero,
+    ]
+    let minima = [
+      CGSize(width: 720, height: 480), CGSize(width: 1600, height: 900),
+      CGSize(width: 2000, height: 1500), .zero,
+    ]
+    for ecran in ecrans {
+      for minimum in minima {
+        let maximum = WindowFrameGuard.safeMaximum(screen: ecran, contentMinimum: minimum)
+        XCTAssertGreaterThanOrEqual(
+          maximum.width, minimum.width, "écran \(ecran), minimum \(minimum)"
+        )
+        XCTAssertGreaterThanOrEqual(
+          maximum.height, minimum.height, "écran \(ecran), minimum \(minimum)"
+        )
+      }
+    }
+  }
+
+  /// Quand le contenu exige plus que l'écran, c'est l'écran qui perd : une
+  /// fenêtre un peu trop large est un désagrément, un plantage est une app
+  /// morte.
+  func testUnContenuPlusLargeQueLEcranGagne() {
+    let maximum = WindowFrameGuard.safeMaximum(
+      screen: CGSize(width: 1440, height: 869),
+      contentMinimum: CGSize(width: 1600, height: 900)
+    )
+    XCTAssertEqual(maximum.width, 1600)
+    XCTAssertEqual(maximum.height, 900)
+  }
+
+  /// Le scénario complet du plantage, contre une fenêtre qui refuse comme la
+  /// vraie : le gardien ne doit jamais lui faire lever.
+  @MainActor
+  func testLeGardienNeFaitJamaisLeverLaFenetre() {
+    let visible = CGRect(x: 0, y: 0, width: 1440, height: 869)
+    let fenetre = FenetreSimulee(frame: CGRect(x: 0, y: 0, width: 1100, height: 760))
+    // Le contenu exige plus large que l'écran — le cas exact du plantage.
+    fenetre.currentContentMinSize = CGSize(width: 1600, height: 900)
+
+    let gardien = WindowFrameKeeper(
+      target: fenetre, minimum: NSSize(width: 720, height: 480), visibleFrame: { visible }
+    )
+    gardien.apply()
+    XCTAssertFalse(fenetre.aLeve, "un maximum sous le minimum tuerait l'app au lancement")
+
+    fenetre.currentFrame = CGRect(x: 0, y: -1273, width: 1100, height: 2142)
+    gardien.apply()
+    XCTAssertFalse(fenetre.aLeve)
   }
 }

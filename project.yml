@@ -99,6 +99,10 @@ targets:
         product: CorrespondanceCore
       - package: CorrespondanceCore
         product: CorrespondanceUI
+      # Rattraper une exception AppKit : une garde de confort ne doit jamais
+      # pouvoir tuer l'app, et Swift seul ne sait pas le faire.
+      - package: CorrespondanceCore
+        product: CorrespondanceObjC
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance

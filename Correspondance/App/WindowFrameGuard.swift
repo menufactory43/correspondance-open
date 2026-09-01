@@ -1,4 +1,6 @@
 import AppKit
+import CorrespondanceObjC
+import OSLog
 import SwiftUI
 
 /// **Une fenêtre ne s'ouvre jamais plus grande que l'écran qui l'accueille, ni
@@ -53,6 +55,24 @@ enum WindowFrameGuard {
       && frame.maxX <= visible.maxX && frame.maxY <= visible.maxY
   }
 
+  /// Le maximum qu'on a le droit de poser sur une fenêtre.
+  ///
+  /// **Jamais inférieur au minimum**, composante par composante. AppKit refuse
+  /// un maximum sous le minimum en levant une exception Objective-C, et l'app
+  /// meurt d'un `SIGABRT` au lancement — c'est arrivé : la barre latérale, la
+  /// liste et le fil ont chacun leur largeur minimale, et leur somme peut
+  /// dépasser la largeur visible de l'écran.
+  ///
+  /// Si le contenu exige plus grand que l'écran, **c'est l'écran qui perd** :
+  /// une fenêtre un peu trop large est un désagrément, un plantage est une app
+  /// morte.
+  static func safeMaximum(screen: CGSize, contentMinimum: CGSize) -> CGSize {
+    CGSize(
+      width: max(screen.width, contentMinimum.width),
+      height: max(screen.height, contentMinimum.height)
+    )
+  }
+
   /// Le cadre à poser, ou `nil` s'il n'y a rien à faire. C'est la décision que
   /// prend l'observateur à chaque redimensionnement.
   static func adjustment(for frame: CGRect, visible: CGRect, minimum: CGSize) -> CGRect? {
@@ -73,6 +93,9 @@ enum WindowFrameGuard {
 protocol WindowFrameTarget: AnyObject {
   var currentFrame: CGRect { get }
   var currentContentMaxSize: CGSize { get set }
+  /// Ce que le contenu exige — SwiftUI le pose, et AppKit refuse tout maximum
+  /// qui passerait dessous.
+  var currentContentMinSize: CGSize { get }
   func contentSize(forFrame frame: CGRect) -> CGSize
   func applyFrame(_ frame: CGRect)
 }
@@ -84,6 +107,7 @@ extension NSWindow: WindowFrameTarget {
     get { contentMaxSize }
     set { contentMaxSize = newValue }
   }
+  var currentContentMinSize: CGSize { contentMinSize }
   func contentSize(forFrame frame: CGRect) -> CGSize { contentRect(forFrameRect: frame).size }
   func applyFrame(_ frame: CGRect) { setFrame(frame, display: true) }
 }
@@ -91,6 +115,8 @@ extension NSWindow: WindowFrameTarget {
 /// Tient la borne **dans la durée**.
 @MainActor
 final class WindowFrameKeeper {
+  static let log = Logger(subsystem: "com.correspondance.app", category: "fenetre")
+
   private weak var target: (any WindowFrameTarget)?
   private weak var window: NSWindow?
   private let minimum: NSSize
@@ -113,6 +139,16 @@ final class WindowFrameKeeper {
 
   /// On retire les observateurs à la main : un `deinit` ne peut pas toucher à
   /// un état isolé sur l'acteur principal. Appelé quand la fenêtre se ferme.
+  /// Une garde de confort ne doit **jamais** pouvoir tuer l'app. Si AppKit
+  /// refuse, on renonce et on le journalise : le pire cas acceptable est une
+  /// fenêtre mal dimensionnée, jamais un `SIGABRT` au lancement.
+  private func sansPlanter(_ quoi: String, _ ecriture: @escaping () -> Void) {
+    guard let exception = CorrespondanceExceptionCatcher.catchException(ecriture) else { return }
+    Self.log.error(
+      "\(quoi, privacy: .public) refusé par AppKit : \(exception.reason ?? "sans raison", privacy: .public) — la fenêtre reste telle quelle"
+    )
+  }
+
   func stop() {
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
     observers.removeAll()
@@ -143,15 +179,23 @@ final class WindowFrameKeeper {
     //    demander la hauteur idéale du contenu quand les conversations
     //    arrivent. Une garde qui court après le redimensionnement arrive
     //    toujours trop tard ; une borne posée sur la fenêtre, non.
-    let maxContenu = target.contentSize(forFrame: visible)
-    if target.currentContentMaxSize != maxContenu { target.currentContentMaxSize = maxContenu }
+    //
+    //    Mais jamais sous le minimum du contenu : ça faisait lever AppKit et
+    //    mourir l'app au lancement.
+    let maxContenu = WindowFrameGuard.safeMaximum(
+      screen: target.contentSize(forFrame: visible),
+      contentMinimum: target.currentContentMinSize
+    )
+    if target.currentContentMaxSize != maxContenu {
+      sansPlanter("contentMaxSize") { target.currentContentMaxSize = maxContenu }
+    }
 
     // 2. Et ce qui déborde déjà revient dans l'écran.
     guard let borne = WindowFrameGuard.adjustment(
       for: target.currentFrame, visible: visible, minimum: minimum
     ) else { return }
     enCoursDAjustement = true
-    target.applyFrame(borne)
+    sansPlanter("setFrame") { target.applyFrame(borne) }
     enCoursDAjustement = false
   }
 }
