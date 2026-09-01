@@ -131,7 +131,11 @@ extension InboxStore {
     guard let conversation = selectedConversation,
           let roomID = await matrix.roomID(ofConversation: conversation.id)
     else { return nil }
-    guard let console = await activateAgentConsole(), let config = console.config else {
+    // On part de ce que le Relais porte, jamais d'une config de départ : c'est
+    // la config entière qui s'écrit, et ce qu'on n'a pas relu, on l'efface.
+    var console = await loadAgentConsole()
+    if console == nil { console = await activateAgentConsole() }
+    guard let console, let config = console.config else {
       lastErrorMessage = "la console de cc n'est pas joignable — le réglage n'est pas parti"
       return nil
     }

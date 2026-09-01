@@ -74,7 +74,10 @@ extension MatrixBridgeService {
   @discardableResult
   public func ensureAgentConsole(agent: String, config: AgentConsoleConfig) async throws -> String {
     if let existing = try await findAgentConsole(agent: agent) {
-      try await writeAgentConfig(config, in: existing)
+      // Une console qui existe garde sa config : la réécrire avec celle de
+      // départ effaçait les réglages par room — vu en vrai, la voix d'une
+      // conversation revenait à « voix haute » au clic suivant. « Assurer »
+      // veut dire créer si ça manque, jamais remettre à zéro.
       return existing
     }
     let roomID = try await client.createGroupRoom(

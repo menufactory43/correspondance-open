@@ -402,8 +402,9 @@ struct SettingsAgentPane: View {
       }
 
       SettingsRow(
-        label: "Dans les conversations de groupe",
-        detail: (config.defaultMode ?? store.agentDefaultMode).subtitleFR,
+        label: "Voix par défaut",
+        detail: (config.defaultMode ?? store.agentDefaultMode).subtitleFR
+          + " — une conversation peut dire autrement, sous son « + ».",
         systemImage: "person.2.wave.2"
       ) {
         Picker("", selection: Binding(
