@@ -10,12 +10,21 @@ public enum MatrixBridgeNotice {
     if lower.contains("will now be relayed through") {
       return "Relais du pont allumé : cc parle ici à voix haute, depuis ton compte."
     }
-    if lower.contains("relay") && (lower.contains("unset") || lower.contains("disabled") || lower.contains("no longer")) {
+    if lower.contains("stopped relaying")
+      || (lower.contains("relay") && (lower.contains("unset") || lower.contains("disabled") || lower.contains("no longer"))) {
       return "Relais du pont éteint : cc propose des brouillons, visibles de toi seul."
     }
     if lower.contains("not bridged") {
       return "Message non relayé par le pont : " + text
     }
     return "Pont : " + text
+  }
+
+  /// « !wa set-relay », « !fb unset-relay » : une commande au pont de ce
+  /// réseau, pas un message.
+  public static func isBridgeCommand(_ body: String, network: MessageNetwork) -> Bool {
+    guard let bridge = network.bridge else { return false }
+    let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    return text.hasPrefix(bridge.commandPrefix + " ") || text == bridge.commandPrefix
   }
 }

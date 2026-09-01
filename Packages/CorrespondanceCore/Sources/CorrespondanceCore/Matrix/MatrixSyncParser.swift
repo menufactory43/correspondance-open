@@ -18,6 +18,11 @@ public struct MatrixSyncParser: Sendable {
       var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
       for event in (room.state?.events ?? []) { applyState(event, to: &model) }
       for event in (room.timeline?.events ?? []) {
+        // Avant `applyState` : c'est l'adhésion encore en mémoire qui dit si
+        // quelque chose a changé. Manquait ici — la ligne « cc a rejoint »
+        // n'apparaissait qu'après une relecture de l'historique, jamais au
+        // moment où on l'invite.
+        applyMembershipNotice(event, roomID: roomID, to: &model)
         applyState(event, to: &model)
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
@@ -428,6 +433,13 @@ public struct MatrixSyncParser: Sendable {
     // « relay now set », « message not bridged » sont des événements, en
     // anglais. Ils s'écrivent en ligne d'événement, traduits quand on les
     // connaît — vu en vrai, l'avis prenait la bulle et le visage du contact.
+    // Une commande que j'ai donnée au pont dans le portail (« !wa set-relay »)
+    // n'est pas un message à mon correspondant : le pont la lit et ne la
+    // relaie pas, le fil n'a pas à la montrer en bulle.
+    if event.sender == selfUserID, MatrixBridgeNotice.isBridgeCommand(body, network: network) {
+      model.markWritten(eventID)
+      return
+    }
     if let sender = event.sender, MatrixIdentity.isBridgeBot(sender), !body.isEmpty {
       model.messagesByID[eventID] = ChatMessage(
         id: eventID,

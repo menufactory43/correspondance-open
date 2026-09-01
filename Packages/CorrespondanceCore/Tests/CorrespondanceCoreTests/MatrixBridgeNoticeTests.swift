@@ -23,4 +23,15 @@ final class MatrixBridgeNoticeTests: XCTestCase {
   func testUnAvisInconnuNEstPasAvale() {
     XCTAssertEqual(MatrixBridgeNotice.systemText(for: "Something else happened"), "Pont : Something else happened")
   }
+
+  func testLArretDuRelaisMessengerSeDitEnFrancais() {
+    XCTAssertEqual(MatrixBridgeNotice.systemText(for: "Stopped relaying messages for users who haven't logged in"), "Relais du pont éteint : cc propose des brouillons, visibles de toi seul.")
+  }
+
+  func testUneCommandeAuPontEstReconnue() {
+    XCTAssertTrue(MatrixBridgeNotice.isBridgeCommand("!wa set-relay", network: .whatsapp))
+    XCTAssertTrue(MatrixBridgeNotice.isBridgeCommand("!signal unset-relay", network: .signal))
+    XCTAssertFalse(MatrixBridgeNotice.isBridgeCommand("!wa set-relay", network: .signal), "le préfixe d'un autre réseau n'est qu'un texte")
+    XCTAssertFalse(MatrixBridgeNotice.isBridgeCommand("salut !wa", network: .whatsapp))
+  }
 }
