@@ -114,7 +114,7 @@ final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
     LaunchGate.noteDidFinishLaunching()
     // cc meurt avec l'app ; il renaît avec elle, si on l'a voulu et que son
     // amorce est là. Sans ça, chaque relance de l'app demandait de « ré-activer ».
-    AgentLocalHost.resume(agent: MatrixIdentity.agentName)
+    AgentLocalHost.resumeAll()
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -136,6 +136,6 @@ final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
   /// c'est le prix assumé de « Sur ce Mac » : pour un cc joignable jour et
   /// nuit, il faut une autre machine.
   func applicationWillTerminate(_ notification: Notification) {
-    AgentProcessHost.shared.stop()
+    AgentProcessHost.shared.stopAll()
   }
 }

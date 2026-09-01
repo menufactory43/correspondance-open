@@ -106,8 +106,21 @@ public struct AgentBootstrapToken: Sendable, Equatable {
   /// Pas de `curl | sh` : testé sur le NUC avec un domaine qui n'existait pas,
   /// `curl` échoue, `sh` lit un script vide et sort en 0 — « installé » sans
   /// rien avoir fait. Ici, le `&&` arrête tout si le téléchargement échoue.
+  /// Pour un agent autre que `cc`, la commande **commence par son nom** :
+  /// `CORRESPONDANCE_AGENT=hermes …`. L'installeur lit cette variable pour
+  /// choisir le dossier d'amorce (`~/.correspondance-hermes`) et le nom de
+  /// l'unité systemd (`correspondance-hermes`) ; sans elle, un second agent
+  /// écraserait l'amorce du premier et les deux se disputeraient le même
+  /// service.
+  ///
+  /// Le `sh -c` n'est pas une coquetterie : un préfixe `VAR=x` ne s'applique
+  /// qu'à **une** commande, et c'est le `sh` final qui doit la voir, pas le
+  /// `curl`. L'envelopper est la seule forme qui commence par le nom de
+  /// l'agent *et* le lui transmet.
   public func installCommand(installerURL: String = Self.installerURL) -> String {
-    "curl -fsSL \(installerURL) -o /tmp/correspondance-install.sh"
+    let telecharge = "curl -fsSL \(installerURL) -o /tmp/correspondance-install.sh"
       + " && sh /tmp/correspondance-install.sh \(encoded())"
+    guard user != MatrixIdentity.agentName else { return telecharge }
+    return "CORRESPONDANCE_AGENT=\(user) sh -c \"\(telecharge)\""
   }
 }

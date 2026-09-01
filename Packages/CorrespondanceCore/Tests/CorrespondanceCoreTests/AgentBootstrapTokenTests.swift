@@ -63,6 +63,30 @@ final class AgentBootstrapTokenTests: XCTestCase {
     XCTAssertFalse(commande.contains("\n"))
   }
 
+  /// Un second agent ne s'installe pas au même endroit que le premier :
+  /// l'installeur lit `CORRESPONDANCE_AGENT` pour choisir le dossier d'amorce
+  /// et le nom de son service. Sans ce préfixe, installer `hermes` écraserait
+  /// l'amorce de `cc` et les deux se disputeraient la même unité systemd.
+  func testUnAgentAutreQueCCPorteSonNomDansLaCommande() {
+    let hermes = AgentBootstrapToken(
+      homeserver: URL(string: "http://100.64.0.1:8008")!,
+      user: "hermes", password: "secret", owner: "@meffysto:correspondance.local"
+    )
+    let commande = hermes.installCommand()
+    XCTAssertTrue(commande.hasPrefix("CORRESPONDANCE_AGENT=hermes "), commande)
+    // Et la variable atteint bien le `sh` qui lit le jeton : un préfixe
+    // `VAR=x` ne s'applique qu'à une seule commande, d'où l'enveloppe.
+    XCTAssertTrue(commande.contains("sh -c \""), commande)
+    XCTAssertTrue(commande.contains(hermes.encoded()), commande)
+    XCTAssertFalse(commande.contains("| sh"), commande)
+  }
+
+  /// Et `cc` garde la commande d'avant : un préfixe inutile sur le cas courant
+  /// est du bruit dans un terminal.
+  func testCCGardeLaCommandeSansPrefixe() {
+    XCTAssertFalse(jeton().installCommand().contains("CORRESPONDANCE_AGENT"))
+  }
+
   /// La durée de vie est courte parce que l'usage unique n'est pas
   /// vérifiable sans serveur : c'est la péremption qui borne la fuite.
   func testLaDureeDeVieEstCourte() {

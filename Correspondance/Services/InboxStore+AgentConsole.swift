@@ -9,14 +9,16 @@ import Foundation
 /// sans SSH et sans redémarrage.
 extension InboxStore {
 
-  /// Le nom de l'agent qu'on règle. Un seul pour l'instant ; la console est
-  /// déjà par agent, l'écran suivra quand il y en aura deux.
+  /// Le nom **par défaut** proposé quand on n'en nomme aucun : le premier
+  /// agent d'un Relais s'appelle `cc`. Rien ici ne le suppose unique — chaque
+  /// geste prend son `agent:`, parce qu'un Relais en porte plusieurs, chacun
+  /// avec son compte et sa console.
   var agentName: String { MatrixIdentity.agentName }
 
   /// Ce que la console raconte, ou `nil` si elle n'existe pas encore.
-  func loadAgentConsole() async -> MatrixBridgeService.AgentConsole? {
+  func loadAgentConsole(agent: String? = nil) async -> MatrixBridgeService.AgentConsole? {
     do {
-      return try await matrix.readAgentConsole(agent: agentName)
+      return try await matrix.readAgentConsole(agent: agent ?? agentName)
     } catch {
       Self.relayLog.error("console de l'agent illisible : \(error.localizedDescription, privacy: .public)")
       return nil
@@ -27,15 +29,24 @@ extension InboxStore {
   /// le geste de la première activation. L'agent est invité au passage ; il
   /// rejoint parce qu'un propriétaire l'a invité, et découvre sa config seul.
   @discardableResult
-  func activateAgentConsole() async -> MatrixBridgeService.AgentConsole? {
-    var config = AgentConsoleConfig(agent: agentName)
+  func activateAgentConsole(
+    agent: String? = nil,
+    backend: String? = nil,
+    acpCommand: String? = nil
+  ) async -> MatrixBridgeService.AgentConsole? {
+    let nom = agent ?? agentName
+    var config = AgentConsoleConfig(agent: nom)
     config.owners = [await matrix.currentUserID]
-    config.trigger = "@\(agentName)"
+    config.trigger = "@\(nom)"
     config.defaultMode = agentDefaultMode
     config.toolPreset = AgentConsoleConfig.ToolPreset.executer.rawValue
+    // Le moteur est écrit dès la création : sans lui, un agent `hermes` naîtrait
+    // avec le backend `claude` de l'amorce et répondrait avec le mauvais moteur.
+    config.backend = backend
+    config.acpCommand = acpCommand
     do {
-      _ = try await matrix.ensureAgentConsole(agent: agentName, config: config)
-      return await loadAgentConsole()
+      _ = try await matrix.ensureAgentConsole(agent: nom, config: config)
+      return await loadAgentConsole(agent: nom)
     } catch {
       Self.relayLog.error("console impossible à créer : \(error.localizedDescription, privacy: .public)")
       return nil
@@ -51,12 +62,17 @@ extension InboxStore {
   /// « Activer sur ce Mac » : le compte du bot sur le Relais, l'amorce sur le
   /// disque, le service dans macOS, et la console ouverte. Rend l'état du
   /// service — dont « à autoriser », qu'il faut montrer et pas espérer.
-  func activateAgentOnThisMac() async -> Result<AgentLocalHost.State, Error> {
+  func activateAgentOnThisMac(
+    agent: String? = nil,
+    backend: String? = nil,
+    acpCommand: String? = nil
+  ) async -> Result<AgentLocalHost.State, Error> {
+    let nom = agent ?? agentName
     do {
-      let bootstrap = try await matrix.provisionAgent(named: agentName)
-      let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: agentName)
-      await activateAgentConsole()
-      await inviteAgentToSelfNote()
+      let bootstrap = try await matrix.provisionAgent(named: nom)
+      let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: nom)
+      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand)
+      await inviteAgentToSelfNote(agent: nom)
       return .success(state)
     } catch {
       Self.relayLog.error("activation locale impossible : \(error.localizedDescription, privacy: .public)")
@@ -73,10 +89,10 @@ extension InboxStore {
   ///
   /// L'agent ne rejoint que sur invitation d'un propriétaire : c'est
   /// précisément celle-ci.
-  func inviteAgentToSelfNote() async {
+  func inviteAgentToSelfNote(agent: String? = nil) async {
     do {
       let roomID = try await matrix.ensureSelfNote()
-      try await matrix.inviteAgentToRoom(roomID)
+      try await matrix.inviteAgentToRoom(roomID, agent: agent ?? agentName)
     } catch {
       Self.relayLog.error("cc non invité dans la note à soi : \(error.localizedDescription, privacy: .public)")
     }
@@ -88,12 +104,17 @@ extension InboxStore {
   /// Rend l'erreur telle quelle : l'écran disait « le Relais n'a pas voulu »
   /// quand c'était notre propre garde qui refusait, et on cherchait au mauvais
   /// endroit.
-  func remoteAgentToken() async -> Result<AgentBootstrapToken, Error> {
+  func remoteAgentToken(
+    agent: String? = nil,
+    backend: String? = nil,
+    acpCommand: String? = nil
+  ) async -> Result<AgentBootstrapToken, Error> {
+    let nom = agent ?? agentName
     do {
-      let bootstrap = try await matrix.provisionAgent(named: agentName)
+      let bootstrap = try await matrix.provisionAgent(named: nom)
       // La console est ouverte au passage : l'agent distant y trouvera sa
       // configuration dès qu'il se connectera.
-      await activateAgentConsole()
+      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand)
       return .success(AgentBootstrapToken(bootstrap: bootstrap))
     } catch {
       Self.relayLog.error("jeton d'amorce impossible : \(error.localizedDescription, privacy: .public)")
@@ -101,8 +122,8 @@ extension InboxStore {
     }
   }
 
-  func deactivateAgentOnThisMac() {
-    try? AgentLocalHost.uninstall(agent: agentName)
+  func deactivateAgentOnThisMac(agent: String? = nil) {
+    try? AgentLocalHost.uninstall(agent: agent ?? agentName)
   }
 
   // MARK: - La voix de cc dans le fil ouvert

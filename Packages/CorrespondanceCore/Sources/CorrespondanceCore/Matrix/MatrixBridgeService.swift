@@ -385,25 +385,34 @@ public actor MatrixBridgeService {
     return AgentStatus(engines: body, publishedAt: status.sentAt)
   }
 
-  /// L'agent est-il déjà membre (ou invité) de ce fil ?
-  public func hasAgent(conversationID: String) -> Bool {
+  /// Cet agent est-il déjà membre (ou invité) de ce fil ?
+  public func hasAgent(conversationID: String, agent: String = MatrixIdentity.agentName) -> Bool {
     hydrateIfNeeded()
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }
-    return model.members[agentUserID]?.isActive == true
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
+    return model.members[userID]?.isActive == true
+  }
+
+  /// Les agents présents (ou invités) dans ce fil, parmi ceux qu'on nomme.
+  /// C'est ce qui décide entre un bouton « Inviter cc » et un menu : la
+  /// question « lesquels sont là » se pose au salon, pas à un réglage.
+  public func agentsPresent(conversationID: String, among agents: [String]) -> [String] {
+    agents.filter { hasAgent(conversationID: conversationID, agent: $0) }
   }
 
   /// Invite « cc » dans le fil. Il ne rejoint que sur MON invitation — c'est
   /// précisément elle. Le fil affichera « cc a rejoint la conversation ».
-  public func inviteAgent(conversationID: String) async throws {
+  public func inviteAgent(conversationID: String, agent: String = MatrixIdentity.agentName) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
     // Le pont ne m'a pas toujours donné le droit d'inviter dans ce portail :
     // `withRoomPower` se hisse et réessaie. On n'ajoute personne au groupe
     // réel — cc est un utilisateur Matrix, les ponts ne relaient pas les
     // adhésions de gens qui n'ont pas de compte sur le réseau.
     try await withRoomPower(roomID: roomID) {
-      try await self.client.invite(roomID: roomID, userID: self.agentUserID)
+      try await self.client.invite(roomID: roomID, userID: userID)
     }
   }
 

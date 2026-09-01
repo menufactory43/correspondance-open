@@ -260,7 +260,7 @@ struct SettingsAgentPane: View {
     ) {
       SettingsRow(
         label: "cc",
-        detail: hote.labelFR,
+        detail: hote.labelFR(agent: store.agentName),
         systemImage: "cpu"
       ) {
         // Chaque état a une sortie. Un écran qui affiche un fait sans offrir
@@ -318,7 +318,7 @@ struct SettingsAgentPane: View {
 
   @ViewBuilder
   private var journalBouton: some View {
-    if let url = AgentLocalHost.logURL {
+    if let url = AgentLocalHost.logURL(agent: store.agentName) {
       Button("Ouvrir le journal") { NSWorkspace.shared.open(url) }
     } else {
       EmptyView()
