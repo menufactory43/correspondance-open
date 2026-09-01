@@ -61,7 +61,7 @@ actor SenderAvatarStore {
       // En groupe, chat.db donne le handle de l'auteur : le carnet d'adresses
       // sait y répondre exactement comme pour un tête-à-tête.
       resolved = await ContactDirectory.shared.imageData(forHandle: senderID)
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .messenger:
       // La photo qu'on a choisie soi-même passe avant celle du réseau, comme
       // partout ailleurs — mais un ghost n'expose un numéro que rarement.
       let contact = senderID.hasPrefix("+")

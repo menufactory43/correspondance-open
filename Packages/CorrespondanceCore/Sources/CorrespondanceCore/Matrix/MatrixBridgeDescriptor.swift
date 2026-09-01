@@ -37,6 +37,15 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// Signal non — mautrix-signal n'expose que le flow QR, et lui envoyer un
   /// `login phone` ne produirait qu'un message d'erreur du bot.
   public let supportsPhonePairing: Bool
+  /// Identifiant du flow de connexion à nommer dans la commande `login`, quand le
+  /// pont en expose plusieurs.
+  ///
+  /// bridgev2 ne choisit tout seul que si le connecteur n'a qu'un flow ; sinon il
+  /// répond « Please specify a login flow » et n'ouvre rien. mautrix-facebook en
+  /// annonce quatre (facebook.com, messenger.com, et les deux API Messenger Lite),
+  /// et mautrix-instagram en a ajouté un second en amont. Nommer le flow coûte un
+  /// mot et nous met à l'abri des deux côtés.
+  public let webLoginFlowID: String?
   /// Quitter le portail est-il relayé comme un départ du groupe côté réseau ?
   /// Vrai pour Signal et WhatsApp. Laissé faux pour Instagram tant que ce n'est
   /// pas vérifié : proposer le geste sans qu'il porte, c'est promettre un départ
@@ -53,6 +62,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (WA)", " (WhatsApp)"],
     supportsPhonePairing: true,
+    webLoginFlowID: nil,
     relaysGroupLeave: true
   )
 
@@ -68,6 +78,39 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     // formes qu'on croise chez les instances qui l'ont configuré autrement.
     displayNameSuffixes: [" (IG)", " (Instagram)"],
     supportsPhonePairing: false,
+    // Le flow par cookies de mautrix-instagram (l'autre, `instagram-password`, passe
+    // par l'API mobile et n'est pas celui que la fenêtre de connexion alimente).
+    webLoginFlowID: "instagram",
+    relaysGroupLeave: false
+  )
+
+  /// Messenger : le jumeau d'Instagram côté Meta, mais un autre pont — mautrix-meta
+  /// (l'image `v26.08` sans préfixe `ig-`), un autre bot, une autre base. Depuis
+  /// v26.08 les deux réseaux ont chacun leur binaire, et donc chacun leur salon de
+  /// gestion : rien ne se partage, pas même la session.
+  public static let messenger = MatrixBridgeDescriptor(
+    network: .messenger,
+    botLocalpart: "messengerbot",
+    // `!fb` est le préfixe par défaut du pont ; on le fige côté overrides pour que
+    // l'app et lui parlent la même langue hors salon de gestion.
+    commandPrefix: "!fb",
+    ghostPrefix: "messenger_",
+    // Le pont s'annonce en `facebook` (son `id` par défaut) ou `facebookgo`
+    // (`BeeperBridgeType`). On accepte aussi `messenger` et `meta`, sous lesquels
+    // d'autres déploiements le publient.
+    protocolIDs: ["facebook", "facebookgo", "messenger", "meta"],
+    loginFlow: .webSession,
+    // Un compte Facebook s'identifie par un ID numérique, jamais par un numéro :
+    // rien ne doit fusionner avec le carnet d'adresses sur cette base.
+    identifiersArePhoneNumbers: false,
+    displayNameSuffixes: [" (FB)", " (Messenger)"],
+    supportsPhonePairing: false,
+    // Quatre flows chez mautrix-facebook : cookies facebook.com, cookies
+    // messenger.com, et deux API Messenger Lite par mot de passe. C'est le premier
+    // qu'on prend — la fenêtre récolte des cookies de facebook.com.
+    webLoginFlowID: "facebook",
+    // Même prudence que pour Instagram : tant que le départ d'un groupe n'a pas
+    // été vu remonter jusqu'à Messenger, on ne propose pas le geste.
     relaysGroupLeave: false
   )
 
@@ -89,10 +132,11 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     identifiersArePhoneNumbers: true,
     displayNameSuffixes: [" (Signal)"],
     supportsPhonePairing: false,
+    webLoginFlowID: nil,
     relaysGroupLeave: true
   )
 
-  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .signal]
+  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .signal]
 
   public static func descriptor(for network: MessageNetwork) -> MatrixBridgeDescriptor? {
     all.first { $0.network == network }
@@ -121,10 +165,11 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// Ce que l'app tape au bot pour ouvrir un fil vers un identifiant.
   ///
   /// `pm` est l'alias de `start-chat` dans bridgev2 : WhatsApp prend un numéro,
-  /// Instagram l'identifiant numérique Meta (les pseudos passent d'abord par `search`).
+  /// Instagram et Messenger l'identifiant numérique Meta (les pseudos passent
+  /// d'abord par `search`).
   public func startChatCommand(identifier: String) -> String { "pm \(identifier)" }
 
-  public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, relaysGroupLeave: Bool) {
+  public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, webLoginFlowID: String? = nil, relaysGroupLeave: Bool) {
     self.network = network
     self.botLocalpart = botLocalpart
     self.commandPrefix = commandPrefix
@@ -134,6 +179,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     self.identifiersArePhoneNumbers = identifiersArePhoneNumbers
     self.displayNameSuffixes = displayNameSuffixes
     self.supportsPhonePairing = supportsPhonePairing
+    self.webLoginFlowID = webLoginFlowID
     self.relaysGroupLeave = relaysGroupLeave
   }
 }

@@ -50,9 +50,11 @@ public struct NetworkCapabilities: Sendable, Hashable {
   /// - **WhatsApp** et **Signal** : les ponts ne remontent pas le `m.replace`
   ///   vers le réseau ; une correction envoyée là-bas ne serait visible que
   ///   chez nous. Ils relaient en revanche le nom du groupe et le retrait.
-  /// - **Instagram / Meta** : le seul `m.replace` que mautrix porte jusqu'au
-  ///   réseau. En revanche le pont ne relaie ni le nom du groupe ni le retrait
-  ///   — même prudence que `relaysGroupLeave`, qui y est déjà faux.
+  /// - **Instagram** et **Messenger** : les deux réseaux de Meta, les deux mêmes
+  ///   capacités — c'est le même connecteur derrière, à un binaire près. Le seul
+  ///   `m.replace` que mautrix porte jusqu'au réseau. En revanche le pont ne relaie
+  ///   ni le nom du groupe ni le retrait — même prudence que `relaysGroupLeave`,
+  ///   qui y est déjà faux pour l'un comme pour l'autre.
   /// - **La note à soi** est un salon à nous : rien ne s'y oppose, mais il n'y
   ///   a personne à y ajouter ni à en retirer.
   ///
@@ -60,8 +62,8 @@ public struct NetworkCapabilities: Sendable, Hashable {
   /// seuls deux ponts implémentent : mautrix-whatsapp (v0.12.5+) et
   /// mautrix-signal (v0.8.7+). mautrix-meta l'annonce en « support initial des
   /// groupes NON chiffrés » : tant que ce n'est pas vérifié sur un vrai compte,
-  /// Instagram reste à non — un groupe qu'on croit avoir créé et qui n'existe
-  /// pas est pire que pas de bouton du tout.
+  /// Instagram et Messenger restent à non — un groupe qu'on croit avoir créé et
+  /// qui n'existe pas est pire que pas de bouton du tout.
   public static func of(_ network: MessageNetwork) -> NetworkCapabilities {
     switch network {
     case .iMessage:
@@ -82,7 +84,7 @@ public struct NetworkCapabilities: Sendable, Hashable {
         createsGroup: true,
         sendsVoiceMessages: true
       )
-    case .instagram:
+    case .instagram, .messenger:
       NetworkCapabilities(
         editsSentMessages: true,
         addsMember: true,

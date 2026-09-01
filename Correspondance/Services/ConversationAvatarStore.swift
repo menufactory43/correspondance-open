@@ -45,10 +45,10 @@ actor ConversationAvatarStore {
       } else {
         resolved = await ContactDirectory.shared.imageData(for: conversation)
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .messenger:
       // Fil bridgé : d'abord le carnet d'adresses si le pont a exposé un numéro —
       // la photo qu'on a choisie soi-même vaut mieux que celle du réseau. Sinon la
-      // photo du portail (`m.room.avatar`), seule image dont dispose un fil Instagram.
+      // photo du portail (`m.room.avatar`), seule image dont disposent les fils Meta.
       let contact = conversation.address.hasPrefix("+")
         ? await ContactDirectory.shared.imageData(forHandle: conversation.address)
         : nil

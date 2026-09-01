@@ -104,6 +104,9 @@ struct ConversationAvatarView: View {
     case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)
     // Le magenta d'Instagram, sans dégradé : une pastille de 8 points n'a pas la place.
     case .instagram: Color(red: 0.78, green: 0.23, blue: 0.55)
+    // Le bleu-violet de Messenger, choisi assez loin du magenta d'Instagram pour
+    // qu'on distingue les deux réseaux de Meta d'un coup d'œil dans l'inbox.
+    case .messenger: Color(red: 0.35, green: 0.40, blue: 0.95)
     }
   }
 

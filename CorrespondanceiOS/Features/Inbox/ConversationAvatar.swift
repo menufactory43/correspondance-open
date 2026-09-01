@@ -126,6 +126,8 @@ struct ConversationAvatar: View {
     case .signal: theme.accent
     case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)
     case .instagram: Color(red: 0.78, green: 0.23, blue: 0.55)
+    // Mêmes teintes que sur le Mac : la pastille d'un réseau ne change pas d'appareil.
+    case .messenger: Color(red: 0.35, green: 0.40, blue: 0.95)
     }
   }
 

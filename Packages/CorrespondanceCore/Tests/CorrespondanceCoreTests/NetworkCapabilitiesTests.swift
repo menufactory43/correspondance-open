@@ -6,6 +6,7 @@ import XCTest
 final class NetworkCapabilitiesTests: XCTestCase {
   func testSeulMetaPorteLaModificationJusquAuReseau() {
     XCTAssertTrue(MessageNetwork.instagram.supportsEditing)
+    XCTAssertTrue(MessageNetwork.messenger.supportsEditing)
     XCTAssertFalse(MessageNetwork.whatsapp.supportsEditing)
     XCTAssertFalse(MessageNetwork.signal.supportsEditing)
     XCTAssertFalse(MessageNetwork.iMessage.supportsEditing)
@@ -20,6 +21,7 @@ final class NetworkCapabilitiesTests: XCTestCase {
     XCTAssertTrue(MessageNetwork.whatsapp.supportsGroupRename)
     XCTAssertTrue(MessageNetwork.signal.supportsGroupRename)
     XCTAssertFalse(MessageNetwork.instagram.supportsGroupRename)
+    XCTAssertFalse(MessageNetwork.messenger.supportsGroupRename)
     XCTAssertFalse(MessageNetwork.iMessage.supportsGroupRename)
   }
 
@@ -29,12 +31,13 @@ final class NetworkCapabilitiesTests: XCTestCase {
     XCTAssertTrue(MessageNetwork.whatsapp.supportsMemberRemoval)
     XCTAssertTrue(MessageNetwork.signal.supportsMemberRemoval)
     XCTAssertFalse(MessageNetwork.instagram.supportsMemberRemoval)
+    XCTAssertFalse(MessageNetwork.messenger.supportsMemberRemoval)
     XCTAssertFalse(MessageNetwork.iMessage.supportsMemberRemoval)
     XCTAssertFalse(MessageNetwork.selfNote.supportsMemberRemoval)
   }
 
   func testAjouterQuelquUnSuitLesPontsQuiOntUnGhostComposable() {
-    for network in [MessageNetwork.whatsapp, .instagram, .signal] {
+    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .signal] {
       XCTAssertTrue(network.supportsMemberInvite, "\(network.labelFR) devrait accepter l'ajout")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsMemberInvite)
@@ -42,7 +45,7 @@ final class NetworkCapabilitiesTests: XCTestCase {
 
   /// iMessage n'envoie pas de pièce jointe par notre chemin : pas de micro.
   func testLeVocalEstOffertPartoutSaufSurIMessage() {
-    for network in [MessageNetwork.whatsapp, .instagram, .signal, .selfNote] {
+    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .signal, .selfNote] {
       XCTAssertTrue(network.supportsVoiceMessages, "\(network.labelFR) devrait accepter le vocal")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsVoiceMessages)
@@ -55,6 +58,7 @@ final class NetworkCapabilitiesTests: XCTestCase {
     XCTAssertTrue(MessageNetwork.whatsapp.capabilities.createsGroup)
     XCTAssertTrue(MessageNetwork.signal.capabilities.createsGroup)
     XCTAssertFalse(MessageNetwork.instagram.capabilities.createsGroup)
+    XCTAssertFalse(MessageNetwork.messenger.capabilities.createsGroup)
     XCTAssertFalse(MessageNetwork.iMessage.capabilities.createsGroup)
     XCTAssertFalse(MessageNetwork.selfNote.capabilities.createsGroup)
   }

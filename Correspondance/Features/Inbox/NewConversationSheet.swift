@@ -26,12 +26,14 @@ struct NewConversationSheet: View {
     MessageNetwork.allCases.filter { !$0.isMatrixBridged || store.isMatrixConnected }
   }
 
-  /// Ce que le réseau attend dans le champ. WhatsApp se compose, Instagram se nomme.
+  /// Ce que le réseau attend dans le champ. WhatsApp se compose, Instagram et
+  /// Messenger se nomment.
   private var placeholderFR: String {
     switch network {
     case .whatsapp: "Numéro WhatsApp"
     case .signal: "Numéro Signal"
     case .instagram: "Nom d’utilisateur Instagram"
+    case .messenger: "Nom ou identifiant Messenger"
     default: "Nom, numéro ou e-mail"
     }
   }
@@ -49,9 +51,9 @@ struct NewConversationSheet: View {
     // Une adresse e-mail y échouerait côté bot, sans rien dire de lisible ici.
     case .whatsapp, .signal:
       return handle.filter(\.isNumber).count >= 8 && !handle.contains("@")
-    // Instagram : un pseudo ou un identifiant Meta. Pas d'arobase à l'intérieur —
-    // celle de tête, l'usage la met, on la retire à l'envoi.
-    case .instagram:
+    // Instagram et Messenger : un pseudo ou un identifiant Meta. Pas d'arobase à
+    // l'intérieur — celle de tête, l'usage la met, on la retire à l'envoi.
+    case .instagram, .messenger:
       let bare = handle.hasPrefix("@") ? String(handle.dropFirst()) : handle
       return !bare.isEmpty && !bare.contains("@") && !bare.contains(" ")
     default:

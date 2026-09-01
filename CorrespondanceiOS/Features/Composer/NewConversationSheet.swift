@@ -63,8 +63,8 @@ struct NewConversationSheet: View {
 
   // MARK: - Puces de réseau
 
-  /// Seuls les réseaux qui ont déjà un fil : une puce Instagram sans compte
-  /// Instagram ne mènerait nulle part, et le dirait trop tard.
+  /// Seuls les réseaux qui ont déjà un fil : une puce Messenger sans compte
+  /// Messenger ne mènerait nulle part, et le dirait trop tard.
   private var networks: [MessageNetwork] {
     let inUse = store.networksInUse
     return inUse.isEmpty ? MessageNetwork.matrixBridged : inUse
@@ -239,8 +239,8 @@ struct NewConversationSheet: View {
   // MARK: - Le carnet d'adresses
 
   /// Le réseau qui recevra un numéro du carnet : celui choisi s'il se compose
-  /// (WhatsApp, Signal) ; « Tous » prend celui qu'on utilise déjà. Instagram
-  /// ne connaît pas les numéros — pas de section.
+  /// (WhatsApp, Signal) ; « Tous » prend celui qu'on utilise déjà. Instagram et
+  /// Messenger ne connaissent pas les numéros — pas de section.
   private var bookNetwork: MessageNetwork? {
     if let network {
       return (network == .whatsapp || network == .signal) ? network : nil
@@ -290,12 +290,12 @@ struct NewConversationSheet: View {
       guard let target, target == .whatsapp || target == .signal else { return nil }
       return Freeform(network: target, identifier: phone)
     }
-    // Un pseudo : Instagram, et seulement si on l'a choisi. Deviner qu'un mot
-    // est un pseudo Instagram plutôt qu'un nom mal orthographié, c'est deviner.
-    if network == .instagram {
+    // Un pseudo : Instagram ou Messenger, et seulement si on l'a choisi. Deviner
+    // qu'un mot est un pseudo Meta plutôt qu'un nom mal orthographié, c'est deviner.
+    if let network, network == .instagram || network == .messenger {
       let bare = trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
       guard !bare.isEmpty, !bare.contains(" "), !bare.contains("@") else { return nil }
-      return Freeform(network: .instagram, identifier: bare)
+      return Freeform(network: network, identifier: bare)
     }
     return nil
   }
@@ -350,7 +350,7 @@ struct NewConversationSheet: View {
         .foregroundStyle(theme.ink)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
-        .keyboardType(network == .instagram ? .default : .namePhonePad)
+        .keyboardType(network == .instagram || network == .messenger ? .default : .namePhonePad)
         .focused($isFocused)
         .submitLabel(.go)
         .onSubmit { if let composable { open(freeform: composable) } }
@@ -376,6 +376,7 @@ struct NewConversationSheet: View {
     case .whatsapp: "Nom ou numéro WhatsApp"
     case .signal: "Nom ou numéro Signal"
     case .instagram: "Nom d'utilisateur Instagram"
+    case .messenger: "Nom ou identifiant Messenger"
     default: "Nom ou numéro"
     }
   }

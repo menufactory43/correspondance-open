@@ -1,0 +1,92 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-meta
+# (`dock.mau.dev/mautrix/meta:v26.08`, tag SANS `ig-`). Fusion profonde
+# (bootstrap.sh) : on ne fige pas le config amont, seulement nos choix.
+#
+# Depuis v26.08, Instagram et Messenger ont chacun leur binaire : il n'y a plus de
+# `network.mode` à choisir (vérifié sur le config par défaut de l'image), la section
+# `network` ne porte que les réglages du connecteur Facebook. Le binaire s'annonce
+# « mautrix-facebook v26.08 » alors qu'il s'appelle toujours /usr/bin/mautrix-meta.
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-messenger:29331
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  # 29330 est pris par le pont Instagram, qui tourne sur le même réseau Docker.
+  port: 29331
+  id: messenger
+  bot:
+    # Le pont s'appellerait `facebook` / `facebookbot` par défaut. On le renomme en
+    # « messenger » — c'est le nom que l'app reconnaît (MatrixBridgeDescriptor), et
+    # c'est ce que l'utilisateur lit dans Réglages.
+    username: messengerbot
+    displayname: Messenger bridge bot
+  username_template: messenger_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_messenger?sslmode=disable
+
+bridge:
+  command_prefix: '!fb'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Mode relais : ce qu'un utilisateur du Relais non connecté au réseau — l'agent
+# « cc » — dit dans un portail part via MON compte, préfixé de son nom. Rien ne
+# se relaie tout seul : il faut, par room, `!fb set-relay` (admin).
+  relay:
+    enabled: true
+    admin_only: true
+    message_formats:
+      m.text: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+      m.notice: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+
+# Historique initial : sans ça les salons arrivent vides côté Correspondance.
+backfill:
+  enabled: true
+  max_initial_messages: 50
+  max_catchup_messages: 500
+
+# Ici `thread_backfill.batch_count` vaut -1 par défaut (illimité) — l'inverse
+# d'Instagram, qui vaut 0. On le borne à une page : une boîte Messenger ancienne
+# tirerait sinon des milliers de fils au premier démarrage, et la première
+# ouverture de l'inbox attendrait la fin.
+network:
+  thread_backfill:
+    batch_count: 1
+    batch_delay: 2s
+
+# Double puppeting : sans lui, les messages que j'envoie depuis l'app officielle du
+# téléphone remontent signés par mon propre ghost, et Correspondance les prend pour ceux
+# d'un correspondant (`isFromMe` = `sender == selfUserID`). Le jeton est celui de
+# `doublepuppet-registration.yaml`, côté Synapse.
+double_puppet:
+  servers: {}
+  allow_discovery: false
+  secrets:
+    # Notre domaine et lui seul : la clé remplace la map d'amont (et son exemple bidon).
+    __remplacer__: true
+    __SERVER_NAME__: "as_token:__DOUBLEPUPPET_AS_TOKEN__"
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

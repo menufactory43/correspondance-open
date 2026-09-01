@@ -81,8 +81,8 @@ struct ThreadInfoSheet: View {
       Button("Ajouter") { invite() }
       Button("Annuler", role: .cancel) { newMember = "" }
     } message: {
-      Text(conversation?.network == .instagram
-        ? "Son pseudo Instagram, ou son identifiant."
+      Text(conversation?.network == .instagram || conversation?.network == .messenger
+        ? "Son pseudo, ou son identifiant."
         : "Son numéro, avec l'indicatif du pays.")
     }
     .alert("Renommer le groupe", isPresented: $isRenaming) {
@@ -400,7 +400,7 @@ struct ThreadInfoSheet: View {
 
   private var addMemberPrompt: String {
     switch conversation?.network {
-    case .instagram: "pseudo"
+    case .instagram, .messenger: "pseudo"
     case .signal: "identifiant Signal"
     default: "+33 6 12 34 56 78"
     }

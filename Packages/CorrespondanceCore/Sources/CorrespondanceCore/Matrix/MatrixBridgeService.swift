@@ -426,7 +426,7 @@ public actor MatrixBridgeService {
   }
 
   /// Dit au Relais qu'on écrit — ou qu'on a fini. Le pont le relaie au réseau
-  /// (WhatsApp et Signal dans les deux sens ; Instagram l'envoie surtout).
+  /// (WhatsApp et Signal dans les deux sens ; Instagram et Messenger l'envoient surtout).
   public func setTyping(conversationID: String, isTyping: Bool) async {
     guard let roomID = roomID(forConversation: conversationID) else { return }
     // Une frappe qui n'arrive pas n'est pas une erreur à montrer : on se tait.
@@ -587,7 +587,7 @@ public actor MatrixBridgeService {
   }
 
   /// Photo d'un portail (`m.room.avatar`), depuis le cache disque sinon le homeserver.
-  /// L'inbox en a besoin pour les fils sans numéro : Instagram n'expose rien d'autre.
+  /// L'inbox en a besoin pour les fils sans numéro : Instagram et Messenger n'exposent rien d'autre.
   public func avatarData(mxcURI: String) async -> Data? {
     if let cached = MatrixAvatarStore.existingData(forMXC: mxcURI) { return cached }
     guard let data = try? await client.downloadMedia(mxcURI: mxcURI), !data.isEmpty else { return nil }
@@ -645,7 +645,7 @@ public actor MatrixBridgeService {
 
   /// Pose, remplace ou retire ma réaction sur un message.
   ///
-  /// WhatsApp comme Instagram n'acceptent **qu'un emoji par personne et par message**
+  /// WhatsApp comme les ponts Meta n'acceptent **qu'un emoji par personne et par message**
   /// (`ReactionCount: 1` dans les capacités de mautrix-whatsapp et de mautrix-instagram) :
   /// reposer le même emoji le retire, en poser un autre remplace le précédent.
   /// Envoie un message vocal : le fichier enregistré et sa forme d'onde.
@@ -964,7 +964,7 @@ public actor MatrixBridgeService {
     /// QR à scanner (PNG déjà téléchargé).
     case qrCode(Data)
     case pairingCode(String)
-    /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram).
+    /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram, Messenger).
     case awaitingCookies(String)
     case success(String)
     case failure(String)
@@ -979,7 +979,8 @@ public actor MatrixBridgeService {
     /// Repli par code d'appairage, quand le pont sait le faire — WhatsApp seul :
     /// mautrix-signal n'expose que le flow QR.
     case phonePairing(phoneNumber: String)
-    /// Instagram : la commande `login` seule, la session récoltée dans la fenêtre suivra.
+    /// Instagram et Messenger : la commande `login` seule, la session récoltée dans
+    /// la fenêtre suivra.
     case webSession
   }
 
@@ -989,9 +990,15 @@ public actor MatrixBridgeService {
     switch input {
     case .qrCode: command = "login qr"
     case .phonePairing(let phoneNumber): command = "login phone \(phoneNumber)"
-    // Un seul flow côté mautrix-instagram (`instagram`, par cookies) : `login` suffit,
-    // et le bot enchaîne tout seul sur l'étape « colle ton JSON ».
-    case .webSession: command = "login"
+    // On nomme le flow : bridgev2 ne choisit tout seul que si le pont n'en a qu'un,
+    // et mautrix-facebook en annonce quatre. Sans le mot, le bot répond « Please
+    // specify a login flow » et la fenêtre attendrait une invite qui ne vient pas.
+    case .webSession:
+      if let flow = network.bridge?.webLoginFlowID {
+        command = "login \(flow)"
+      } else {
+        command = "login"
+      }
     }
     // Une tentative précédente peut encore être ouverte côté pont — une feuille
     // fermée sans « Fermer », un QR qu'on a laissé tourner. Le bot refuserait alors
@@ -1097,8 +1104,14 @@ public actor MatrixBridgeService {
       || lower.contains("timed out")
       || lower.contains("failed to parse input as json")
       || lower.contains("missing some keys")
+      // mautrix-facebook refuse la session incomplète par « Missing cookies: [datr] » :
+      // sans ça la feuille attendrait en silence une étape qui ne viendra plus.
+      || lower.contains("missing cookies")
       || lower.contains("invalid value for")
       || lower.contains("failed to submit input")
+      // Le pont a plusieurs flows et on ne lui en a pas nommé un : la tentative
+      // n'a jamais commencé. À dire, plutôt que d'attendre une invite fantôme.
+      || lower.contains("please specify a login flow")
     {
       return .failure(body)
     }
@@ -1112,7 +1125,8 @@ public actor MatrixBridgeService {
 
   /// Ouvre un fil vers un correspondant via la commande bot `pm` (alias de `start-chat`).
   ///
-  /// WhatsApp attend un numéro. Instagram attend l'identifiant **numérique** Meta :
+  /// WhatsApp attend un numéro. Instagram et Messenger attendent l'identifiant
+  /// **numérique** Meta :
   /// un pseudo doit d'abord passer par `search`, dont on lit la réponse du bot.
   public func startConversation(network: MessageNetwork, identifier: String) async throws {
     guard let bridge = network.bridge else {
@@ -1140,7 +1154,8 @@ public actor MatrixBridgeService {
 
   /// Ajoute un contact à un groupe : on invite son ghost dans le portail, le pont
   /// fait l'ajout sur le réseau. WhatsApp prend un numéro (`@whatsapp_<num>`),
-  /// Instagram un pseudo ou un identifiant Meta (`@instagram_<id>`). Signal
+  /// Instagram et Messenger un pseudo ou un identifiant Meta (`@instagram_<id>`,
+  /// `@messenger_<id>`). Signal
   /// n'identifie ses ghosts que par UUID : on ne sait pas les deviner d'un
   /// numéro, et on le dit plutôt que d'inviter dans le vide.
   public func inviteMember(conversationID: String, identifier: String) async throws {
@@ -1156,8 +1171,8 @@ public actor MatrixBridgeService {
 
   /// Le MXID du fantôme d'un correspondant, à partir de ce qu'on tape.
   ///
-  /// WhatsApp prend un numéro, Instagram un pseudo (résolu en identifiant Meta)
-  /// ou l'identifiant lui-même. Signal n'identifie ses fantômes que par UUID :
+  /// WhatsApp prend un numéro, Instagram et Messenger un pseudo (résolu en
+  /// identifiant Meta) ou l'identifiant lui-même. Signal n'identifie ses fantômes que par UUID :
   /// on ne sait pas les deviner d'un numéro, et on le dit plutôt que d'inviter
   /// dans le vide.
   private func ghostUserID(
@@ -1172,10 +1187,10 @@ public actor MatrixBridgeService {
       let digits = identifier.filter { $0.isNumber }
       guard digits.count >= 8 else { throw MatrixError.decoding("numéro WhatsApp invalide") }
       localpart = bridge.ghostPrefix + digits
-    case .instagram:
+    case .instagram, .messenger:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
-      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Instagram vide") }
+      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant \(network.labelFR) vide") }
       let metaID = trimmed.allSatisfy(\.isNumber)
         ? trimmed
         : try await resolveMetaID(username: trimmed, network: network)
@@ -1454,7 +1469,7 @@ public actor MatrixBridgeService {
     return String(body[range]).uppercased()
   }
 
-  /// « 12 WhatsApp · 3 Instagram » — un décompte qui dit de quoi l'inbox est faite.
+  /// « 12 WhatsApp · 3 Instagram · 2 Messenger » — un décompte qui dit de quoi l'inbox est faite.
   public static func bridgedCountFR(_ conversations: [Conversation]) -> String {
     let parts = MessageNetwork.matrixBridged.compactMap { network -> String? in
       let count = conversations.filter { $0.network == network }.count

@@ -305,7 +305,10 @@ struct ThreadView: View {
     let showsAvatar = themes.showsMessageAvatars
       && !group.isFromMe
       && first?.isSystemEvent != true
-    HStack(alignment: .top, spacing: ThreadMetrics.avatarSpacing) {
+    // La photo se pose EN BAS de la prise de parole, en face de la dernière
+    // bulle : c'est là que Messages, WhatsApp et Telegram la mettent, et c'est
+    // la bulle la plus récente que l'œil cherche à attribuer.
+    HStack(alignment: .bottom, spacing: ThreadMetrics.avatarSpacing) {
       if showsAvatar, let first {
         MessageAvatarView(
           message: first,
@@ -313,8 +316,6 @@ struct ThreadView: View {
           size: ThreadMetrics.avatarSize,
           theme: theme
         )
-        // La photo s'aligne sur la première bulle, pas sur le nom au-dessus.
-        .padding(.top, group.senderLabel == nil ? 2 : ThreadMetrics.avatarLabelOffset)
       }
       VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
         if let label = group.senderLabel {
@@ -496,8 +497,6 @@ enum ThreadMetrics {
   static let avatarSize: CGFloat = 26
   /// Air entre la photo et la première bulle.
   static let avatarSpacing: CGFloat = 8
-  /// Quand un nom coiffe le groupe, la photo descend le long de la première bulle.
-  static let avatarLabelOffset: CGFloat = 18
   /// Air au-dessus du premier message, en plus de la zone sûre de la barre
   /// d'outils que le système fournit déjà.
   static let topClearance: CGFloat = 16

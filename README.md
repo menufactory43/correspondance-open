@@ -1,6 +1,6 @@
 # Correspondance
 
-> Inbox Focus pour **iMessage**, **Signal**, **WhatsApp** et **Instagram** (dogfood).
+> Inbox Focus pour **iMessage**, **Signal**, **WhatsApp**, **Instagram** et **Messenger** (dogfood).
 > Spec : [`docs/PRODUCT.md`](docs/PRODUCT.md) · agent « cc » : [`docs/AGENT.md`](docs/AGENT.md) · les deux derniers passent par des ponts mautrix,
 > voir [`docs/MATRIX-SETUP.md`](docs/MATRIX-SETUP.md).
 
@@ -29,8 +29,9 @@ Puis ⌘R. macOS 14+, Xcode récent.
 2. Réglages Système → Confidentialité → **Accès complet au disque** → autorise **une seule fois** `/Applications/Correspondance.app` (ou le build Xcode).
 3. Actualise (⌘R ou bouton) pour lire `~/Library/Messages/chat.db`.
 4. L’envoi iMessage passe par l’app **Messages** (AppleScript) — accorde Automation si macOS le demande.
-5. Signal / WhatsApp / Instagram : pile Matrix sur le NUC (`./infra/matrix/bootstrap.sh`), puis
-   Réglages › Matrix — QR à scanner pour Signal et WhatsApp, cookies pour Instagram.
+5. Signal / WhatsApp / Instagram / Messenger : pile Matrix sur le NUC (`./infra/matrix/bootstrap.sh`), puis
+   Réglages › Matrix — QR à scanner pour Signal et WhatsApp, fenêtre de connexion pour Instagram
+   (instagram.com) et Messenger (facebook.com).
 
 ### Accès disque qui « saute » à chaque rebuild
 

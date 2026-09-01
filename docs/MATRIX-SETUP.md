@@ -1,17 +1,19 @@
-# Matrix, WhatsApp, Instagram & Signal — installation, usage, dépannage
+# Matrix, WhatsApp, Instagram, Messenger & Signal — installation, usage, dépannage
 
-Correspondance parle WhatsApp, Instagram et Signal par des ponts : un homeserver **Synapse**
-privé et les bridges **mautrix**, tous sur le NUC, joints depuis le Mac par Tailscale. Seul
-iMessage reste natif et ne passe pas par là.
+Correspondance parle WhatsApp, Instagram, Messenger et Signal par des ponts : un homeserver
+**Synapse** privé et les bridges **mautrix**, tous sur le NUC, joints depuis le Mac par Tailscale.
+Seul iMessage reste natif et ne passe pas par là.
 
 ```
                                                  ┌─► mautrix-whatsapp  ──► WhatsApp
-Mac (Correspondance) ──Tailscale──► Synapse ─────┼─► mautrix-instagram ──► Instagram DM
-                       100.64.0.7:8008       └─► mautrix-signal    ──► Signal
+                                                 ├─► mautrix-instagram ──► Instagram DM
+Mac (Correspondance) ──Tailscale──► Synapse ─────┤
+                       100.64.0.7:8008       ├─► mautrix-facebook  ──► Messenger
+                                                 └─► mautrix-signal    ──► Signal
 ```
 
-Un seul `/sync` côté app pour les trois ponts (même homeserver), mais **un salon de gestion par
-pont** : `@whatsappbot`, `@instagrambot` et `@signalbot` ne se parlent pas.
+Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
+pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
 ## 0. Ce qui tourne déjà, et où
 
@@ -23,12 +25,22 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-postgres` | `postgres:16-alpine` | base de Synapse et des bridges |
 | `correspondance-mautrix-whatsapp` | `dock.mau.dev/mautrix/whatsapp:v26.08` | pont WhatsApp (tag **épinglé**) |
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
+| `correspondance-mautrix-messenger` | `dock.mau.dev/mautrix/meta:v26.08` | pont Messenger (tag **épinglé**, **sans** `ig-`) |
 | `correspondance-mautrix-signal` | `dock.mau.dev/mautrix/signal:v26.08` | pont Signal (tag **épinglé**) |
 
 Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
 `mautrix-instagram`, publié sur **la même image Docker** avec un tag préfixé `ig-`. Dans cette
 variante le binaire s'appelle toujours `/usr/bin/mautrix-meta`, mais `--version` répond bien
 « mautrix-instagram v26.08 » : l'entrypoint standard `/docker-run.sh` fonctionne tel quel.
+
+D'où **deux conteneurs de la même image** : `:ig-v26.08` pour Instagram, `:v26.08` pour Messenger
+(où `/usr/bin/mautrix-meta --version` répond « mautrix-facebook v26.08 »). Deux bases Postgres
+(`mautrix_meta`, `mautrix_messenger`), deux ports d'appservice (29330, 29331), deux bots. Les deux
+réseaux de Meta ne partagent plus rien : se connecter à l'un ne connecte pas l'autre.
+
+L'ancien `network.mode` (`facebook` / `messenger` / `facebook-tor`) **n'existe plus** en v26.08 —
+le binaire décide du réseau, le config ne garde qu'un `network.tor` booléen. Rien à choisir donc,
+mais quatre *flows* de connexion côté bot (voir § 2 ter).
 
 Tout vit dans `~/correspondance-matrix/` : configs générées, données, et `CREDENTIALS.txt`
 (chmod 600) qui contient le mot de passe du compte `@meffysto:correspondance.local`. Ce fichier ne
@@ -167,7 +179,48 @@ Les ghosts Instagram sont des **identifiants numériques Meta**, pas des pseudos
 directement en `pm <id>`, un pseudo passe d'abord par `search <pseudo>`, dont l'app lit la réponse
 du bot (`` `17841400000000001` / Malo ``) pour en tirer l'ID.
 
-## 2 ter. Connecter Signal — le QR, et ce qu'on laisse derrière
+## 2 ter. Connecter Messenger — la même fenêtre, sur facebook.com
+
+Même contrainte que pour Instagram, même vue : `mautrix-facebook` ne se connecte qu'avec les
+cookies d'une session de navigateur. **Réglages › Comptes › Messenger › Connecter…** ouvre la
+feuille, qui charge **le vrai formulaire facebook.com** (`https://www.facebook.com/login/`) dans la
+même `WKWebView` non persistante — e-mail, mot de passe, 2FA, captcha éventuel. C'est le même
+`BridgeWebLoginView` que pour Instagram, à un profil près (`BridgeSessionCookies.Profile`) : URL de
+connexion, domaine accepté, liste des cookies.
+
+Une différence de taille avec Instagram : **`mautrix-facebook` expose quatre flows de connexion**
+(`facebook`, `messenger`, `messenger-lite`, `messenger-lite-android`). bridgev2 ne choisit tout
+seul que quand un pont n'en a qu'un ; sinon il répond « Please specify a login flow » et n'ouvre
+rien du tout. L'app envoie donc **`login facebook`** — le flow par cookies de facebook.com, celui
+que la fenêtre alimente. (Le descripteur porte ce choix : `MatrixBridgeDescriptor.webLoginFlowID`.)
+
+Les cookies obligatoires, tels que `FBRequiredCookies` les liste dans `pkg/messagix/cookies` de
+mautrix/meta, sont **trois** : `c_user` (l'identifiant du compte), `xs` (la session) et `datr`
+(l'empreinte du navigateur, sans laquelle Meta juge la session suspecte). `sb`, `fr`, `presence`,
+`wd`, `oo` et `dpr` partent en plus quand ils existent, sans jamais bloquer. ⚠️ La page
+docs.mau.fi range `sb` avec les indispensables et oublie `datr` : c'est le **code** qui refuse, et
+c'est lui qu'on suit.
+
+Au succès, le bot répond « Logged in as <nom> (<id>) » et le backfill démarre. Les échecs
+parlent : `Missing cookies: [datr]`, `Failed to parse input as JSON`, `Login failed: …`.
+
+Le repli **« Coller des cookies… »** existe ici aussi : relever `c_user`, `xs` et `datr` sur
+`https://www.facebook.com` dans les outils de développement, puis coller
+
+```json
+{"c_user":"…","xs":"…","datr":"…"}
+```
+
+### Ouvrir un fil Messenger
+
+Comme Instagram : les ghosts sont des **identifiants numériques Meta** (`@messenger_<id>`), pas des
+noms. `NewConversationSheet` accepte les deux écritures — un identifiant numérique part en
+`pm <id>`, un nom passe d'abord par `search <nom>`. ⚠️ Un identifiant Facebook fait quinze
+chiffres, soit la longueur d'un E.164 maximal : le parseur refuse explicitement d'y voir un numéro
+(`MatrixSyncParser.networkMayCarryPhoneNumbers`), sans quoi un fil Messenger fusionnerait avec le
+contact qui porterait ce numéro.
+
+## 2 quater. Connecter Signal — le QR, et ce qu'on laisse derrière
 
 `mautrix-signal` se lie comme **appareil secondaire**, exactement comme Signal Desktop.
 **Réglages › Matrix › Connecter Signal…** envoie `login` à `@signalbot`, qui renvoie un QR ;
@@ -205,7 +258,7 @@ qu'on lit dans les MXID de ghosts (`@signal_2f9d4c60-…`). L'app ne le prend ja
 composable, donc un fil Signal ne fusionne avec une fiche du carnet d'adresses que lorsque le pont
 a réellement exposé un numéro.
 
-## 2 quater. Double puppeting — que mes messages du téléphone restent les miens
+## 2 quinquies. Double puppeting — que mes messages du téléphone restent les miens
 
 Un pont mautrix, seul, ne connaît qu'un compte Matrix par correspondant : le **ghost**
 (`@whatsapp_…`, `@instagram_…`, `@signal_…`). Y compris pour moi. Un message envoyé depuis
@@ -276,6 +329,7 @@ Toutes les commandes ci-dessous se lancent depuis `~/correspondance-matrix/` sur
 docker-compose ps                        # les 5 services doivent être Up
 docker-compose logs -f mautrix-whatsapp  # le journal du pont WhatsApp, en direct
 docker-compose logs -f mautrix-meta      # celui d'Instagram
+docker-compose logs -f mautrix-messenger # celui de Messenger
 docker-compose logs -f mautrix-signal    # celui de Signal
 docker-compose logs --tail=200 synapse   # le homeserver
 docker-compose restart mautrix-meta      # redémarrer un pont seul
@@ -305,6 +359,9 @@ Element ; hors salon de gestion, les préfixer de `!wa`) :
 | `ping` | état de la connexion |
 | `pm <numéro>` | ouvre un fil vers un numéro E.164 |
 | `sync` | reconstruit les portails et les contacts |
+
+**Commandes du bot Messenger** : les mêmes, dans le DM avec `@messengerbot`, préfixe **`!fb`** —
+à ceci près que `login` veut son flow : `login facebook`.
 
 **Commandes du bot Instagram** (DM avec `@instagrambot`, préfixe `!ig` hors salon de gestion) :
 
@@ -337,11 +394,16 @@ reprend son état depuis Postgres, rien n'est perdu.
 | Instagram : « Challenge/Checkpoint required » | Meta veut une vérification : la faire sur instagram.com, puis relancer `login` |
 | Instagram : « Got logged out immediately » | cookies périmés (déconnexion côté navigateur) — se reconnecter sur instagram.com et recopier |
 | Instagram : aucun avatar dans l'inbox | attendu : Instagram n'expose pas de numéro, donc rien à rapprocher du carnet d'adresses. Les initiales font office |
+| Messenger : « Please specify a login flow » | le pont a quatre flows et l'app n'en a nommé aucun — vérifier `MatrixBridgeDescriptor.messenger.webLoginFlowID` (`facebook`) |
+| Messenger : « Missing cookies: [datr] » | `datr` n'a pas été récolté : se déconnecter de facebook.com dans la fenêtre, recharger la page d'accueil, puis se reconnecter |
+| Messenger : le bot ne répond pas | tag d'image : `dock.mau.dev/mautrix/meta:v26.08` **sans** `ig-` (le `ig-` livrerait un second Instagram sur la base Messenger) |
 | `mautrix-meta` redémarre en boucle (`as_token was not accepted`) | Synapse n'a pas rechargé `meta-registration.yaml` : `docker-compose restart synapse` puis `docker-compose restart mautrix-meta` |
 
 **Ne jamais** passer une image mautrix en `latest` sans relire le code : le passage aux ghosts LID
 en v26.08 a changé le format des MXID que le client analyse, et la même version a sorti Instagram
-de `mautrix-meta`. Côté Instagram, penser aussi au préfixe : `ig-v26.08`, jamais `v26.08`.
+de `mautrix-meta`. Côté Instagram, penser aussi au préfixe : `ig-v26.08`, jamais `v26.08` — et
+l'inverse pour Messenger, `v26.08` nu, jamais `ig-`. Les deux tags se ressemblent assez pour qu'une
+inversion passe inaperçue jusqu'au premier `login`.
 
 ## 3 bis. Push iOS — Sygnal
 

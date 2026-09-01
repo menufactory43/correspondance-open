@@ -59,7 +59,7 @@ extension InboxStore {
           avatar: .avatarStub(network: conversation.network, address: handle, title: name)
         ))
       }
-    case .signal, .whatsapp, .instagram:
+    case .signal, .whatsapp, .instagram, .messenger:
       for member in await matrix.members(conversationID: conversation.id) {
         let name = member.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = (name?.isEmpty == false) ? name! : MatrixIdentity.localpart(member.userID)

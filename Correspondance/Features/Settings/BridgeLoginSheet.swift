@@ -3,9 +3,10 @@ import CorrespondanceCore
 import CorrespondanceUI
 
 /// Feuille « Connecter <réseau> » : ce que le pont demande, et rien d'autre.
-/// WhatsApp fait scanner un QR ; Instagram ouvre une vraie fenêtre de connexion
-/// instagram.com dans l'app — Meta ne connaît que la session d'un navigateur, mais
-/// l'utilisateur n'a rien à savoir des cookies pour autant.
+/// WhatsApp et Signal font scanner un QR ; Instagram et Messenger ouvrent une vraie
+/// fenêtre de connexion (instagram.com, facebook.com) dans l'app — Meta ne connaît
+/// que la session d'un navigateur, mais l'utilisateur n'a rien à savoir des cookies
+/// pour autant.
 struct BridgeLoginSheet: View {
   let network: MessageNetwork
 
@@ -85,16 +86,17 @@ struct BridgeLoginSheet: View {
     }
   }
 
-  // MARK: - Fenêtre de connexion (Instagram)
+  // MARK: - Fenêtre de connexion (Instagram, Messenger)
 
   @ViewBuilder
   private var webSessionPanel: some View {
     VStack(alignment: .leading, spacing: Spacing.sm) {
-      InstagramWebLoginView { cookies in
-        store.handleInstagramSessionCookies(cookies)
+      BridgeWebLoginView(network: network) { cookies in
+        store.handleWebSessionCookies(cookies, network: network)
       }
-      // La feuille vit dans la fenêtre Réglages (660 pt de haut au mieux) : le formulaire
-      // Instagram tient dans 360 pt, et la page défile à l'intérieur pour le reste.
+      // La feuille vit dans la fenêtre Réglages (660 pt de haut au mieux) : les
+      // formulaires de Meta tiennent dans 360 pt, et la page défile à l'intérieur
+      // pour le reste.
       .frame(width: 420, height: 360)
       .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
       .overlay(
@@ -110,7 +112,7 @@ struct BridgeLoginSheet: View {
     }
   }
 
-  /// L'ancienne saisie, gardée en secours : si la fenêtre reste blanche ou qu'Instagram
+  /// L'ancienne saisie, gardée en secours : si la fenêtre reste blanche ou que Meta
   /// refuse le navigateur intégré, on peut encore coller la session à la main.
   @ViewBuilder
   private var manualCookiesPanel: some View {

@@ -1240,7 +1240,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -1750,8 +1750,8 @@ final class InboxStore {
   }
 
   /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.
-  /// Le flux dépend du pont : QR à scanner pour WhatsApp, fenêtre de connexion intégrée
-  /// pour Instagram (dont la session part ensuite au bot).
+  /// Le flux dépend du pont : QR à scanner pour WhatsApp et Signal, fenêtre de connexion
+  /// intégrée pour Instagram et Messenger (dont la session part ensuite au bot).
   func presentBridgeLogin(network: MessageNetwork, phoneNumber: String? = nil) {
     guard let bridge = network.bridge else { return }
     bridgeLoginQRData = nil
@@ -1803,8 +1803,10 @@ final class InboxStore {
   /// L'utilisateur ne voit ni cookie ni JSON, et rien n'est journalisé — la charge utile
   /// ne fait que passer. Si `login` n'est pas encore parti, on attend : le bot n'accepte
   /// une entrée qu'une fois la commande reçue.
-  func handleInstagramSessionCookies(_ cookies: [String: String]) {
-    guard let session = InstagramSessionCookies(rawCookies: cookies) else { return }
+  func handleWebSessionCookies(_ cookies: [String: String], network: MessageNetwork) {
+    guard let profile = BridgeSessionCookies.Profile.of(network),
+          let session = BridgeSessionCookies(rawCookies: cookies, profile: profile)
+    else { return }
     let payload = session.jsonPayload
     guard bridgeLoginCommandSent else {
       pendingWebSessionPayload = payload
@@ -2122,7 +2124,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -2956,7 +2958,7 @@ final class InboxStore {
           try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
         }
       }
-    case .signal, .whatsapp, .instagram, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -3518,7 +3520,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
       let began = ContinuousClock.now
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {

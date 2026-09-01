@@ -41,7 +41,10 @@ final class MatrixBridgeInstagramTests: XCTestCase {
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("Instagram"), .instagram)
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("whatsappgo"), .whatsapp)
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("whatsapp"), .whatsapp)
-    XCTAssertNil(MessageNetwork.fromBridgeProtocol("messenger"))
+    // « messenger » appartient désormais au pont Messenger : il ne doit surtout pas
+    // retomber sur Instagram, avec qui il ne partage plus rien qu'une image Docker.
+    XCTAssertEqual(MessageNetwork.fromBridgeProtocol("messenger"), .messenger)
+    XCTAssertNil(MessageNetwork.fromBridgeProtocol("telegram"))
   }
 
   func testDirectConversationFromInstagramRoom() throws {
@@ -230,6 +233,9 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(instagram.loginFlow, .webSession)
     XCTAssertEqual(instagram.botUserID(serverName: "correspondance.local"), "@instagrambot:correspondance.local")
     XCTAssertEqual(instagram.startChatCommand(identifier: "17841400000000001"), "pm 17841400000000001")
+    // Le flow est nommé : mautrix-instagram en expose désormais deux (cookies et
+    // mot de passe), et bridgev2 ne choisit tout seul que quand il n'y en a qu'un.
+    XCTAssertEqual(instagram.webLoginFlowID, "instagram")
 
     let whatsapp = try XCTUnwrap(MessageNetwork.whatsapp.bridge)
     XCTAssertEqual(whatsapp.commandPrefix, "!wa")
@@ -248,7 +254,7 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("signal"), .signal)
 
     XCTAssertNil(MessageNetwork.iMessage.bridge)
-    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram])
+    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger])
   }
 
   /// Les réponses du bot pendant un login par cookies, telles que bridgev2 les écrit.

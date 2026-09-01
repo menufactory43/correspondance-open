@@ -230,6 +230,7 @@ public struct MatrixSyncParser: Sendable {
       if let avatarMXC, !avatarMXC.isEmpty { member.avatarMXC = avatarMXC }
       model.members[userID] = member
       if model.bridgePhoneNumber == nil,
+         Self.networkMayCarryPhoneNumbers(model.network),
          !MatrixIdentity.isBridgeBot(userID),
          userID != selfUserID,
          let phone = MatrixIdentity.phoneNumber(in: displayName)
@@ -253,6 +254,9 @@ public struct MatrixSyncParser: Sendable {
        let network = MessageNetwork.fromBridgeProtocol(protocolID)
     {
       model.network = network
+      // Un `m.room.member` lu avant l'état de bridge a pu prendre un identifiant
+      // pour un numéro : maintenant qu'on sait de quel réseau il s'agit, on défait.
+      if !Self.networkMayCarryPhoneNumbers(network) { model.bridgePhoneNumber = nil }
     }
     if let channelName = content.string(at: "channel.displayname") {
       model.bridgeChannelName = MatrixIdentity.stripBridgeSuffix(channelName)
@@ -271,7 +275,7 @@ public struct MatrixSyncParser: Sendable {
     if let pending { model.isNetworkFlaggedRequest = pending }
     // Le bridge peut exposer le numéro (`channel.id` en JID, ou un extra explicite).
     // On ne prend que ce qui ressemble vraiment à un numéro ; sinon on s'en passe.
-    if model.bridgePhoneNumber == nil {
+    if model.bridgePhoneNumber == nil, Self.networkMayCarryPhoneNumbers(model.network) {
       let candidates = [
         content.string(at: "channel.id"),
         content.string(at: "channel.external_url"),
@@ -289,6 +293,19 @@ public struct MatrixSyncParser: Sendable {
         }
       }
     }
+  }
+
+  /// Ce réseau identifie-t-il les gens par un numéro ?
+  ///
+  /// Sans cette question, un `channel.id` Messenger — quinze chiffres, la longueur
+  /// exacte d'un E.164 maximal — deviendrait un « +100012345678901 », s'installerait
+  /// comme adresse du fil, et fusionnerait avec le contact qui aurait le malheur de
+  /// porter ce numéro. Instagram n'y échappe que par la longueur de ses identifiants ;
+  /// on ne laisse plus le hasard décider. Réseau inconnu : on laisse passer, l'état de
+  /// bridge repassera derrière (cf. `applyBridge`).
+  private static func networkMayCarryPhoneNumbers(_ network: MessageNetwork?) -> Bool {
+    guard let bridge = network?.bridge else { return true }
+    return bridge.identifiersArePhoneNumbers
   }
 
   // MARK: - Arrivées et départs

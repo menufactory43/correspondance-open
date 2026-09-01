@@ -65,7 +65,6 @@
 		72C453A5065BFAAE4ECBE3EC /* NewGroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D795885D36B118B751ABF6B2 /* NewGroupSheet.swift */; };
 		73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9204E0947294308F58D53C /* MessageBubbleView.swift */; };
 		74879E315ECC26508E7130ED /* QuickReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159B414D35163785B3368CC9 /* QuickReplyTests.swift */; };
-		74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */; };
 		76E873AC961652BB6447FF67 /* ThreadComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F182E185A81655BCD5EF0FE6 /* ThreadComposer.swift */; };
 		7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */; };
 		778505358D6414659E088520 /* DetachedWindowStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4151D8EBFA079B28AAEB4660 /* DetachedWindowStateTests.swift */; };
@@ -114,6 +113,7 @@
 		D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
 		D715DF3EF9D0387064702836 /* IMessageAttachmentSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */; };
+		D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */; };
 		D91D4B35B2A3A6F8A4C99B2B /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D2CE4167125A5E3D61756E /* ThreadView.swift */; };
 		DA616E7027C048BDBFFD8BA3 /* NewGroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75FE8F29C63BB7A4379AADA /* NewGroupSheet.swift */; };
 		DBB325F9306CED3C8C8B92B8 /* MessageActionsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */; };
@@ -190,6 +190,7 @@
 		0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Notifications.swift"; sourceTree = "<group>"; };
 		0C12CE26EAAA391CC9194D18 /* CorrespondanceTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CorrespondanceTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0F2AFCEFE15D88844C9879FE /* LaunchExperiment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperiment.swift; sourceTree = "<group>"; };
+		112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeWebLoginView.swift; sourceTree = "<group>"; };
 		1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetachedWindowState.swift; sourceTree = "<group>"; };
 		13F4051D4B4D35D826FCBC41 /* CorrespondanceiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceiOSApp.swift; sourceTree = "<group>"; };
 		14C444A549BA3C7D7093F38E /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
@@ -229,7 +230,6 @@
 		503F3F88679B6D47523DF6E9 /* RelayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayStore.swift; sourceTree = "<group>"; };
 		506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageChatDatabaseTests.swift; sourceTree = "<group>"; };
 		5134D90E3C3D585B478FDD21 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstagramWebLoginView.swift; sourceTree = "<group>"; };
 		55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAvatarView.swift; sourceTree = "<group>"; };
 		56ABFEA2CE8EC6FCC0E82519 /* SettingsSendingPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSendingPane.swift; sourceTree = "<group>"; };
 		5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CorrespondanceiOSNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -564,7 +564,7 @@
 			isa = PBXGroup;
 			children = (
 				1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */,
-				524957C4AD72CCE0BA86A7D3 /* InstagramWebLoginView.swift */,
+				112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */,
 				A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */,
 				6C2362886157441127E0488B /* SettingsAppearancePane.swift */,
 				471DBB431518CAF077924600 /* SettingsAutomationPane.swift */,
@@ -1022,6 +1022,7 @@
 			files = (
 				95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */,
 				C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */,
+				D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */,
 				B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */,
 				FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */,
 				F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */,
@@ -1059,7 +1060,6 @@
 				6C5D74E105C8D000F664DE85 /* InboxStore+Mentions.swift in Sources */,
 				EB9BF4A84E3FF11A77F95899 /* InboxStore+Relay.swift in Sources */,
 				92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */,
-				74B06FF03D7D71E1B5B862B7 /* InstagramWebLoginView.swift in Sources */,
 				FFDC2FEB7122DD8798DD2C33 /* LaunchExperiment.swift in Sources */,
 				40276C56251E072B800E7657 /* LaunchGate.swift in Sources */,
 				E8096E3B2FE11B4EC42F80CE /* LaunchWarmup.swift in Sources */,

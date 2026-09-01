@@ -33,6 +33,8 @@ struct SettingsAccountsPane: View {
           donne un code d’appairage.
           Instagram : @instagrambot demande les cookies d’une session instagram.com — \
           la feuille explique où les prendre.
+          Messenger : @messengerbot fait pareil, sur facebook.com — la connexion se fait \
+          par e-mail et mot de passe dans la fenêtre, 2FA comprise.
           Signal : @signalbot renvoie un QR à scanner depuis Réglages → Appareils liés. \
           Le pont ne verra que les messages postérieurs à la liaison.
           """

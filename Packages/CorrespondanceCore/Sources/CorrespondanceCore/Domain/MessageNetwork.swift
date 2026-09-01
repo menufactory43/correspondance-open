@@ -5,6 +5,10 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   case signal
   case whatsapp
   case instagram
+  /// Messenger passe par le même pont que les autres réseaux de Meta, mais par
+  /// son propre binaire (mautrix-meta, tag sans `ig-`) et son propre salon de
+  /// gestion : côté app, c'est un réseau à part entière, pas une variante d'Instagram.
+  case messenger
   /// La note à soi : le seul fil qui ne vienne d'aucun réseau. Il vit dans le
   /// Relais, dans un salon dont on est le seul membre — de quoi se laisser un
   /// mot, une adresse, une photo, et le retrouver sur l'autre appareil.
@@ -18,6 +22,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .signal: "Signal"
     case .whatsapp: "WhatsApp"
     case .instagram: "Instagram"
+    case .messenger: "Messenger"
     case .selfNote: "Note à soi"
     }
   }
@@ -28,6 +33,9 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .signal: "antenna.radiowaves.left.and.right"
     case .whatsapp: "phone.bubble.fill"
     case .instagram: "camera.fill"
+    // L'éclair de Messenger, au plus près de ce que SF Symbols sait dire d'un
+    // réseau qu'Apple ne nomme pas. Disponible depuis macOS 11 / iOS 14.
+    case .messenger: "bolt.horizontal.circle.fill"
     case .selfNote: "note.text"
     }
   }

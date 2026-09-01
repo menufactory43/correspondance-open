@@ -5,7 +5,7 @@ import CorrespondanceCore
 ///
 /// Deux gestes, jamais confondus : **pour tout le monde** part sur le réseau
 /// (une redaction Matrix, que les ponts traduisent en suppression WhatsApp /
-/// Signal / Instagram) ; **ici** ne quitte pas la machine — l'identifiant rejoint
+/// Signal / Instagram / Messenger) ; **ici** ne quitte pas la machine — l'identifiant rejoint
 /// `HiddenMessageStore` et le fil cesse de le montrer, sur tous les réseaux.
 extension InboxStore {
   /// Ce message peut-il partir du réseau lui-même ?
@@ -19,7 +19,7 @@ extension InboxStore {
     switch conversation.network {
     case .iMessage: return false
     // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
-    case .signal, .whatsapp, .instagram, .selfNote: return isMatrixConnected
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote: return isMatrixConnected
     }
   }
 

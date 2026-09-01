@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Ce n'est pas une maquette : les conversations et les messages sortent du
 /// VRAI `MatrixSyncParser`, appliqué aux VRAIS payloads mautrix (WhatsApp,
-/// Signal, Instagram). Ce qui s'affiche en démonstration est donc exactement ce
+/// Signal, Instagram, Messenger). Ce qui s'affiche en démonstration est donc exactement ce
 /// que le Relais afficherait — noms de portails, groupes, réactions, citations,
 /// accusés de lecture compris. Sert aux captures d'écran et à travailler la
 /// mise en page sans NUC sous la main.
