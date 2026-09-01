@@ -326,7 +326,9 @@ struct ThreadComposer: View {
     .padding(.vertical, 9)
     .glassSurface(cornerRadius: 19, fallbackFill: theme.paperSecondary, border: theme.edge)
     .opacity(lockHintOpacity)
-    .offset(y: -58 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
+    // Assez haut pour passer au-dessus d'une citation dans la pilule — et
+    // toujours à la même hauteur, citation ou pas : la main apprend un geste.
+    .offset(y: -100 - min(-min(holdTranslation.height, 0), VoiceHoldGesture.threshold) * 0.2)
     .onAppear {
       guard !reduceMotion else { return }
       withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { hintBreathes = true }
