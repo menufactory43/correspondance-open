@@ -5,7 +5,10 @@ import Foundation
 /// avec « les propriétaires seuls déclenchent » (cf. `docs/PLAN-relais-agents.md`).
 ///
 /// Règle : jamais `~`, jamais le dossier courant du service. Une room sans
-/// dépôt lié travaille dans `~/Correspondance/<agent>/<room>`, créé au besoin.
+/// dépôt lié travaille dans `~/.correspondance-<agent>/ateliers/<room>`, créé
+/// au besoin — sous le dossier caché de l'agent (`AgentHome`), et surtout pas
+/// sous `~/Correspondance` : sur un disque insensible à la casse, c'est le même
+/// chemin que `~/correspondance`, et cc a écrit dans le dépôt de l'app.
 public enum Workspace {
 
   /// Le dossier d'un tour. `binding` est le dépôt lié à cette room dans la
@@ -17,9 +20,8 @@ public enum Workspace {
     home: URL = FileManager.default.homeDirectoryForCurrentUser
   ) -> String {
     if let binding, !binding.isEmpty, isAcceptable(binding, home: home) { return binding }
-    return home
-      .appending(path: "Correspondance")
-      .appending(path: sanitize(agent))
+    return AgentHome.directory(agent: agent, home: home)
+      .appending(path: "ateliers")
       .appending(path: sanitize(roomID))
       .path()
   }

@@ -26,7 +26,7 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
   CLI, `session/set_mode` en ACP) et on répond `allow_always` à toute demande. Ce qui
   borne le risque n'est plus une question posée mais :
   1. **un dossier par room, jamais `~`** — le `cwd` d'un tour est
-     `~/Correspondance/<agent>/<room>` tant qu'aucun dépôt n'est lié (`Workspace`) ;
+     `~/.correspondance-<agent>/ateliers/<room>` tant qu'aucun dépôt n'est lié (`Workspace`) — jamais `~/Correspondance`, qui est `~/correspondance` sur un disque insensible à la casse, et cc y a écrit une fois ;
   2. **les propriétaires seuls déclenchent**, et un **fantôme de pont** (`@whatsapp_…`)
      jamais — même inscrit par erreur dans `owners` (`Trigger.isBridgeGhost`) ;
   3. **le journal des tours** dans la room console (`fr.correspondance.agent.journal`) :

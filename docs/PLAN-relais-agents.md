@@ -173,7 +173,7 @@ le serveur MCP d'approbation.
 
 Ce qui borne le risque n'est de toute façon pas la carte — c'est ce triptyque, et il reste :
 
-1. **Un dossier par room, jamais `~`.** Le `cwd` d'un tour est `~/Correspondance/<agent>/<room>`
+1. **Un dossier par room, jamais `~`.** Le `cwd` d'un tour est `~/.correspondance-<agent>/ateliers/<room>`
    tant qu'aucun dépôt n'est lié. C'est le seul vrai rayon d'explosion.
 2. **Seuls les propriétaires déclenchent**, et un fantôme de pont ne déclenche jamais.
 3. **Le journal des tours** dans la room console : qui, quoi, quels outils, combien de temps.

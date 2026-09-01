@@ -74,7 +74,7 @@ Ce qui existe : owners seuls, invitation par un propriétaire seulement, plafond
 **À faire.**
 - **Trois paliers d'outils** plutôt qu'une liste brute, réglés depuis l'app par agent : *Lire* (Read/Grep/Glob/Web), *Écrire* (+ Edit/Write dans le dossier lié), *Exécuter* (+ Bash). Tout ce qui déborde du palier est demandé dans la room. Les listes exactes vivent dans `AgentConfig.Presets`, versionnées.
 - **Le 👍 dans l'app** (iOS + Mac) : la demande de permission rendue comme une carte avec deux boutons, pas une réaction à trouver. Sans ça, dans une room avec un tiers, la question est invisible.
-- **Un dossier par room, jamais `~`** par défaut : le `cwd` de l'agent est un dossier dédié (`~/Correspondance/cc/<room>`) tant qu'on n'a pas lié un dépôt.
+- **Un dossier par room, jamais `~`** par défaut : le `cwd` de l'agent est un dossier dédié (`~/.correspondance-agent/ateliers/<room>`) tant qu'on n'a pas lié un dépôt.
 - **Secrets** : mot de passe du bot dans le Trousseau sur le Mac, `0600` sur un hôte ; jamais dans une room sauf décision explicite (question ouverte n° 3).
 - **Journal** : chaque tour (qui, quoi, outils, durée) posté dans la room console — relisible depuis l'iPhone.
 - **E2EE** : un agent est un utilisateur ; dans une room chiffrée il faudrait qu'il soit un *appareil* avec ses clés. Hors périmètre tant que le Relais n'est pas chiffré (décision produit existante), à noter pour ne pas se fermer la porte.
