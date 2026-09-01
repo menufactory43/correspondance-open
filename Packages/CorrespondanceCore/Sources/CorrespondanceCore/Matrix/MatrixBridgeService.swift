@@ -7,10 +7,14 @@ import Foundation
 /// **un salon de gestion par pont** : le bot WhatsApp et le bot Instagram ne se
 /// parlent pas, et une commande envoyée au mauvais bot reste sans réponse.
 public actor MatrixBridgeService {
-  private let client: MatrixClient
+  /// Interne, et pas `private` : les extensions du service (la console d'un
+  /// agent, par exemple) vivent dans d'autres fichiers du même module.
+  let client: MatrixClient
   private var rooms: [String: MatrixRoomModel] = [:]
   private var nextBatch: String?
-  private var selfUserID: String = ""
+  /// Interne : les extensions du service, dans leurs propres fichiers, en ont
+  /// besoin pour déduire le serveur (le MXID d'un agent, par exemple).
+  private(set) var selfUserID: String = ""
   private var didHydrate = false
   /// Salon de gestion par réseau (commandes `login`, `pm`…).
   private var managementRoomIDs: [MessageNetwork: String] = [:]

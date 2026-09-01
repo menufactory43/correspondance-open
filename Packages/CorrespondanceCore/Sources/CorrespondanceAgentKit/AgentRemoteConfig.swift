@@ -16,7 +16,7 @@ import Foundation
 public struct AgentRemoteConfig: Sendable, Equatable {
   /// La version du schéma. Un agent plus vieux que l'event refuse de le lire
   /// plutôt que d'en deviner la moitié.
-  public static let currentVersion = 1
+  public static let currentVersion = AgentWire.configVersion
 
   public var version: Int
   /// Le nom de l'agent que cet event configure (`cc`, `hermes`) — une room
@@ -51,23 +51,23 @@ public struct AgentRemoteConfig: Sendable, Equatable {
   // MARK: - L'event
 
   public init?(content: MatrixJSON) {
-    guard let agent = content["agent"]?.stringValue else { return nil }
+    guard let agent = content[AgentWire.ConfigKey.agent]?.stringValue else { return nil }
     self.agent = agent
-    version = content["version"]?.intValue ?? 1
-    owners = content["owners"]?.arrayValue?.compactMap(\.stringValue)
-    trigger = content["trigger"]?.stringValue
-    hourlyCap = content["hourlyCap"]?.intValue
-    defaultMode = content["defaultMode"]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:))
-    backend = content["backend"]?.stringValue.flatMap(AgentConfig.Backend.init(rawValue:))
-    toolPreset = content["toolPreset"]?.stringValue
-    model = content["model"]?.stringValue
-    systemPrompt = content["systemPrompt"]?.stringValue
-    acpCommand = content["acpCommand"]?.stringValue
-    if let object = content["rooms"]?.objectValue {
+    version = content[AgentWire.ConfigKey.version]?.intValue ?? 1
+    owners = content[AgentWire.ConfigKey.owners]?.arrayValue?.compactMap(\.stringValue)
+    trigger = content[AgentWire.ConfigKey.trigger]?.stringValue
+    hourlyCap = content[AgentWire.ConfigKey.hourlyCap]?.intValue
+    defaultMode = content[AgentWire.ConfigKey.defaultMode]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:))
+    backend = content[AgentWire.ConfigKey.backend]?.stringValue.flatMap(AgentConfig.Backend.init(rawValue:))
+    toolPreset = content[AgentWire.ConfigKey.toolPreset]?.stringValue
+    model = content[AgentWire.ConfigKey.model]?.stringValue
+    systemPrompt = content[AgentWire.ConfigKey.systemPrompt]?.stringValue
+    acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
+    if let object = content[AgentWire.ConfigKey.rooms]?.objectValue {
       rooms = object.reduce(into: [String: AgentConfig.RoomBinding]()) { result, entry in
         result[entry.key] = AgentConfig.RoomBinding(
-          cwd: entry.value["cwd"]?.stringValue,
-          mode: entry.value["mode"]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:))
+          cwd: entry.value[AgentWire.ConfigKey.roomCwd]?.stringValue,
+          mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:))
         )
       }
     }
@@ -76,23 +76,23 @@ public struct AgentRemoteConfig: Sendable, Equatable {
   /// Ce que l'app écrit dans la room console.
   public func content() -> MatrixJSON {
     var fields: [String: MatrixJSON] = [
-      "version": .number(Double(version)),
-      "agent": .string(agent),
+      AgentWire.ConfigKey.version: .number(Double(version)),
+      AgentWire.ConfigKey.agent: .string(agent),
     ]
-    if let owners { fields["owners"] = .array(owners.map(MatrixJSON.string)) }
-    if let trigger { fields["trigger"] = .string(trigger) }
-    if let hourlyCap { fields["hourlyCap"] = .number(Double(hourlyCap)) }
-    if let defaultMode { fields["defaultMode"] = .string(defaultMode.rawValue) }
-    if let backend { fields["backend"] = .string(backend.rawValue) }
-    if let toolPreset { fields["toolPreset"] = .string(toolPreset) }
-    if let model { fields["model"] = .string(model) }
-    if let systemPrompt { fields["systemPrompt"] = .string(systemPrompt) }
-    if let acpCommand { fields["acpCommand"] = .string(acpCommand) }
+    if let owners { fields[AgentWire.ConfigKey.owners] = .array(owners.map(MatrixJSON.string)) }
+    if let trigger { fields[AgentWire.ConfigKey.trigger] = .string(trigger) }
+    if let hourlyCap { fields[AgentWire.ConfigKey.hourlyCap] = .number(Double(hourlyCap)) }
+    if let defaultMode { fields[AgentWire.ConfigKey.defaultMode] = .string(defaultMode.rawValue) }
+    if let backend { fields[AgentWire.ConfigKey.backend] = .string(backend.rawValue) }
+    if let toolPreset { fields[AgentWire.ConfigKey.toolPreset] = .string(toolPreset) }
+    if let model { fields[AgentWire.ConfigKey.model] = .string(model) }
+    if let systemPrompt { fields[AgentWire.ConfigKey.systemPrompt] = .string(systemPrompt) }
+    if let acpCommand { fields[AgentWire.ConfigKey.acpCommand] = .string(acpCommand) }
     if let rooms {
-      fields["rooms"] = .object(rooms.mapValues { binding in
+      fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
         var entry: [String: MatrixJSON] = [:]
-        if let cwd = binding.cwd { entry["cwd"] = .string(cwd) }
-        if let mode = binding.mode { entry["mode"] = .string(mode.rawValue) }
+        if let cwd = binding.cwd { entry[AgentWire.ConfigKey.roomCwd] = .string(cwd) }
+        if let mode = binding.mode { entry[AgentWire.ConfigKey.roomMode] = .string(mode.rawValue) }
         return .object(entry)
       })
     }

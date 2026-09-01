@@ -325,6 +325,28 @@ public actor MatrixClient {
     return json.string(at: "event_id")
   }
 
+  /// Un event **d'état** : il n'a pas d'historique, il a une valeur courante.
+  /// C'est la forme d'une configuration — la room console d'un agent porte la
+  /// sienne, et l'agent la relit à chaque `/sync` (`fr.correspondance.agent.config`).
+  ///
+  /// Pas de `txnId` ici : l'état s'écrase, il ne se rejoue pas. Deux écritures
+  /// identiques laissent la même valeur, ce qui est exactement l'idempotence
+  /// qu'on veut.
+  @discardableResult
+  public func sendStateEvent(
+    roomID: String,
+    type: String,
+    stateKey: String = "",
+    content: MatrixJSON
+  ) async throws -> String? {
+    let json = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/state/\(Self.escape(type))/\(Self.escape(stateKey))",
+      body: content
+    )
+    return json.string(at: "event_id")
+  }
+
   /// Modifier un message déjà envoyé (MSC2676, `m.replace`).
   ///
   /// Trois morceaux obligatoires : le `body` de repli, préfixé d'une étoile,

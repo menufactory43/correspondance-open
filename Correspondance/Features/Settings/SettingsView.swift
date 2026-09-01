@@ -181,85 +181,192 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   }
 }
 
-/// Le seul réglage que l'agent lise.
+/// Les réglages de « cc » — et depuis la phase 1, ils vivent sur le Relais.
 ///
-/// « cc » ne tourne pas dans l'app : c'est un processus à part, sur le Relais.
-/// Ce choix-ci part dans l'account data Matrix globale, et l'agent l'y relit à
-/// son prochain `/sync` — d'où la phrase du bas, qui dit que rien n'est
-/// instantané. En tête-à-tête l'agent répond toujours à voix haute : il n'y a
-/// personne à ménager, et ce réglage n'a donc rien à en dire.
+/// « cc » ne tourne pas dans l'app : c'est un processus à part, sur son hôte.
+/// Ce que cet écran écrit part dans sa **room console** (event d'état
+/// `fr.correspondance.agent.config`), qu'il relit à chaque `/sync` — d'où la
+/// phrase du bas, qui dit que rien n'est instantané. Le mode brouillon/voix
+/// haute continue d'être écrit *aussi* dans l'account data, une version encore,
+/// pour un agent qui n'aurait pas été redéployé.
 struct SettingsAgentPane: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
 
-  /// Ce que le scan a dit — au premier affichage, puis à chaque « Scanner ».
-  @State private var enginesDetail: String?
-  @State private var isScanning = false
+  @State private var console: MatrixBridgeService.AgentConsole?
+  @State private var isLoading = false
+  @State private var isActivating = false
+  @State private var erreur: String?
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
-      SettingsCard(
-        title: "Moteurs",
-        footnote: "Les moteurs vivent là où l’agent tourne (le Relais), pas sur ce Mac. "
-          + "cc scanne sa machine à son démarrage et publie ce qu’il y trouve."
-      ) {
-        SettingsRow(
-          label: "Sur la machine de cc",
-          detail: enginesDetail ?? "pas encore scanné",
-          systemImage: "cpu"
-        ) {
-          if isScanning {
-            ProgressView().controlSize(.small)
-          } else {
-            Button("Scanner") { Task { await scanEngines() } }
-          }
-        }
+      consoleCard
+
+      if let console, let config = console.config {
+        reglagesCard(console: console, config: config)
+        journalCard(console: console)
       }
 
-      SettingsCard(
-        title: "Réponses de cc",
-        footnote: "En tête-à-tête avec toi, cc répond toujours à voix haute. "
-          + "Ce choix ne concerne que les conversations où d’autres personnes lisent."
-      ) {
-        SettingsRow(
-          label: "Dans les conversations de groupe",
-          detail: store.agentDefaultMode.subtitleFR,
-          systemImage: "person.2.wave.2"
-        ) {
-          Picker("", selection: Binding(
-            get: { store.agentDefaultMode },
-            set: { store.setAgentDefaultMode($0) }
-          )) {
-            Text("Brouillon à valider").tag(AgentSettings.Mode.draft)
-            Text("À voix haute").tag(AgentSettings.Mode.direct)
-          }
-          .pickerStyle(.menu)
-          .frame(width: 190)
-        }
-      }
-
-      Text("Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
+      Text(console == nil
+        ? "Tant que la console n'existe pas, cc tourne sur le fichier de sa machine."
+        : "Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
         .font(Typography.meta(themes.typeface))
         .foregroundStyle(themes.theme.inkTertiary)
     }
-    .task { await scanEngines() }
+    .task { await recharger() }
   }
 
-  /// Lit le dernier status que cc a posté dans la note à soi :
-  /// « moteur hermes · prêts : claude, hermes », daté de son dernier démarrage.
-  private func scanEngines() async {
-    isScanning = true
-    defer { isScanning = false }
-    do {
-      guard let status = try await store.matrix.agentStatus() else {
-        enginesDetail = "cc n’a rien publié — jamais démarré, ou trop ancien pour le dire (redéploie-le)"
-        return
+  // MARK: - Où tourne cc
+
+  private var consoleCard: some View {
+    SettingsCard(
+      title: "cc",
+      footnote: "Les moteurs vivent là où cc tourne, pas sur ce Mac. "
+        + "Il scanne sa machine à son démarrage et publie ce qu'il y trouve."
+    ) {
+      SettingsRow(
+        label: "État",
+        detail: etatDetail,
+        systemImage: "cpu"
+      ) {
+        if isLoading || isActivating {
+          ProgressView().controlSize(.small)
+        } else if console == nil {
+          Button("Activer cc") { Task { await activer() } }
+        } else {
+          Button("Rafraîchir") { Task { await recharger() } }
+        }
       }
-      // L'app parle français ; le formateur suivrait la locale système.
-      let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
-      enginesDetail = "\(status.engines) — au démarrage de cc, \(age)"
-    } catch {
-      enginesDetail = "le Relais n’a pas répondu : \(error.localizedDescription)"
     }
+  }
+
+  private var etatDetail: String {
+    if let erreur { return erreur }
+    guard let console else { return "pas encore de console — cc tourne sur son fichier" }
+    guard let status = console.status else { return "console ouverte ; cc n'a encore rien publié" }
+    let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
+    return "\(status.engines) — \(age)"
+  }
+
+  // MARK: - Ce que cc a le droit de faire
+
+  private func reglagesCard(console: MatrixBridgeService.AgentConsole, config: AgentConsoleConfig) -> some View {
+    SettingsCard(
+      title: "Réglages de cc",
+      footnote: "cc travaille dans un dossier par conversation — jamais ta maison — "
+        + "tant qu'aucun dépôt n'y est lié. C'est ce qui borne ce qu'il peut atteindre."
+    ) {
+      SettingsRow(
+        label: "Outils",
+        detail: (AgentConsoleConfig.ToolPreset(rawValue: config.toolPreset ?? "")?.subtitleFR)
+          ?? "réglés à la main sur sa machine",
+        systemImage: "wrench.and.screwdriver"
+      ) {
+        Picker("", selection: Binding(
+          get: { AgentConsoleConfig.ToolPreset(rawValue: config.toolPreset ?? "") ?? .executer },
+          set: { palier in
+            Task { await ecrire(console: console) { $0.toolPreset = palier.rawValue } }
+          }
+        )) {
+          ForEach(AgentConsoleConfig.ToolPreset.allCases) { palier in
+            Text(palier.labelFR).tag(palier)
+          }
+        }
+        .pickerStyle(.menu)
+        .frame(width: 220)
+      }
+
+      SettingsRow(
+        label: "Dans les conversations de groupe",
+        detail: (config.defaultMode ?? store.agentDefaultMode).subtitleFR,
+        systemImage: "person.2.wave.2"
+      ) {
+        Picker("", selection: Binding(
+          get: { config.defaultMode ?? store.agentDefaultMode },
+          set: { mode in
+            // L'account data reste écrite une version encore : un agent pas
+            // redéployé ne lit que celle-là.
+            store.setAgentDefaultMode(mode)
+            Task { await ecrire(console: console) { $0.defaultMode = mode } }
+          }
+        )) {
+          Text("Brouillon à valider").tag(AgentSettings.Mode.draft)
+          Text("À voix haute").tag(AgentSettings.Mode.direct)
+        }
+        .pickerStyle(.menu)
+        .frame(width: 190)
+      }
+
+      SettingsRow(
+        label: "Demandes par heure",
+        detail: "au-delà, cc répond qu'il faut attendre",
+        systemImage: "gauge.with.needle"
+      ) {
+        Picker("", selection: Binding(
+          get: { config.hourlyCap ?? 30 },
+          set: { plafond in Task { await ecrire(console: console) { $0.hourlyCap = plafond } } }
+        )) {
+          ForEach([10, 30, 60, 120], id: \.self) { Text("\($0)").tag($0) }
+        }
+        .pickerStyle(.menu)
+        .frame(width: 90)
+      }
+    }
+  }
+
+  // MARK: - Ce que cc a fait
+
+  private func journalCard(console: MatrixBridgeService.AgentConsole) -> some View {
+    SettingsCard(
+      title: "Derniers tours",
+      footnote: console.journal.isEmpty
+        ? "cc n'a encore rien fait depuis que sa console existe."
+        : "Chaque tour laisse une trace ici : qui a demandé, quels outils ont servi, combien de temps."
+    ) {
+      ForEach(console.journal.prefix(6)) { tour in
+        SettingsRow(
+          label: tour.prompt.isEmpty ? "(sans texte)" : tour.prompt,
+          detail: tour.summaryFR,
+          systemImage: "clock.arrow.circlepath"
+        ) {
+          Text(tour.at.formatted(date: .omitted, time: .shortened))
+            .font(Typography.meta(themes.typeface))
+            .foregroundStyle(themes.theme.inkTertiary)
+        }
+      }
+    }
+  }
+
+  // MARK: -
+
+  private func recharger() async {
+    isLoading = true
+    defer { isLoading = false }
+    erreur = nil
+    console = await store.loadAgentConsole()
+  }
+
+  private func activer() async {
+    isActivating = true
+    defer { isActivating = false }
+    erreur = nil
+    guard let ouverte = await store.activateAgentConsole() else {
+      erreur = "le Relais n'a pas voulu ouvrir la console"
+      return
+    }
+    console = ouverte
+  }
+
+  /// Corrige la config et l'écrit. On recharge derrière : ce que l'écran montre
+  /// est ce que le Relais porte, pas ce qu'on aurait aimé y mettre.
+  private func ecrire(
+    console: MatrixBridgeService.AgentConsole,
+    _ mutation: (inout AgentConsoleConfig) -> Void
+  ) async {
+    guard var config = console.config else { return }
+    mutation(&config)
+    let parti = await store.writeAgentConsoleConfig(config, in: console.roomID)
+    if !parti { erreur = "le réglage n'est pas parti — il est resté sur ce Mac" }
+    await recharger()
   }
 }

@@ -139,6 +139,7 @@
 		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
+		F3BAFA4B3445328D8221B7D5 /* InboxStore+AgentConsole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */; };
 		F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */; };
 		F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B38B0A2FFD77B5B638F0F /* MessageBubble.swift */; };
 		FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBED963D2D0FDDC25F5A0072 /* FocusView.swift */; };
@@ -259,6 +260,7 @@
 		73E49DB73F8B4BF73B3C346C /* MessageAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAvatarView.swift; sourceTree = "<group>"; };
 		75F798C1E52A24C90A294483 /* ConversationRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRow.swift; sourceTree = "<group>"; };
 		76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+AgentConsole.swift"; sourceTree = "<group>"; };
 		7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsPermissionBanner.swift; sourceTree = "<group>"; };
 		7C72EC2976B9D7432A734100 /* NetworkRailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRailView.swift; sourceTree = "<group>"; };
 		7FC472EC8CA01BA228483427 /* HoverZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverZone.swift; sourceTree = "<group>"; };
@@ -718,6 +720,7 @@
 				DE05DF5AB0829B0A55A79DD4 /* IMessageSummaryInfo.swift */,
 				AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */,
 				16EE06AF0526360BC841BE21 /* InboxStore.swift */,
+				7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */,
 				9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */,
 				8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */,
 				8FCCC768619D417D8C2B6ACC /* InboxStore+Group.swift */,
@@ -1080,6 +1083,7 @@
 				2296A866F422DD1F9A2AE02E /* IMessageSummaryInfo.swift in Sources */,
 				EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */,
 				7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */,
+				F3BAFA4B3445328D8221B7D5 /* InboxStore+AgentConsole.swift in Sources */,
 				9DE1C25B859BECA488321758 /* InboxStore+Deletion.swift in Sources */,
 				272F9F6E19B8F69616CED1F3 /* InboxStore+Detached.swift in Sources */,
 				FE60F6A979BA6DE4DFFA3AF6 /* InboxStore+Group.swift in Sources */,
