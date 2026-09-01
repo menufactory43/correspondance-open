@@ -371,6 +371,53 @@ public actor MatrixBridgeService {
     /// Le démarrage qui l'a publiée — un status vieux d'un mois parle d'un
     /// agent qui ne redémarre plus.
     public var publishedAt: Date
+
+    public init(engines: String, publishedAt: Date) {
+      self.engines = engines
+      self.publishedAt = publishedAt
+    }
+
+    /// La machine où l'agent tourne, lue dans « cc tourne sur umbrel depuis
+    /// 14 h 02 · moteur acp · prêts : claude ».
+    ///
+    /// **C'est la seule preuve qu'on ait de l'hôte d'un agent distant** : l'app
+    /// n'a rien installé là-bas et ne peut pas y regarder. Un `nil` se dit
+    /// « on ne sait pas où », jamais « sur ce Mac ».
+    public var host: String? {
+      guard let apres = engines.range(of: "tourne sur ") else { return nil }
+      let reste = engines[apres.upperBound...]
+      let fin = reste.firstIndex(of: "·") ?? reste.endIndex
+      var nom = reste[..<fin]
+      if let depuis = nom.range(of: " depuis ") { nom = nom[..<depuis.lowerBound] }
+      let texte = nom.trimmingCharacters(in: .whitespaces)
+      return texte.isEmpty ? nil : texte
+    }
+
+    /// Le moteur configuré, lu dans « · moteur acp · ».
+    public var backend: String? {
+      guard let apres = engines.range(of: "moteur ") else { return nil }
+      let reste = engines[apres.upperBound...]
+      let fin = reste.firstIndex(of: "·") ?? reste.endIndex
+      let texte = reste[..<fin].trimmingCharacters(in: .whitespaces)
+      return texte.isEmpty ? nil : texte
+    }
+
+    /// Les moteurs prêts **sur la machine de l'agent**, lus dans
+    /// « prêts : claude, hermes ». Vide veut dire « il n'en a annoncé aucun »,
+    /// pas « il n'y en a pas » : un agent d'avant le scan n'en publie aucun.
+    public var enginesReady: [String] {
+      guard let apres = engines.range(of: "prêts : ") else { return [] }
+      return engines[apres.upperBound...]
+        .split(separator: ",")
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty && $0 != "aucun" }
+    }
+
+    /// Un status daté de moins d'une heure : l'agent a donné signe de vie.
+    /// Le seuil est large exprès — un agent qui n'a rien à faire ne poste rien.
+    public func isFresh(now: Date = Date(), silenceMax: TimeInterval = 3600) -> Bool {
+      now.timeIntervalSince(publishedAt) <= silenceMax
+    }
   }
 
   /// Le dernier status de cc dans la note à soi, ou `nil` : agent jamais
@@ -385,25 +432,34 @@ public actor MatrixBridgeService {
     return AgentStatus(engines: body, publishedAt: status.sentAt)
   }
 
-  /// L'agent est-il déjà membre (ou invité) de ce fil ?
-  public func hasAgent(conversationID: String) -> Bool {
+  /// Cet agent est-il déjà membre (ou invité) de ce fil ?
+  public func hasAgent(conversationID: String, agent: String = MatrixIdentity.agentName) -> Bool {
     hydrateIfNeeded()
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }
-    return model.members[agentUserID]?.isActive == true
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
+    return model.members[userID]?.isActive == true
+  }
+
+  /// Les agents présents (ou invités) dans ce fil, parmi ceux qu'on nomme.
+  /// C'est ce qui décide entre un bouton « Inviter cc » et un menu : la
+  /// question « lesquels sont là » se pose au salon, pas à un réglage.
+  public func agentsPresent(conversationID: String, among agents: [String]) -> [String] {
+    agents.filter { hasAgent(conversationID: conversationID, agent: $0) }
   }
 
   /// Invite « cc » dans le fil. Il ne rejoint que sur MON invitation — c'est
   /// précisément elle. Le fil affichera « cc a rejoint la conversation ».
-  public func inviteAgent(conversationID: String) async throws {
+  public func inviteAgent(conversationID: String, agent: String = MatrixIdentity.agentName) async throws {
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
     // Le pont ne m'a pas toujours donné le droit d'inviter dans ce portail :
     // `withRoomPower` se hisse et réessaie. On n'ajoute personne au groupe
     // réel — cc est un utilisateur Matrix, les ponts ne relaient pas les
     // adhésions de gens qui n'ont pas de compte sur le réseau.
     try await withRoomPower(roomID: roomID) {
-      try await self.client.invite(roomID: roomID, userID: self.agentUserID)
+      try await self.client.invite(roomID: roomID, userID: userID)
     }
   }
 

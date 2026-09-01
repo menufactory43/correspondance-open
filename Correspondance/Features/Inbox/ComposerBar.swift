@@ -11,10 +11,13 @@ struct ComposerBar: View {
   var theme: WritingTheme
   var onAttach: () -> Void
   var onSendLater: () -> Void = {}
-  var onInviteAgent: (() -> Void)?
-  /// La voix de cc dans ce fil, quand il y est ; `nil` sinon.
-  var agentVoice: AgentSettings.Mode? = nil
-  var onToggleAgentVoice: (() -> Void)? = nil
+  /// Les agents qu'on peut encore inviter ici — vide quand ils y sont tous.
+  var invitableAgents: [String] = []
+  var onInviteAgent: ((String) -> Void)?
+  /// La voix de chaque agent **présent** dans ce fil ; vide quand il n'y en a
+  /// aucun.
+  var agentVoices: [AgentVoice] = []
+  var onToggleAgentVoice: ((String) -> Void)? = nil
   /// « Gérer le groupe… » — nommer, ajouter, retirer. `nil` quand le fil n'est
   /// pas un groupe, ou qu'aucun de ces gestes n'est relayé par son pont.
   var onManageGroup: (() -> Void)?
@@ -79,8 +82,9 @@ struct ComposerBar: View {
           isExpanded: $isTrayExpanded,
           onAttach: onAttach,
           onSendLater: onSendLater,
+          invitableAgents: invitableAgents,
           onInviteAgent: onInviteAgent,
-          agentVoice: agentVoice,
+          agentVoices: agentVoices,
           onToggleAgentVoice: onToggleAgentVoice,
           onManageGroup: onManageGroup
         )

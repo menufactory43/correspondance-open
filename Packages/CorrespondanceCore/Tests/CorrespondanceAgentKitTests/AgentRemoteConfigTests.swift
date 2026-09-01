@@ -35,6 +35,24 @@ final class AgentRemoteConfigTests: XCTestCase {
     XCTAssertEqual(apres.rooms, fichier.rooms)
   }
 
+  /// Les pairs viennent du Relais : c'est l'app qui les écrit quand plusieurs
+  /// agents partagent un salon, et c'est ce qui arme la mention obligatoire et
+  /// la non-relance mutuelle. Sans ce chemin, deux agents dans une même room se
+  /// répondraient l'un l'autre jusqu'au plafond horaire.
+  func testLesPairsArriventParLaConsole() {
+    var remote = AgentRemoteConfig(agent: "cc")
+    remote.peers = ["@hermes:correspondance.local"]
+    XCTAssertEqual(fichier.applying(remote).peers, ["@hermes:correspondance.local"])
+  }
+
+  /// Et ils survivent à l'aller-retour par l'event : une clé lue d'un côté et
+  /// écrite de l'autre est le genre de divergence qu'on ne voit qu'en vrai.
+  func testLesPairsSurviventALEvent() {
+    var remote = AgentRemoteConfig(agent: "cc")
+    remote.peers = ["@hermes:s", "@codex:s"]
+    XCTAssertEqual(AgentRemoteConfig(content: remote.content())?.peers, ["@hermes:s", "@codex:s"])
+  }
+
   /// L'amorce est l'ancre : rien d'écrit dans une room ne fait pointer l'agent
   /// ailleurs ni ne change son identité.
   func testLAmorceNeBougeJamais() {

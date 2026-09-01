@@ -55,21 +55,25 @@ enum AgentLocalHost {
     /// Le binaire n'est pas dans le bundle. **Constaté sur le disque**, jamais
     /// deviné : on regarde `Contents/MacOS/correspondance-agent`.
     case introuvable
-    /// cc est tombé trop de fois de suite. On dit combien, et on renvoie au
+    /// L'agent est tombé trop de fois de suite. On dit combien, et on renvoie au
     /// journal — pas de boucle folle, pas de silence non plus.
     case abandonne(raison: String)
 
-    var labelFR: String {
+    /// Ce que l'écran affiche. Le nom de l'agent est un paramètre : la phrase
+    /// « l'amorce de cc n'est pas sur le disque » était fausse dès qu'on
+    /// regardait `hermes`, et une phrase fausse dans un écran d'état coûte
+    /// plus cher qu'une phrase absente.
+    func labelFR(agent: String = MatrixIdentity.agentName) -> String {
       switch self {
       case .absent: "arrêté"
-      case .actif: "actif — cc répond tant que Correspondance est ouverte"
+      case .actif: "actif — \(agent) répond tant que Correspondance est ouverte"
       case .silencieux(let depuis):
         if let depuis {
           "démarré, mais muet depuis \(Self.ageFR(depuis))"
         } else {
           "démarré, il n'a pas encore publié son premier status"
         }
-      case .incomplet: "l'amorce de cc n'est pas sur le disque"
+      case .incomplet: "l'amorce de \(agent) n'est pas sur le disque"
       case .introuvable: "cette build n'embarque pas l'agent"
       case .abandonne(let raison): raison
       }
@@ -119,10 +123,10 @@ enum AgentLocalHost {
   static func state(agent: String, dernierStatus: Date? = nil) -> State {
     decide(
       binairePresent: AgentProcessHost.Launch.embeddedAgentURL != nil,
-      processusVivant: AgentProcessHost.shared.isRunning,
+      processusVivant: AgentProcessHost.shared.isRunning(agent: agent),
       amorcePresente: hasBootstrap(agent: agent),
       dernierStatus: dernierStatus,
-      abandon: AgentProcessHost.shared.abandon
+      abandon: AgentProcessHost.shared.abandon(agent: agent)
     )
   }
 
@@ -139,6 +143,25 @@ enum AgentLocalHost {
 
   static func setWanted(_ value: Bool, agent: String) {
     UserDefaults.standard.set(value, forKey: wantedKey(agent: agent))
+    // Le drapeau seul ne dit pas *qui* : au lancement il faut la liste, sinon
+    // on ne saurait relancer que l'agent dont on connaît déjà le nom — et un
+    // second agent activé hier resterait mort sans que rien ne le dise.
+    var connus = Set(knownWantedAgents)
+    if value { connus.insert(agent) } else { connus.remove(agent) }
+    UserDefaults.standard.set(connus.sorted(), forKey: wantedListKey)
+  }
+
+  /// La clé de la liste des agents voulus sur ce Mac.
+  static let wantedListKey = "agents.voulus"
+
+  /// Les agents que l'utilisateur a voulus ici, dans l'ordre. C'est un choix
+  /// mémorisé, pas un état : ce qui tourne vraiment se constate (`state`).
+  static var knownWantedAgents: [String] {
+    var noms = Set(UserDefaults.standard.array(forKey: wantedListKey) as? [String] ?? [])
+    // Reprise des installations d'avant la liste : cc y était voulu sans que
+    // personne n'ait écrit son nom nulle part.
+    if isWanted(agent: MatrixIdentity.agentName) { noms.insert(MatrixIdentity.agentName) }
+    return noms.filter { isWanted(agent: $0) }.sorted()
   }
 
   /// Faut-il relancer l'agent au lancement de l'app ? Pur, pour les tests :
@@ -164,12 +187,21 @@ enum AgentLocalHost {
     ), let launch else { return nil }
     if force { setWanted(true, agent: agent) }
     do {
-      try AgentProcessHost.shared.start(launch)
+      try AgentProcessHost.shared.start(launch, agent: agent)
       log.info("agent relancé pour \(agent, privacy: .public)")
     } catch {
       log.error("relance impossible pour \(agent, privacy: .public) : \(error.localizedDescription, privacy: .public)")
     }
     return state(agent: agent)
+  }
+
+  /// Relance **tous** les agents voulus dont l'amorce est là. C'est ce que
+  /// l'app fait à son lancement : `cc` et `hermes` sur ce Mac renaissent tous
+  /// les deux, pas seulement le premier. Rend les noms effectivement relancés,
+  /// pour que l'appelant puisse le dire plutôt que le supposer.
+  @discardableResult
+  static func resumeAll() -> [String] {
+    knownWantedAgents.filter { resume(agent: $0) != nil }
   }
 
   /// Écrit l'amorce, puis démarre l'agent.
@@ -188,13 +220,13 @@ enum AgentLocalHost {
     guard let launch = AgentProcessHost.Launch.embeddedAgent(named: agent) else {
       return .introuvable
     }
-    try AgentProcessHost.shared.start(launch)
+    try AgentProcessHost.shared.start(launch, agent: agent)
     return state(agent: agent)
   }
 
   static func uninstall(agent: String) throws {
     setWanted(false, agent: agent)
-    AgentProcessHost.shared.stop()
+    AgentProcessHost.shared.stop(agent: agent)
     if useLaunchAgent {
       try SMAppService.agent(plistName: plistName(agent: agent)).unregister()
     }
@@ -205,15 +237,15 @@ enum AgentLocalHost {
   /// qui n'en avait aucune — un écran sans action possible est un cul-de-sac.
   static func reset(agent: String) {
     setWanted(false, agent: agent)
-    AgentProcessHost.shared.stop()
+    AgentProcessHost.shared.stop(agent: agent)
     if useLaunchAgent {
       try? SMAppService.agent(plistName: plistName(agent: agent)).unregister()
     }
     log.info("agent remis à zéro pour \(agent, privacy: .public)")
   }
 
-  /// Le journal de l'agent, pour l'ouvrir depuis les réglages.
-  static var logURL: URL? { AgentProcessHost.shared.logURL }
+  /// Le journal d'un agent, pour l'ouvrir depuis les réglages.
+  static func logURL(agent: String) -> URL? { AgentProcessHost.shared.logURL(agent: agent) }
 
   /// Ce qu'on dit quand le binaire n'est pas dans le bundle. On **constate**,
   /// on ne devine pas : l'ancien message conseillait de vérifier un fichier qui

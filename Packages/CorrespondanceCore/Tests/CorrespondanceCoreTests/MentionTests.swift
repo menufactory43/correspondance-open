@@ -96,8 +96,25 @@ final class MentionTests: XCTestCase {
   }
 
   func testLAgentSeReconnaitSansEtreMembre() {
-    let names = MentionHighlight.withAgent([])
+    let names = MentionHighlight.withAgents([])
     XCTAssertEqual(surligne("@cc donne moi pi puis attends", names), ["@cc"])
+  }
+
+  /// Un salon d'agents : la mention désigne lequel répond, donc chacun doit
+  /// prendre l'encre. Avec un seul nom d'agent en dur, « @hermes » passait pour
+  /// du texte ordinaire.
+  func testChaqueAgentDeLAnnuaireSeSurligne() {
+    let names = MentionHighlight.withAgents([], agents: ["cc", "hermes", "codex"])
+    XCTAssertEqual(surligne("@hermes tu en penses quoi ?", names), ["@hermes"])
+    XCTAssertEqual(surligne("@codex et @cc, ensemble", names), ["@codex", "@cc"])
+  }
+
+  /// Un agent membre du salon figure déjà dans les correspondants : le compter
+  /// deux fois ferait deux plages qui se chevauchent sur le même « @ ».
+  func testUnAgentDejaMembreNEstPasCompteDeuxFois() {
+    let names = MentionHighlight.withAgents(["hermes", "Papa"], agents: ["cc", "hermes"])
+    XCTAssertEqual(names.filter { $0 == "hermes" }.count, 1, "\(names)")
+    XCTAssertEqual(surligne("@hermes salut", names), ["@hermes"])
   }
 
   func testSansPersonneConnueRienNEstSurligne() {

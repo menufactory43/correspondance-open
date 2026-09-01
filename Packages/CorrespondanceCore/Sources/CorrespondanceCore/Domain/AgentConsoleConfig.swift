@@ -22,6 +22,11 @@ public struct AgentConsoleConfig: Sendable, Equatable {
   public var model: String?
   public var systemPrompt: String?
   public var acpCommand: String?
+  /// Les **autres** agents du Relais, par leur MXID. L'app les renseigne quand
+  /// plusieurs agents partagent un salon : c'est ce qui fait de ce salon un
+  /// atelier — mention obligatoire, et un agent ne relance pas un agent. Sans
+  /// eux, deux agents dans une même room se répondraient l'un l'autre.
+  public var peers: [String]?
   /// Liaisons conversation → dossier de travail et mode.
   public var rooms: [String: RoomBinding]
 
@@ -58,6 +63,7 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     model = content[AgentWire.ConfigKey.model]?.stringValue
     systemPrompt = content[AgentWire.ConfigKey.systemPrompt]?.stringValue
     acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
+    peers = content[AgentWire.ConfigKey.peers]?.arrayValue?.compactMap(\.stringValue)
     rooms = (content[AgentWire.ConfigKey.rooms]?.objectValue ?? [:]).reduce(into: [:]) { result, entry in
       result[entry.key] = RoomBinding(
         cwd: entry.value[AgentWire.ConfigKey.roomCwd]?.stringValue,
@@ -80,6 +86,9 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     if let model { fields[AgentWire.ConfigKey.model] = .string(model) }
     if let systemPrompt { fields[AgentWire.ConfigKey.systemPrompt] = .string(systemPrompt) }
     if let acpCommand { fields[AgentWire.ConfigKey.acpCommand] = .string(acpCommand) }
+    if let peers, !peers.isEmpty {
+      fields[AgentWire.ConfigKey.peers] = .array(peers.map(MatrixJSON.string))
+    }
     if !rooms.isEmpty {
       fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
         var entry: [String: MatrixJSON] = [:]

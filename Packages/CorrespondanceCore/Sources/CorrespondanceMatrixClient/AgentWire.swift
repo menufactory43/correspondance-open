@@ -46,6 +46,10 @@ public enum AgentWire {
     public static let systemPrompt = "systemPrompt"
     public static let rooms = "rooms"
     public static let acpCommand = "acpCommand"
+    /// Les autres agents du Relais, par leur MXID. C'est ce qui fait d'un salon
+    /// un **atelier** : la mention devient obligatoire, et un agent ne relance
+    /// pas un agent.
+    public static let peers = "peers"
     /// Dans chaque entrée de `rooms`.
     public static let roomCwd = "cwd"
     public static let roomMode = "mode"

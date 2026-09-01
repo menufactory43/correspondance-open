@@ -57,6 +57,11 @@ public actor Agent {
   /// La ligne de status, scannée une fois : elle est reposée à chaque arrivée
   /// dans une room, et rescanner à chaque fois coûterait un `--version` par moteur.
   private var statusLine: String?
+  /// Le dernier scan des moteurs, gardé sous la main : un `--version` par
+  /// moteur à chaque tour coûterait plus cher que le tour lui-même. Refait
+  /// quand le moteur configuré change — c'est le seul cas où la réponse peut
+  /// changer sans qu'on redémarre.
+  private var dernierScan: (engine: String?, scan: EngineScan)?
   /// Pourquoi le journal ne peut pas s'exercer, quand c'est le cas. Le status
   /// le porte : sans ça, un garde-fou absent resterait invisible pour l'app.
   private var journalIndisponible: String?
@@ -493,6 +498,20 @@ public actor Agent {
       }
     }
 
+    // Le moteur est-il seulement là ? Se taire était le pire des choix : on
+    // écrit « @cc … », rien ne revient, et il faut aller lire un journal sur
+    // une autre machine pour apprendre que `hermes` n'a jamais été installé.
+    // Un agent qui ne peut pas répondre dit pourquoi, et où.
+    let scan = await scanCourant()
+    if !scan.isPresent(live.backend) {
+      let moteur = scan.configuredEngine ?? live.backend.rawValue
+      let message = EngineScan.absenceFR(engine: moteur, host: EngineScan.hostName)
+      log("[\(request.roomID)] moteur \(moteur) absent — on le dit plutôt que de se taire")
+      await reply(message, to: request)
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
+      return
+    }
+
     do {
       // Jamais `~` : un tour travaille dans le dossier de sa room tant qu'aucun
       // dépôt n'est lié. C'est le rayon d'explosion, et c'est le garde-fou qui
@@ -513,6 +532,21 @@ public actor Agent {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
     }
+  }
+
+  /// Le scan des moteurs, refait seulement quand le moteur configuré change.
+  /// Bloquant (des `--version`) : détaché, comme au démarrage.
+  private func scanCourant() async -> EngineScan {
+    let config = self.live
+    let attendu: String? = switch config.backend {
+    case .claude: "claude"
+    case .hermes: "hermes"
+    case .acp: config.acp.command
+    }
+    if let dernierScan, dernierScan.engine == attendu { return dernierScan.scan }
+    let scan = await Task.detached { EngineScan.scan(config: config) }.value
+    dernierScan = (engine: attendu, scan: scan)
+    return scan
   }
 
   // MARK: - Journal

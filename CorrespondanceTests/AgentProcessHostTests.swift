@@ -47,11 +47,11 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "sleep 30"],
       logURL: journal
-    ))
-    XCTAssertTrue(hote.isRunning)
+    ), agent: "essai")
+    XCTAssertTrue(hote.isRunning(agent: "essai"))
 
-    hote.stop()
-    XCTAssertFalse(hote.isRunning, "l'arrêt est immédiat : rien ne survit à l'app")
+    hote.stop(agent: "essai")
+    XCTAssertFalse(hote.isRunning(agent: "essai"), "l'arrêt est immédiat : rien ne survit à l'app")
   }
 
   func testUnProcessusQuiTombeRedemarre() async throws {
@@ -60,7 +60,7 @@ final class AgentProcessHostTests: XCTestCase {
     hote.backoff = .init(premier: 0.1, plafond: 0.1, essaisMax: 5)
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -68,10 +68,10 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "exit 1"],
       logURL: journal
-    ))
+    ), agent: "essai")
     // Le processus meurt aussitôt ; on laisse le harnais le relancer deux fois.
     try await Task.sleep(for: .milliseconds(700))
-    XCTAssertGreaterThanOrEqual(hote.redemarrages, 2, "il doit avoir été relancé")
+    XCTAssertGreaterThanOrEqual(hote.redemarrages(agent: "essai"), 2, "il doit avoir été relancé")
   }
 
   func testApresTropDeChutesOnRenonceEtOnLeDit() async throws {
@@ -79,7 +79,7 @@ final class AgentProcessHostTests: XCTestCase {
     hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 3)
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -87,10 +87,10 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "exit 3"],
       logURL: journal
-    ))
+    ), agent: "essai")
     try await Task.sleep(for: .milliseconds(800))
-    XCTAssertFalse(hote.isRunning)
-    let abandon = try XCTUnwrap(hote.abandon, "on doit dire pourquoi on a cessé")
+    XCTAssertFalse(hote.isRunning(agent: "essai"))
+    let abandon = try XCTUnwrap(hote.abandon(agent: "essai"), "on doit dire pourquoi on a cessé")
     XCTAssertTrue(abandon.contains("journal"), abandon)
   }
 
@@ -104,18 +104,18 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "sleep 30"],
       logURL: journal
-    ))
-    hote.stop()
+    ), agent: "essai")
+    hote.stop(agent: "essai")
     try await Task.sleep(for: .milliseconds(300))
-    XCTAssertEqual(hote.redemarrages, 0, "arrêter n'est pas tomber")
-    XCTAssertFalse(hote.isRunning)
+    XCTAssertEqual(hote.redemarrages(agent: "essai"), 0, "arrêter n'est pas tomber")
+    XCTAssertFalse(hote.isRunning(agent: "essai"))
   }
 
   func testLeJournalEstEcritEtRetrouvable() async throws {
     let hote = AgentProcessHost()
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -123,8 +123,8 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "echo bonjour-du-journal; sleep 5"],
       logURL: journal
-    ))
-    XCTAssertEqual(hote.logURL, journal, "les réglages doivent pouvoir l'ouvrir")
+    ), agent: "essai")
+    XCTAssertEqual(hote.logURL(agent: "essai"), journal, "les réglages doivent pouvoir l'ouvrir")
     try await Task.sleep(for: .milliseconds(300))
     let contenu = try String(contentsOf: journal, encoding: .utf8)
     XCTAssertTrue(contenu.contains("bonjour-du-journal"), contenu)
@@ -140,6 +140,74 @@ final class AgentProcessHostTests: XCTestCase {
     XCTAssertEqual(AgentProcessHost.Launch.embeddedAgent(named: "cc") == nil, url == nil)
   }
 
+  // MARK: - Plusieurs agents
+
+  /// Un agent est un compte Matrix ; l'app en fait tourner plusieurs. Chacun a
+  /// son processus, et arrêter l'un ne touche pas à l'autre — sans quoi
+  /// « Arrêter hermes » tuerait cc en silence.
+  func testDeuxAgentsTournentEtSArretentSeparement() throws {
+    let hote = AgentProcessHost()
+    let journalCC = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let journalHermes = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+      hote.stopAll()
+      try? FileManager.default.removeItem(at: journalCC)
+      try? FileManager.default.removeItem(at: journalHermes)
+    }
+
+    try hote.start(
+      .init(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "sleep 30"], logURL: journalCC),
+      agent: "cc"
+    )
+    try hote.start(
+      .init(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "sleep 30"], logURL: journalHermes),
+      agent: "hermes"
+    )
+    XCTAssertEqual(hote.agentsVivants, ["cc", "hermes"])
+    XCTAssertEqual(hote.logURL(agent: "hermes"), journalHermes, "chacun son journal")
+
+    hote.stop(agent: "hermes")
+    XCTAssertTrue(hote.isRunning(agent: "cc"), "arrêter hermes ne touche pas à cc")
+    XCTAssertFalse(hote.isRunning(agent: "hermes"))
+    XCTAssertEqual(hote.agentsVivants, ["cc"])
+  }
+
+  /// L'app se ferme : **tout le monde** s'arrête. Le pluriel n'est pas
+  /// décoratif — un agent orphelin continuerait de répondre au nom de
+  /// quelqu'un après la fermeture.
+  func testLaFermetureDeLAppArreteTousLesAgents() throws {
+    let hote = AgentProcessHost()
+    let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: journal) }
+
+    for nom in ["cc", "hermes", "goose"] {
+      try hote.start(
+        .init(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "sleep 30"], logURL: journal),
+        agent: nom
+      )
+    }
+    XCTAssertEqual(hote.agentsVivants.count, 3)
+    hote.stopAll()
+    XCTAssertTrue(hote.agentsVivants.isEmpty, "aucun agent ne survit à l'app")
+  }
+
+  /// Redémarrer un agent sous le même nom ne le lance pas deux fois : deux
+  /// processus sur un compte, ce sont deux réponses au même message.
+  func testRedemarrerUnAgentNeLeLancePasDeuxFois() throws {
+    let hote = AgentProcessHost()
+    let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+      hote.stopAll()
+      try? FileManager.default.removeItem(at: journal)
+    }
+    let lancement = AgentProcessHost.Launch(
+      executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", "sleep 30"], logURL: journal
+    )
+    try hote.start(lancement, agent: "cc")
+    try hote.start(lancement, agent: "cc")
+    XCTAssertEqual(hote.agentsVivants, ["cc"], "un agent, un processus")
+  }
+
   // MARK: - Toutes les chutes ne se valent pas
 
   /// Un mot de passe refusé par le Relais ne se répare pas tout seul :
@@ -150,7 +218,7 @@ final class AgentProcessHostTests: XCTestCase {
     hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -158,12 +226,12 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "exit \(AgentExit.identifiantsRefuses)"],
       logURL: journal
-    ))
+    ), agent: "essai")
     try await Task.sleep(for: .milliseconds(500))
 
-    XCTAssertEqual(hote.redemarrages, 0, "on ne relance pas ce qui ne se répare pas tout seul")
-    XCTAssertFalse(hote.isRunning)
-    let abandon = try XCTUnwrap(hote.abandon)
+    XCTAssertEqual(hote.redemarrages(agent: "essai"), 0, "on ne relance pas ce qui ne se répare pas tout seul")
+    XCTAssertFalse(hote.isRunning(agent: "essai"))
+    let abandon = try XCTUnwrap(hote.abandon(agent: "essai"))
     XCTAssertTrue(abandon.contains("identifiants refusés"), abandon)
     XCTAssertTrue(abandon.contains("Réinstaller"), "le message doit donner l'issue")
   }
@@ -175,7 +243,7 @@ final class AgentProcessHostTests: XCTestCase {
     hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -183,11 +251,11 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "exit \(AgentExit.dejaEnCours)"],
       logURL: journal
-    ))
+    ), agent: "essai")
     try await Task.sleep(for: .milliseconds(500))
 
-    XCTAssertEqual(hote.redemarrages, 0)
-    XCTAssertTrue(hote.abandon?.contains("deux fois") == true, hote.abandon ?? "")
+    XCTAssertEqual(hote.redemarrages(agent: "essai"), 0)
+    XCTAssertTrue(hote.abandon(agent: "essai")?.contains("deux fois") == true, hote.abandon(agent: "essai") ?? "")
   }
 
   /// Une chute ordinaire, elle, se relance : le Relais pas encore prêt, un
@@ -197,7 +265,7 @@ final class AgentProcessHostTests: XCTestCase {
     hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
     let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer {
-      hote.stop()
+      hote.stop(agent: "essai")
       try? FileManager.default.removeItem(at: journal)
     }
 
@@ -205,9 +273,9 @@ final class AgentProcessHostTests: XCTestCase {
       executable: URL(fileURLWithPath: "/bin/sh"),
       arguments: ["-c", "exit 1"],
       logURL: journal
-    ))
+    ), agent: "essai")
     try await Task.sleep(for: .milliseconds(400))
-    XCTAssertGreaterThanOrEqual(hote.redemarrages, 1, "une erreur ordinaire se réessaie")
+    XCTAssertGreaterThanOrEqual(hote.redemarrages(agent: "essai"), 1, "une erreur ordinaire se réessaie")
   }
 
   // MARK: - Le contrat de sortie

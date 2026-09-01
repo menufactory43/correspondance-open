@@ -265,7 +265,7 @@ struct ThreadComposer: View {
         .background(alignment: .topLeading) {
           MentionUnderlay(
             text: text.wrappedValue,
-            names: MentionHighlight.withAgent(members.map(\.name)),
+            names: MentionHighlight.withAgents(members.map(\.name)),
             tint: theme.accent.opacity(0.16),
             font: Typography.composer(typeface),
             lineSpacing: theme.bubbleLineSpacing(forBodySize: Typography.composerSize())

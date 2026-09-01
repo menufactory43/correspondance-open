@@ -17,6 +17,7 @@ final class AgentConsoleConfigTests: XCTestCase {
     config.backend = "acp"
     config.toolPreset = "exécuter"
     config.acpCommand = "claude-code-acp"
+    config.peers = ["@hermes:correspondance.local"]
     config.rooms["!une:local"] = .init(cwd: "/Users/moi/projet", mode: .draft)
 
     let relu = AgentConsoleConfig(content: config.content())
@@ -41,13 +42,14 @@ final class AgentConsoleConfigTests: XCTestCase {
     config.model = "claude-sonnet-5"
     config.systemPrompt = "Tu es cc."
     config.acpCommand = "goose"
+    config.peers = ["@hermes:s"]
     config.rooms["!r:s"] = .init(cwd: "/tmp/x", mode: .direct)
 
     guard let object = config.content().objectValue else { return XCTFail("un event est un objet") }
     XCTAssertEqual(
       Set(object.keys),
       ["version", "agent", "owners", "trigger", "hourlyCap", "defaultMode", "backend",
-       "toolPreset", "model", "systemPrompt", "acpCommand", "rooms"]
+       "toolPreset", "model", "systemPrompt", "acpCommand", "peers", "rooms"]
     )
     XCTAssertEqual(object["version"]?.intValue, AgentWire.configVersion)
     // Les liaisons de rooms aussi : `cwd` et `mode`, pas autre chose.

@@ -39,10 +39,10 @@ final class AgentLocalHostTests: XCTestCase {
       .abandonne(raison: "cc s'est arrêté 8 fois de suite."),
     ]
     for etat in etats {
-      XCTAssertFalse(etat.labelFR.isEmpty)
+      XCTAssertFalse(etat.labelFR().isEmpty)
     }
     XCTAssertTrue(
-      AgentLocalHost.State.actif.labelFR.contains("Correspondance est ouverte"),
+      AgentLocalHost.State.actif.labelFR().contains("Correspondance est ouverte"),
       "l'interface doit dire ce que « Ce Mac » achète vraiment"
     )
   }
@@ -57,7 +57,7 @@ final class AgentLocalHostTests: XCTestCase {
       binairePresent: true, processusVivant: true, amorcePresente: false, dernierStatus: Date()
     )
     XCTAssertEqual(etat, .incomplet, "un processus sans amorce ne peut pas se connecter")
-    XCTAssertTrue(etat.labelFR.contains("amorce"), etat.labelFR)
+    XCTAssertTrue(etat.labelFR().contains("amorce"), etat.labelFR())
   }
 
   func testProcessusVivantEtStatusRecent() {
@@ -88,7 +88,7 @@ final class AgentLocalHostTests: XCTestCase {
       binairePresent: true, processusVivant: true, amorcePresente: true, dernierStatus: vieux
     )
     XCTAssertEqual(etat, .silencieux(depuis: vieux))
-    XCTAssertTrue(etat.labelFR.contains("muet"), etat.labelFR)
+    XCTAssertTrue(etat.labelFR().contains("muet"), etat.labelFR())
   }
 
   func testJusteDemarreIlNAPasEncoreParle() {
@@ -150,5 +150,25 @@ final class AgentLocalHostTests: XCTestCase {
 
   func testSansBinaireOnNeRelancePas() {
     XCTAssertFalse(AgentLocalHost.shouldResume(wanted: true, amorcePresente: true, binairePresent: false))
+  }
+
+  // MARK: - Plusieurs agents voulus sur ce Mac
+
+  /// Le drapeau « voulu » dit *si*, la liste dit *qui*. Sans la liste, l'app ne
+  /// saurait relancer au lancement que l'agent dont elle connaît déjà le nom —
+  /// un `hermes` activé hier resterait mort sans que rien ne le dise.
+  func testLaListeDesAgentsVoulusSeTientAJour() {
+    let temoins = ["essai-cc-\(UUID().uuidString.prefix(6))", "essai-hermes-\(UUID().uuidString.prefix(6))"]
+    defer { for nom in temoins { AgentLocalHost.setWanted(false, agent: nom) } }
+
+    for nom in temoins { AgentLocalHost.setWanted(true, agent: nom) }
+    let voulus = AgentLocalHost.knownWantedAgents
+    for nom in temoins {
+      XCTAssertTrue(voulus.contains(nom), "\(nom) manque dans \(voulus)")
+    }
+
+    AgentLocalHost.setWanted(false, agent: temoins[0])
+    XCTAssertFalse(AgentLocalHost.knownWantedAgents.contains(temoins[0]), "« Arrêter » retire de la liste")
+    XCTAssertTrue(AgentLocalHost.knownWantedAgents.contains(temoins[1]), "et ne touche pas aux autres")
   }
 }

@@ -162,6 +162,13 @@ final class InboxStore {
   /// Le réglage ne vit pas ici : il vit dans l'account data globale, que l'agent
   /// relit sur le Relais. Ceci n'en est que la copie affichée.
   private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
+  /// **L'annuaire des agents**, tel que le Relais le porte : le nom de chaque
+  /// agent qui a une room console. C'est ce qui décide entre un bouton
+  /// « Inviter cc » et un menu — la question « qui existe » se pose au Relais,
+  /// pas à une constante. Vide tant qu'on ne l'a pas lu : un menu qui invente
+  /// des noms serait pire qu'un bouton unique.
+  /// Écrit par `refreshAgentDirectory()`, qui est le seul à le remplir.
+  var agentDirectory: [String] = []
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
