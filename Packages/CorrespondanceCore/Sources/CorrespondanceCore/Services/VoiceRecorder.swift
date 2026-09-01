@@ -3,9 +3,10 @@ import Foundation
 
 /// L'enregistrement d'un message vocal — le même sur le Mac et sur l'iPhone.
 ///
-/// `AVAudioRecorder` en AAC dans un `.m4a` : c'est ce que les ponts mautrix
-/// acceptent sans transcoder, et ce que WhatsApp comme Signal savent lire. La
-/// forme d'onde se relève pendant qu'on parle (`updateMeters`), pas après :
+/// `AVAudioRecorder` en AAC dans un `.m4a` : c'est ce que le matériel encode
+/// sans effort. Le fichier ne part pas tel quel — `OggOpusEncoder` le mue en
+/// Ogg/Opus, seul format que les trois ponts acceptent. La forme d'onde se
+/// relève pendant qu'on parle (`updateMeters`), pas après :
 /// c'est ce qui la rend gratuite, et fidèle à ce qu'on a entendu.
 ///
 /// La session audio n'existe que sur iOS ; sur macOS, l'autorisation micro

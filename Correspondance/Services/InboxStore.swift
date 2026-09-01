@@ -2739,12 +2739,16 @@ final class InboxStore {
       return
     }
 
+    // Les ponts tranchent sur le type avant toute conversion : un AAC revient
+    // en « unsupported media type ». Le vocal part donc en Ogg/Opus, et la
+    // bulle lit ce même fichier — `AVAudioPlayer` l'ouvre.
+    let envoi = (try? await OggOpusEncoder.encodeVoiceNote(from: url)) ?? url
     let localID = "local-\(UUID().uuidString)"
     var piece = MessageAttachment(
-      id: url.path,
-      contentType: "audio/mp4",
-      filename: url.lastPathComponent,
-      localPath: url.path
+      id: envoi.path,
+      contentType: OggOpusEncoder.contentType,
+      filename: envoi.lastPathComponent,
+      localPath: envoi.path
     )
     piece.voice = voice
     session.messages.append(
@@ -2765,7 +2769,7 @@ final class InboxStore {
     do {
       try await matrix.sendVoiceMessage(
         conversationID: conversation.id,
-        fileURL: url,
+        fileURL: envoi,
         voice: voice,
         localID: localID
       )

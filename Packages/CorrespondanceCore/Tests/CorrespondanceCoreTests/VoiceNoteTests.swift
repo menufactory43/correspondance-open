@@ -91,6 +91,7 @@ final class VoiceNoteTests: XCTestCase {
 
   func testLeVocalPartAvecUnTypeAudio() {
     XCTAssertEqual(MatrixClient.mimeType(for: URL(fileURLWithPath: "/tmp/x.m4a")), "audio/mp4")
-    XCTAssertEqual(MatrixClient.mimeType(for: URL(fileURLWithPath: "/tmp/x.ogg")), "audio/ogg")
+    XCTAssertEqual(MatrixClient.mimeType(for: URL(fileURLWithPath: "/tmp/x.ogg")), OggOpusEncoder.contentType)
+    XCTAssertEqual(MatrixAttachmentStore.fileExtension(for: OggOpusEncoder.contentType), "ogg")
   }
 }

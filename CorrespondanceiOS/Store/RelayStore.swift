@@ -851,12 +851,15 @@ final class RelayStore {
     sendingConversationIDs.insert(conversationID)
     defer { sendingConversationIDs.remove(conversationID) }
 
+    // Comme sur le Mac : les ponts refusent l'AAC d'entrée, le vocal part en
+    // Ogg/Opus et la bulle relit le même fichier.
+    let envoi = (try? await OggOpusEncoder.encodeVoiceNote(from: url)) ?? url
     let localID = UUID().uuidString
     var piece = MessageAttachment(
-      id: url.path,
-      contentType: "audio/mp4",
-      filename: url.lastPathComponent,
-      localPath: url.path
+      id: envoi.path,
+      contentType: OggOpusEncoder.contentType,
+      filename: envoi.lastPathComponent,
+      localPath: envoi.path
     )
     piece.voice = voice
     messages[target, default: []].append(
@@ -876,7 +879,7 @@ final class RelayStore {
     do {
       try await matrix.sendVoiceMessage(
         conversationID: target,
-        fileURL: url,
+        fileURL: envoi,
         voice: voice,
         localID: localID
       )

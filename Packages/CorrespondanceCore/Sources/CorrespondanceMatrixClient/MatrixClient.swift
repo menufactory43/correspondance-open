@@ -991,7 +991,8 @@ public actor MatrixClient {
     // Les vocaux : sans type audio, le pont range le fichier en pièce jointe.
     case "m4a", "aac": "audio/mp4"
     case "mp3": "audio/mpeg"
-    case "ogg", "oga", "opus": "audio/ogg"
+    // Le paramètre `codecs` fait partie du contrat côté WhatsApp.
+    case "ogg", "oga", "opus": "audio/ogg; codecs=opus"
     case "wav": "audio/wav"
     case "caf": "audio/x-caf"
     default: "application/octet-stream"

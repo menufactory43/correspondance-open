@@ -69,7 +69,9 @@ public enum MatrixAttachmentStore {
   }
 
   public static func fileExtension(for contentType: String?) -> String {
-    switch contentType {
+    // Un vocal arrive en « audio/ogg; codecs=opus » : le paramètre ne dit rien
+    // du fichier, seul le type compte pour le nommer.
+    switch contentType?.split(separator: ";").first.map({ $0.trimmingCharacters(in: .whitespaces) }) {
     case "image/jpeg": "jpg"
     case "image/png": "png"
     case "image/gif": "gif"
