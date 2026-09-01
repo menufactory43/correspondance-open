@@ -21,15 +21,21 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
 - Seuls les `owners` déclenchent ; tout autre expéditeur est ignoré en silence.
 - L'agent ne rejoint que les rooms où **un propriétaire** l'invite.
 - Une demande à la fois par room ; plafond glissant (30/h par défaut).
-- `claude -p` avec `allowedTools` (Read, Grep, Glob par défaut) — le reste est refusé,
-  sauf si `claude.permission.enabled` : l'outil est alors **demandé dans la room**
-  (👍 pour autoriser, 👎 pour refuser, refus après `timeoutSeconds`, 120 s par défaut).
-  En tête-à-tête la question est un message ordinaire (lisible depuis Element ou le
-  téléphone) ; devant des tiers ou un pont, un event `fr.correspondance.agent.permission`
-  que les ponts ne relaient pas — la demande ne part jamais vers le réseau.
-  Mécanique : `claude` lance `correspondance-agent permission-tool <spool>` en serveur
-  MCP (`--permission-prompt-tool mcp__cc-perm__approve`) ; demande et décision
-  transitent par fichiers dans le spool, seuls les `owners` tranchent.
+- **Pleine permission, et trois bornes.** Un agent invité par son propriétaire a ses
+  outils : le régime est posé explicitement (`--permission-mode bypassPermissions` sur la
+  CLI, `session/set_mode` en ACP) et on répond `allow_always` à toute demande. Ce qui
+  borne le risque n'est plus une question posée mais :
+  1. **un dossier par room, jamais `~`** — le `cwd` d'un tour est
+     `~/Correspondance/<agent>/<room>` tant qu'aucun dépôt n'est lié (`Workspace`) ;
+  2. **les propriétaires seuls déclenchent**, et un **fantôme de pont** (`@whatsapp_…`)
+     jamais — même inscrit par erreur dans `owners` (`Trigger.isBridgeGhost`) ;
+  3. **le journal des tours** dans la room console (`fr.correspondance.agent.journal`) :
+     qui, quoi, quels outils, combien de temps.
+  Le risque assumé : le prompt contient du texte écrit par d'autres (message cité, fil
+  ponté), et avec `Bash` ouvert c'est un chemin d'exécution. La parade est le dossier
+  borné, pas une question à laquelle on répondrait oui. Cf. `docs/PLAN-relais-agents.md`.
+  Le spool de permissions et `permission-tool` restent en place pour la CLI (`claude.permission.enabled`,
+  faux par défaut) ; ils disparaîtront avec le passage complet à l'ACP.
 - L'historique n'est jamais rejoué (seuls les messages postérieurs au démarrage comptent).
 - Un `join` ne déclenche jamais rien : le déclencheur est un message qui **commence** par `@cc`.
 
@@ -58,16 +64,28 @@ scripts/agent-e2e.sh "question"              # test de bout en bout via la note 
 Config : `~/.correspondance-agent/config.json` (NUC, 0600 — contient le mot de passe
 Matrix de cc). État (token, sessions Claude, position de sync) : `state.json` à côté.
 
+## La config vient du Relais
+
+Une **room console** par agent porte sa configuration, event d'état
+`fr.correspondance.agent.config` (`AgentRemoteConfig`, versionné) : l'agent la lit au
+démarrage et la suit à chaque `/sync` — changer un palier d'outils ou un plafond depuis
+l'app prend effet sans SSH ni redémarrage. L'agent découvre sa console tout seul : c'est
+la room qui porte un event de config à son nom, écrit par un propriétaire.
+
+Sur l'hôte il ne reste que l'**amorce** : `homeserver`, `user`, `password`. Elle est
+l'ancre — rien d'écrit dans une room ne change l'identité de l'agent ni son Relais, et
+**qui a le droit de le reconfigurer** se lit dans le fichier, pas dans l'event.
+
+Le repli est complet : sans room console, un `config.json` d'hier tourne à l'identique.
+
 ## Suite prévue
 
-1. Éprouver les permissions sur le NUC (activer `claude.permission.enabled`, un `Bash`
-   inoffensif depuis la note à soi, 👍 depuis l'iPhone).
-2. Rendre `fr.correspondance.agent.permission` dans l'app (boutons 👍/👎 dans le fil) —
-   sans quoi, dans une room avec tiers, la question n'est visible nulle part.
-3. Test relais réel (WhatsApp « Vous », puis une room choisie).
-4. Éprouver `@hermes` sur le NUC (le backend existe, voir « Multi-moteurs ») ;
-   puis `@codex`, `@gem` sur le même contrat `AgentBackend`.
-5. Mémoire transversale : ce que cc sait d'un contact, partagé entre ses rooms.
+1. L'app écrit la config dans la room console et la crée à l'activation (côté agent : fait).
+2. Hôte « Ce Mac » : `SMAppService`, cible `correspondance-agent` embarquée, création du
+   compte bot (`logout_devices: false`).
+3. Hôte distant assisté : binaire publié, commande à coller, jeton d'amorce.
+4. `correspondance-mcp` : l'inbox comme outil pour un agent du dehors.
+5. Ateliers (salons multi-agents) puis chiffrement — cf. `docs/PLAN-relais-agents.md`.
 
 ## Multi-moteurs
 
@@ -77,6 +95,12 @@ pour tous ; seul `backend` change dans la config.
 
 Moteurs disponibles :
 
+- `acp` : **n'importe quel moteur qui parle l'Agent Client Protocol** — `claude-code-acp`
+  (défaut), `codex-acp`, `goose acp`. Un moteur de plus est une entrée de config, pas un
+  backend de plus : `acp.command`, `acp.arguments`, `acp.permissionModes`. Le protocole
+  rend la permission (`session/request_permission`), la reprise (`session/load`), la
+  réponse progressive (`session/update`) et le compte des jetons. **L'abonnement suffit**,
+  éprouvé — cf. `docs/SPIKE-acp.md`, qui dit aussi pourquoi le mode se force toujours.
 - `claude` (défaut) : Claude Code, `claude -p`, sessions `--resume`, permissions 👍.
 - `hermes` : [Hermes de Nous Research](https://hermes-agent.nousresearch.com) —
   `hermes -z` (un tour, texte seul), reprise `-r`, `session_id` lu dans
