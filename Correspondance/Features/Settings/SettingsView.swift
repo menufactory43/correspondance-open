@@ -264,20 +264,45 @@ struct SettingsAgentPane: View {
         detail: hote.labelFR,
         systemImage: "gearshape.2"
       ) {
+        // Chaque état a une sortie. Un écran qui affiche un fait sans offrir
+        // d'action est un cul-de-sac : c'est exactement ce qui s'est produit
+        // quand macOS a dit « enregistré » alors que rien n'existait.
         switch hote {
         case .attenteApprobation:
           Button("Autoriser…") { AgentLocalHost.openLoginItemsSettings() }
         case .actif:
-          Button("Désactiver") {
-            store.deactivateAgentOnThisMac()
-            hote = AgentLocalHost.state(agent: store.agentName)
-          }
+          Button("Désactiver") { desactiver() }
+        case .silencieux:
+          Button("Réinstaller") { Task { await activerLocalement() } }
+            .disabled(!peutProvisionner || isActivating)
+        case .incomplet:
+          Button("Réparer") { Task { await reparerLocalement() } }
+            .disabled(!peutProvisionner || isActivating)
         case .absent:
           Button("Activer sur ce Mac") { Task { await activerLocalement() } }
             .disabled(!peutProvisionner || isActivating)
         case .introuvable:
-          EmptyView()
+          // Rien à activer, mais on ne laisse pas sans issue : on dit quoi faire.
+          Button("Pourquoi ?") { erreur = AgentLocalHost.aideIntrouvable }
         }
+      }
+
+      if case .silencieux = hote {
+        SettingsRow(
+          label: "Signe de vie",
+          detail: "cc n'a rien publié depuis un moment. « Réinstaller » refait tout le chemin ; "
+            + "son journal est dans /tmp/correspondance-agent.log.",
+          systemImage: "waveform.path"
+        ) { EmptyView() }
+      }
+
+      if hote == .incomplet {
+        SettingsRow(
+          label: "Ce qui manque",
+          detail: "Le service est enregistré auprès de macOS, mais son amorce n'est pas sur le disque : "
+            + "il ne peut pas démarrer. « Réparer » recrée le compte, l'amorce et le service.",
+          systemImage: "exclamationmark.triangle"
+        ) { EmptyView() }
       }
 
       if !peutProvisionner, hote == .absent {
@@ -433,8 +458,23 @@ struct SettingsAgentPane: View {
     defer { isLoading = false }
     erreur = nil
     console = await store.loadAgentConsole()
-    hote = AgentLocalHost.state(agent: store.agentName)
+    // L'état ne se lit pas dans macOS : il se conclut. Le dernier status publié
+    // par l'agent dans sa console est le seul vrai signe de vie.
+    hote = AgentLocalHost.state(agent: store.agentName, dernierStatus: console?.status?.publishedAt)
     peutProvisionner = await store.canProvisionAgents()
+  }
+
+  private func desactiver() {
+    store.deactivateAgentOnThisMac()
+    Task { await recharger() }
+  }
+
+  /// « Réparer » : on désenregistre d'abord, puis on refait tout. Sans le
+  /// désenregistrement, macOS garde son drapeau et on repart dans le même
+  /// demi-état.
+  private func reparerLocalement() async {
+    AgentLocalHost.reset(agent: store.agentName)
+    await activerLocalement()
   }
 
   /// Crée le compte du bot, pose son amorce, enregistre le service. macOS peut
@@ -444,9 +484,10 @@ struct SettingsAgentPane: View {
     defer { isActivating = false }
     erreur = nil
     switch await store.activateAgentOnThisMac() {
-    case .success(let etat):
-      hote = etat
-      console = await store.loadAgentConsole()
+    case .success:
+      // On ne garde pas l'état rendu par l'installation : il ne connaît pas le
+      // status de l'agent, qui n'a pas encore eu le temps de parler.
+      await recharger()
     case .failure(let raison):
       erreur = raison.localizedDescription
     }

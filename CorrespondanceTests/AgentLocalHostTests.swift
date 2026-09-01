@@ -32,12 +32,109 @@ final class AgentLocalHostTests: XCTestCase {
   }
 
   func testChaqueEtatDuServiceSeDitEnFrancais() {
-    for etat: AgentLocalHost.State in [.absent, .actif, .attenteApprobation, .introuvable] {
+    let etats: [AgentLocalHost.State] = [
+      .absent, .actif, .attenteApprobation, .introuvable, .incomplet,
+      .silencieux(depuis: nil), .silencieux(depuis: Date().addingTimeInterval(-7200)),
+    ]
+    for etat in etats {
       XCTAssertFalse(etat.labelFR.isEmpty)
     }
     XCTAssertTrue(
       AgentLocalHost.State.attenteApprobation.labelFR.contains("Éléments d'ouverture"),
       "l'écran doit dire où cliquer, pas « autorisation requise »"
+    )
+  }
+
+  // MARK: - « Actif » est une conclusion, pas une lecture
+
+  /// Le bug trouvé au premier essai réel : macOS répondait « enregistré » alors
+  /// qu'aucune amorce, aucun service et aucun compte n'existaient. L'app
+  /// affichait « actif sur ce Mac » et ne proposait plus que « Désactiver » —
+  /// aucun moyen d'activer quoi que ce soit.
+  func testUnDrapeauSansAmorceNEstPasActif() {
+    let etat = AgentLocalHost.decide(
+      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
+      amorcePresente: false, dernierStatus: Date()
+    )
+    XCTAssertEqual(etat, .incomplet, "un service enregistré sans amorce est cassé, pas actif")
+    XCTAssertTrue(etat.labelFR.contains("moitié"), etat.labelFR)
+  }
+
+  func testToutEstLaEtLAgentAParleRecemment() {
+    let etat = AgentLocalHost.decide(
+      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
+      amorcePresente: true, dernierStatus: Date().addingTimeInterval(-60)
+    )
+    XCTAssertEqual(etat, .actif)
+  }
+
+  /// Un status vieux d'une heure se dit, il ne se tait pas.
+  func testUnAgentMuetDepuisLongtempsNEstPasActif() {
+    let vieux = Date().addingTimeInterval(-7200)
+    let etat = AgentLocalHost.decide(
+      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
+      amorcePresente: true, dernierStatus: vieux
+    )
+    XCTAssertEqual(etat, .silencieux(depuis: vieux))
+    XCTAssertTrue(etat.labelFR.contains("muet"), etat.labelFR)
+  }
+
+  func testToutEstLaMaisLAgentNAJamaisParle() {
+    let etat = AgentLocalHost.decide(
+      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
+      amorcePresente: true, dernierStatus: nil
+    )
+    XCTAssertEqual(etat, .silencieux(depuis: nil))
+  }
+
+  func testSansDrapeauCEstAbsent() {
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        flagEnregistre: false, demandeApprobation: false, plistPresent: true,
+        amorcePresente: false, dernierStatus: nil
+      ),
+      .absent
+    )
+    // Même avec une amorce restée sur le disque : rien n'est enregistré.
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        flagEnregistre: false, demandeApprobation: false, plistPresent: true,
+        amorcePresente: true, dernierStatus: Date()
+      ),
+      .absent
+    )
+  }
+
+  func testLApprobationPasseAvantToutLeReste() {
+    let etat = AgentLocalHost.decide(
+      flagEnregistre: false, demandeApprobation: true, plistPresent: true,
+      amorcePresente: false, dernierStatus: nil
+    )
+    XCTAssertEqual(etat, .attenteApprobation, "on montre l'approbation, on ne l'espère pas")
+  }
+
+  func testSansPlistRienNEstPossible() {
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        flagEnregistre: true, demandeApprobation: false, plistPresent: false,
+        amorcePresente: true, dernierStatus: Date()
+      ),
+      .introuvable
+    )
+    XCTAssertFalse(AgentLocalHost.aideIntrouvable.isEmpty, "même là, on dit quoi faire")
+  }
+
+  /// Le seuil est large exprès : un agent qui n'a rien à faire ne poste rien.
+  func testLeSeuilDeSilenceEstLarge() {
+    XCTAssertEqual(AgentLocalHost.State.silenceMax, 3600)
+    let limite = Date().addingTimeInterval(-3000)
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        flagEnregistre: true, demandeApprobation: false, plistPresent: true,
+        amorcePresente: true, dernierStatus: limite
+      ),
+      .actif,
+      "cinquante minutes de silence, c'est encore normal"
     )
   }
 }
