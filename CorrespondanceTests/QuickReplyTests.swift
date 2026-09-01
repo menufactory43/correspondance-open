@@ -172,6 +172,11 @@ final class QuickReplyModelTests: XCTestCase {
 
   private func makeStore() -> InboxStore {
     let store = InboxStore()
+    // Le magasin relit le rail réseau de l'app hôte : un rail posé sur
+    // Messenger viderait la file du test. On le neutralise, et on le rend.
+    let rail = store.networkFilter
+    addTeardownBlock { store.networkFilter = rail }
+    store.networkFilter = nil
     store.conversations = [
       conversation(id: "sig:1", title: "Élise", unread: 0, minutesAgo: 1),
       conversation(id: "sig:2", title: "Paul", unread: 2, minutesAgo: 30),
