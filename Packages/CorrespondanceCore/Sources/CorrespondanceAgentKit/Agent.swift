@@ -34,6 +34,12 @@ public actor Agent {
   /// On ne rejoue pas l'historique : seuls les ordres postérieurs comptent —
   /// avec dix minutes de marge pour un ordre donné pendant un redémarrage.
   private let notBefore: Date
+  /// Depuis quand ce processus tourne — le status le dit, pour qu'on sache
+  /// *où* et *depuis quand* sans ouvrir un terminal.
+  private let startedAt = Date()
+  /// La ligne de status, scannée une fois : elle est reposée à chaque arrivée
+  /// dans une room, et rescanner à chaque fois coûterait un `--version` par moteur.
+  private var statusLine: String?
 
   public init(
     config: AgentConfig,
@@ -149,6 +155,10 @@ public actor Agent {
       do {
         _ = try await client.join(roomID: roomID)
         log("rejoint \(roomID) sur invitation de \(inviter)")
+        // Un status à l'arrivée : sans ça, un bot invité après le démarrage
+        // reste muet dans les réglages jusqu'au prochain redémarrage.
+        members[roomID] = nil
+        await publishStatus(in: [roomID])
       } catch {
         log("impossible de rejoindre \(roomID) : \(error.localizedDescription)")
       }
@@ -256,7 +266,12 @@ public actor Agent {
     }
 
     do {
-      let cwd = config.rooms[request.roomID]?.cwd
+      // Jamais `~` : un tour travaille dans le dossier de sa room tant qu'aucun
+      // dépôt n'est lié. C'est le rayon d'explosion, et c'est le garde-fou qui
+      // remplace la question qu'on ne pose plus.
+      let cwd = Workspace.prepare(
+        Workspace.directory(agent: config.user, roomID: request.roomID, binding: config.rooms[request.roomID]?.cwd)
+      )
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
@@ -276,13 +291,24 @@ public actor Agent {
   /// Scanne les moteurs et poste `fr.correspondance.agent.status` dans chaque
   /// room en tête-à-tête avec les propriétaires. Les ponts ignorent ce type,
   /// et on ne le poste de toute façon jamais devant des tiers.
-  private func publishStatus() async {
+  private func publishStatus(in rooms: [String]? = nil) async {
     let config = self.config
-    let scan = await Task.detached { EngineScan.scan(config: config) }.value
-    let line = scan.statusLine(backend: config.backend)
-    log("moteurs : \(line)")
-    guard let joined = try? await client.joinedRooms() else { return }
-    for roomID in joined {
+    if statusLine == nil {
+      let scan = await Task.detached { EngineScan.scan(config: config) }.value
+      statusLine = scan.statusLine(
+        backend: config.backend, agent: config.user, host: EngineScan.hostName, since: startedAt
+      )
+      log("moteurs : \(statusLine ?? "")")
+    }
+    guard let line = statusLine else { return }
+    let targets: [String]
+    if let rooms {
+      targets = rooms
+    } else {
+      guard let joined = try? await client.joinedRooms() else { return }
+      targets = joined
+    }
+    for roomID in targets {
       guard await isPrivateWithOwners(roomID) else { continue }
       do {
         try await client.sendEvent(

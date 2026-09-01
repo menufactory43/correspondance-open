@@ -57,6 +57,11 @@ struct AgentCommand {
         fail("`hermes` introuvable — installe Hermes (Nous Research) ou renseigne hermes.binary")
       }
       return HermesBackend(settings: config.hermes)
+    case .acp:
+      guard ACPBackend.resolveBinary(config.acp) != nil else {
+        fail("`\(config.acp.command)` introuvable — installe l'adaptateur ACP du moteur (npm i -g @zed-industries/claude-code-acp) ou renseigne acp.binary")
+      }
+      return ACPBackend(settings: config.acp, log: { stamp($0) })
     }
   }
 

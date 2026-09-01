@@ -39,11 +39,26 @@ final class ClaudeOutputTests: XCTestCase {
     settings.systemPrompt = "Tu es cc."
     XCTAssertEqual(
       ClaudeCodeBackend.arguments(settings: settings, sessionID: "s9"),
-      ["-p", "--output-format", "json", "--resume", "s9", "--allowedTools", "Read,Bash(git *)", "--model", "claude-sonnet-5", "--append-system-prompt", "Tu es cc."]
+      ["-p", "--output-format", "json", "--resume", "s9", "--allowedTools", "Read,Bash(git *)", "--permission-mode", "bypassPermissions", "--model", "claude-sonnet-5", "--append-system-prompt", "Tu es cc."]
     )
     settings.allowedTools = []
     settings.model = nil
     settings.systemPrompt = ""
-    XCTAssertEqual(ClaudeCodeBackend.arguments(settings: settings, sessionID: nil), ["-p", "--output-format", "json"])
+    // Sans liste blanche, il reste le régime — et il est dit, pas subi.
+    XCTAssertEqual(
+      ClaudeCodeBackend.arguments(settings: settings, sessionID: nil),
+      ["-p", "--output-format", "json", "--permission-mode", "bypassPermissions"]
+    )
+  }
+
+  /// Le régime se pose explicitement : un défaut de CLI change de version en
+  /// version, et « pleine permission » doit être écrit dans la ligne de commande.
+  func testLeRegimeEstToujoursDitALaCLI() {
+    var settings = AgentConfig.ClaudeSettings()
+    XCTAssertEqual(settings.permissionMode, "bypassPermissions")
+    XCTAssertTrue(ClaudeCodeBackend.arguments(settings: settings, sessionID: nil).contains("--permission-mode"))
+    // Sauf si on le vide exprès : on rend alors la main au moteur.
+    settings.permissionMode = ""
+    XCTAssertFalse(ClaudeCodeBackend.arguments(settings: settings, sessionID: nil).contains("--permission-mode"))
   }
 }

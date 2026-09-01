@@ -40,6 +40,24 @@ public enum Trigger {
     return String(rest).trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  /// Les fantômes des ponts : `@whatsapp_33…`, `@signalbot`, `@instagram_…`.
+  /// Ils ne déclenchent **jamais**, même inscrits par erreur dans `owners` —
+  /// sinon un correspondant distant piloterait l'agent depuis son réseau, avec
+  /// tous ses outils. C'est une des trois choses qui bornent le risque depuis
+  /// qu'on donne la pleine permission (cf. `docs/PLAN-relais-agents.md`).
+  static let bridgePrefixes = [
+    "whatsapp", "signal", "telegram", "instagram", "messenger", "facebook", "meta",
+    "discord", "slack", "twitter", "gmessages", "imessage", "linkedin",
+  ]
+
+  public static func isBridgeGhost(_ userID: String) -> Bool {
+    let localpart = userID.hasPrefix("@") ? String(userID.dropFirst()) : userID
+    let name = localpart.split(separator: ":").first.map(String.init)?.lowercased() ?? ""
+    return bridgePrefixes.contains { prefix in
+      name == prefix || name == "\(prefix)bot" || name.hasPrefix("\(prefix)_")
+    }
+  }
+
   /// L'event est-il un ordre pour l'agent ? Il faut un `m.room.message` texte,
   /// d'un propriétaire, postérieur au démarrage (pas de rejouage de l'historique
   /// au premier `/sync`), qui commence par le déclencheur.
@@ -52,6 +70,7 @@ public enum Trigger {
     guard event.type == "m.room.message",
           let eventID = event.eventID,
           let sender = event.sender,
+          !isBridgeGhost(sender),
           config.owners.contains(sender),
           event.sentAt >= notBefore
     else { return nil }

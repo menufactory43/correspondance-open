@@ -102,6 +102,9 @@ public struct ClaudeCodeBackend: AgentBackend {
     var args = ["-p", "--output-format", "json"]
     if let sessionID { args += ["--resume", sessionID] }
     if !settings.allowedTools.isEmpty { args += ["--allowedTools", settings.allowedTools.joined(separator: ",")] }
+    // Le régime se pose explicitement — un défaut de CLI peut changer de
+    // version en version, et « pleine permission » doit être dit, pas espéré.
+    if !settings.permissionMode.isEmpty { args += ["--permission-mode", settings.permissionMode] }
     if let model = settings.model { args += ["--model", model] }
     if !settings.systemPrompt.isEmpty { args += ["--append-system-prompt", settings.systemPrompt] }
     if let permission {
