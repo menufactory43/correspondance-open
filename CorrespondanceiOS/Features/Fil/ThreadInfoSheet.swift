@@ -1,7 +1,5 @@
-import AVFoundation
 import CorrespondanceCore
 import CorrespondanceUI
-import ImageIO
 import SwiftUI
 
 /// La fiche d'un fil, ouverte depuis la pilule de l'en-tête.
@@ -29,6 +27,8 @@ struct ThreadInfoSheet: View {
   @State private var members: [RelayStore.ThreadMember] = []
   /// Vrai quand le fil peut accueillir « cc » — pas encore membre.
   @State private var agentInvitable = false
+  /// Le média que la visionneuse montre, tapé dans les quatre carrés.
+  @State private var openedMedia: OpenedMedia?
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -54,6 +54,9 @@ struct ThreadInfoSheet: View {
         }
       }
       .background(theme.paper.ignoresSafeArea())
+      .fullScreenCover(item: $openedMedia) { start in
+        MediaViewer(media: media, startAt: start.id)
+      }
       .navigationTitle("")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -230,8 +233,10 @@ struct ThreadInfoSheet: View {
           .padding(.vertical, 6)
       } else {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
-          ForEach(media.prefix(4)) { attachment in
-            MediaTile(attachment: attachment, cornerRadius: 14, theme: theme)
+          ForEach(Array(media.prefix(4).enumerated()), id: \.element.id) { rank, attachment in
+            MediaTile(attachment: attachment, cornerRadius: 14, theme: theme) {
+              openedMedia = OpenedMedia(rank)
+            }
           }
         }
         NavigationLink(value: MediaGridRoute()) {
@@ -459,17 +464,24 @@ struct ThreadMediaGrid: View {
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @State private var opened: OpenedMedia?
 
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
+    let media = store.media(conversationID)
     ScrollView {
       LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 3), spacing: 3) {
-        ForEach(store.media(conversationID)) { attachment in
-          MediaTile(attachment: attachment, cornerRadius: 4, theme: theme)
+        ForEach(Array(media.enumerated()), id: \.element.id) { rank, attachment in
+          MediaTile(attachment: attachment, cornerRadius: 4, theme: theme) {
+            opened = OpenedMedia(rank)
+          }
         }
       }
       .padding(.horizontal, 3)
+    }
+    .fullScreenCover(item: $opened) { start in
+      MediaViewer(media: media, startAt: start.id)
     }
     .background(theme.paper.ignoresSafeArea())
     .navigationTitle("Médias")
@@ -478,70 +490,34 @@ struct ThreadMediaGrid: View {
   }
 }
 
-/// Un carré : la photo cadrée dedans, ou la première image d'une vidéo avec
-/// son triangle. La vignette est réduite à la lecture (ImageIO) : quatre
-/// photos de douze mégapixels ne doivent pas coûter quatre décodages pleins.
+/// Un carré de la fiche : la même tuile que celle des mosaïques du fil, cadrée
+/// au remplissage, et qui ouvre la visionneuse sur tous les médias du fil.
 struct MediaTile: View {
   let attachment: MessageAttachment
   var cornerRadius: CGFloat
   let theme: WritingTheme
-
-  @State private var thumbnail: PlatformImage?
+  var onOpen: (() -> Void)?
 
   var body: some View {
     Color.clear
       .aspectRatio(1, contentMode: .fit)
       .overlay {
-        if let thumbnail {
-          Image(platformImage: thumbnail)
-            .resizable()
-            .scaledToFill()
-        } else {
-          Rectangle().fill(theme.bubbleIn)
-          Image(systemName: attachment.isVideo ? "video" : "photo")
-            .font(.system(size: 16))
-            .foregroundStyle(theme.inkTertiary)
-        }
-      }
-      .overlay(alignment: .bottomLeading) {
-        if attachment.isVideo, thumbnail != nil {
-          Image(systemName: "play.fill")
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.white)
-            .shadow(radius: 2)
-            .padding(6)
-        }
+        MediaTileImage(
+          url: attachment.resolvedFileURL,
+          isVideo: attachment.isVideo,
+          placeholder: theme.bubbleIn,
+          accentInk: theme.inkTertiary
+        )
       }
       .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
           .strokeBorder(theme.edge.opacity(0.4), lineWidth: 0.5)
       )
+      .contentShape(Rectangle())
+      .onTapGesture { onOpen?() }
+      .accessibilityAddTraits(onOpen == nil ? [] : .isButton)
       .accessibilityLabel(attachment.filename ?? (attachment.isVideo ? "Vidéo" : "Photo"))
-      .task(id: attachment.id) {
-        guard let url = attachment.resolvedFileURL else { return }
-        thumbnail = await Self.thumbnail(for: url, isVideo: attachment.isVideo)
-      }
-  }
-
-  private static func thumbnail(for url: URL, isVideo: Bool) async -> PlatformImage? {
-    await Task.detached(priority: .utility) {
-      if isVideo {
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 400, height: 400)
-        guard let cg = try? generator.copyCGImage(at: .zero, actualTime: nil) else { return nil }
-        return PlatformImage(cgImage: cg)
-      }
-      guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-      let options: [CFString: Any] = [
-        kCGImageSourceCreateThumbnailFromImageAlways: true,
-        kCGImageSourceCreateThumbnailWithTransform: true,
-        kCGImageSourceThumbnailMaxPixelSize: 400,
-      ]
-      guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-      return PlatformImage(cgImage: cg)
-    }.value
   }
 }
 

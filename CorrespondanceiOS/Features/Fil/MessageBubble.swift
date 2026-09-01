@@ -1,4 +1,3 @@
-import AVKit
 import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
@@ -37,6 +36,16 @@ struct MessageBubble: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var dragOffset: CGFloat = 0
+  /// Le média sur lequel la visionneuse s'ouvre. `nil` = elle est fermée.
+  @State private var opened: OpenedMedia?
+  /// Le fichier joint dont on regarde l'aperçu Quick Look.
+  @State private var previewedFile: PreviewedFile?
+  @Namespace private var albumZoom
+
+  struct PreviewedFile: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+  }
 
   private var bodySize: CGFloat { Typography.bubbleSize() }
 
@@ -90,11 +99,30 @@ struct MessageBubble: View {
       // les pastilles mordent : accrochées à la pile entière, elles se
       // seraient posées sous « Modifié » au lieu du coin de la bulle.
       VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
-        ForEach(visibleAttachments) { attachment in
+        if let album {
+          MediaAlbumView(
+            media: albumMedia,
+            layout: album,
+            width: Self.mediaWidth,
+            cornerRadius: 16,
+            theme: theme,
+            onOpen: { opened = OpenedMedia($0) }
+          )
+          .matchedTransitionSource(id: "album", in: albumZoom)
+        }
+        ForEach(stackedAttachments) { attachment in
           attachmentView(attachment)
         }
 
-        if let poll = message.poll {
+        if let post = sharedPost {
+          SharedPostCard(
+            post: post,
+            theme: theme,
+            typeface: typeface,
+            width: Self.mediaWidth,
+            cornerRadius: 16
+          )
+        } else if let poll = message.poll {
           PollView(
             poll: poll,
             theme: theme,
@@ -180,6 +208,14 @@ struct MessageBubble: View {
       onLongPress?()
     }
     .accessibilityAction(named: "Actions du message") { onLongPress?() }
+    .fullScreenCover(item: $opened) { start in
+      MediaViewer(media: albumMedia.isEmpty ? visibleAttachments : albumMedia, startAt: start.id)
+        .navigationTransition(.zoom(sourceID: "album", in: albumZoom))
+    }
+    .sheet(item: $previewedFile) { file in
+      FilePreview(url: file.url)
+        .ignoresSafeArea()
+    }
   }
 
   // MARK: - Gestes
@@ -297,9 +333,11 @@ struct MessageBubble: View {
       ) {
         unavailable(repaired, systemImage: "photo")
       }
+      .onTapGesture { opened = OpenedMedia(0) }
+      .accessibilityAddTraits(.isButton)
     } else if let url = repaired.resolvedFileURL, repaired.isVideo {
-      VideoPlayer(player: AVPlayer(url: url))
-        .frame(width: 300, height: 220)
+      StableVideoPlayer(url: url)
+        .frame(width: Self.mediaWidth, height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
           RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -309,7 +347,12 @@ struct MessageBubble: View {
     } else if repaired.isImage {
       unavailable(repaired, systemImage: "photo")
     } else {
-      unavailable(repaired, systemImage: "paperclip")
+      AttachmentFileCard(
+        attachment: repaired,
+        theme: theme,
+        typeface: typeface,
+        onOpen: repaired.resolvedFileURL.map { url in { previewedFile = PreviewedFile(url: url) } }
+      )
     }
   }
 
@@ -323,10 +366,37 @@ struct MessageBubble: View {
 
   // MARK: - Texte
 
+  /// La largeur d'une photo dans une bulle — celle de la mosaïque aussi : un
+  /// album ne prend pas plus de place qu'une photo seule.
+  private static let mediaWidth: CGFloat = 300
+
   private var visibleAttachments: [MessageAttachment] {
     message.attachments.map(Self.repaired).filter {
       $0.isImage || $0.isVideo || $0.resolvedFileURL != nil
     }
+  }
+
+  /// Ce qui entre dans la mosaïque : photos et vidéos. Un GIF se joue, un vocal
+  /// s'écoute, un fichier s'ouvre — tous les trois restent empilés.
+  private var albumMedia: [MessageAttachment] {
+    visibleAttachments.filter { ($0.isImage || $0.isVideo) && !$0.isGIF }
+  }
+
+  private var album: MediaAlbumLayout? {
+    sharedPost == nil ? MediaAlbumLayout.plan(count: albumMedia.count) : nil
+  }
+
+  private var stackedAttachments: [MessageAttachment] {
+    guard album != nil else { return sharedPost == nil ? visibleAttachments : [] }
+    let inAlbum = Set(albumMedia.map(\.id))
+    return visibleAttachments.filter { !inAlbum.contains($0.id) }
+  }
+
+  /// Le post partagé que porte ce message, son média raccroché au cache.
+  private var sharedPost: SharedPost? {
+    guard var post = SharedPost.parse(message) else { return nil }
+    post.media = post.media.map(Self.repaired)
+    return post
   }
 
   private var displayText: String {
@@ -347,7 +417,8 @@ struct MessageBubble: View {
   private var showsTextBubble: Bool { !displayText.isEmpty }
 
   private var previewedLink: URL? {
-    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble
+    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble,
+          sharedPost == nil
     else { return nil }
     // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.
     if let bridged = message.linkPreview, bridgedPreview != nil, let url = bridged.webURL { return url }

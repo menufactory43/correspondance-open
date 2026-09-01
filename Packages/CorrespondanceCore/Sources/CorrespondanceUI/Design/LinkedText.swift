@@ -15,14 +15,25 @@ public struct LinkedText: View {
 
   /// Pose liens, couleur et soulignement sur `base` (ou sur le texte nu).
   /// `base` sert au surlignage ⌘F : il porte déjà le même contenu, autrement attribué.
+  ///
+  /// Le Markdown des ponts (`**gras**`, `[texte](adresse)`) se lit au passage —
+  /// mais jamais quand un `base` est fourni : ses plages de surlignage désignent
+  /// le texte NU, et l'interprétation le raccourcirait sous elles.
   @MainActor
   public static func render(text: String, tint: Color, base: AttributedString? = nil) -> AttributedString {
-    var attributed = base ?? AttributedString(text)
-    for link in detected(in: text) {
-      guard let bounds = Range(NSRange(link.range, in: text), in: attributed) else { continue }
+    let interpreted = base == nil ? InlineMarkdown.attributed(text) : nil
+    var attributed = base ?? interpreted ?? AttributedString(text)
+    let plain = interpreted.map { String($0.characters) } ?? text
+    for link in detected(in: plain) {
+      guard let bounds = Range(NSRange(link.range, in: plain), in: attributed) else { continue }
       attributed[bounds].link = link.url
       attributed[bounds].foregroundColor = tint
       attributed[bounds].underlineStyle = .single
+    }
+    // Un lien nommé porte déjà son adresse : il ne lui manque que l'encre.
+    for range in attributed.runs.filter({ $0.link != nil }).map(\.range) {
+      attributed[range].foregroundColor = tint
+      attributed[range].underlineStyle = .single
     }
     return attributed
   }

@@ -231,7 +231,7 @@ struct ThreadView: View {
       .padding(.horizontal, Spacing.sm)
     }
     .scrollDismissesKeyboard(.interactively)
-    .defaultScrollAnchor(.bottom)
+    .defaultScrollAnchor(.bottom, for: .initialOffset)
     .scrollPosition($scrollPosition)
     // Quand le bas se rétrécit — clavier qui s'ouvre, citation ou pièces
     // jointes qui coiffent le champ — le fil remonte d'autant : ce qu'on
@@ -278,7 +278,10 @@ struct ThreadView: View {
         .accessibilityLabel("Aller au dernier message")
       }
     }
-    .onChange(of: messages.last?.id) { _, _ in
+    // `initial: true` : à l'ouverture aussi. Le fil de démonstration a ses
+    // messages avant d'être à l'écran — sans ce premier appel, personne ne
+    // corrigeait le placement de l'ancre.
+    .onChange(of: messages.last?.id, initial: true) { _, _ in
       // Un souffle : la bulle qui vient d'arriver doit être mesurée avant
       // qu'on sache où est le nouveau bas.
       Task { @MainActor in
@@ -304,7 +307,17 @@ struct ThreadView: View {
   /// matérialise en route. On recolle donc jusqu'à toucher le bas.
   private func scrollToBottom(duration: Double = 0.25) {
     withAnimation(.easeOut(duration: duration)) {
-      scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
+      // Viser LE DERNIER MESSAGE, pas un décalage en points : la pile
+      // paresseuse ESTIME les rangées qu'elle n'a pas mesurées, et une bulle
+      // qui se révèle plus petite que son estimation (une photo absente,
+      // réduite à une ligne) laissait le fil garé SOUS son propre bas — écran
+      // vide, et une hauteur de contenu périmée qui prétendait le contraire.
+      // Viser un identifiant force la matérialisation de la rangée visée.
+      if let last = messages.last?.id {
+        scrollPosition.scrollTo(id: last, anchor: .bottom)
+      } else {
+        scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
+      }
     }
     Task { @MainActor in
       for _ in 0..<3 {

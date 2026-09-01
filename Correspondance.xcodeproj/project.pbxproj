@@ -96,12 +96,14 @@
 		AACF21AE1C0A6B7B3AE16915 /* SenderAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */; };
 		AB527CABCA3E052EF550AB15 /* CorrespondanceiOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B17CC62B814724EE08A1202A /* CorrespondanceSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */; };
+		B20DA05969A9A5B907CC26E3 /* ThreadMediaUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD91090D22C8F4B9DB00543 /* ThreadMediaUITests.swift */; };
 		B29C767B7919B5E7524CE9E1 /* ForwardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED6F4C2276CC3788BBBE29D /* ForwardSheet.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B844FE3D594D5B5ADC44DAAA /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */; };
 		BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F807FD24E1467416CB81E90 /* MentionMenu.swift */; };
 		C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */; };
 		C1A364F177A76D1E5B33FC4C /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = E30260377CE15D0E3426943D /* CorrespondanceCore */; };
+		C1F2AF05BA71706404C0E330 /* QuickLookPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06853CC092F39EA6D7674973 /* QuickLookPanel.swift */; };
 		C24D8539867956DA1A0AA941 /* GroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
@@ -183,6 +185,7 @@
 /* Begin PBXFileReference section */
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
 		0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActionsOverlay.swift; sourceTree = "<group>"; };
+		06853CC092F39EA6D7674973 /* QuickLookPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPanel.swift; sourceTree = "<group>"; };
 		09D0AE563D1722592CC227A3 /* InboxFloatingBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxFloatingBar.swift; sourceTree = "<group>"; };
 		0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+IMessageAutomation.swift"; sourceTree = "<group>"; };
 		0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */ = {isa = PBXFileReference; path = "imessage-macos26.db"; sourceTree = "<group>"; };
@@ -258,6 +261,7 @@
 		8866BC7F1E02EB890C0CDEFD /* SendLaterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLaterSheet.swift; sourceTree = "<group>"; };
 		8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Detached.swift"; sourceTree = "<group>"; };
 		8FCCC768619D417D8C2B6ACC /* InboxStore+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Group.swift"; sourceTree = "<group>"; };
+		8FD91090D22C8F4B9DB00543 /* ThreadMediaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadMediaUITests.swift; sourceTree = "<group>"; };
 		90E28665C56283D03F52E170 /* DemoRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRelay.swift; sourceTree = "<group>"; };
 		94D422F39E0A48F41C38E6CD /* PushRegistration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushRegistration.swift; sourceTree = "<group>"; };
 		9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Deletion.swift"; sourceTree = "<group>"; };
@@ -528,6 +532,7 @@
 			children = (
 				F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */,
 				7FC472EC8CA01BA228483427 /* HoverZone.swift */,
+				06853CC092F39EA6D7674973 /* QuickLookPanel.swift */,
 				F69827D334B0A62C8E003293 /* TopScrollFade.swift */,
 				1697F0DD386E4141F1AECA23 /* WindowBackground.swift */,
 				CF291CB888D9703104F47AB1 /* WindowChrome.swift */,
@@ -619,6 +624,7 @@
 			children = (
 				3D03259AAAF015B7E7C7ED0F /* InboxNavigationUITests.swift */,
 				4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */,
+				8FD91090D22C8F4B9DB00543 /* ThreadMediaUITests.swift */,
 				8389AC7B1B1BBA8D7D6A7F0B /* ThreadScrollUITests.swift */,
 			);
 			path = CorrespondanceiOSUITests;
@@ -1012,6 +1018,7 @@
 			files = (
 				033185C5BA411C7BF93BE797 /* InboxNavigationUITests.swift in Sources */,
 				AA6BA0E7020906B49E8D0389 /* ThreadGesturesUITests.swift in Sources */,
+				B20DA05969A9A5B907CC26E3 /* ThreadMediaUITests.swift in Sources */,
 				02B6048F769F60C78C012557 /* ThreadScrollUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1072,6 +1079,7 @@
 				72C453A5065BFAAE4ECBE3EC /* NewGroupSheet.swift in Sources */,
 				0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */,
 				003EBAD13023436D77C15471 /* PermissionBanner.swift in Sources */,
+				C1F2AF05BA71706404C0E330 /* QuickLookPanel.swift in Sources */,
 				A7E4683BE328EF7B138AD137 /* QuickReplyPanel.swift in Sources */,
 				36D13C2FDED6EA357EE9A806 /* QuickReplyPreferences.swift in Sources */,
 				2D29C0D4AFAF6044FEB74ABD /* QuickReplyStatusItem.swift in Sources */,

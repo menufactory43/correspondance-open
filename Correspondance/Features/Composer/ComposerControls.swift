@@ -186,15 +186,10 @@ struct ComposerAttachmentStrip: View {
     }
   }
 
-  /// Icône du type de fichier, à l'extension.
+  /// Icône du type de fichier, à l'extension — la même que celle des cartes de
+  /// pièce jointe du fil.
   static func symbol(forPath path: String) -> String {
-    switch URL(fileURLWithPath: path).pathExtension.lowercased() {
-    case "pdf": return "doc.richtext"
-    case "mp4", "mov", "m4v": return "film"
-    case "caf", "m4a", "mp3", "aac", "wav", "ogg", "opus": return "waveform"
-    case "zip", "gz", "tar": return "doc.zipper"
-    default: return "doc"
-    }
+    AttachmentFileCard.symbol(forPath: path)
   }
 }
 

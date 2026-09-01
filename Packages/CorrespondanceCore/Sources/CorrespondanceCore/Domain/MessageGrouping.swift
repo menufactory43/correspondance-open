@@ -58,7 +58,9 @@ public enum MessageGrouping {
   ) -> [MessageGroup] {
     var groups: [MessageGroup] = []
 
-    for message in messages {
+    // Les photos envoyées d'un coup se recollent en album AVANT le découpage :
+    // le fil n'en voit plus qu'une bulle, avec sa mosaïque.
+    for message in MediaAlbums.merged(messages) {
       let previous = groups.last?.messages.last
       let silence = previous.map { message.sentAt.timeIntervalSince($0.sentAt) > breakInterval } ?? true
       let changedAuthor = previous.map {

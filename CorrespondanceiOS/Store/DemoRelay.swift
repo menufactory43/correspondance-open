@@ -1,5 +1,6 @@
 import CorrespondanceCore
 import Foundation
+import UIKit
 
 /// Un Relais de démonstration, fait des payloads `/sync` qui servent déjà de
 /// fixtures aux tests de Core.
@@ -42,6 +43,8 @@ enum DemoRelay {
     case recherche
     case plusTard
     case reglages
+    /// Le fil aux photos : une mosaïque de quatre et un partage Instagram.
+    case medias
   }
 
   /// L'adresse du Relais de démonstration, pour l'écran `notification`.
@@ -101,7 +104,46 @@ enum DemoRelay {
     var state = InboxState()
   }
 
+  /// Les médias que les fixtures annoncent, déposés dans le cache des pièces
+  /// jointes AVANT la lecture des payloads : sans fichier sous la main, une
+  /// photo bridgée ne sait dire que « indisponible », et le fil de démonstration
+  /// n'aurait ni mosaïque ni carte de partage à montrer.
+  private static func seedAttachments() {
+    let hues: [Double] = [0.09, 0.42, 0.55, 0.86]
+    for (rank, hue) in hues.enumerated() {
+      seed(
+        mxc: "mxc://correspondance.local/demo-album-\(rank + 1)",
+        contentType: "image/png",
+        size: rank.isMultiple(of: 2) ? CGSize(width: 480, height: 640) : CGSize(width: 640, height: 480),
+        hue: hue
+      )
+    }
+    seed(
+      mxc: "mxc://correspondance.local/demo-reel-1",
+      contentType: "image/jpeg",
+      size: CGSize(width: 540, height: 675),
+      hue: 0.72
+    )
+  }
+
+  private static func seed(mxc: String, contentType: String, size: CGSize, hue: Double) {
+    guard MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: contentType) == nil
+    else { return }
+    let image = UIGraphicsImageRenderer(size: size).image { context in
+      UIColor(hue: hue, saturation: 0.34, brightness: 0.82, alpha: 1).setFill()
+      context.fill(CGRect(origin: .zero, size: size))
+      UIColor(hue: hue, saturation: 0.55, brightness: 0.52, alpha: 1).setFill()
+      context.fill(CGRect(x: 0, y: size.height * 0.62, width: size.width, height: size.height * 0.38))
+    }
+    guard let data = contentType == "image/jpeg"
+      ? image.jpegData(compressionQuality: 0.9)
+      : image.pngData()
+    else { return }
+    MatrixAttachmentStore.store(data: data, forMXC: mxc, contentType: contentType)
+  }
+
   static func catalogue() -> Catalogue {
+    seedAttachments()
     var rooms: [String: MatrixRoomModel] = [:]
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     for name in ["matrix-sync-whatsapp", "matrix-sync-signal", "matrix-sync-instagram"] {

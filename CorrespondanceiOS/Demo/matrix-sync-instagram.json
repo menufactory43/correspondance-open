@@ -244,6 +244,90 @@
                 "msgtype": "m.text",
                 "body": "Rendez-vous samedi au studio."
               }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-album-1",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500410000,
+              "content": {
+                "msgtype": "m.image",
+                "body": "plage-1.png",
+                "url": "mxc://correspondance.local/demo-album-1",
+                "info": {
+                  "mimetype": "image/png"
+                }
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-album-2",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500415000,
+              "content": {
+                "msgtype": "m.image",
+                "body": "plage-2.png",
+                "url": "mxc://correspondance.local/demo-album-2",
+                "info": {
+                  "mimetype": "image/png"
+                }
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-album-3",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500420000,
+              "content": {
+                "msgtype": "m.image",
+                "body": "plage-3.png",
+                "url": "mxc://correspondance.local/demo-album-3",
+                "info": {
+                  "mimetype": "image/png"
+                }
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-album-4",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500425000,
+              "content": {
+                "msgtype": "m.image",
+                "body": "plage-4.png",
+                "url": "mxc://correspondance.local/demo-album-4",
+                "info": {
+                  "mimetype": "image/png"
+                }
+              }
+            },
+            {
+              "type": "m.reaction",
+              "event_id": "$rea-album-coeur",
+              "sender": "@meffysto:correspondance.local",
+              "origin_server_ts": 1756500430000,
+              "content": {
+                "m.relates_to": {
+                  "rel_type": "m.annotation",
+                  "event_id": "$msg-album-1",
+                  "key": "❤️"
+                }
+              }
+            },
+            {
+              "type": "m.room.message",
+              "event_id": "$msg-partage-ig",
+              "sender": "@instagram_17841400000000002:correspondance.local",
+              "origin_server_ts": 1756500435000,
+              "content": {
+                "msgtype": "m.image",
+                "body": "**menbase.fr Dans la plupart des milieux de travail, traiter quelqu'un de « chauve » serait généralement considéré comme une insulte…**\n[https://www.instagram.com/reel/DbtNjyPoF0Q/](https://www.instagram.com/reel/DbtNjyPoF0Q/?id=3957879281264123152_72760849859&is_sponsored=false)",
+                "filename": "reel.jpg",
+                "url": "mxc://correspondance.local/demo-reel-1",
+                "info": {
+                  "mimetype": "image/jpeg"
+                }
+              }
             }
           ]
         }

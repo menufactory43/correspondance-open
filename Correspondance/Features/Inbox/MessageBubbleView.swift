@@ -85,11 +85,29 @@ struct MessageBubbleView: View {
         // les pastilles mordent : accrochées à la pile entière, elles se
         // seraient posées sous « Modifié » au lieu du coin de la bulle.
         VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
-          ForEach(visibleAttachments) { attachment in
+          if let album {
+            MediaAlbumView(
+              media: albumMedia,
+              layout: album,
+              width: Self.mediaWidth,
+              cornerRadius: 12,
+              theme: theme,
+              onOpen: openMedia
+            )
+          }
+          ForEach(stackedAttachments) { attachment in
             attachmentView(attachment)
           }
 
-          if let poll = message.poll {
+          if let post = sharedPost {
+            SharedPostCard(
+              post: post,
+              theme: theme,
+              typeface: typeface,
+              width: Self.mediaWidth,
+              cornerRadius: 12
+            )
+          } else if let poll = message.poll {
             PollView(
               poll: poll,
               theme: theme,
@@ -237,7 +255,8 @@ struct MessageBubbleView: View {
   /// L'adresse dont on montre la carte : la première du message, et seulement
   /// si le réglage est allumé et que la bulle porte bien du texte.
   private var previewedLink: URL? {
-    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble
+    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble,
+          sharedPost == nil
     else { return nil }
     // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.
     if let bridged = message.linkPreview, bridgedPreview != nil, let url = bridged.webURL { return url }
@@ -444,8 +463,45 @@ struct MessageBubbleView: View {
     }
   }
 
+  /// La largeur d'une photo dans une bulle du Mac — celle de la mosaïque aussi :
+  /// un album ne prend pas plus de place qu'une photo seule.
+  private static let mediaWidth: CGFloat = 280
+
   private var visibleAttachments: [MessageAttachment] {
     message.attachments.map(Self.repaired).filter { $0.isImage || $0.isVideo || $0.resolvedFileURL != nil }
+  }
+
+  /// Ce qui entre dans la mosaïque : photos et vidéos. Un GIF se joue, un vocal
+  /// s'écoute, un fichier s'ouvre — tous les trois restent empilés.
+  private var albumMedia: [MessageAttachment] {
+    visibleAttachments.filter { ($0.isImage || $0.isVideo) && !$0.isGIF }
+  }
+
+  private var album: MediaAlbumLayout? {
+    sharedPost == nil ? MediaAlbumLayout.plan(count: albumMedia.count) : nil
+  }
+
+  private var stackedAttachments: [MessageAttachment] {
+    guard album != nil else { return sharedPost == nil ? visibleAttachments : [] }
+    let inAlbum = Set(albumMedia.map(\.id))
+    return visibleAttachments.filter { !inAlbum.contains($0.id) }
+  }
+
+  /// Le post partagé que porte ce message, son média raccroché au cache.
+  private var sharedPost: SharedPost? {
+    guard var post = SharedPost.parse(message) else { return nil }
+    post.media = post.media.map(Self.repaired)
+    return post
+  }
+
+  /// Quick Look sur le média touché, les autres du message à portée de flèche.
+  private func openMedia(at index: Int) {
+    let urls = albumMedia.compactMap(\.resolvedFileURL)
+    guard albumMedia.indices.contains(index),
+          let tapped = albumMedia[index].resolvedFileURL,
+          let start = urls.firstIndex(of: tapped)
+    else { return }
+    QuickLookPanel.open(urls: urls, startAt: start)
   }
 
   private var displayText: String {
@@ -475,8 +531,16 @@ struct MessageBubbleView: View {
   /// Corps du message avec les occurrences de la requête ⌘F surlignées.
   /// Le message visé par la navigation est marqué plus franchement que les autres.
   private var highlighted: AttributedString {
-    var attributed = AttributedString(displayText)
     let ranges = ConversationSearch.highlightRanges(in: displayText, query: highlightQuery)
+    // Hors recherche, le corps passe par le lecteur de Markdown : les plages de
+    // surlignage, elles, désignent le texte nu et lui passent devant.
+    guard !ranges.isEmpty else {
+      return LinkedText.render(
+        text: displayText,
+        tint: message.isFromMe ? theme.bubbleOutInk : theme.accent
+      )
+    }
+    var attributed = AttributedString(displayText)
     let tint = isCurrentMatch ? theme.accent.opacity(0.55) : theme.accent.opacity(0.22)
     for range in ranges {
       guard let bounds = Range(range, in: attributed) else { continue }
@@ -514,7 +578,7 @@ struct MessageBubbleView: View {
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       AttachmentImageView(
         url: url,
-        maxWidth: 280,
+        maxWidth: Self.mediaWidth,
         maxHeight: 320,
         placeholder: theme.bubbleIn,
         border: theme.edge.opacity(0.5),
@@ -522,10 +586,13 @@ struct MessageBubbleView: View {
       ) {
         unavailableImageLabel(repaired)
       }
+      .onTapGesture { QuickLookPanel.open(urls: [url]) }
+      .help("Ouvrir en grand")
+      .accessibilityAddTraits(.isButton)
     } else if let url = repaired.resolvedFileURL, repaired.isVideo {
       AttachmentVideoView(
         url: url,
-        maxWidth: 280,
+        maxWidth: Self.mediaWidth,
         maxHeight: 320,
         placeholder: theme.bubbleIn,
         border: theme.edge.opacity(0.5),
@@ -534,11 +601,12 @@ struct MessageBubbleView: View {
     } else if repaired.isImage {
       unavailableImageLabel(repaired)
     } else {
-      Label(repaired.filename ?? "Pièce jointe", systemImage: "paperclip")
-        .font(Typography.meta)
-        .foregroundStyle(theme.inkSecondary)
-        .padding(10)
-        .background(theme.bubbleIn, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      AttachmentFileCard(
+        attachment: repaired,
+        theme: theme,
+        typeface: typeface,
+        onOpen: repaired.resolvedFileURL.map { url in { QuickLookPanel.open(urls: [url]) } }
+      )
     }
   }
 

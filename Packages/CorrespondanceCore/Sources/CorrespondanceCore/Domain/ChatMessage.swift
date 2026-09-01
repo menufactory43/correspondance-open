@@ -303,6 +303,8 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     if let systemEventText { return systemEventText }
     if isRetracted { return "Message annulé" }
     if let poll { return "📊 \(poll.question)" }
+    // Le Markdown d'un post partagé ne dit rien à qui balaie sa file : on le nomme.
+    if let post = SharedPost.parse(self) { return post.previewText }
     if !text.isEmpty { return text }
     // Le GIF passe avant la photo : c'en est une, mais on la nomme autrement.
     if attachments.contains(where: \.isGIF) { return "GIF" }

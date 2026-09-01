@@ -137,6 +137,10 @@ struct RootView: View {
       mode = .focus
       store.state.archived = Set(store.conversations.map(\.id))
       store.focusConversationID = nil
+    case .medias:
+      // Le fil le plus illustré : c'est lui qui porte la mosaïque et le partage.
+      store.selectedConversationID = store.visibleConversations
+        .max { photoCount($0) < photoCount($1) }?.id
     case .nouvelle, .recherche, .reglages:
       // Ces trois-là s'ouvrent en feuille, depuis l'inbox : c'est elle qui
       // les porte (`InboxListView.openDemoSheetIfRequested`).
@@ -156,6 +160,11 @@ struct RootView: View {
         await push.presentDemoNotification(reference: reference, after: 8)
       }
     }
+  }
+
+  /// Le nombre de photos d'un fil — de quoi choisir celui qu'on photographie.
+  private func photoCount(_ conversation: Conversation) -> Int {
+    store.visibleMessages(conversation.id).reduce(0) { $0 + $1.attachments.count }
   }
 
   private var noSelection: some View {
