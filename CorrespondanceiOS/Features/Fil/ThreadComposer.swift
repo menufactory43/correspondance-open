@@ -56,6 +56,10 @@ struct ThreadComposer: View {
   /// Ce toucher-ci a COMMENCÉ sur un enregistrement déjà verrouillé : c'est
   /// une tape sur la flèche, pas la suite du maintien qui vient de verrouiller.
   @State private var startedLocked = false
+  /// Ce toucher-ci a déjà tranché — glissé à gauche, le vocal est à la
+  /// corbeille — mais le doigt est encore posé : ses derniers mouvements ne
+  /// doivent pas rouvrir le micro.
+  @State private var touchSpent = false
   /// Le chevron du guide respire vers le haut : c'est lui qui dit « par ici ».
   @State private var hintBreathes = false
   /// Les gens du groupe, relus à l'ouverture du fil : taper « @ » ne doit pas
@@ -339,6 +343,7 @@ struct ThreadComposer: View {
           if value.translation == .zero { startedLocked = true }
           return
         }
+        guard !touchSpent else { return }
         if !isHolding, !store.recorder.isRecording {
           // Demander le micro PENDANT le maintien annule le toucher : la
           // première pression ne fait que demander, la suivante enregistre.
@@ -365,9 +370,14 @@ struct ThreadComposer: View {
           haptic(.cancelled)
           store.recorder.cancel()
           endHold()
+          touchSpent = true
         }
       }
       .onEnded { _ in
+        if touchSpent {
+          touchSpent = false
+          return
+        }
         if startedLocked {
           startedLocked = false
           endHold()
