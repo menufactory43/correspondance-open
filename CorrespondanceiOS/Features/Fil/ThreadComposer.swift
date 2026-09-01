@@ -34,6 +34,9 @@ struct ThreadComposer: View {
   /// Où le doigt en est depuis le micro : ce qui fait glisser « Glisser pour annuler ».
   @State private var holdTranslation: CGSize = .zero
   @State private var holdStartedAt = Date()
+  /// Ce toucher-ci a COMMENCÉ sur un enregistrement déjà verrouillé : c'est
+  /// une tape sur la flèche, pas la suite du maintien qui vient de verrouiller.
+  @State private var startedLocked = false
   /// Les gens du groupe, relus à l'ouverture du fil : taper « @ » ne doit pas
   /// attendre le réseau.
   @State private var members: [RelayStore.ThreadMember] = []
@@ -90,16 +93,16 @@ struct ThreadComposer: View {
     if store.replyTarget(conversationID) != nil { return true }
     if isEditing { return true }
     if !store.attachments(conversationID).isEmpty { return true }
-    if showsRecordingStrip { return true }
     if case .failed = store.recorder.state { return true }
     return false
   }
 
-  /// La bande paraît dès que le doigt tient, pas quand le micro daigne
+  /// La bulle se fait enregistreur — même place, même hauteur : rien ne saute
+  /// sous le doigt qui tient. Dès qu'il tient, pas quand le micro daigne
   /// démarrer : le rappel « glisser pour annuler » doit être là tout de suite.
-  private var showsRecordingStrip: Bool {
+  private var isRecordingBubble: Bool {
     if case .failed = store.recorder.state { return false }
-    return store.recorder.isRecording || isHolding
+    return isHolding || store.recorder.isRecording
   }
 
   var body: some View {
@@ -122,7 +125,6 @@ struct ThreadComposer: View {
           if !store.attachments(conversationID).isEmpty {
             attachmentStrip
           }
-          if showsRecordingStrip { recordingStrip }
           if case .failed(let raison) = store.recorder.state { micError(raison) }
         }
         .padding(.vertical, 10)
@@ -200,20 +202,24 @@ struct ThreadComposer: View {
 
   private var bubble: some View {
     HStack(alignment: .bottom, spacing: 6) {
-      TextField(
-        "",
-        text: text,
-        prompt: Text(placeholder).foregroundStyle(theme.inkTertiary),
-        axis: .vertical
-      )
-      .textFieldStyle(.plain)
-      .font(Typography.composer(typeface))
-      .lineSpacing(theme.bubbleLineSpacing(forBodySize: Typography.composerSize()))
-      .foregroundStyle(theme.ink)
-      .lineLimit(1...6)
-      .focused($isFocused)
-      .padding(.leading, 4)
-      .padding(.vertical, 6)
+      if isRecordingBubble {
+        recordingField
+      } else {
+        TextField(
+          "",
+          text: text,
+          prompt: Text(placeholder).foregroundStyle(theme.inkTertiary),
+          axis: .vertical
+        )
+        .textFieldStyle(.plain)
+        .font(Typography.composer(typeface))
+        .lineSpacing(theme.bubbleLineSpacing(forBodySize: Typography.composerSize()))
+        .foregroundStyle(theme.ink)
+        .lineLimit(1...6)
+        .focused($isFocused)
+        .padding(.leading, 4)
+        .padding(.vertical, 6)
+      }
 
       trailingControl
     }
@@ -247,35 +253,28 @@ struct ThreadComposer: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Envoyer")
-    } else if store.recorder.isRecording && !isHolding {
-      Button(action: sendRecording) {
-        Image(systemName: "arrow.up")
-          .font(.system(size: 15, weight: .bold))
-          .foregroundStyle(theme.accentInk)
-          .frame(width: 32, height: 32)
-          .background(Circle().fill(theme.accentFill))
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Envoyer le message vocal")
     } else {
       micButton
     }
   }
 
   /// Le micro qu'on maintient. Pas un `Button` : c'est le glissement qui
-  /// décide, et un bouton avalerait le geste avant qu'il commence.
+  /// décide, et un bouton avalerait le geste avant qu'il commence. Une seule
+  /// image du repos au verrou : remplacer la vue sous le doigt tuerait le
+  /// geste en cours — seul le symbole change.
   private var micButton: some View {
-    Image(systemName: isHolding ? "mic.fill" : "mic")
-      .font(.system(size: 16, weight: .medium))
-      .foregroundStyle(isHolding ? theme.accent : theme.inkTertiary)
+    Image(systemName: isLocked ? "arrow.up" : (isHolding ? "mic.fill" : "mic"))
+      .font(.system(size: isLocked ? 15 : 16, weight: isLocked ? .bold : .medium))
+      .foregroundStyle(isLocked ? theme.accentInk : (isHolding ? theme.accent : theme.inkTertiary))
       .frame(width: 32, height: 32)
+      .background(Circle().fill(isLocked ? theme.accentFill : .clear))
       .scaleEffect(isHolding ? 1.25 : 1)
       .contentShape(Circle())
-      .gesture(holdToTalk)
+      .highPriorityGesture(holdToTalk)
       // Le verrou se sent : le doigt peut se lever.
       .sensoryFeedback(.success, trigger: isLocked) { _, new in new }
-      .accessibilityLabel("Enregistrer un message vocal")
-      .accessibilityHint("Maintenir pour parler, relâcher pour envoyer")
+      .accessibilityLabel(isLocked ? "Envoyer le message vocal" : "Enregistrer un message vocal")
+      .accessibilityHint(isLocked ? "" : "Maintenir pour parler, relâcher pour envoyer")
       // Le cadenas, au-dessus du micro, dit où glisser pour poser le doigt.
       .overlay(alignment: .top) {
         if isHolding, !isLocked {
@@ -297,7 +296,20 @@ struct ThreadComposer: View {
   private var holdToTalk: some Gesture {
     DragGesture(minimumDistance: 0)
       .onChanged { value in
+        // Verrouillé : le premier relevé d'un toucher n'a pas encore bougé —
+        // c'est une tape sur la flèche, et elle enverra. Les suivants sont la
+        // fin du geste qui vient de verrouiller : ils ne doivent rien envoyer.
+        guard !isLocked else {
+          if value.translation == .zero { startedLocked = true }
+          return
+        }
         if !isHolding, !store.recorder.isRecording {
+          // Demander le micro PENDANT le maintien annule le toucher : la
+          // première pression ne fait que demander, la suivante enregistre.
+          guard VoiceRecorder.hasPermission else {
+            Task { if await VoiceRecorder.requestPermission() == false { await store.recorder.start() } }
+            return
+          }
           isHolding = true
           isLocked = false
           holdStartedAt = Date()
@@ -315,6 +327,12 @@ struct ThreadComposer: View {
         }
       }
       .onEnded { _ in
+        if startedLocked {
+          startedLocked = false
+          endHold()
+          sendRecording()
+          return
+        }
         guard isHolding else { return }
         // Une tape, pas un maintien : l'ancien geste garde la main — la bande
         // reste ouverte, et c'est le second appui qui enverra.
@@ -345,20 +363,24 @@ struct ThreadComposer: View {
     Task { await store.sendVoiceMessage(taken.url, voice: taken.voice, conversationID: conversationID) }
   }
 
-  /// Ce qu'on est en train de dire : la durée qui court, le niveau du micro,
-  /// et le geste pour renoncer. Le bouton d'envoi, lui, est à sa place.
-  private var recordingStrip: some View {
+  /// Ce qu'on est en train de dire, À LA PLACE du champ : la durée qui court,
+  /// le niveau du micro, et le geste pour renoncer. La corbeille n'apparaît
+  /// qu'une fois le doigt reparti — tant qu'il tient, c'est le glissement qui
+  /// renonce.
+  private var recordingField: some View {
     HStack(spacing: 8) {
-      Button {
-        endHold()
-        store.recorder.cancel()
-      } label: {
-        Image(systemName: "trash")
-          .font(.system(size: 13, weight: .medium))
-          .foregroundStyle(theme.inkTertiary)
+      if !isHolding {
+        Button {
+          endHold()
+          store.recorder.cancel()
+        } label: {
+          Image(systemName: "trash")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(theme.inkTertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Abandonner le message vocal")
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Abandonner le message vocal")
 
       Circle()
         .fill(theme.accent)
@@ -393,7 +415,8 @@ struct ThreadComposer: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
       }
     }
-    .padding(.horizontal, Spacing.xs)
+    .padding(.leading, 4)
+    .padding(.vertical, 6)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Enregistrement en cours")
   }

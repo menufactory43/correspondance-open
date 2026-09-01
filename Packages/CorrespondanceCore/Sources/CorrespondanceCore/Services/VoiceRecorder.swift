@@ -38,6 +38,12 @@ public final class VoiceRecorder {
   /// Un vocal d'une seconde est un doigt qui a glissé, pas un message.
   public static let minimumDuration: TimeInterval = 0.6
 
+  /// Le micro est-il DÉJÀ accordé ? La vue le demande avant de laisser tenir :
+  /// l'alerte système, si elle paraît pendant un maintien, annule le toucher.
+  public static var hasPermission: Bool {
+    AVAudioApplication.shared.recordPermission == .granted
+  }
+
   /// Le micro est-il accordé ? Demande l'autorisation la première fois.
   public static func requestPermission() async -> Bool {
     await withCheckedContinuation { continuation in
