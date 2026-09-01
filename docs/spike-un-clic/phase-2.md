@@ -608,3 +608,15 @@ CORRESPONDANCE_HOME=unclic CORRESPONDANCE_CHIFFREMENT=1 \
 # 8. Ranger.
 bash infra/relais-spike/stop.sh
 ```
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : `swift test` sans drapeau (759 tests, 0 échec), avec `CORRESPONDANCE_CRYPTO=1` et
+scratch séparé (764, 0 échec), puis `preuve-chiffrement.sh` contre le Relais du spike : le
+Relais stocke un `m.room.encrypted` (megolm), la seconde session reçoit la clé par `to_device`
+(`m.olm.v1` → `m.room_key`) et lit le message envoyé par la première. Les 15 échecs de
+déchiffrement du sync initial sont les messages des essais précédents, antérieurs à l'appareil
+— la limite « index 1 / message 0 » du rapport, attendue. Capture `app-note-chiffree.png`
+cohérente. Aucun orphelin. Phase acceptée.
