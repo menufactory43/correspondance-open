@@ -52,6 +52,9 @@ public actor Agent {
   /// La ligne de status, scannée une fois : elle est reposée à chaque arrivée
   /// dans une room, et rescanner à chaque fois coûterait un `--version` par moteur.
   private var statusLine: String?
+  /// Pourquoi le journal ne peut pas s'exercer, quand c'est le cas. Le status
+  /// le porte : sans ça, un garde-fou absent resterait invisible pour l'app.
+  private var journalIndisponible: String?
 
   public init(
     config: AgentConfig,
@@ -103,8 +106,76 @@ public actor Agent {
 
   // MARK: - Boucle
 
+  /// Un autre agent tourne-t-il déjà sur ce compte ? On regarde le status le
+  /// plus récent qu'on ait posté — l'event porte la machine et le pid.
+  ///
+  /// Deux agents sur le même compte, ce sont deux réponses à chaque message.
+  /// L'app refuse déjà d'activer un second hôte ; le faire **aussi** ici couvre
+  /// le cas où les deux lanceurs ne se connaissent pas (un `systemctl start`
+  /// sur le NUC ne sait rien d'un clic sur le Mac).
+  private func verifyOnlyInstance() async throws {
+    let moi = SingleInstance.Sighting(
+      host: AgentWire.hostName, pid: ProcessInfo.processInfo.processIdentifier, at: Date()
+    )
+    var dernier: SingleInstance.Sighting?
+    guard let joined = try? await client.joinedRooms() else {
+      // On n'a pas pu vérifier : on démarre quand même (mieux vaut un agent
+      // qu'aucun), mais on le dit — c'est une protection qui n'a pas pu jouer.
+      log("⚠ impossible de vérifier qu'aucun autre agent ne tourne : le Relais n'a pas répondu")
+      return
+    }
+    for roomID in joined {
+      guard let messages = try? await client.roomMessages(roomID: roomID, limit: 30) else { continue }
+      for event in messages.chunk
+      where event.type == AgentEvents.statusType && event.sender == config.botUserID {
+        guard let vu = AgentEvents.sighting(in: event.content ?? .object([:]), at: event.sentAt) else {
+          continue
+        }
+        if dernier == nil || vu.at > dernier!.at { dernier = vu }
+      }
+    }
+    if case .refuse(let raison) = SingleInstance.verdict(sighting: dernier, moi: moi) {
+      log("démarrage refusé : \(raison)")
+      throw AgentError.dejaEnCours(raison)
+    }
+  }
+
+  /// Trouve la room console en **interrogeant l'état des rooms**, sans
+  /// dépendre du `/sync`.
+  ///
+  /// C'est le correctif d'un bug qui a rendu le journal muet : la découverte ne
+  /// passait que par `absorbRemoteConfig`, donc par un event d'état — or Matrix
+  /// n'envoie l'état complet qu'au **premier** `/sync`. Dès que `state.json`
+  /// existait (c'est-à-dire à tous les redémarrages), les syncs étaient
+  /// incrémentaux, la config n'était jamais revue, et `consoleRoomID` restait
+  /// `nil` pour toujours. Le status, lui, parcourait les rooms directement :
+  /// d'où un agent qui s'annonçait dans sa console mais n'y journalisait rien.
+  private func discoverConsole() async {
+    guard let joined = try? await client.joinedRooms() else {
+      log("⚠ \(AgentJournal.sansConsole) (le Relais n'a pas répondu à la recherche)")
+      journalIndisponible = AgentJournal.sansConsole
+      return
+    }
+    for roomID in joined {
+      guard let content = try? await client.roomState(roomID: roomID, type: AgentEvents.configType),
+            let remote = AgentRemoteConfig(content: content),
+            remote.agent == config.user, remote.isReadable
+      else { continue }
+      consoleRoomID = roomID
+      live = config.applying(remote)
+      cap = HourlyCap(limit: live.hourlyCap)
+      log("console trouvée : \(roomID)")
+      return
+    }
+    // Un garde-fou qui ne peut pas s'exercer doit le dire — ici, et dans le
+    // status que l'app affiche.
+    log("⚠ \(AgentJournal.sansConsole)")
+  }
+
   public func run() async throws {
     let credentials = try await ensureLoggedIn()
+    try await verifyOnlyInstance()
+    await discoverConsole()
     var backoff: TimeInterval = 2
     if state.nextBatch == nil {
       // Premier lancement : on prend l'état, on note où on en est, on ne
@@ -409,21 +480,29 @@ public actor Agent {
   /// permission, c'est ce qui rend l'agent relisible — et c'est le troisième
   /// garde-fou avec le dossier borné et les propriétaires seuls.
   ///
-  /// Rien n'est posté s'il n'y a pas de room console : on n'invente pas un
-  /// endroit où déverser ce que les gens se disent.
+  /// On n'invente pas un endroit où déverser ce que les gens se disent : sans
+  /// console, rien n'est posté. Mais **on le dit** — un garde-fou qui ne peut
+  /// pas s'exercer et qui se tait est pire qu'un garde-fou absent, parce que
+  /// personne ne sait qu'il manque.
   private func journal(_ request: AgentRequest, seconds: Double, tools: [String], tokens: Int?) async {
-    guard let consoleRoomID else { return }
-    do {
-      try await client.sendEvent(
-        roomID: consoleRoomID,
-        type: AgentEvents.journalType,
-        content: AgentEvents.journal(
-          agent: live.user, roomID: request.roomID, sender: request.sender,
-          prompt: request.prompt, tools: tools, seconds: seconds, tokens: tokens
-        )
-      )
-    } catch {
-      log("journal impostable : \(error.localizedDescription)")
+    let carnet = AgentJournal(consoleRoomID: consoleRoomID) { [client] roomID, type, content in
+      try await client.sendEvent(roomID: roomID, type: type, content: content)
+    }
+    let issue = await carnet.record(
+      agent: live.user, roomID: request.roomID, sender: request.sender,
+      prompt: request.prompt, tools: tools, seconds: seconds, tokens: tokens
+    )
+    switch issue {
+    case .written:
+      journalIndisponible = nil
+    case .impossible(let raison):
+      // Une fois dans le journal local, et dans le status : l'app doit pouvoir
+      // le montrer sans qu'on aille lire un fichier sur la machine.
+      if journalIndisponible != raison {
+        log("⚠ \(raison)")
+        journalIndisponible = raison
+        statusLine = nil  // le prochain status portera l'avertissement
+      }
     }
   }
 
@@ -436,9 +515,13 @@ public actor Agent {
     let config = self.live
     if statusLine == nil {
       let scan = await Task.detached { EngineScan.scan(config: config) }.value
-      statusLine = scan.statusLine(
+      var ligne = scan.statusLine(
         backend: config.backend, agent: config.user, host: EngineScan.hostName, since: startedAt
       )
+      // Un garde-fou qui manque se voit dans les réglages, pas seulement dans
+      // un fichier sur la machine de l'agent.
+      if journalIndisponible != nil { ligne += " · ⚠ journal indisponible" }
+      statusLine = ligne
       log("moteurs : \(statusLine ?? "")")
     }
     guard let line = statusLine else { return }
@@ -446,7 +529,10 @@ public actor Agent {
     if let rooms {
       targets = rooms
     } else {
-      guard let joined = try? await client.joinedRooms() else { return }
+      guard let joined = try? await client.joinedRooms() else {
+        log("⚠ status non publié : le Relais n'a pas répondu — l'app dira que cc est muet")
+        return
+      }
       targets = joined
     }
     for roomID in targets {
