@@ -38,7 +38,7 @@ struct MentionField: ViewModifier {
       .background(alignment: .topLeading) {
         MentionUnderlay(
           text: text,
-          names: session?.mentionCandidates.map(\.name) ?? [],
+          names: MentionHighlight.withAgent(session?.mentionCandidates.map(\.name) ?? []),
           tint: theme.accent.opacity(0.16),
           font: font,
           lineSpacing: lineSpacing

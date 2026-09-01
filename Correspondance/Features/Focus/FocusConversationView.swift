@@ -260,7 +260,7 @@ struct FocusTranscriptView: View {
                     LinkedText(
                       text: message.text,
                       tint: theme.accent,
-                      mentions: live?.mentionCandidates.map(\.name) ?? []
+                      mentions: MentionHighlight.withAgent(live?.mentionCandidates.map(\.name) ?? [])
                     )
                       .font(pageFont)
                       .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))

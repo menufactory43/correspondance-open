@@ -94,6 +94,13 @@ public enum MentionParser {
 /// On relit donc le texte avec la liste des gens du fil : ce qui suit un « @ »
 /// et qui porte le nom de quelqu'un est une mention, et prend l'encre.
 public enum MentionHighlight {
+  /// Les gens du fil, plus l'agent : « @cc » ne figure dans la liste d'aucun
+  /// salon — le Relais l'écarte des correspondants — mais c'est le mot qui le
+  /// réveille, et rien ne mérite plus de se voir.
+  public static func withAgent(_ names: [String]) -> [String] {
+    names + [MatrixIdentity.agentName]
+  }
+
   /// Les plages « @Nom » d'un texte, l'arobase comprise. Le nom le plus long
   /// d'abord : dans un fil où vivent « Marie » et « Marie Claire »,
   /// « @Marie Claire » ne se coupe pas en deux.

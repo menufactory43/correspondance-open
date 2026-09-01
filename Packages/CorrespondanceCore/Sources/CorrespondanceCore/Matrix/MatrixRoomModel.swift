@@ -399,9 +399,13 @@ public enum MatrixIdentity {
     network(ofBot: userID) != nil
   }
 
+  /// Le nom sous lequel on appelle l'agent : « @cc » réveille le bot, c'est
+  /// donc une mention comme une autre — et elle doit se voir comme telle.
+  public static let agentName = "cc"
+
   /// Le MXID de l'agent « cc » : il vit sur le même Relais que soi.
   public static func agentUserID(sameServerAs selfUserID: String) -> String {
-    "@cc:\(String(selfUserID.split(separator: ":").last ?? ""))"
+    "@\(agentName):\(String(selfUserID.split(separator: ":").last ?? ""))"
   }
 
   /// Réseau du bot de gestion, quand ce MXID en est un.

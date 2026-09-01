@@ -165,7 +165,7 @@ struct ThreadView: View {
   /// Les noms qu'on peut mentionner ici — la liste que le menu « @ » du
   /// composer tient déjà à jour pour la session ouverte.
   private var mentionNames: [String] {
-    store.primarySession?.mentionCandidates.map(\.name) ?? []
+    MentionHighlight.withAgent(store.primarySession?.mentionCandidates.map(\.name) ?? [])
   }
 
   /// Espace ouvre Quick Look sur la bulle SURVOLÉE — c'est le survol qui
@@ -259,12 +259,18 @@ struct ThreadView: View {
             groupRow(group, proxy: proxy)
           }
 
-          if let delivery = store.selectedConversation?.lastDelivery,
-             thread.last?.isFromMe == true
+          // « Annuler » vit sur CETTE ligne, pas sous la bulle : la ligne est
+          // là de « Envoi… » à « Vu », à hauteur constante — un bouton qui
+          // prenait une ligne sous la bulle puis s'en allait faisait sauter
+          // tout le fil, ancré en bas, à chaque changement d'état.
+          if let last = thread.last, last.isFromMe,
+             let delivery = store.selectedConversation?.lastDelivery
+               ?? (store.canUndoSend(last.id) ? MessageDelivery.sending : nil)
           {
             DeliveryReceiptLabel(
               delivery: delivery,
               seenBy: store.selectedConversationID.flatMap { store.seenByLabel($0) },
+              onUndo: store.canUndoSend(last.id) ? { store.undoSend(last.id) } : nil,
               theme: theme,
               typeface: themes.typeface
             )
@@ -487,7 +493,10 @@ struct ThreadView: View {
       onEdit: onEdit,
       onUndoSend: onUndoSend,
       onForward: store.canForward(message) ? { store.beginForwarding(message) } : nil,
-      onCancelPending: store.canUndoSend(message.id) ? { store.undoSend(message.id) } : nil,
+      // Le dernier message a son « Annuler » sur la ligne de l'accusé ; seul
+      // un envoi en sursis qui n'est plus le dernier garde le sien sous lui.
+      onCancelPending: store.canUndoSend(message.id) && thread.last?.id != message.id
+        ? { store.undoSend(message.id) } : nil,
       onDeleteLocally: { store.deleteLocally(messageID: message.id) },
       onDeleteEverywhere: store.canDeleteEverywhere(message)
         ? { Task { await store.deleteEverywhere(messageID: message.id) } }
@@ -854,6 +863,8 @@ private struct DeliveryReceiptLabel: View {
   /// « Vu par Alice et Bruno » — le détail des lecteurs, dans un groupe.
   /// Quand il existe, il remplace le « Vu » anonyme.
   var seenBy: String?
+  /// Le dernier envoi est encore rattrapable : « Annuler » à côté de « Envoi… ».
+  var onUndo: (() -> Void)?
   let theme: WritingTheme
   let typeface: WritingTypeface
 
@@ -863,6 +874,17 @@ private struct DeliveryReceiptLabel: View {
 
   var body: some View {
     HStack(spacing: 3) {
+      if let onUndo {
+        Button("Annuler", action: onUndo)
+          .buttonStyle(.plain)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.accent)
+          .help("Ce message n’est pas encore parti")
+          .accessibilityLabel("Annuler l’envoi de ce message")
+        Text("·")
+          .font(Typography.meta(typeface))
+          .padding(.horizontal, 2)
+      }
       Image(systemName: delivery.systemImage)
         .font(.system(size: 9))
       Text(label)
@@ -871,6 +893,9 @@ private struct DeliveryReceiptLabel: View {
     .foregroundStyle(delivery == .read ? theme.accent : theme.inkTertiary)
     .frame(maxWidth: .infinity, alignment: .trailing)
     .padding(.trailing, 4)
+    // La ligne ne change pas de hauteur quand « Annuler » s'en va ou que le
+    // libellé change : même fonte, même rangée. Ce qui bouge, c'est le mot.
+    .animation(nil, value: label)
     .accessibilityLabel("Dernier message : \(label)")
   }
 }

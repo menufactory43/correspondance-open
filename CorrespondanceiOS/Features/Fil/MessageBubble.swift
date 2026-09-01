@@ -458,7 +458,10 @@ struct MessageBubble: View {
     LinkedText.render(
       text: displayText,
       tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
-      mentions: mentionNames
+      mentions: mentionNames,
+      // Sur ma bulle la bande s'éclaircit, sur celle d'en face elle prend
+      // l'accent : la mention se voit sans que l'encre du corps change.
+      mentionBand: message.isFromMe ? theme.paper.opacity(0.24) : theme.accent.opacity(0.14)
     )
   }
 

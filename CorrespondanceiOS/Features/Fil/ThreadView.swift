@@ -102,7 +102,7 @@ struct ThreadView: View {
       .task(id: conversationID) { members = await store.members(conversationID) }
       // Les gens du fil descendent jusqu'aux bulles : c'est ce qui fait d'un
       // « @Nom » une mention plutôt qu'un mot comme les autres.
-      .environment(\.mentionNames, members.map(\.name))
+      .environment(\.mentionNames, MentionHighlight.withAgent(members.map(\.name)))
       .task(id: store.pendingJumpMessageID) {
         guard let target = store.pendingJumpMessageID else { return }
         await consumeJump(target)
@@ -213,7 +213,10 @@ struct ThreadView: View {
                     onQuoteTap: message.replyTo?.messageID.map { targetID in
                       { jumpTo(targetID) }
                     },
-                    onCancelPending: store.canUndoSend(message.id)
+                    // Le dernier message a son « Annuler » sur la ligne de
+                    // l'accusé ; seul un envoi en sursis qui n'est plus le
+                    // dernier garde le sien sous lui.
+                    onCancelPending: store.canUndoSend(message.id) && messages.last?.id != message.id
                       ? { store.undoSend(message.id) }
                       : nil,
                     onSendProposal: {
@@ -251,13 +254,28 @@ struct ThreadView: View {
           .transition(.opacity)
         }
 
+        // « Annuler » vit sur CETTE ligne, pas sous la bulle : la ligne est là
+        // de « Envoi… » à « Vu », à hauteur constante — un bouton qui prenait
+        // une ligne sous la bulle puis s'en allait faisait sauter tout le fil,
+        // ancré en bas, à chaque changement d'état.
         if let receipt = readReceiptLabel {
-          Text(receipt)
-            .font(Typography.meta(typeface))
-            .foregroundStyle(theme.inkTertiary)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing, 6)
-            .accessibilityLabel("Dernier message \(receipt)")
+          HStack(spacing: 3) {
+            if let last = messages.last, store.canUndoSend(last.id) {
+              Button("Annuler") { store.undoSend(last.id) }
+                .buttonStyle(.plain)
+                .font(Typography.meta(typeface))
+                .foregroundStyle(theme.accent)
+                .accessibilityLabel("Annuler l'envoi de ce message")
+              Text("·").font(Typography.meta(typeface)).padding(.horizontal, 2)
+            }
+            Text(receipt)
+              .font(Typography.meta(typeface))
+          }
+          .foregroundStyle(theme.inkTertiary)
+          .frame(maxWidth: .infinity, alignment: .trailing)
+          .padding(.trailing, 6)
+          .animation(nil, value: receipt)
+          .accessibilityLabel("Dernier message \(receipt)")
         }
 
         Color.clear.frame(height: 8)
@@ -466,8 +484,11 @@ struct ThreadView: View {
   /// Signal et WhatsApp ne le donnent pas : on n'affiche alors rien plutôt
   /// qu'un état inventé.
   private var readReceiptLabel: String? {
-    guard let delivery = conversation?.lastDelivery,
-          messages.last?.isFromMe == true
+    guard let last = messages.last, last.isFromMe else { return nil }
+    // Un envoi en sursis n'a pas encore d'accusé : la ligne dit « Envoi… »
+    // dès la bulle, pour ne pas apparaître après coup.
+    guard let delivery = conversation?.lastDelivery
+      ?? (last.isPending || store.canUndoSend(last.id) ? MessageDelivery.sending : nil)
     else { return nil }
     // Dans un groupe, le détail des lecteurs remplace le « Vu » anonyme.
     if delivery == .read, let seenBy = store.seenByLabel(conversationID) { return seenBy }

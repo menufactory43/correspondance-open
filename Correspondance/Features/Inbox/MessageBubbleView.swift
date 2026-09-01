@@ -567,6 +567,13 @@ struct MessageBubbleView: View {
     !displayText.isEmpty
   }
 
+  /// La bande sous un « @Nom ». Sur ma bulle, elle s'éclaircit ; sur celle
+  /// d'en face, elle prend l'accent — dans les deux cas la mention se voit
+  /// sans que l'encre du corps change.
+  private var mentionBand: Color {
+    message.isFromMe ? theme.paper.opacity(0.24) : theme.accent.opacity(0.14)
+  }
+
   /// Corps du message avec les occurrences de la requête ⌘F surlignées.
   /// Le message visé par la navigation est marqué plus franchement que les autres.
   private var highlighted: AttributedString {
@@ -577,7 +584,8 @@ struct MessageBubbleView: View {
       return LinkedText.render(
         text: displayText,
         tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
-        mentions: mentionNames
+        mentions: mentionNames,
+        mentionBand: mentionBand
       )
     }
     var attributed = AttributedString(displayText)
@@ -592,7 +600,8 @@ struct MessageBubbleView: View {
       text: displayText,
       tint: message.isFromMe ? theme.bubbleOutInk : theme.accent,
       base: attributed,
-      mentions: mentionNames
+      mentions: mentionNames,
+      mentionBand: mentionBand
     )
   }
 

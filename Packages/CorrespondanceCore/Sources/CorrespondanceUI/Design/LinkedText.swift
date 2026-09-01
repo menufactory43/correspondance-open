@@ -7,12 +7,14 @@ public struct LinkedText: View {
   public let text: String
   /// Les gens du fil : « @Nom » prend alors l'encre de la mention.
   public var mentions: [String] = []
+  /// La bande posée sous la mention. `nil` = l'encre suffit.
+  public var mentionBand: Color?
   /// Couleur des liens — celle du thème, jamais le bleu système : il tranche sur
   /// les six papiers et devient illisible sur les sombres.
   public var tint: Color
 
   public var body: some View {
-    Text(LinkedText.render(text: text, tint: tint, mentions: mentions))
+    Text(LinkedText.render(text: text, tint: tint, mentions: mentions, mentionBand: mentionBand))
   }
 
   /// Pose liens, couleur et soulignement sur `base` (ou sur le texte nu).
@@ -23,7 +25,8 @@ public struct LinkedText: View {
   /// le texte NU, et l'interprétation le raccourcirait sous elles.
   @MainActor
   public static func render(
-    text: String, tint: Color, base: AttributedString? = nil, mentions: [String] = []
+    text: String, tint: Color, base: AttributedString? = nil, mentions: [String] = [],
+    mentionBand: Color? = nil
   ) -> AttributedString {
     let interpreted = base == nil ? InlineMarkdown.attributed(text) : nil
     var attributed = base ?? interpreted ?? AttributedString(text)
@@ -38,6 +41,9 @@ public struct LinkedText: View {
     // soulignement — c'est la marque des liens, et une mention n'en est pas un.
     for range in MentionHighlight.ranges(in: plain, names: mentions) {
       guard let bounds = Range(NSRange(range, in: plain), in: attributed) else { continue }
+      // Sur MA bulle, l'encre est déjà celle du texte : sans la bande, la
+      // mention ne se distinguerait de rien.
+      if let mentionBand { attributed[bounds].backgroundColor = mentionBand }
       attributed[bounds].foregroundColor = tint
       attributed[bounds].inlinePresentationIntent = .stronglyEmphasized
     }
@@ -73,9 +79,10 @@ public struct LinkedText: View {
     return found
   }
 
-  public init(text: String, tint: Color, mentions: [String] = []) {
+  public init(text: String, tint: Color, mentions: [String] = [], mentionBand: Color? = nil) {
     self.text = text
     self.tint = tint
     self.mentions = mentions
+    self.mentionBand = mentionBand
   }
 }

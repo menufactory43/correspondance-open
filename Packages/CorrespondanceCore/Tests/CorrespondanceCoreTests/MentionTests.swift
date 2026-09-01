@@ -95,6 +95,11 @@ final class MentionTests: XCTestCase {
     XCTAssertEqual(surligne("écris à papa@pasteque.fr", people), [])
   }
 
+  func testLAgentSeReconnaitSansEtreMembre() {
+    let names = MentionHighlight.withAgent([])
+    XCTAssertEqual(surligne("@cc donne moi pi puis attends", names), ["@cc"])
+  }
+
   func testSansPersonneConnueRienNEstSurligne() {
     XCTAssertEqual(surligne("@Papa", []), [])
   }
