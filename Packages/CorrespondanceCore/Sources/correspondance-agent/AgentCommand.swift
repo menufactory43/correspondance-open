@@ -143,7 +143,13 @@ struct AgentCommand {
       do {
         try await agent.run()
       } catch {
-        fail(error.localizedDescription)
+        // Le code de sortie dit à l'app **s'il faut relancer**. Un mot de passe
+        // refusé par le Relais ne se répare pas tout seul : insister huit fois
+        // ne ferait que remplir le journal en donnant l'illusion d'un plantage.
+        let code = AgentExit.code(for: error)
+        if let raison = AgentExit.raisonFR(code) { stamp("arrêt définitif : \(raison)") }
+        FileHandle.standardError.write(Data("correspondance-agent : \(error.localizedDescription)\n".utf8))
+        exit(code)
       }
 
     // Quels moteurs cette machine sait lancer, et si celui de la config est là.

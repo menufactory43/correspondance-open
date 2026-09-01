@@ -99,10 +99,11 @@ targets:
         product: CorrespondanceCore
       - package: CorrespondanceCore
         product: CorrespondanceUI
-      # Rattraper une exception AppKit : une garde de confort ne doit jamais
-      # pouvoir tuer l'app, et Swift seul ne sait pas le faire.
+      # Le contrat de sortie de l'agent (`AgentExit`) : le surveillant a besoin
+      # de savoir quelles chutes se relancent et lesquelles ne se réparent pas
+      # toutes seules. Un contrat partagé, jamais recopié.
       - package: CorrespondanceCore
-        product: CorrespondanceObjC
+        product: CorrespondanceAgentKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance

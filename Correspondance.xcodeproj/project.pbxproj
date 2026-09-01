@@ -109,7 +109,7 @@
 		B844FE3D594D5B5ADC44DAAA /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */; };
 		BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F807FD24E1467416CB81E90 /* MentionMenu.swift */; };
 		C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */; };
-		C0D97B4BFDC2206209990811 /* CorrespondanceObjC in Frameworks */ = {isa = PBXBuildFile; productRef = 44332EC022EBF1FADF483EA2 /* CorrespondanceObjC */; };
+		C0D97B4BFDC2206209990811 /* CorrespondanceAgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 02E1C9BC6573CFBBE8797C6F /* CorrespondanceAgentKit */; };
 		C1A364F177A76D1E5B33FC4C /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = E30260377CE15D0E3426943D /* CorrespondanceCore */; };
 		C1F2AF05BA71706404C0E330 /* QuickLookPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06853CC092F39EA6D7674973 /* QuickLookPanel.swift */; };
 		C24D8539867956DA1A0AA941 /* GroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */; };
@@ -369,7 +369,7 @@
 			files = (
 				89B82803BEB2BD559E0DF200 /* CorrespondanceCore in Frameworks */,
 				345624DA9E3019B77E70EF0D /* CorrespondanceUI in Frameworks */,
-				C0D97B4BFDC2206209990811 /* CorrespondanceObjC in Frameworks */,
+				C0D97B4BFDC2206209990811 /* CorrespondanceAgentKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -828,7 +828,7 @@
 			packageProductDependencies = (
 				D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */,
 				1F9428785D41EA5A65DA201E /* CorrespondanceUI */,
-				44332EC022EBF1FADF483EA2 /* CorrespondanceObjC */,
+				02E1C9BC6573CFBBE8797C6F /* CorrespondanceAgentKit */,
 			);
 			productName = Correspondance;
 			productReference = BC47469B7E80A1746977143F /* Correspondance.app */;
@@ -1645,13 +1645,13 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		02E1C9BC6573CFBBE8797C6F /* CorrespondanceAgentKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CorrespondanceAgentKit;
+		};
 		1F9428785D41EA5A65DA201E /* CorrespondanceUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CorrespondanceUI;
-		};
-		44332EC022EBF1FADF483EA2 /* CorrespondanceObjC */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = CorrespondanceObjC;
 		};
 		A1388660CF1198DE116A1477 /* CorrespondanceUI */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -1,3 +1,4 @@
+import CorrespondanceAgentKit
 import Foundation
 import OSLog
 
@@ -154,6 +155,16 @@ final class AgentProcessHost {
     process = nil
     guard !arretVoulu else { return }
     guard let launch else { return }
+
+    // Toutes les chutes ne se valent pas. Un mot de passe refusé par le Relais
+    // ne se répare pas tout seul : relancer huit fois ne ferait que remplir le
+    // journal, en donnant l'illusion d'un plantage à répétition alors que rien
+    // ne plante — c'est une configuration à refaire.
+    guard AgentExit.shouldRestart(after: code) else {
+      abandon = AgentExit.raisonFR(code) ?? "cc s'est arrêté (code \(code))."
+      Self.log.error("arrêt définitif (code \(code)) : pas de redémarrage")
+      return
+    }
 
     redemarrages += 1
     guard !backoff.renonce(apres: redemarrages) else {

@@ -1,5 +1,8 @@
 import XCTest
 
+import CorrespondanceAgentKit
+import CorrespondanceMatrixClient
+
 @testable import Correspondance
 
 /// La surveillance du processus de l'agent : il démarre, il redémarre s'il
@@ -135,5 +138,109 @@ final class AgentProcessHostTests: XCTestCase {
       XCTAssertTrue(FileManager.default.isExecutableFile(atPath: url.path()))
     }
     XCTAssertEqual(AgentProcessHost.Launch.embeddedAgent(named: "cc") == nil, url == nil)
+  }
+
+  // MARK: - Toutes les chutes ne se valent pas
+
+  /// Un mot de passe refusé par le Relais ne se répare pas tout seul :
+  /// relancer huit fois ne fait que remplir le journal en donnant l'illusion
+  /// d'un plantage à répétition. C'était le dernier défaut connu.
+  func testUnRefusDIdentifiantsNeSeRelancePas() async throws {
+    let hote = AgentProcessHost()
+    hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
+    let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+      hote.stop()
+      try? FileManager.default.removeItem(at: journal)
+    }
+
+    try hote.start(.init(
+      executable: URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "exit \(AgentExit.identifiantsRefuses)"],
+      logURL: journal
+    ))
+    try await Task.sleep(for: .milliseconds(500))
+
+    XCTAssertEqual(hote.redemarrages, 0, "on ne relance pas ce qui ne se répare pas tout seul")
+    XCTAssertFalse(hote.isRunning)
+    let abandon = try XCTUnwrap(hote.abandon)
+    XCTAssertTrue(abandon.contains("identifiants refusés"), abandon)
+    XCTAssertTrue(abandon.contains("Réinstaller"), "le message doit donner l'issue")
+  }
+
+  /// Un second agent sur le même compte : même raisonnement, insister
+  /// n'arrangerait rien.
+  func testUnAgentDejaEnCoursNeSeRelancePas() async throws {
+    let hote = AgentProcessHost()
+    hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
+    let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+      hote.stop()
+      try? FileManager.default.removeItem(at: journal)
+    }
+
+    try hote.start(.init(
+      executable: URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "exit \(AgentExit.dejaEnCours)"],
+      logURL: journal
+    ))
+    try await Task.sleep(for: .milliseconds(500))
+
+    XCTAssertEqual(hote.redemarrages, 0)
+    XCTAssertTrue(hote.abandon?.contains("deux fois") == true, hote.abandon ?? "")
+  }
+
+  /// Une chute ordinaire, elle, se relance : le Relais pas encore prêt, un
+  /// moteur qui trébuche. C'est le cas courant et il ne doit pas changer.
+  func testUneChuteOrdinaireSeRelanceToujours() async throws {
+    let hote = AgentProcessHost()
+    hote.backoff = .init(premier: 0.05, plafond: 0.05, essaisMax: 5)
+    let journal = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer {
+      hote.stop()
+      try? FileManager.default.removeItem(at: journal)
+    }
+
+    try hote.start(.init(
+      executable: URL(fileURLWithPath: "/bin/sh"),
+      arguments: ["-c", "exit 1"],
+      logURL: journal
+    ))
+    try await Task.sleep(for: .milliseconds(400))
+    XCTAssertGreaterThanOrEqual(hote.redemarrages, 1, "une erreur ordinaire se réessaie")
+  }
+
+  // MARK: - Le contrat de sortie
+
+  func testUnRefusDuRelaisSeDistingueDUnePanne() {
+    // 401/403 : le serveur a décidé. On ne réessaie pas.
+    XCTAssertEqual(
+      AgentExit.code(for: MatrixError.http(status: 403, errcode: "M_FORBIDDEN", message: nil)),
+      AgentExit.identifiantsRefuses
+    )
+    XCTAssertEqual(
+      AgentExit.code(for: MatrixError.http(status: 401, errcode: nil, message: nil)),
+      AgentExit.identifiantsRefuses
+    )
+    // Une panne réseau, elle, se réessaie.
+    XCTAssertEqual(AgentExit.code(for: MatrixError.transport("timeout")), AgentExit.erreur)
+    XCTAssertEqual(
+      AgentExit.code(for: MatrixError.http(status: 502, errcode: nil, message: nil)),
+      AgentExit.erreur
+    )
+  }
+
+  func testUnAgentDejaEnCoursASonPropreCode() {
+    XCTAssertEqual(
+      AgentExit.code(for: AgentError.dejaEnCours("cc tourne sur umbrel")),
+      AgentExit.dejaEnCours
+    )
+  }
+
+  func testSeulesLesErreursIrreparablesArretentLesRelances() {
+    XCTAssertFalse(AgentExit.shouldRestart(after: AgentExit.identifiantsRefuses))
+    XCTAssertFalse(AgentExit.shouldRestart(after: AgentExit.dejaEnCours))
+    XCTAssertTrue(AgentExit.shouldRestart(after: AgentExit.erreur))
+    XCTAssertTrue(AgentExit.shouldRestart(after: 139), "un plantage se relance")
   }
 }
