@@ -25,6 +25,11 @@ public actor Agent {
   private var members: [String: Set<String>] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
+  /// Ce qui est arrivé pendant qu'un tour était en vol. À la fin du tour, tout
+  /// ce qui attend part **ensemble** — comme `buzz-acp`. On ne poste jamais de
+  /// bulle pour dire qu'on attend : ça remplirait la file au lieu de la vider,
+  /// et ça perdait la demande.
+  private var enAttente: [String: [AgentRequest]] = [:]
   /// Les tours consommés par atelier dans l'heure — un budget de salon, en plus
   /// du plafond de l'agent : deux agents qui se répondent brûleraient une
   /// fenêtre d'abonnement en une nuit.
@@ -404,21 +409,52 @@ public actor Agent {
     Task { await self.handle(request) }
   }
 
-  private func handle(_ request: AgentRequest) async {
-    guard !busyRooms.contains(request.roomID) else {
-      await reply("Je suis encore sur ta demande précédente ici — une à la fois.", to: request)
+  private func handle(_ arrivee: AgentRequest) async {
+    // Un tour est déjà en vol ici : la demande attend, et elle partira avec les
+    // autres. Aucune bulle — le « écrit… » dit déjà qu'on travaille, et une
+    // bulle de refus remplissait la file en perdant la demande.
+    guard !busyRooms.contains(arrivee.roomID) else {
+      enAttente[arrivee.roomID, default: []].append(arrivee)
+      log("[\(arrivee.roomID)] mise en attente (\(enAttente[arrivee.roomID]?.count ?? 0) en file)")
       return
     }
+    busyRooms.insert(arrivee.roomID)
+    defer { busyRooms.remove(arrivee.roomID) }
+
+    var aTraiter = [arrivee]
+    // Tant qu'il reste quelque chose, on enchaîne : ce qui est arrivé pendant
+    // le tour part au tour suivant, fusionné.
+    while !aTraiter.isEmpty {
+      await runTurn(aTraiter)
+      aTraiter = enAttente.removeValue(forKey: arrivee.roomID) ?? []
+    }
+  }
+
+  /// Un tour : un lot de demandes, un appel au moteur, une réponse.
+  ///
+  /// Le plafond horaire se prend **ici**, au moment où le tour part — pas quand
+  /// une demande entre dans la file. Deux messages coup sur coup coûtent donc
+  /// un seul tour, ce qui est tout l'intérêt du lot.
+  private func runTurn(_ requests: [AgentRequest]) async {
+    guard let lot = RequestBatch.merge(requests) else { return }
+    let request = lot.reply
+
     guard cap.admit() else {
       let wait = Int((cap.nextSlot() ?? 0) / 60) + 1
       await reply("Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
       return
     }
-    busyRooms.insert(request.roomID)
-    defer { busyRooms.remove(request.roomID) }
+
+    if !lot.dropped.isEmpty {
+      // Une perte se dit dans le journal, jamais dans la conversation.
+      log("[\(request.roomID)] ⚠ \(lot.dropped.count) demande(s) trop anciennes écartées du lot (prompt trop long)")
+    }
+    if lot.count > 1 {
+      log("[\(request.roomID)] \(lot.count) demandes fusionnées en un tour")
+    }
 
     let startedTurn = Date()
-    let prompt = request.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : request.prompt
+    let prompt = lot.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : lot.prompt
     log("[\(request.roomID)] \(request.sender) → « \(prompt.prefix(80)) »")
 
     let typing = Task { [client] in

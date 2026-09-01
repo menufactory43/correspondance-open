@@ -136,6 +136,44 @@ Si quelqu'un y revient : commencer par renommer le `Label` en
 puis regarder `log stream --predicate 'subsystem == "com.apple.smd"'` pendant un
 `register()`.
 
+## Deux messages coup sur coup : un seul tour
+
+Un tour à la fois par conversation, c'est la garantie — mais ce qui arrive
+*pendant* ce tour n'est plus refusé, il **attend et part avec la suite**, fusionné
+en un seul appel au moteur.
+
+Avant, l'agent postait « Je suis encore sur ta demande précédente ici — une à la
+fois ». Deux défauts en un : la bulle **remplit la file au lieu de la vider** (la
+règle qui domine tout le chantier), et la demande était **perdue** — jamais
+traitée. Éprouvé en vrai : `@cc test` puis `@cc ping` ; `test` a eu sa réponse,
+`ping` n'a eu qu'un refus.
+
+Rien n'est posté pour dire qu'on attend : le « écrit… » le dit déjà, et il tient
+tant qu'il reste quelque chose à traiter.
+
+### Ce qu'on prend à `buzz-acp`, et pourquoi
+
+C'est leur mécanique : les events d'un canal s'accumulent, et quand aucune
+requête n'est en vol, **tout ce qui attend part en un seul `session/prompt`**.
+Deux messages coup sur coup coûtent donc **un** tour — décisif quand le plafond
+compte les tours et que chaque tour consomme une fenêtre d'abonnement.
+
+Le prix est réel : une seule réponse pour deux questions. On le borne de deux
+façons — le prompt attribue chaque message à son expéditeur, dans l'ordre, pour
+que le moteur sache qu'il en traite plusieurs ; et la **citation désigne le
+dernier**, celui auquel on s'attend à voir répondre, les précédents étant dans le
+corps du tour.
+
+Deux détails qui comptent :
+
+- **Le plafond horaire se prend au départ du tour**, pas à l'arrivée d'une
+  demande — sinon une file pleine ferait mentir le plafond, et le lot perdrait
+  tout son intérêt.
+- **Une borne de taille**, pas une profondeur : un lot absorbe tout ce qui
+  attend. Si le prompt deviendrait ingérable, on garde les **plus récentes** et
+  on écrit la perte dans le journal local et celui de la console — **jamais dans
+  la conversation**.
+
 ## Au plus un agent vivant par compte
 
 Deux agents sur le même compte Matrix, ce sont **deux réponses à chaque message**. Le plan
