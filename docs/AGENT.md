@@ -118,6 +118,44 @@ premier `register()` sans le dire ; le plist embarqué doit être signé avec l'
 il fait partie du bundle) ; et une app déplacée dans le Finder après enregistrement peut
 faire perdre le service — auquel cas « Désactiver » puis « Activer » le repose.
 
+## Chiffrement (chantier E) — commencé par le bout honnête
+
+Rien de cryptographique n'est écrit. Ce qui est fait, c'est ce qui doit être juste
+**avant** : `ConversationPrivacy` classe chaque conversation en trois états, et refuse de
+promettre ce qui est faux.
+
+| État | Ce que ça veut dire | Cadenas |
+|---|---|---|
+| **Chiffré de bout en bout** | seuls les participants lisent, l'hébergeur du Relais compris | ✅ |
+| **Chiffré jusqu'au Relais** | la machine qui héberge le Relais peut lire | non |
+| **Passe par un pont** | le pont déchiffre pour traduire : il lit au passage | non |
+
+La règle qu'aucune optimisation ne doit renverser : **une conversation pontée ne sera
+jamais chiffrée de bout en bout**, et une room de portail marquée `m.room.encryption`
+reste « pontée ». Chiffrer un portail protégerait le trajet app↔Relais, pas la
+conversation. Un cadenas qui ment est pire que pas de cadenas.
+
+### Ce qui reste, et pourquoi ce n'est pas commencé
+
+Le reste demande une chaîne de compilation Rust et un XCFramework, qu'on ne pose pas à
+l'aveugle :
+
+1. `CorrespondanceCrypto` — `matrix-sdk-crypto-ffi` (uniffi) lié en Swift, partagé par
+   l'app iOS, l'app Mac et l'agent (Rust compile des deux côtés, la propriété
+   « Foundation pur, compile sous Linux » de `CorrespondanceMatrixClient` est préservée).
+   Repli si le portage Linux résiste : Pantalaimon, un conteneur de plus sur l'hôte.
+2. **L'agent naît vérifié** : au provisionnement, l'app connaît le mot de passe du bot
+   puisqu'elle vient de le créer — elle ouvre une session pour lui, pose ses clés et les
+   signe avec la clé de signature croisée du propriétaire. Personne ne compare d'émojis.
+3. **La sauvegarde des clés**, activée dès le premier jour : sans elle, l'historique
+   d'avant un appareil est perdu pour toujours.
+4. **L'extension de notification** (`CorrespondanceiOSNotificationService`) doit déchiffrer,
+   donc accéder au magasin de clés par un groupe d'app.
+5. **La recherche** devient locale — ce que `docs/PLAN-store-local.md` prépare déjà.
+
+Ordre : après le reste, sauf si le Relais est hébergé pour quelqu'un d'autre — auquel cas
+ça devient la première ligne, pas la dernière.
+
 ## La config vient du Relais
 
 Une **room console** par agent porte sa configuration, event d'état
