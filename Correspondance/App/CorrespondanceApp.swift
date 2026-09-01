@@ -35,10 +35,6 @@ struct CorrespondanceApp: App {
       ContentView()
         .environment(store)
         .environment(themes)
-        // Une fenêtre ne s'ouvre jamais plus grande que son écran. Sur un
-        // profil neuf, celle-ci s'ouvrait en 1440 × 2142 sur 1440 × 869 : le
-        // champ de saisie était hors de l'écran.
-        .background(WindowFrameGuardView(minimum: NSSize(width: 720, height: 480)))
         .task {
           // Fenêtre visible → puis demande Contacts (sinon pas dans Confidentialité).
           // Visible pour de vrai, pas « après 500 ms » : sinon Contacts, la sonde
@@ -56,11 +52,32 @@ struct CorrespondanceApp: App {
         }
     }
     .defaultSize(width: 1100, height: 760)
-    // Sans ça, SwiftUI dimensionne la fenêtre sur la hauteur *idéale* du
+    // **C'est cette ligne qui règle la fenêtre géante**, et elle seule.
+    //
+    // Sans elle, SwiftUI dimensionne la fenêtre sur la hauteur *idéale* du
     // contenu au premier lancement — une liste de conversations n'en a pas de
-    // raisonnable — et `.defaultSize` ne sert plus à rien. `contentMinSize`
-    // laisse la fenêtre libre au-dessus du minimum de la vue, comme celle
-    // d'une conversation détachée.
+    // raisonnable, d'où les 2142 pixels observés sur un écran de 869 — et
+    // `.defaultSize` ne sert à rien. `contentMinSize` laisse la fenêtre libre
+    // au-dessus du minimum de la vue, comme celle d'une conversation détachée.
+    //
+    // Il y a eu ici, pendant trois commits, une garde qui ramenait la fenêtre
+    // dans l'écran à chaque redimensionnement. Elle est partie, et l'enquête
+    // vaut d'être gardée :
+    //
+    // - elle a **tué l'app au lancement**, par intermittence : son `setFrame`
+    //   tombait parfois pendant la passe de contraintes d'AppKit, qui lève
+    //   alors `_postWindowNeedsUpdateConstraints` — une exception Objective-C
+    //   qu'aucun `@try/@catch` posé autour de l'écriture ne peut rattraper,
+    //   puisqu'elle survient plus tard, dans le cycle d'affichage ;
+    // - et elle ne protégeait de rien de démontré : avec un cadre enregistré
+    //   de 1100 × 2142 restauré sur un écran de 1440 × 869, l'app **sans**
+    //   garde ouvre une fenêtre de 1100 × 790, mesurée. C'est `contentMinSize`
+    //   qui fait le travail.
+    //
+    // Entre une protection non démontrée qui tue l'app et pas de protection,
+    // on choisit pas de protection. Si le cas revient, la seule voie sûre est
+    // de répondre à `windowWillResize(_:to:)` — AppKit *demande* une taille au
+    // lieu qu'on lui en impose une — jamais un `setFrame` asynchrone.
     .windowResizability(.contentMinSize)
     .commands { CorrespondanceCommands(store: store, themes: themes) }
 
@@ -75,8 +92,6 @@ struct CorrespondanceApp: App {
       DetachedConversationWindow(conversationID: conversationID)
         .environment(store)
         .environment(themes)
-        // Elle a son propre cadre enregistré, donc le même risque.
-        .background(WindowFrameGuardView(minimum: NSSize(width: 240, height: 180)))
     }
     .defaultSize(width: 520, height: 640)
     // `contentMinSize` : la fenêtre peut descendre jusqu'au post-it que la vue

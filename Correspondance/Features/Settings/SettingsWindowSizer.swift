@@ -68,11 +68,22 @@ struct SettingsWindowSizer: NSViewRepresentable {
     // On grandit vers le bas et la droite : la barre de titre ne doit pas
     // plonger sous le bord haut de l'écran.
     frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-    // Et jamais plus grand que l'écran : cette fenêtre bornait sa position mais
-    // pas sa taille, donc une taille idéale démesurée la faisait déborder —
-    // le même défaut que celui de la fenêtre principale sur un profil neuf.
+    // Et jamais plus grand que l'écran. Cette fenêtre-ci bornait sa position
+    // mais pas sa taille : une taille idéale démesurée la faisait déborder.
+    //
+    // Le calcul est fait ici, en clair, plutôt que dans une garde partagée :
+    // celle qui existait pour la fenêtre principale tuait l'app par
+    // intermittence (`setFrame` pendant la passe de contraintes d'AppKit) et a
+    // été retirée — cf. CorrespondanceApp.swift. Ici, l'écriture n'a lieu
+    // qu'une fois, à l'ouverture des Réglages, jamais depuis une notification.
     if let visible = (window.screen ?? NSScreen.main)?.visibleFrame {
-      frame = WindowFrameGuard.clamp(frame, visible: visible, minimum: minSize)
+      let largeur = max(min(frame.width, visible.width), min(minSize.width, visible.width))
+      let hauteur = max(min(frame.height, visible.height), min(minSize.height, visible.height))
+      frame = NSRect(
+        x: max(visible.minX, min(frame.origin.x, visible.maxX - largeur)),
+        y: max(visible.minY, min(frame.origin.y, visible.maxY - hauteur)),
+        width: largeur, height: hauteur
+      )
     }
     window.setFrame(frame, display: true)
   }
