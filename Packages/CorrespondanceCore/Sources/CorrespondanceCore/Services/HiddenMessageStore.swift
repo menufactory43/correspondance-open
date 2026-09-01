@@ -9,11 +9,7 @@ import Foundation
 /// d'y figurer : l'event a disparu du salon.
 public enum HiddenMessageStore {
   private static var fileURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("hidden-messages.json")
+    CorrespondanceHome.file("hidden-messages.json")
   }
 
   public static func load() -> Set<String> {

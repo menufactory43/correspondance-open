@@ -18,11 +18,7 @@ public enum MergedContactStore {
   }
 
   private static var fileURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("merged-contacts.json")
+    CorrespondanceHome.file("merged-contacts.json")
   }
 
   public static func load() -> Stored {

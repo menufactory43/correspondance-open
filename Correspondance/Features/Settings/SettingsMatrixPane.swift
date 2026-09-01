@@ -22,6 +22,22 @@ struct SettingsMatrixPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
+      // Sur un jeu de données d'essai, on le dit avant tout le reste : personne
+      // ne doit croire qu'il regarde ses vraies conversations.
+      if let essai = CorrespondanceHome.name {
+        SettingsCard(
+          title: "Essai",
+          footnote: "Données et session à part (`CORRESPONDANCE_HOME=\(essai)`). "
+            + "Tes vraies conversations sont intactes ailleurs — relance sans la variable pour les retrouver."
+        ) {
+          SettingsRow(
+            label: "Jeu de données",
+            detail: "Correspondance-\(essai)",
+            systemImage: "flask"
+          ) { EmptyView() }
+        }
+      }
+
       SettingsCard(title: "État") {
         SettingsRow(
           label: "Homeserver",

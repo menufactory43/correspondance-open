@@ -3,11 +3,7 @@ import Foundation
 /// Lecture sync du cache Contacts sur disque — pour hydrater l’inbox au lancement (0 latence).
 public enum ContactDirectoryDisk {
   private static var indexURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    return base
-      .appendingPathComponent("Correspondance", isDirectory: true)
-      .appendingPathComponent("contacts-index.json")
+    CorrespondanceHome.file("contacts-index.json")
   }
 
   private struct DiskIndex: Codable {

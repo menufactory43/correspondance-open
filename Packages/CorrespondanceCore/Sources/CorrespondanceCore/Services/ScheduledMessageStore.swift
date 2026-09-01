@@ -8,11 +8,7 @@ import Foundation
 /// Au relancement, les échéances passées partent aussitôt.
 public enum ScheduledMessageStore {
   private static var fileURL: URL {
-    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-      ?? FileManager.default.temporaryDirectory
-    let dir = base.appendingPathComponent("Correspondance", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("scheduled-messages.json")
+    CorrespondanceHome.file("scheduled-messages.json")
   }
 
   public static func load() -> [ScheduledMessage] {
