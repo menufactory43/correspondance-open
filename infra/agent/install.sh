@@ -62,6 +62,26 @@ USER_NAME="$(field "$JSON" user)"
 PASSWORD="$(field "$JSON" password)"
 OWNER="$(field "$JSON" owner)"
 
+# Le Relais est-il joignable d'ici ? Le jeton porte l'adresse telle que l'app
+# la voit — un nom Tailscale, par exemple — et cette machine ne la voit pas
+# forcément. Trouvé en vrai : sur la machine du Relais lui-même, le nom
+# MagicDNS n'existait pas, et cc redémarrait toutes les dix secondes. On
+# vérifie avant d'écrire, et si un Synapse répond ici même sous le **même nom
+# de serveur**, c'est lui — vérifié, pas supposé.
+SERVER_NAME="${OWNER#*:}"
+server_name_at() { curl -fsS -m 5 "$1/_matrix/key/v2/server" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("server_name",""))' 2>/dev/null; }
+echo "→ Relais : $HOMESERVER"
+if [ "$(server_name_at "$HOMESERVER")" = "$SERVER_NAME" ]; then
+  :
+elif [ "$(server_name_at http://127.0.0.1:8008)" = "$SERVER_NAME" ]; then
+  echo "   injoignable à cette adresse d'ici, mais le Relais « $SERVER_NAME » tourne sur cette machine : http://127.0.0.1:8008"
+  HOMESERVER="http://127.0.0.1:8008"
+else
+  echo "!! cette machine ne joint pas le Relais « $SERVER_NAME » à $HOMESERVER (ni sur 127.0.0.1:8008)." >&2
+  echo "   Rien n'est installé. Si le Relais est joint par Tailscale, installe Tailscale ici d'abord." >&2
+  exit 1
+fi
+
 echo "→ Amorce dans $HOME_DIR"
 mkdir -p "$HOME_DIR"
 chmod 700 "$HOME_DIR"
