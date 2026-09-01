@@ -38,6 +38,15 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   /// Réglages par room : dans quel dépôt travailler, et si l'agent envoie ou propose.
   public var rooms: [String: RoomBinding] = [:]
 
+  /// Les autres agents du Relais (`@hermes:…`). Une room où l'un d'eux est
+  /// présent est un **atelier** : mention obligatoire, budget de salon, et un
+  /// agent n'y déclenche pas un agent (cf. `Atelier`). Vide — le défaut — veut
+  /// dire qu'il n'y a pas d'atelier, et rien ne change.
+  public var peers: [String] = []
+
+  /// Le budget de tours par heure et par atelier, en plus du plafond de l'agent.
+  public var atelierBudget: Int = 20
+
   public init(homeserver: URL, user: String, password: String, owners: [String]) {
     self.homeserver = homeserver
     self.user = user
@@ -49,6 +58,7 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   // `config.json` de quatre lignes doit suffire.
   private enum CodingKeys: String, CodingKey {
     case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, backend, claude, hermes, acp, rooms
+    case peers, atelierBudget
   }
 
   public init(from decoder: Decoder) throws {
@@ -65,6 +75,8 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     hermes = try c.decodeIfPresent(HermesSettings.self, forKey: .hermes) ?? HermesSettings()
     acp = try c.decodeIfPresent(ACPSettings.self, forKey: .acp) ?? ACPSettings()
     rooms = try c.decodeIfPresent([String: RoomBinding].self, forKey: .rooms) ?? [:]
+    peers = try c.decodeIfPresent([String].self, forKey: .peers) ?? []
+    atelierBudget = try c.decodeIfPresent(Int.self, forKey: .atelierBudget) ?? 20
   }
 
   /// Le Matrix ID complet du bot, déduit du `server_name` d'un propriétaire.

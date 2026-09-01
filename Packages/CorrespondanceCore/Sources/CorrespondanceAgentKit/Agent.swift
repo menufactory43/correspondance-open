@@ -25,6 +25,10 @@ public actor Agent {
   private var members: [String: Set<String>] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
+  /// Les tours consommés par atelier dans l'heure — un budget de salon, en plus
+  /// du plafond de l'agent : deux agents qui se répondent brûleraient une
+  /// fenêtre d'abonnement en une nuit.
+  private var atelierBudgets: [String: HourlyCap] = [:]
   /// Les demandes de permission posées dans une room, en attente d'un 👍 —
   /// clef : l'event de la question ; valeur : où écrire la décision.
   private var pendingPermissions: [String: PendingPermission] = [:]
@@ -133,6 +137,10 @@ public actor Agent {
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
+            if isAtelier(roomID) {
+              if let request = atelierRequest(from: event, roomID: roomID) { dispatch(request) }
+              continue
+            }
             guard let request = Trigger.request(from: event, roomID: roomID, config: live, notBefore: notBefore)
             else { continue }
             dispatch(request)
@@ -256,6 +264,67 @@ public actor Agent {
       accountDataDefault: accountDefaultMode,
       configuredDefault: live.defaultMode
     )
+  }
+
+  // MARK: - Ateliers
+
+  /// Un salon où l'un des autres agents du Relais est présent. Sans pair
+  /// déclaré, il n'y a pas d'atelier et rien ne change.
+  private func isAtelier(_ roomID: String) -> Bool {
+    guard !live.peers.isEmpty, let membres = members[roomID] else { return false }
+    return !membres.isDisjoint(with: Set(live.peers))
+  }
+
+  /// Les règles d'un atelier : mention obligatoire (n'importe où dans le
+  /// message), un agent ne déclenche pas un agent sauf délégation nommée par un
+  /// propriétaire, et un budget de tours par salon. Cf. `Atelier`.
+  private func atelierRequest(from event: MatrixEvent, roomID: String) -> AgentRequest? {
+    guard event.type == "m.room.message",
+          let eventID = event.eventID,
+          let sender = event.sender,
+          !Trigger.isBridgeGhost(sender),
+          event.sentAt >= notBefore
+    else { return nil }
+    let msgtype = event.content?.string(at: "msgtype") ?? "m.text"
+    guard msgtype == "m.text" || msgtype == "m.notice" else { return nil }
+    let body = event.content?.string(at: "m.new_content.body")
+      ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
+
+    let budget = atelierBudgets[roomID] ?? HourlyCap(limit: live.atelierBudget)
+    let contexte = Atelier.Context(
+      agents: Set(live.peers),
+      owners: Set(live.owners),
+      turnsThisHour: budget.limit - budget.remaining(),
+      budget: live.atelierBudget
+    )
+    // Une délégation : un propriétaire a chargé un agent d'en appeler un autre.
+    let delegation = Atelier.delegationTarget(
+      in: body, among: Set(live.peers + [live.botUserID]),
+      triggers: [live.botUserID: live.trigger]
+    ) == live.botUserID
+
+    switch Atelier.decide(
+      agent: live.botUserID, sender: sender, body: body, trigger: live.trigger,
+      context: contexte, isDelegation: delegation
+    ) {
+    case .respond:
+      var reserve = budget
+      guard reserve.admit() else {
+        log("[\(roomID)] budget de l'atelier épuisé (\(live.atelierBudget)/h)")
+        atelierBudgets[roomID] = reserve
+        return nil
+      }
+      atelierBudgets[roomID] = reserve
+      let prompt = Trigger.prompt(in: body, trigger: live.trigger) ?? body
+      return AgentRequest(
+        roomID: roomID, eventID: eventID, sender: sender, prompt: prompt, sentAt: event.sentAt
+      )
+    case .ignore(let raison):
+      if raison != .notMentioned {
+        log("[\(roomID)] ignoré (\(raison.rawValue)) — \(sender)")
+      }
+      return nil
+    }
   }
 
   // MARK: - Un tour
@@ -467,6 +536,16 @@ public actor Agent {
   private func reply(_ text: String, to request: AgentRequest) async {
     let mode = await mode(for: request.roomID)
     do {
+      // Dans un atelier, le tour se déroule dans un thread : seul le résultat
+      // remonte, et le salon reste lisible à trois moteurs.
+      if isAtelier(request.roomID), mode == .direct {
+        try await client.sendEvent(
+          roomID: request.roomID,
+          type: "m.room.message",
+          content: AgentEvents.threadedText(text, root: request.eventID, lastEventID: request.eventID)
+        )
+        return
+      }
       switch mode {
       case .direct:
         // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un

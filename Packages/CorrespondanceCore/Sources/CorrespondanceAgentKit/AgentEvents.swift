@@ -53,6 +53,27 @@ public enum AgentEvents {
     ])
   }
 
+  /// Une réponse **dans un thread** (MSC3440) : le travail d'un tour se déroule
+  /// là, et seul le résultat remonte dans le fil. Dans un atelier à trois
+  /// moteurs, c'est ce qui rend le salon lisible — et dans une inbox humaine,
+  /// c'est ce qui empêche un tour de trois minutes de pousser la conversation
+  /// de quelqu'un hors de l'écran.
+  ///
+  /// `m.in_reply_to` avec `is_falling_back` : les clients qui ignorent les
+  /// threads voient une réponse citée ordinaire, pas un message orphelin.
+  public static func threadedText(_ text: String, root: String, lastEventID: String) -> MatrixJSON {
+    .object([
+      "msgtype": .string("m.text"),
+      "body": .string(text),
+      "m.relates_to": .object([
+        "rel_type": .string("m.thread"),
+        "event_id": .string(root),
+        "is_falling_back": .bool(true),
+        "m.in_reply_to": .object(["event_id": .string(lastEventID)]),
+      ]),
+    ])
+  }
+
   /// Le contenu d'un status : la ligne des moteurs, et l'agent qui la signe.
   public static func status(body: String, agent: String) -> MatrixJSON {
     .object([
