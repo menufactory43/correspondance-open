@@ -152,10 +152,10 @@ final class MessengerSessionCookiesTests: XCTestCase {
     XCTAssertNil(full.values["inconnu"])
   }
 
-  /// La fenêtre de connexion Messenger part de facebook.com, et rien d'autre :
+  /// La fenêtre de connexion Messenger part de messenger.com, et rien d'autre :
   /// une session Instagram croisée en route ne doit pas s'y glisser.
-  func testOnlyFacebookCookiesAreKept() throws {
-    var cookies = complete.map { cookie(name: $0.key, value: $0.value, domain: ".facebook.com") }
+  func testOnlyMessengerCookiesAreKept() throws {
+    var cookies = complete.map { cookie(name: $0.key, value: $0.value, domain: ".messenger.com") }
     cookies.append(cookie(name: "sessionid", value: "ig", domain: ".instagram.com"))
     cookies.append(cookie(name: "c_user", value: "autre-site", domain: ".exemple.fr"))
 
@@ -164,12 +164,12 @@ final class MessengerSessionCookiesTests: XCTestCase {
     XCTAssertEqual(session.values["c_user"], "100012345678901")
     XCTAssertNil(session.values["sessionid"])
 
-    XCTAssertTrue(BridgeSessionCookies.Profile.messenger.acceptsDomain("www.facebook.com"))
-    XCTAssertTrue(BridgeSessionCookies.Profile.messenger.acceptsDomain(".facebook.com"))
-    XCTAssertFalse(BridgeSessionCookies.Profile.messenger.acceptsDomain("faux-facebook.com"))
+    XCTAssertTrue(BridgeSessionCookies.Profile.messenger.acceptsDomain("www.messenger.com"))
+    XCTAssertTrue(BridgeSessionCookies.Profile.messenger.acceptsDomain(".messenger.com"))
+    XCTAssertFalse(BridgeSessionCookies.Profile.messenger.acceptsDomain("faux-messenger.com"))
     // Le domaine d'un profil ne déborde pas sur celui de l'autre.
     XCTAssertFalse(BridgeSessionCookies.Profile.messenger.acceptsDomain("instagram.com"))
-    XCTAssertFalse(BridgeSessionCookies.Profile.instagram.acceptsDomain("facebook.com"))
+    XCTAssertFalse(BridgeSessionCookies.Profile.instagram.acceptsDomain("messenger.com"))
   }
 
   func testJSONPayloadIsSortedAndFlat() throws {
@@ -188,7 +188,7 @@ final class MessengerSessionCookiesTests: XCTestCase {
     XCTAssertEqual(BridgeSessionCookies.Profile.of(.messenger)?.network, .messenger)
     XCTAssertEqual(
       BridgeSessionCookies.Profile.of(.messenger)?.loginURL.absoluteString,
-      "https://www.facebook.com/login/"
+      "https://www.messenger.com/?no_redirect=true"
     )
     XCTAssertEqual(
       BridgeSessionCookies.Profile.of(.instagram)?.loginURL.absoluteString,

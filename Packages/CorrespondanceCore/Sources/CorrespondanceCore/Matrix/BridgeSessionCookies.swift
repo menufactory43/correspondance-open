@@ -58,18 +58,28 @@ public struct BridgeSessionCookies: Equatable, Sendable {
       cookieDomain: "instagram.com"
     )
 
-    /// Messenger se connecte sur facebook.com, avec un compte Facebook ordinaire —
-    /// email/mot de passe, 2FA comprise. Trois cookies suffisent au pont : `c_user`
-    /// (l'identifiant du compte), `xs` (la session elle-même) et `datr` (l'empreinte
-    /// du navigateur, sans laquelle Meta considère la session suspecte).
+    /// Messenger se connecte sur **messenger.com**, pas facebook.com. Le pont expose
+    /// bien un flow `facebook` (cookies de facebook.com), mais il retombe sur le
+    /// compte Facebook actif du navigateur : un compte désactivé « Messenger gardé »,
+    /// ou un second profil au même e-mail, le fait dérailler. messenger.com se connecte
+    /// au compte Messenger lui-même, quel que soit l'état du compte Facebook — et sert
+    /// aussi bien un compte Facebook ordinaire. C'est le flow `messenger` côté pont.
+    ///
+    /// Mêmes trois cookies que la famille Facebook (`FBRequiredCookies` de
+    /// `pkg/messagix/cookies`) : `c_user` (l'identifiant du compte), `xs` (la session
+    /// elle-même) et `datr` (l'empreinte du navigateur, sans laquelle Meta considère la
+    /// session suspecte) — mais posés sur le domaine messenger.com, pas facebook.com.
+    /// L'URL porte `?no_redirect=true`, celle que le connecteur attend (`login.go`),
+    /// pour que messenger.com ne renvoie pas vers facebook.com en cours de route.
     public static let messenger = Profile(
       network: .messenger,
-      loginURL: URL(string: "https://www.facebook.com/login/")!,
+      loginURL: URL(string: "https://www.messenger.com/?no_redirect=true")!,
       requiredNames: ["c_user", "xs", "datr"],
-      // `wd` sert au pont à se donner une taille de fenêtre plausible ; les autres ne
-      // sont que rejouées telles quelles dans l'en-tête `Cookie`. Aucune ne bloque.
+      // Le pont ne déclare aucun cookie « optionnel » pour la famille Facebook, mais
+      // messenger.com pose `wd` (taille de fenêtre) et `sb`/`fr` : on les laisse passer
+      // s'ils sont là — ils sont rejoués tels quels dans l'en-tête `Cookie`, aucun ne bloque.
       optionalNames: ["sb", "fr", "presence", "wd", "oo", "dpr"],
-      cookieDomain: "facebook.com"
+      cookieDomain: "messenger.com"
     )
 
     /// Profil d'un réseau, ou `nil` s'il ne se connecte pas par session de navigateur.
