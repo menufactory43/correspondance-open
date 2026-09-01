@@ -1869,6 +1869,19 @@ final class InboxStore {
         case .success(let detail):
           bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
           startMatrixSync()
+          // La fenêtre de connexion a fait son travail. On laisse le message de
+          // succès s'afficher une seconde, puis on referme la feuille, on bascule
+          // l'inbox sur le réseau qu'on vient de lier et on ramène sa fenêtre
+          // devant — le compte fraîchement synchronisé s'ouvre de lui-même, sans
+          // que l'utilisateur ait à fermer puis retrouver son réseau à la main.
+          Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.2))
+            guard let self else { return }
+            self.setNetworkFilter(network)
+            self.mode = .inbox
+            self.bridgeLoginNetwork = nil
+            WindowOpener.shared.openInbox()
+          }
           return
         case .failure(let detail):
           bridgeLoginStatusFR = "Échec : \(detail)"
