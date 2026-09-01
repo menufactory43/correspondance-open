@@ -3,20 +3,28 @@ import Foundation
 import OSLog
 import ServiceManagement
 
-/// L'hôte « Ce Mac » : l'agent tourne à côté de l'app, en LaunchAgent.
+/// L'hôte « Ce Mac » : l'amorce sur le disque, et l'agent lancé **par l'app**
+/// (`AgentProcessHost`).
 ///
-/// C'est le seul chemin qui fait de « avoir cc » un bouton plutôt qu'un
-/// week-end : `claude` est déjà connecté sur cette machine, donc l'abonnement
-/// est là, et il n'y a ni serveur à louer ni SSH à ouvrir.
+/// C'est le chemin qui fait de « avoir cc » un bouton plutôt qu'un week-end :
+/// `claude` est déjà connecté sur cette machine, donc l'abonnement est là, et
+/// il n'y a ni serveur à louer ni SSH à ouvrir. Son prix, dit franchement dans
+/// l'interface : cc s'arrête quand on quitte l'app.
 ///
 /// Ce que l'app pose : l'amorce dans `~/.correspondance-<agent>/config.json`
-/// (en `0600`), et le service par `SMAppService.agent(plistName:)` — le plist
-/// est **dans le bundle**, `Contents/Library/LaunchAgents/`, c'est macOS qui
-/// l'exige. Un plist statique ne connaît pas `~` : il passe `--agent <nom>`, et
-/// c'est le binaire qui en déduit son dossier (`AgentHome`).
+/// (en `0600`). Le service LaunchAgent est rangé derrière `useLaunchAgent`,
+/// faux et non proposé dans l'interface — l'enquête qui a mené là est dans
+/// `docs/AGENT.md`, § « Pourquoi cc ne tourne pas en LaunchAgent ».
 @MainActor
 enum AgentLocalHost {
   static let log = Logger(subsystem: "com.correspondance.app", category: "agent-local")
+
+  /// **Rangé, pas jeté.** `SMAppService` reste dans le dépôt derrière ce
+  /// drapeau — faux, et non proposé dans l'interface. Il achèterait une seule
+  /// chose : cc qui répond quand l'app est *quittée*, le Mac allumé. Pour un cc
+  /// joignable jour et nuit, c'est l'hôte distant qu'il faut. L'enquête (quatre
+  /// hypothèses éliminées, deux restantes) est dans `docs/AGENT.md`.
+  static let useLaunchAgent = false
 
   /// Le nom du plist embarqué, sans extension de chemin : macOS le cherche
   /// dans `Contents/Library/LaunchAgents/`.
@@ -34,37 +42,36 @@ enum AgentLocalHost {
   /// Il faut donc **trois** choses pour dire « actif » : le drapeau, l'amorce
   /// sur le disque, et un signe de vie de l'agent lui-même.
   enum State: Equatable {
-    /// Jamais enregistré, ou désenregistré.
+    /// Jamais démarré, ou arrêté.
     case absent
-    /// Tout est là, et l'agent a donné signe de vie récemment.
+    /// Le processus tourne, et l'agent a donné signe de vie récemment.
     case actif
-    /// Tout est là, mais l'agent n'a rien publié depuis longtemps. On le dit —
-    /// un service enregistré qui ne parle plus n'est pas « actif ».
+    /// Le processus tourne, mais l'agent n'a rien publié depuis longtemps. On
+    /// le dit — un processus vivant qui ne parle plus n'est pas « actif ».
     case silencieux(depuis: Date?)
-    /// Enregistré, mais **l'utilisateur doit l'autoriser** dans
-    /// Réglages Système › Général › Ouverture et extensions › Éléments d'ouverture.
-    /// C'est le cas qu'il faut *montrer*, pas espérer.
-    case attenteApprobation
-    /// Le drapeau dit « enregistré », mais l'amorce n'est pas là : le service
-    /// ne peut pas démarrer. C'est cassé, pas actif — et ça se répare en
-    /// refaisant le chemin en entier.
+    /// L'amorce n'est pas sur le disque : l'agent ne peut pas se connecter.
+    /// C'est cassé, pas actif — et ça se répare en refaisant le chemin.
     case incomplet
-    /// Le plist n'est pas dans l'app : build sans l'agent embarqué.
+    /// Le binaire n'est pas dans le bundle. **Constaté sur le disque**, jamais
+    /// deviné : on regarde `Contents/MacOS/correspondance-agent`.
     case introuvable
+    /// cc est tombé trop de fois de suite. On dit combien, et on renvoie au
+    /// journal — pas de boucle folle, pas de silence non plus.
+    case abandonne(raison: String)
 
     var labelFR: String {
       switch self {
-      case .absent: "pas installé sur ce Mac"
-      case .actif: "actif sur ce Mac"
+      case .absent: "arrêté"
+      case .actif: "actif — cc répond tant que Correspondance est ouverte"
       case .silencieux(let depuis):
         if let depuis {
-          "installé, mais muet depuis \(Self.ageFR(depuis))"
+          "démarré, mais muet depuis \(Self.ageFR(depuis))"
         } else {
-          "installé, mais il n'a encore rien publié"
+          "démarré, il n'a pas encore publié son premier status"
         }
-      case .attenteApprobation: "à autoriser dans Réglages Système › Éléments d'ouverture"
-      case .incomplet: "installé à moitié : le service est enregistré, son amorce a disparu"
-      case .introuvable: "le service n'est pas dans l'app (build sans l'agent embarqué)"
+      case .incomplet: "l'amorce de cc n'est pas sur le disque"
+      case .introuvable: "cette build n'embarque pas l'agent"
+      case .abandonne(let raison): raison
       }
     }
 
@@ -83,22 +90,23 @@ enum AgentLocalHost {
   /// La conclusion, à partir de ce qu'on sait vraiment. Pure, donc éprouvée :
   /// c'est elle qui empêche l'app d'affirmer ce qu'elle n'a pas vérifié.
   ///
-  /// - `flagEnregistre` : ce que dit `SMAppService`, et rien de plus ;
-  /// - `amorcePresente` : le `config.json` est-il sur le disque ;
-  /// - `dernierStatus` : quand l'agent a publié son status dans la console.
+  /// Le premier essai réel avait montré pourquoi elle doit exister : macOS
+  /// répondait « enregistré » alors qu'aucun service, aucune amorce et aucun
+  /// compte n'existaient, et l'écran ne proposait plus que « Désactiver ».
   static func decide(
-    flagEnregistre: Bool,
-    demandeApprobation: Bool,
-    plistPresent: Bool,
+    binairePresent: Bool,
+    processusVivant: Bool,
     amorcePresente: Bool,
     dernierStatus: Date?,
+    abandon: String? = nil,
     maintenant: Date = Date()
   ) -> State {
-    guard plistPresent else { return .introuvable }
-    if demandeApprobation { return .attenteApprobation }
-    guard flagEnregistre else { return .absent }
-    // Le drapeau seul ne suffit pas : sans amorce, le service ne démarre pas.
+    guard binairePresent else { return .introuvable }
+    if let abandon { return .abandonne(raison: abandon) }
+    // L'amorce d'abord : sans elle, démarrer le processus ne sert à rien, et
+    // c'est le cas qu'il faut savoir réparer.
     guard amorcePresente else { return .incomplet }
+    guard processusVivant else { return .absent }
     guard let dernierStatus else { return .silencieux(depuis: nil) }
     if maintenant.timeIntervalSince(dernierStatus) > State.silenceMax {
       return .silencieux(depuis: dernierStatus)
@@ -106,16 +114,15 @@ enum AgentLocalHost {
     return .actif
   }
 
-  /// L'état réel : le drapeau de macOS, le disque, et le dernier status que
-  /// l'agent a publié dans sa room console (l'app le lit déjà).
+  /// L'état réel : le binaire sur le disque, le processus que l'app surveille,
+  /// l'amorce, et le dernier status publié dans la room console.
   static func state(agent: String, dernierStatus: Date? = nil) -> State {
-    let service = SMAppService.agent(plistName: plistName(agent: agent))
-    return decide(
-      flagEnregistre: service.status == .enabled,
-      demandeApprobation: service.status == .requiresApproval,
-      plistPresent: service.status != .notFound,
+    decide(
+      binairePresent: AgentProcessHost.Launch.embeddedAgentURL != nil,
+      processusVivant: AgentProcessHost.shared.isRunning,
       amorcePresente: hasBootstrap(agent: agent),
-      dernierStatus: dernierStatus
+      dernierStatus: dernierStatus,
+      abandon: AgentProcessHost.shared.abandon
     )
   }
 
@@ -123,41 +130,55 @@ enum AgentLocalHost {
   ///
   /// L'ordre compte : un service qui démarre sans amorce boucle sur une erreur
   /// de config, et macOS finit par le brider.
+  /// Écrit l'amorce, puis démarre l'agent.
+  ///
+  /// L'ordre compte : un agent qui démarre sans amorce boucle sur une erreur de
+  /// configuration.
+  @discardableResult
   static func install(bootstrap: MatrixBridgeService.AgentBootstrap, agent: String) throws -> State {
     try writeBootstrap(bootstrap, agent: agent)
-    let service = SMAppService.agent(plistName: plistName(agent: agent))
-    // Un service déjà enregistré ne se réenregistre pas — mais on ne rend pas
-    // `.actif` pour autant : l'amorce vient d'être écrite, l'agent n'a pas
-    // encore parlé, et c'est `state(agent:)` qui conclut.
-    if service.status != .enabled {
-      try service.register()
-      log.info("service enregistré pour \(agent, privacy: .public)")
+    if useLaunchAgent {
+      let service = SMAppService.agent(plistName: plistName(agent: agent))
+      if service.status != .enabled { try service.register() }
+      return state(agent: agent, dernierStatus: nil)
     }
+    guard let launch = AgentProcessHost.Launch.embeddedAgent(named: agent) else {
+      return .introuvable
+    }
+    try AgentProcessHost.shared.start(launch)
     return state(agent: agent)
   }
 
-  /// Refait le chemin en entier : désenregistre, puis laisse l'appelant
-  /// réinstaller. C'est la sortie du cas « installé à moitié », qui n'en avait
-  /// aucune — un écran sans action possible est un cul-de-sac.
-  static func reset(agent: String) {
-    let service = SMAppService.agent(plistName: plistName(agent: agent))
-    try? service.unregister()
-    log.info("service remis à zéro pour \(agent, privacy: .public)")
-  }
-
   static func uninstall(agent: String) throws {
-    let service = SMAppService.agent(plistName: plistName(agent: agent))
-    try service.unregister()
-    log.info("service désenregistré pour \(agent, privacy: .public)")
+    AgentProcessHost.shared.stop()
+    if useLaunchAgent {
+      try SMAppService.agent(plistName: plistName(agent: agent)).unregister()
+    }
+    log.info("agent arrêté pour \(agent, privacy: .public)")
   }
 
-  /// Ce qu'on répond quand le service n'est pas dans l'app : une explication,
-  /// pas un cul-de-sac.
+  /// Refait le chemin en entier. C'est la sortie du cas « installé à moitié »,
+  /// qui n'en avait aucune — un écran sans action possible est un cul-de-sac.
+  static func reset(agent: String) {
+    AgentProcessHost.shared.stop()
+    if useLaunchAgent {
+      try? SMAppService.agent(plistName: plistName(agent: agent)).unregister()
+    }
+    log.info("agent remis à zéro pour \(agent, privacy: .public)")
+  }
+
+  /// Le journal de l'agent, pour l'ouvrir depuis les réglages.
+  static var logURL: URL? { AgentProcessHost.shared.logURL }
+
+  /// Ce qu'on dit quand le binaire n'est pas dans le bundle. On **constate**,
+  /// on ne devine pas : l'ancien message conseillait de vérifier un fichier qui
+  /// existait bel et bien, ce qui envoyait chercher au mauvais endroit.
   static let aideIntrouvable = """
-    Cette build de l'app n'embarque pas l'agent. Reconstruis-la \
-    (`xcodegen generate` puis un build Xcode), et vérifie que \
-    Correspondance.app/Contents/MacOS/correspondance-agent existe. \
-    En attendant, cc peut tourner sur une autre machine : « Sur une autre machine » ci-dessous.
+    Cette build n'embarque pas l'agent : \
+    Correspondance.app/Contents/MacOS/correspondance-agent est absent. \
+    Reconstruis avec `xcodegen generate` puis un build Xcode — la phase \
+    « Embed correspondance-agent » le pose. En attendant, cc peut tourner sur \
+    une autre machine (« Sur une autre machine », ci-dessous).
     """
 
   /// Ouvre le panneau où l'approbation se donne — parce que « va dans les

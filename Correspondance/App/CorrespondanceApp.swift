@@ -100,4 +100,12 @@ final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     true
   }
+
+  /// cc s'arrête avec l'app. Un agent orphelin qui continuerait de répondre au
+  /// nom de quelqu'un après la fermeture serait pire qu'un agent mort — et
+  /// c'est le prix assumé de « Sur ce Mac » : pour un cc joignable jour et
+  /// nuit, il faut une autre machine.
+  func applicationWillTerminate(_ notification: Notification) {
+    AgentProcessHost.shared.stop()
+  }
 }

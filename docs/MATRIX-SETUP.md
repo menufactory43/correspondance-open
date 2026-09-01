@@ -101,33 +101,33 @@ Si les mots diffèrent, tu appaires autre chose que ce que tu viens d'installer 
 
 Réglages › Agent › **Sur ce Mac** › « Activer sur ce Mac ».
 
-**Ce que tu dois voir**, dans l'ordre du plus probable : « installé, mais il n'a encore rien
-publié » (l'agent démarre, il n'a pas encore parlé) qui passe à « actif sur ce Mac » après
-son premier status ; **ou** « à autoriser dans Réglages Système › Éléments d'ouverture »
-avec un bouton « Autoriser… » (§ *Vérification manuelle* de `docs/AGENT.md` — c'est le point
-que personne n'a encore éprouvé de bout en bout).
+**Ce que tu dois voir** : « démarré, il n'a pas encore publié son premier status », qui
+passe à « actif — cc répond tant que Correspondance est ouverte » dans la minute.
 
-« Actif » n'est jamais une lecture du drapeau de macOS : il faut le service **et** l'amorce
-sur le disque **et** un status récent de l'agent. Si tu vois « installé à moitié », macOS a
-gardé un drapeau d'une installation précédente : « Réparer » refait tout le chemin. Ce cas
-est arrivé au premier essai réel, et l'écran ne proposait alors aucune sortie — c'est
-corrigé.
+cc tourne **dans l'app**, comme processus enfant : il redémarre s'il tombe, il s'arrête
+quand tu quittes Correspondance. Il n'y a plus ni approbation macOS ni Éléments d'ouverture
+— l'enquête qui a mené à ce choix est dans `docs/AGENT.md`, § « Pourquoi cc ne tourne pas
+en LaunchAgent ».
+
+« Actif » n'est jamais une lecture d'un drapeau : il faut le binaire dans le bundle, le
+processus vivant, l'amorce sur le disque **et** un status récent. Les autres états ont
+chacun leur sortie — « l'amorce n'est pas sur le disque » → *Réparer* ; « muet depuis… » →
+le journal ; « cette build n'embarque pas l'agent » → *Pourquoi ?*.
 
 Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse en moins d'une
-minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent :
-`tail -f /tmp/correspondance-agent.log`.
+minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent s'ouvre depuis les
+réglages, ou `tail -f /tmp/correspondance-cc.log`.
 
 **Attention, un dossier n'est pas isolé** : « Activer sur ce Mac » écrit l'amorce de `cc`
 dans `~/.correspondance-agent/`, et `CORRESPONDANCE_HOME` ne le déplace pas — il ne déplace
-que les données de l'**app**. Sur ton Mac ce dossier est libre (ton agent tourne sur le
-NUC), donc l'essai peut s'y installer sans rien écraser. Vérifie-le avant :
+que les données de l'**app**. Vérifie qu'il est libre avant :
 
 ```bash
 ls ~/.correspondance-agent/config.json 2>/dev/null && echo "OCCUPÉ — ne pas activer cc ici"
 ```
 
-S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans
-agent local.
+S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans agent
+local.
 
 ### 5. Brancher `correspondance-mcp` dans Claude Desktop
 

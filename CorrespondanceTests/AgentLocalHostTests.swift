@@ -25,113 +25,109 @@ final class AgentLocalHostTests: XCTestCase {
     XCTAssertTrue(dossier.hasPrefix("/Users/moi/.correspondance-"), dossier)
   }
 
-  func testLeNomDuPlistEstCeluiQueLeBundlePorte() {
-    // `SMAppService.agent(plistName:)` ne cherche que dans
-    // Contents/Library/LaunchAgents/ et ne pardonne pas une faute de frappe.
+  func testLeLaunchAgentEstRangePasProposé() {
+    // `SMAppService` reste dans le dépôt, derrière ce drapeau : l'enquête est
+    // dans docs/AGENT.md, et quelqu'un y reviendra peut-être.
+    XCTAssertFalse(AgentLocalHost.useLaunchAgent)
     XCTAssertEqual(AgentLocalHost.plistName(agent: "cc"), "app.correspondance.agent.plist")
   }
 
-  func testChaqueEtatDuServiceSeDitEnFrancais() {
+  func testChaqueEtatSeDitEnFrancais() {
     let etats: [AgentLocalHost.State] = [
-      .absent, .actif, .attenteApprobation, .introuvable, .incomplet,
+      .absent, .actif, .introuvable, .incomplet,
       .silencieux(depuis: nil), .silencieux(depuis: Date().addingTimeInterval(-7200)),
+      .abandonne(raison: "cc s'est arrêté 8 fois de suite."),
     ]
     for etat in etats {
       XCTAssertFalse(etat.labelFR.isEmpty)
     }
     XCTAssertTrue(
-      AgentLocalHost.State.attenteApprobation.labelFR.contains("Éléments d'ouverture"),
-      "l'écran doit dire où cliquer, pas « autorisation requise »"
+      AgentLocalHost.State.actif.labelFR.contains("Correspondance est ouverte"),
+      "l'interface doit dire ce que « Ce Mac » achète vraiment"
     )
   }
 
   // MARK: - « Actif » est une conclusion, pas une lecture
 
-  /// Le bug trouvé au premier essai réel : macOS répondait « enregistré » alors
-  /// qu'aucune amorce, aucun service et aucun compte n'existaient. L'app
-  /// affichait « actif sur ce Mac » et ne proposait plus que « Désactiver » —
-  /// aucun moyen d'activer quoi que ce soit.
-  func testUnDrapeauSansAmorceNEstPasActif() {
+  /// Le bug du premier essai réel : l'app affichait « actif » sur la foi d'un
+  /// drapeau de macOS, alors qu'aucune amorce, aucun service et aucun compte
+  /// n'existaient — et ne proposait plus que « Désactiver ».
+  func testSansAmorceRienNEstActif() {
     let etat = AgentLocalHost.decide(
-      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
-      amorcePresente: false, dernierStatus: Date()
+      binairePresent: true, processusVivant: true, amorcePresente: false, dernierStatus: Date()
     )
-    XCTAssertEqual(etat, .incomplet, "un service enregistré sans amorce est cassé, pas actif")
-    XCTAssertTrue(etat.labelFR.contains("moitié"), etat.labelFR)
+    XCTAssertEqual(etat, .incomplet, "un processus sans amorce ne peut pas se connecter")
+    XCTAssertTrue(etat.labelFR.contains("amorce"), etat.labelFR)
   }
 
-  func testToutEstLaEtLAgentAParleRecemment() {
-    let etat = AgentLocalHost.decide(
-      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
-      amorcePresente: true, dernierStatus: Date().addingTimeInterval(-60)
+  func testProcessusVivantEtStatusRecent() {
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        binairePresent: true, processusVivant: true, amorcePresente: true,
+        dernierStatus: Date().addingTimeInterval(-60)
+      ),
+      .actif
     )
-    XCTAssertEqual(etat, .actif)
+  }
+
+  func testUnProcessusArreteNEstPasActifMemeAvecUnStatusRecent() {
+    XCTAssertEqual(
+      AgentLocalHost.decide(
+        binairePresent: true, processusVivant: false, amorcePresente: true,
+        dernierStatus: Date()
+      ),
+      .absent,
+      "un status récent peut venir d'un agent qui tourne ailleurs"
+    )
   }
 
   /// Un status vieux d'une heure se dit, il ne se tait pas.
   func testUnAgentMuetDepuisLongtempsNEstPasActif() {
     let vieux = Date().addingTimeInterval(-7200)
     let etat = AgentLocalHost.decide(
-      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
-      amorcePresente: true, dernierStatus: vieux
+      binairePresent: true, processusVivant: true, amorcePresente: true, dernierStatus: vieux
     )
     XCTAssertEqual(etat, .silencieux(depuis: vieux))
     XCTAssertTrue(etat.labelFR.contains("muet"), etat.labelFR)
   }
 
-  func testToutEstLaMaisLAgentNAJamaisParle() {
-    let etat = AgentLocalHost.decide(
-      flagEnregistre: true, demandeApprobation: false, plistPresent: true,
-      amorcePresente: true, dernierStatus: nil
-    )
-    XCTAssertEqual(etat, .silencieux(depuis: nil))
-  }
-
-  func testSansDrapeauCEstAbsent() {
+  func testJusteDemarreIlNAPasEncoreParle() {
     XCTAssertEqual(
       AgentLocalHost.decide(
-        flagEnregistre: false, demandeApprobation: false, plistPresent: true,
-        amorcePresente: false, dernierStatus: nil
+        binairePresent: true, processusVivant: true, amorcePresente: true, dernierStatus: nil
       ),
-      .absent
-    )
-    // Même avec une amorce restée sur le disque : rien n'est enregistré.
-    XCTAssertEqual(
-      AgentLocalHost.decide(
-        flagEnregistre: false, demandeApprobation: false, plistPresent: true,
-        amorcePresente: true, dernierStatus: Date()
-      ),
-      .absent
+      .silencieux(depuis: nil)
     )
   }
 
-  func testLApprobationPasseAvantToutLeReste() {
-    let etat = AgentLocalHost.decide(
-      flagEnregistre: false, demandeApprobation: true, plistPresent: true,
-      amorcePresente: false, dernierStatus: nil
-    )
-    XCTAssertEqual(etat, .attenteApprobation, "on montre l'approbation, on ne l'espère pas")
-  }
-
-  func testSansPlistRienNEstPossible() {
+  /// « Introuvable » se constate sur le disque, il ne se devine pas — et le
+  /// message ne renvoie plus vers un fichier qui existe.
+  func testSansBinaireOnDitCeQuOnAConstate() {
     XCTAssertEqual(
       AgentLocalHost.decide(
-        flagEnregistre: true, demandeApprobation: false, plistPresent: false,
-        amorcePresente: true, dernierStatus: Date()
+        binairePresent: false, processusVivant: true, amorcePresente: true, dernierStatus: Date()
       ),
       .introuvable
     )
-    XCTAssertFalse(AgentLocalHost.aideIntrouvable.isEmpty, "même là, on dit quoi faire")
+    XCTAssertTrue(AgentLocalHost.aideIntrouvable.contains("est absent"), "on constate")
+    XCTAssertTrue(AgentLocalHost.aideIntrouvable.contains("autre machine"), "et on donne une issue")
+  }
+
+  func testLAbandonPasseAvantLeReste() {
+    let etat = AgentLocalHost.decide(
+      binairePresent: true, processusVivant: false, amorcePresente: true,
+      dernierStatus: Date(), abandon: "cc s'est arrêté 8 fois de suite."
+    )
+    XCTAssertEqual(etat, .abandonne(raison: "cc s'est arrêté 8 fois de suite."))
   }
 
   /// Le seuil est large exprès : un agent qui n'a rien à faire ne poste rien.
   func testLeSeuilDeSilenceEstLarge() {
     XCTAssertEqual(AgentLocalHost.State.silenceMax, 3600)
-    let limite = Date().addingTimeInterval(-3000)
     XCTAssertEqual(
       AgentLocalHost.decide(
-        flagEnregistre: true, demandeApprobation: false, plistPresent: true,
-        amorcePresente: true, dernierStatus: limite
+        binairePresent: true, processusVivant: true, amorcePresente: true,
+        dernierStatus: Date().addingTimeInterval(-3000)
       ),
       .actif,
       "cinquante minutes de silence, c'est encore normal"

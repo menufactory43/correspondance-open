@@ -249,40 +249,35 @@ struct SettingsAgentPane: View {
     }
   }
 
-  /// L'hôte « Ce Mac » : l'agent tourne à côté de l'app, sur l'abonnement de
-  /// cette machine. Pas de serveur à louer, pas de SSH — mais il s'endort avec
-  /// le Mac, et l'écran le dit plutôt que de le laisser découvrir.
+  /// L'hôte « Ce Mac » : l'agent tourne **dans** l'app, comme processus
+  /// enfant. On le dit sans détour — quitter l'app arrête cc, et pour un cc
+  /// joignable jour et nuit c'est l'hôte distant qu'il faut.
   private var hoteCard: some View {
     SettingsCard(
       title: "Sur ce Mac",
-      footnote: "cc tournera à côté de l'app, sur le `claude` déjà connecté ici. "
-        + "Il dort quand le Mac dort : pour un cc joignable depuis l'iPhone à toute heure, "
-        + "il lui faut une machine allumée."
+      footnote: "cc tourne tant que Correspondance est ouverte, sur le `claude` déjà connecté ici. "
+        + "Pour qu'il réponde jour et nuit, installe-le sur une autre machine — juste en dessous."
     ) {
       SettingsRow(
-        label: "Service",
+        label: "cc",
         detail: hote.labelFR,
-        systemImage: "gearshape.2"
+        systemImage: "cpu"
       ) {
         // Chaque état a une sortie. Un écran qui affiche un fait sans offrir
         // d'action est un cul-de-sac : c'est exactement ce qui s'est produit
         // quand macOS a dit « enregistré » alors que rien n'existait.
         switch hote {
-        case .attenteApprobation:
-          Button("Autoriser…") { AgentLocalHost.openLoginItemsSettings() }
-        case .actif:
-          Button("Désactiver") { desactiver() }
-        case .silencieux:
-          Button("Réinstaller") { Task { await activerLocalement() } }
-            .disabled(!peutProvisionner || isActivating)
-        case .incomplet:
+        case .actif, .silencieux:
+          Button("Arrêter") { desactiver() }
+        case .incomplet, .abandonne:
           Button("Réparer") { Task { await reparerLocalement() } }
             .disabled(!peutProvisionner || isActivating)
         case .absent:
           Button("Activer sur ce Mac") { Task { await activerLocalement() } }
             .disabled(!peutProvisionner || isActivating)
         case .introuvable:
-          // Rien à activer, mais on ne laisse pas sans issue : on dit quoi faire.
+          // Rien à activer, mais on ne laisse pas sans issue : on dit ce qu'on
+          // a constaté, pas ce qu'on suppose.
           Button("Pourquoi ?") { erreur = AgentLocalHost.aideIntrouvable }
         }
       }
@@ -290,39 +285,48 @@ struct SettingsAgentPane: View {
       if case .silencieux = hote {
         SettingsRow(
           label: "Signe de vie",
-          detail: "cc n'a rien publié depuis un moment. « Réinstaller » refait tout le chemin ; "
-            + "son journal est dans /tmp/correspondance-agent.log.",
+          detail: "cc tourne mais n'a rien publié depuis un moment. Son journal dira pourquoi.",
           systemImage: "waveform.path"
-        ) { EmptyView() }
+        ) { journalBouton }
       }
 
       if hote == .incomplet {
         SettingsRow(
           label: "Ce qui manque",
-          detail: "Le service est enregistré auprès de macOS, mais son amorce n'est pas sur le disque : "
-            + "il ne peut pas démarrer. « Réparer » recrée le compte, l'amorce et le service.",
+          detail: "L'amorce de cc n'est pas sur le disque : il ne peut pas se connecter au Relais. "
+            + "« Réparer » recrée le compte, l'amorce et relance.",
           systemImage: "exclamationmark.triangle"
         ) { EmptyView() }
       }
 
-      if !peutProvisionner, hote == .absent {
+      if case .abandonne = hote {
         SettingsRow(
-          label: "Compte du Relais",
-          detail: "ce compte n'est pas administrateur du Relais — c'est lui qui crée les comptes des agents",
-          systemImage: "exclamationmark.triangle"
-        ) { EmptyView() }
+          label: "Journal",
+          detail: "cc est retombé trop de fois de suite — on a cessé de le relancer.",
+          systemImage: "doc.text.magnifyingglass"
+        ) { journalBouton }
       }
+    }
+  }
+
+  @ViewBuilder
+  private var journalBouton: some View {
+    if let url = AgentLocalHost.logURL {
+      Button("Ouvrir le journal") { NSWorkspace.shared.open(url) }
+    } else {
+      EmptyView()
     }
   }
 
   /// L'hôte distant : un NUC, un VPS, un Raspberry. L'app crée le compte et
   /// rend **une** commande à coller — elle ne peut pas aller installer un
-  /// binaire chez quelqu'un, et elle ne prétend pas le faire.
+  /// binaire chez quelqu'un, et elle ne prétend pas le faire. C'est aussi la
+  /// seule réponse à « je veux que cc réponde quand mon Mac est fermé ».
   private var hoteDistantCard: some View {
     SettingsCard(
       title: "Sur une autre machine",
-      footnote: "La commande contient le mot de passe de l'agent : elle se colle dans un terminal, "
-        + "jamais dans une conversation. Elle périme en dix minutes."
+      footnote: "24/7, Mac fermé. La commande contient le mot de passe de l'agent : "
+        + "elle se colle dans un terminal, jamais dans une conversation. Elle périme en dix minutes."
     ) {
       SettingsRow(
         label: "Hôte distant",
@@ -345,7 +349,7 @@ struct SettingsAgentPane: View {
   private var commandeDetail: String {
     guard let commandeDistante else {
       return peutProvisionner
-        ? "24/7, Mac fermé — une commande à coller en SSH"
+        ? "une commande à coller en SSH, et cc répond même Mac fermé"
         : "il faut être administrateur du Relais pour créer un agent"
     }
     if let expire = commandeExpireA, expire <= Date() {

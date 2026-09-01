@@ -64,97 +64,77 @@ scripts/agent-e2e.sh "question"              # test de bout en bout via la note 
 Config : `~/.correspondance-agent/config.json` (NUC, 0600 — contient le mot de passe
 Matrix de cc). État (token, sessions Claude, position de sync) : `state.json` à côté.
 
-## L'hôte « Ce Mac » (phase 2)
+## L'hôte « Ce Mac » : cc tourne dans l'app
 
-L'app embarque l'agent : le binaire dans `Contents/MacOS/correspondance-agent`, son plist
-dans `Contents/Library/LaunchAgents/app.correspondance.agent.plist` — `SMAppService` ne le
-cherche que là. Un plist est statique : il ne connaît ni `~`, ni les variables de la
-session, d'où `--agent cc`, dont le binaire déduit son dossier (`AgentHome`). L'ancien
-dossier de `cc` est conservé (`~/.correspondance-agent`) : le NUC ne perd pas son état.
+« Activer sur ce Mac » fait trois choses : créer le compte du bot sur le Relais, poser son
+amorce sur le disque, et **lancer l'agent comme processus enfant de l'app**
+(`AgentProcessHost`). Il redémarre s'il tombe (palier doublant, 1 s → 60 s, abandon après
+huit chutes), il meurt avec l'app, et son journal s'ouvre depuis les réglages.
 
-« Activer sur ce Mac » enchaîne, dans cet ordre :
+Le prix est dit dans l'interface, sans détour : **cc s'arrête quand on quitte
+Correspondance.** Pour un cc joignable jour et nuit, c'est « Sur une autre machine ».
 
-1. **Vérifier le pouvoir** — `GET /_synapse/admin/v1/users/<moi>/admin`. Sans ce pouvoir,
-   l'app le dit au lieu d'échouer à mi-chemin.
-2. **Créer le compte du bot** — `PUT /_synapse/admin/v2/users/@cc:…` avec un mot de passe
-   tiré au hasard, **`logout_devices: false`** : sans lui, poser un mot de passe déconnecte
-   toutes les sessions du bot, et un clic ici tuerait l'agent qui tourne sur le NUC. Un
-   compte qui existe déjà et dont on a le secret au Trousseau n'est pas retouché.
-3. **Poser l'amorce** — `~/.correspondance-agent/config.json` en `0600` (dossier `0700`),
-   trois lignes : `homeserver`, `user`, `password`, plus le propriétaire. Le mot de passe
-   va aussi au Trousseau (`app.correspondance.agent`), jamais dans une room.
-4. **Enregistrer le service** — `SMAppService.agent(plistName:).register()`.
-5. **Ouvrir la console** et y écrire la configuration.
+Le provisionnement, lui, n'a pas changé :
 
-### Vérification manuelle — non éprouvée de bout en bout
+1. **Vérifier le pouvoir** — `GET /_synapse/admin/v1/users/<moi>/admin`. Sans lui, l'app le
+   dit au lieu d'échouer à mi-chemin.
+2. **Créer le compte du bot** — `PUT /_synapse/admin/v2/users/@cc:…`, mot de passe tiré au
+   hasard, **`logout_devices: false`** : sans lui, poser un mot de passe déconnecte toutes
+   les sessions du bot, et un clic ici tuerait l'agent qui tourne sur le NUC. Un compte qui
+   existe déjà et dont on a le secret au Trousseau n'est pas retouché.
+3. **Poser l'amorce** — `~/.correspondance-agent/config.json` en `0600` (dossier `0700`).
+   Le mot de passe va aussi au Trousseau (`app.correspondance.agent`), jamais dans une room.
+4. **Démarrer**, puis **ouvrir la console** et y écrire la configuration.
 
-Tout ce qui précède est éprouvé sauf **l'approbation dans Éléments d'ouverture** : elle
-demande une main humaine et une app signée lancée hors Xcode. La procédure exacte :
+### « Actif » est une conclusion, jamais une lecture
 
-1. `xcodebuild -project Correspondance.xcodeproj -scheme Correspondance -configuration Release build`,
-   puis lancer l'app depuis le Finder (pas depuis Xcode : le service enregistré par une
-   app lancée par Xcode porte un chemin de DerivedData qui bougera).
-2. Vérifier que l'agent est bien embarqué :
-   `ls Correspondance.app/Contents/MacOS/correspondance-agent` et
-   `ls Correspondance.app/Contents/Library/LaunchAgents/`.
-3. Réglages › Agent › **Sur ce Mac** doit dire « pas installé sur ce Mac », et
-   « Activer sur ce Mac » doit être cliquable — s'il est grisé, le compte connecté n'est
-   pas administrateur du Relais, et la ligne au-dessous le dit.
-4. Cliquer **Activer sur ce Mac**. Attendu : la ligne passe à « actif sur ce Mac », **ou**
-   à « à autoriser dans Réglages Système › Éléments d'ouverture » avec un bouton
-   « Autoriser… ».
-5. Si c'est le second cas : cliquer « Autoriser… » (macOS ouvre
-   Réglages Système › Général › Ouverture et extensions › Éléments d'ouverture), activer
-   « Correspondance », revenir, cliquer « Rafraîchir ». Attendu : « actif sur ce Mac ».
-6. Vérifier que l'agent tourne vraiment :
-   `launchctl print gui/$UID/app.correspondance.agent | head -20` et
-   `tail -f /tmp/correspondance-agent.log` — on doit y lire « connecté comme @cc:… »
-   puis la ligne des moteurs.
-7. Depuis l'app, dans la note à soi : `@cc ping`. Attendu : une réponse en moins d'une
-   minute, et un tour de plus dans « Derniers tours ».
+Trois choses sont nécessaires : le binaire dans le bundle (**constaté sur le disque**), le
+processus vivant, l'amorce présente — et un status récent de l'agent dans sa room console.
+Les états intermédiaires ont chacun leur sortie : `.incomplet` (amorce absente) → *Réparer*,
+`.silencieux` (rien publié depuis plus d'une heure) → *Arrêter* et le journal, `.abandonne`
+(trop de chutes) → *Réparer* et le journal, `.introuvable` (binaire absent) → *Pourquoi ?*.
 
-**Ce qui reste à voir la première fois** : macOS peut exiger l'approbation *après* le
-premier `register()` sans le dire ; le plist embarqué doit être signé avec l'app (il l'est,
-il fait partie du bundle) ; et une app déplacée dans le Finder après enregistrement peut
-faire perdre le service — auquel cas « Désactiver » puis « Activer » le repose.
+Cette prudence vient d'un vrai incident : l'app affichait « actif sur ce Mac » sur la foi du
+drapeau de `SMAppService`, alors qu'aucun service, aucune amorce et aucun compte n'existaient
+— et l'écran ne proposait plus que « Désactiver ». Un écran qui affirme sans vérifier, et
+sans laisser de sortie, est pire qu'un écran qui dit « je ne sais pas ».
 
-## Chiffrement (chantier E) — commencé par le bout honnête
+## Pourquoi cc ne tourne pas en LaunchAgent
 
-Rien de cryptographique n'est écrit. Ce qui est fait, c'est ce qui doit être juste
-**avant** : `ConversationPrivacy` classe chaque conversation en trois états, et refuse de
-promettre ce qui est faux.
+`SMAppService` est resté dans le dépôt (`AgentLocalHost.useLaunchAgent`, faux, non proposé
+dans l'interface) et son plist aussi. Voici pourquoi on ne s'en sert pas, pour que personne
+ne refasse l'enquête.
 
-| État | Ce que ça veut dire | Cadenas |
-|---|---|---|
-| **Chiffré de bout en bout** | seuls les participants lisent, l'hébergeur du Relais compris | ✅ |
-| **Chiffré jusqu'au Relais** | la machine qui héberge le Relais peut lire | non |
-| **Passe par un pont** | le pont déchiffre pour traduire : il lit au passage | non |
+**Le symptôme.** `SMAppService.agent(plistName: "app.correspondance.agent.plist")` répond
+`.notFound` sur la machine d'essai, alors que le plist est bien dans
+`Contents/Library/LaunchAgents/` et le binaire dans `Contents/MacOS/`.
 
-La règle qu'aucune optimisation ne doit renverser : **une conversation pontée ne sera
-jamais chiffrée de bout en bout**, et une room de portail marquée `m.room.encryption`
-reste « pontée ». Chiffrer un portail protégerait le trajet app↔Relais, pas la
-conversation. Un cadenas qui ment est pire que pas de cadenas.
+**Quatre hypothèses éliminées**, une par une :
 
-### Ce qui reste, et pourquoi ce n'est pas commencé
+| Hypothèse | Comment elle a été écartée |
+| --- | --- |
+| L'app est lancée par son exécutable, pas par son bundle | relancée avec `open -n` — même résultat |
+| L'emplacement (`~/Applications`) | déplacée — même résultat |
+| Conflit d'identifiant : cinq bundles partagent `app.correspondance.Correspondance` sur ce Mac, et celui de `/Applications` n'a pas de dossier `LaunchAgents` | rebuild avec `PRODUCT_BUNDLE_IDENTIFIER=…​.essai` — même résultat |
+| Plist ou signature invalides | `plutil -lint` OK, `codesign -v --deep --strict` OK, sceau à 19 fichiers |
 
-Le reste demande une chaîne de compilation Rust et un XCFramework, qu'on ne pose pas à
-l'aveugle :
+Le journal unifié ne dit rien : **aucune entrée `smd` ne mentionne l'app**.
 
-1. `CorrespondanceCrypto` — `matrix-sdk-crypto-ffi` (uniffi) lié en Swift, partagé par
-   l'app iOS, l'app Mac et l'agent (Rust compile des deux côtés, la propriété
-   « Foundation pur, compile sous Linux » de `CorrespondanceMatrixClient` est préservée).
-   Repli si le portage Linux résiste : Pantalaimon, un conteneur de plus sur l'hôte.
-2. **L'agent naît vérifié** : au provisionnement, l'app connaît le mot de passe du bot
-   puisqu'elle vient de le créer — elle ouvre une session pour lui, pose ses clés et les
-   signe avec la clé de signature croisée du propriétaire. Personne ne compare d'émojis.
-3. **La sauvegarde des clés**, activée dès le premier jour : sans elle, l'historique
-   d'avant un appareil est perdu pour toujours.
-4. **L'extension de notification** (`CorrespondanceiOSNotificationService`) doit déchiffrer,
-   donc accéder au magasin de clés par un groupe d'app.
-5. **La recherche** devient locale — ce que `docs/PLAN-store-local.md` prépare déjà.
+**Deux hypothèses restantes, non éprouvées** : le `Label` du plist n'est pas préfixé par
+l'identifiant du bundle (`app.correspondance.agent` vs `app.correspondance.Correspondance`),
+et la combinaison `BundleProgram` + `ProgramArguments`, qui se recouvrent.
 
-Ordre : après le reste, sauf si le Relais est hébergé pour quelqu'un d'autre — auquel cas
-ça devient la première ligne, pas la dernière.
+**Pourquoi on s'est arrêté là.** Le LaunchAgent n'achetait qu'une chose : cc qui répond
+quand l'app est *quittée* et le Mac allumé. Il ne survit pas au sommeil — l'app le disait
+déjà — donc pour un cc joignable à toute heure, la réponse a toujours été l'hôte distant.
+Ce bénéfice mince ne valait ni l'approbation dans Éléments d'ouverture, ni quatre états
+d'installation, ni un chemin qu'on ne peut pas éprouver depuis Xcode. On a préféré une
+chose simple et vérifiable : un processus enfant, surveillé, qui meurt avec l'app.
+
+Si quelqu'un y revient : commencer par renommer le `Label` en
+`app.correspondance.Correspondance.agent` et retirer `BundleProgram` ou `ProgramArguments`,
+puis regarder `log stream --predicate 'subsystem == "com.apple.smd"'` pendant un
+`register()`.
 
 ## La config vient du Relais
 
