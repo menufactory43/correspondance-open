@@ -78,12 +78,17 @@ targets:
           # part pour ne pas mêler ses artefacts à ceux d'Xcode.
           BUILD_DIR="${SRCROOT}/Packages/CorrespondanceCore/.build-agent"
           SWIFT_CONF=$([ "${CONFIGURATION}" = "Release" ] && echo release || echo debug)
+          # Un échec de construction FAIT ÉCHOUER LE BUILD. Auparavant on
+          # sortait en 0 avec un simple « warning » : l'app gardait alors le
+          # binaire précédent, Xcode affichait BUILD SUCCEEDED, et on testait du
+          # vieux code sans le savoir. Un binaire périmé qui a l'air frais coûte
+          # des heures — une build rouge en coûte cinq minutes.
           if ! xcrun swift build --package-path "${SRCROOT}/Packages/CorrespondanceCore" \
                 --product correspondance-agent -c "$SWIFT_CONF" \
                 --scratch-path "$BUILD_DIR" > /tmp/correspondance-agent-build.log 2>&1; then
-            echo "warning: correspondance-agent non construit — voir /tmp/correspondance-agent-build.log"
-            tail -5 /tmp/correspondance-agent-build.log
-            exit 0
+            echo "error: correspondance-agent n'a pas pu être construit — l'app embarquerait un binaire périmé"
+            tail -20 /tmp/correspondance-agent-build.log
+            exit 1
           fi
           BIN=$(xcrun swift build --package-path "${SRCROOT}/Packages/CorrespondanceCore" \
                 --product correspondance-agent -c "$SWIFT_CONF" --scratch-path "$BUILD_DIR" \
@@ -92,7 +97,8 @@ targets:
             cp -f "$BIN" "$APP/MacOS/correspondance-agent"
             echo "Embedded agent: $BIN"
           else
-            echo "warning: binaire de l'agent introuvable ($BIN)"
+            echo "error: binaire de l'agent introuvable ($BIN)"
+            exit 1
           fi
     dependencies:
       - package: CorrespondanceCore

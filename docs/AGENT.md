@@ -136,6 +136,42 @@ Si quelqu'un y revient : commencer par renommer le `Label` en
 puis regarder `log stream --predicate 'subsystem == "com.apple.smd"'` pendant un
 `register()`.
 
+## Toutes les chutes ne se valent pas
+
+Un moteur qui plante mérite qu'on relance ; un mot de passe refusé par le Relais, non — il ne
+se répare pas tout seul, et huit tentatives ne font que remplir le journal en donnant
+l'illusion d'un plantage à répétition.
+
+Le code de sortie porte la différence (`AgentExit`) :
+
+| Code | Ce que c'est | Le surveillant |
+| --- | --- | --- |
+| `0` | fin normale | — |
+| `1` | erreur ordinaire (Relais pas prêt, moteur qui trébuche) | relance, avec palier |
+| `78` | **identifiants refusés** (`401`/`403`, `M_FORBIDDEN`) | s'arrête, propose « Réinstaller » |
+| `79` | un autre agent tourne déjà sur ce compte | s'arrête |
+
+Un `502` ou un timeout restent des pannes : ils se réessaient.
+
+**Éprouvé de bout en bout** : `infra/agent/tests/refus-auth.sh <binaire>` lance le vrai
+binaire contre un homeserver factice qui répond `403 M_FORBIDDEN`, et exige `78`. Ce test
+existe parce que les tests unitaires prouvaient chaque moitié — qu'un processus sortant en 78
+n'est pas relancé, et que la détection reconnaît un 403 — sans jamais vérifier la jonction.
+
+### « Est-ce que je teste bien le code que je viens d'écrire ? »
+
+L'agent écrit son propre chemin et sa date de compilation à chaque démarrage :
+
+```
+22:41:44 binaire : /Applications/Correspondance.app/Contents/MacOS/correspondance-agent (compilé le 1 sept. 22:41)
+```
+
+Ça n'est pas cosmétique : un binaire embarqué d'une build précédente donne exactement les
+symptômes d'un défaut déjà réparé, et la question a déjà coûté un essai complet. Et la phase
+de build « Embed correspondance-agent » **fait maintenant échouer le build** quand l'agent ne
+compile pas, au lieu de garder le binaire précédent avec un simple avertissement — un binaire
+périmé qui a l'air frais coûte des heures, une build rouge cinq minutes.
+
 ## Deux messages coup sur coup : un seul tour
 
 Un tour à la fois par conversation, c'est la garantie — mais ce qui arrive

@@ -32,6 +32,22 @@ struct AgentCommand {
     FileHandle.standardOutput.write(Data("\(f.string(from: Date())) \(line)\n".utf8))
   }
 
+  /// Quel binaire suis-je, et de quand ?
+  ///
+  /// Écrit à chaque démarrage parce que la question « est-ce que je teste bien
+  /// le code que je viens d'écrire ? » a déjà coûté un essai : un binaire
+  /// embarqué d'une build précédente donne les symptômes d'un défaut réparé.
+  static func binaryStamp() -> String {
+    let chemin = ClaudeCodeBackend.resolveSelfBinary() ?? CommandLine.arguments.first ?? "?"
+    let attributs = try? FileManager.default.attributesOfItem(atPath: chemin)
+    let date = attributs?[.modificationDate] as? Date
+    let formatter = DateFormatter()
+    formatter.dateFormat = "d MMM HH:mm"
+    formatter.locale = Locale(identifier: "fr_FR")
+    let quand = date.map { formatter.string(from: $0) } ?? "date inconnue"
+    return "binaire : \(chemin) (compilé le \(quand))"
+  }
+
   static func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data("correspondance-agent : \(message)\n".utf8))
     exit(1)
@@ -139,6 +155,7 @@ struct AgentCommand {
         }
       }
       defer { surveillance?.cancel() }
+      stamp(binaryStamp())
       let agent = Agent(config: config, backend: makeBackend(config), stateURL: stateURL, log: { stamp($0) })
       do {
         try await agent.run()
