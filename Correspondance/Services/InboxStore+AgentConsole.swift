@@ -25,6 +25,19 @@ extension InboxStore {
     }
   }
 
+  /// **L'annuaire** : tous les agents que le Relais connaît, chacun avec sa
+  /// console, sa config, son dernier status et son journal. C'est la source de
+  /// vérité de « quels agents existent » — un agent qui tourne sur le NUC n'a
+  /// jamais été activé depuis ce Mac, et il est là.
+  func listAgentConsoles() async -> [MatrixBridgeService.AgentConsole] {
+    do {
+      return try await matrix.listAgentConsoles()
+    } catch {
+      Self.relayLog.error("annuaire des agents illisible : \(error.localizedDescription, privacy: .public)")
+      return []
+    }
+  }
+
   /// Crée la console si elle manque et y écrit la configuration de départ —
   /// le geste de la première activation. L'agent est invité au passage ; il
   /// rejoint parce qu'un propriétaire l'a invité, et découvre sa config seul.

@@ -371,6 +371,53 @@ public actor MatrixBridgeService {
     /// Le démarrage qui l'a publiée — un status vieux d'un mois parle d'un
     /// agent qui ne redémarre plus.
     public var publishedAt: Date
+
+    public init(engines: String, publishedAt: Date) {
+      self.engines = engines
+      self.publishedAt = publishedAt
+    }
+
+    /// La machine où l'agent tourne, lue dans « cc tourne sur umbrel depuis
+    /// 14 h 02 · moteur acp · prêts : claude ».
+    ///
+    /// **C'est la seule preuve qu'on ait de l'hôte d'un agent distant** : l'app
+    /// n'a rien installé là-bas et ne peut pas y regarder. Un `nil` se dit
+    /// « on ne sait pas où », jamais « sur ce Mac ».
+    public var host: String? {
+      guard let apres = engines.range(of: "tourne sur ") else { return nil }
+      let reste = engines[apres.upperBound...]
+      let fin = reste.firstIndex(of: "·") ?? reste.endIndex
+      var nom = reste[..<fin]
+      if let depuis = nom.range(of: " depuis ") { nom = nom[..<depuis.lowerBound] }
+      let texte = nom.trimmingCharacters(in: .whitespaces)
+      return texte.isEmpty ? nil : texte
+    }
+
+    /// Le moteur configuré, lu dans « · moteur acp · ».
+    public var backend: String? {
+      guard let apres = engines.range(of: "moteur ") else { return nil }
+      let reste = engines[apres.upperBound...]
+      let fin = reste.firstIndex(of: "·") ?? reste.endIndex
+      let texte = reste[..<fin].trimmingCharacters(in: .whitespaces)
+      return texte.isEmpty ? nil : texte
+    }
+
+    /// Les moteurs prêts **sur la machine de l'agent**, lus dans
+    /// « prêts : claude, hermes ». Vide veut dire « il n'en a annoncé aucun »,
+    /// pas « il n'y en a pas » : un agent d'avant le scan n'en publie aucun.
+    public var enginesReady: [String] {
+      guard let apres = engines.range(of: "prêts : ") else { return [] }
+      return engines[apres.upperBound...]
+        .split(separator: ",")
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty && $0 != "aucun" }
+    }
+
+    /// Un status daté de moins d'une heure : l'agent a donné signe de vie.
+    /// Le seuil est large exprès — un agent qui n'a rien à faire ne poste rien.
+    public func isFresh(now: Date = Date(), silenceMax: TimeInterval = 3600) -> Bool {
+      now.timeIntervalSince(publishedAt) <= silenceMax
+    }
   }
 
   /// Le dernier status de cc dans la note à soi, ou `nil` : agent jamais
