@@ -24,8 +24,12 @@ public actor MatrixClient {
   }
 
   /// Le nom sous lequel la session apparaît côté serveur. Inchangé sur Mac et
-  /// iPhone ; « agent » ailleurs — le bot qui tourne sur le NUC.
-  public static var deviceDisplayName: String {
+  /// iPhone ; un agent le remplace au démarrage par « Correspondance agent ·
+  /// <machine> », parce que c'est ce nom que l'app lit pour savoir **où** un
+  /// agent vit — le serveur, lui, ne ment pas sur ses sessions.
+  nonisolated(unsafe) public static var deviceDisplayName: String = defaultDeviceDisplayName
+
+  public static var defaultDeviceDisplayName: String {
     #if canImport(AppKit)
       return "Correspondance (Mac)"
     #elseif canImport(UIKit)
@@ -33,6 +37,12 @@ public actor MatrixClient {
     #else
       return "Correspondance (agent)"
     #endif
+  }
+
+  /// Le nom de session d'un agent : la machine y est, pour que l'app puisse
+  /// distinguer « c'est moi » de « c'est ailleurs ».
+  public static func agentDeviceDisplayName(host: String) -> String {
+    "Correspondance agent · \(host)"
   }
 
   public var currentCredentials: MatrixCredentials? { credentials }
@@ -504,6 +514,46 @@ public actor MatrixClient {
       path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
       body: .object(body)
     )
+  }
+
+  /// Renomme la session courante — `PUT /devices/<id>`. L'agent s'en sert quand
+  /// il reprend une session enregistrée : le nom qui dit sa machine ne se pose
+  /// sinon qu'à la connexion, et une session d'hier garderait un nom muet.
+  public func renameCurrentDevice(_ displayName: String) async throws {
+    guard let deviceID = credentials?.deviceID else { return }
+    _ = try await request(
+      method: "PUT",
+      path: "/_matrix/client/v3/devices/\(Self.escape(deviceID))",
+      body: .object(["display_name": .string(displayName)])
+    )
+  }
+
+  /// Une session d'un compte, telle que le serveur la voit.
+  public struct UserDevice: Sendable, Equatable {
+    public var deviceID: String
+    public var displayName: String?
+    public var lastSeen: Date?
+    public init(deviceID: String, displayName: String?, lastSeen: Date?) {
+      self.deviceID = deviceID
+      self.displayName = displayName
+      self.lastSeen = lastSeen
+    }
+  }
+
+  /// Les sessions d'un compte, par l'API admin — la seule source que l'agent
+  /// lui-même ne peut pas taire : un binaire d'hier qui ne publie aucun status
+  /// a quand même une session, vue par le serveur à chaque `/sync`.
+  public func userDevices(userID: String) async throws -> [UserDevice] {
+    let json = try await request(
+      method: "GET",
+      path: "/_synapse/admin/v2/users/\(Self.escape(userID))/devices",
+      body: nil
+    )
+    return (json.value(at: "devices")?.arrayValue ?? []).compactMap { device in
+      guard let id = device.value(at: "device_id")?.stringValue else { return nil }
+      let seen = device.value(at: "last_seen_ts")?.doubleValue.map { Date(timeIntervalSince1970: $0 / 1000) }
+      return UserDevice(deviceID: id, displayName: device.value(at: "display_name")?.stringValue, lastSeen: seen)
+    }
   }
 
   /// Ce compte existe-t-il déjà sur le Relais ? Pour ne pas réinitialiser le

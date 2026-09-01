@@ -100,6 +100,12 @@ extension MatrixBridgeService {
     if let ailleurs = await liveAgentElsewhere(named: agent) {
       throw AgentProvisioningError.agentDejaVivant(hote: ailleurs)
     }
+    //    Le status ne suffit pas : un agent d'hier n'en publie aucun, et le
+    //    silence a déjà été pris pour une absence — deux cc ont répondu.
+    //    Le serveur, lui, voit chaque session à chaque /sync.
+    if let session = await liveSessionElsewhere(named: agent) {
+      throw AgentProvisioningError.agentDejaVivant(hote: session)
+    }
 
     // 2. Le compte, et son mot de passe.
     let existe = await client.userExists(userID)
@@ -170,6 +176,14 @@ extension MatrixBridgeService {
     return nil
   }
 
+  /// Une session de cet agent, vue par le serveur il y a moins de quinze
+  /// minutes, qui n'est pas celle de cette machine ? Rend de quoi la nommer.
+  public func liveSessionElsewhere(named agent: String, now: Date = Date()) async -> String? {
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
+    guard let devices = try? await client.userDevices(userID: userID) else { return nil }
+    return AgentSessions.elsewhere(devices, here: AgentWire.hostName, now: now)
+  }
+
   /// Le compte de cet agent existe-t-il déjà, et connaît-on son secret ?
   /// L'écran s'en sert pour dire « déjà créé » plutôt que de proposer une
   /// activation qui changerait un mot de passe pour rien.
@@ -177,5 +191,30 @@ extension MatrixBridgeService {
     guard isConnected else { return (false, false) }
     let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
     return (await client.userExists(userID), AgentSecretStore.password(for: agent) != nil)
+  }
+}
+
+/// La décision « un agent vit ailleurs », prise sur les sessions que le serveur
+/// rapporte. Pure, pour être éprouvée sans Relais.
+public enum AgentSessions {
+  /// Au-delà, une session est un cadavre. Un agent vivant fait un `/sync`
+  /// toutes les 30 s, mais Synapse n'écrit `last_seen` qu'une fois par
+  /// **dix minutes** (`LAST_SEEN_GRANULARITY`) — mesuré : un cc vivant « vu il y
+  /// a 223 s ». Plus court que ça, la garde prendrait un vivant pour un mort.
+  public static let silenceMax: TimeInterval = 15 * 60
+
+  /// La première session vivante qui n'est pas de cette machine, décrite pour
+  /// l'erreur : « Correspondance agent · umbrel, vue il y a 37 s ».
+  public static func elsewhere(_ devices: [MatrixClient.UserDevice], here: String, now: Date) -> String? {
+    let mine = MatrixClient.agentDeviceDisplayName(host: here)
+    for device in devices {
+      guard let seen = device.lastSeen else { continue }
+      let age = now.timeIntervalSince(seen)
+      guard age >= 0, age < silenceMax else { continue }
+      if device.displayName == mine { continue }
+      let nom = device.displayName ?? "session \(device.deviceID)"
+      return "\(nom), vue il y a \(Int(age)) s"
+    }
+    return nil
   }
 }

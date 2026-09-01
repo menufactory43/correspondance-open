@@ -273,8 +273,10 @@ struct SettingsAgentPane: View {
           Button("Réparer") { Task { await reparerLocalement() } }
             .disabled(!peutProvisionner || isActivating)
         case .absent:
-          Button("Activer sur ce Mac") { Task { await activerLocalement() } }
-            .disabled(!peutProvisionner || isActivating)
+          // L'amorce est là (sinon l'état serait « incomplet ») : on relance,
+          // on ne refait pas le compte.
+          Button("Démarrer cc") { Task { await demarrerLocalement() } }
+            .disabled(isActivating)
         case .introuvable:
           // Rien à activer, mais on ne laisse pas sans issue : on dit ce qu'on
           // a constaté, pas ce qu'on suppose.
@@ -488,6 +490,28 @@ struct SettingsAgentPane: View {
 
   /// Crée le compte du bot, pose son amorce, enregistre le service. macOS peut
   /// demander une approbation : on la montre, on ne l'espère pas.
+  /// Relance l'agent avec son amorce. Si elle manque malgré l'état, on refait
+  /// le chemin complet — mais on ne le fait jamais par défaut.
+  private func demarrerLocalement() async {
+    isActivating = true
+    defer { isActivating = false }
+    erreur = nil
+    guard AgentLocalHost.resume(agent: store.agentName, force: true) != nil else {
+      await activerLocalement()
+      return
+    }
+    await attendreQuIlParle()
+  }
+
+  private func attendreQuIlParle() async {
+    await recharger()
+    for _ in 0..<6 {
+      if case .actif = hote { break }
+      try? await Task.sleep(for: .seconds(2))
+      await recharger()
+    }
+  }
+
   private func activerLocalement() async {
     isActivating = true
     defer { isActivating = false }

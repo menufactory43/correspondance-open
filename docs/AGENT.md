@@ -252,6 +252,22 @@ L'app refuse déjà d'activer un second hôte ; le faire **aussi** dans l'agent 
 où les deux lanceurs ne se connaissent pas — un `systemctl start` sur le NUC ne sait rien
 d'un clic sur le Mac.
 
+**cc renaît avec l'app.** Il meurt avec elle (voulu), et rien ne le relançait : après une
+relance, l'écran disait « arrêté » et proposait de *ré-activer*, ce qui refait le compte et
+repose un mot de passe. L'app garde le choix de l'utilisateur (« voulu sur ce Mac », posé par
+Activer, retiré par Arrêter) et relance l'agent au lancement si l'amorce et le binaire sont là ;
+l'état « arrêté » propose « Démarrer », qui ne passe pas par le Relais.
+
+**Le status ne suffit pas, éprouvé.** Le cc du NUC datait d'avant le status : il n'en
+publiait aucun, l'app a lu ce silence comme une absence, a activé un second cc sur le Mac,
+et les deux ont répondu au même message. La garde lit désormais aussi **les sessions du
+compte** par l'API admin (`/_synapse/admin/v2/users/<cc>/devices`) : une session vue par le
+serveur il y a moins de quinze minutes qui n'est pas celle de cette machine, et l'activation
+refuse en la nommant. C'est la seule source qu'un agent ne peut pas taire — un `/sync` la
+rafraîchit, mais Synapse ne l'écrit qu'une fois par dix minutes, d'où la fenêtre large : après
+avoir arrêté un agent ailleurs, il faut attendre jusqu'à un quart d'heure avant d'activer ici. Pour que « cette machine » soit lisible, l'agent nomme sa session
+« Correspondance agent · <machine> » à la connexion (`AgentSessions`).
+
 ### Ce qui reste : le bail
 
 La réponse complète est un **bail court renouvelé dans la room console** : l'agent le prend

@@ -126,10 +126,52 @@ enum AgentLocalHost {
     )
   }
 
-  /// Écrit l'amorce, puis enregistre le service.
-  ///
-  /// L'ordre compte : un service qui démarre sans amorce boucle sur une erreur
-  /// de config, et macOS finit par le brider.
+  // MARK: - Reprise au lancement
+
+  /// « cc est voulu sur ce Mac » : posé par « Activer », retiré par « Arrêter ».
+  /// C'est un choix de l'utilisateur, pas une croyance sur l'état du monde —
+  /// l'état, lui, se constate (`state`).
+  static func wantedKey(agent: String) -> String { "agent.\(AgentPaths.sanitize(agent)).voulu" }
+
+  static func isWanted(agent: String) -> Bool {
+    UserDefaults.standard.bool(forKey: wantedKey(agent: agent))
+  }
+
+  static func setWanted(_ value: Bool, agent: String) {
+    UserDefaults.standard.set(value, forKey: wantedKey(agent: agent))
+  }
+
+  /// Faut-il relancer l'agent au lancement de l'app ? Pur, pour les tests :
+  /// il faut que l'utilisateur l'ait voulu, que l'amorce soit là et le binaire
+  /// aussi. Trouvé en vrai : cc mourait avec l'app (voulu), et rien ne le
+  /// relançait — l'écran disait « arrêté » et proposait de *ré-activer*, ce qui
+  /// refait le compte et repose un mot de passe pour rien.
+  static func shouldResume(wanted: Bool, amorcePresente: Bool, binairePresent: Bool) -> Bool {
+    wanted && amorcePresente && binairePresent
+  }
+
+  /// Relance l'agent avec l'amorce déjà sur le disque — sans repasser par le
+  /// Relais. `force` est le bouton « Démarrer » ; sans lui, c'est la reprise au
+  /// lancement, qui respecte un « Arrêter » antérieur. Rend `nil` quand il n'y
+  /// avait rien à reprendre.
+  @discardableResult
+  static func resume(agent: String, force: Bool = false) -> State? {
+    let launch = AgentProcessHost.Launch.embeddedAgent(named: agent)
+    guard shouldResume(
+      wanted: force || isWanted(agent: agent),
+      amorcePresente: hasBootstrap(agent: agent),
+      binairePresent: launch != nil
+    ), let launch else { return nil }
+    if force { setWanted(true, agent: agent) }
+    do {
+      try AgentProcessHost.shared.start(launch)
+      log.info("agent relancé pour \(agent, privacy: .public)")
+    } catch {
+      log.error("relance impossible pour \(agent, privacy: .public) : \(error.localizedDescription, privacy: .public)")
+    }
+    return state(agent: agent)
+  }
+
   /// Écrit l'amorce, puis démarre l'agent.
   ///
   /// L'ordre compte : un agent qui démarre sans amorce boucle sur une erreur de
@@ -137,6 +179,7 @@ enum AgentLocalHost {
   @discardableResult
   static func install(bootstrap: MatrixBridgeService.AgentBootstrap, agent: String) throws -> State {
     try writeBootstrap(bootstrap, agent: agent)
+    setWanted(true, agent: agent)
     if useLaunchAgent {
       let service = SMAppService.agent(plistName: plistName(agent: agent))
       if service.status != .enabled { try service.register() }
@@ -150,6 +193,7 @@ enum AgentLocalHost {
   }
 
   static func uninstall(agent: String) throws {
+    setWanted(false, agent: agent)
     AgentProcessHost.shared.stop()
     if useLaunchAgent {
       try SMAppService.agent(plistName: plistName(agent: agent)).unregister()
@@ -160,6 +204,7 @@ enum AgentLocalHost {
   /// Refait le chemin en entier. C'est la sortie du cas « installé à moitié »,
   /// qui n'en avait aucune — un écran sans action possible est un cul-de-sac.
   static func reset(agent: String) {
+    setWanted(false, agent: agent)
     AgentProcessHost.shared.stop()
     if useLaunchAgent {
       try? SMAppService.agent(plistName: plistName(agent: agent)).unregister()

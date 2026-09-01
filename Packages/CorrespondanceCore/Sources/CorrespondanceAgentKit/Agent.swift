@@ -86,11 +86,17 @@ public actor Agent {
       await client.setCredentials(credentials)
       do {
         _ = try await client.whoami()
+        // Une session reprise porte le nom d'hier : on le remet, pour que
+        // l'app sache d'où cet agent parle.
+        try? await client.renameCurrentDevice(MatrixClient.agentDeviceDisplayName(host: AgentWire.hostName))
         return credentials
       } catch {
         log("session Matrix périmée (\(error.localizedDescription)) — reconnexion")
       }
     }
+    // La session porte le nom de la machine : c'est ce que l'app lit pour
+    // refuser d'activer un second agent quand celui-ci vit ailleurs.
+    MatrixClient.deviceDisplayName = MatrixClient.agentDeviceDisplayName(host: AgentWire.hostName)
     let credentials = try await client.login(homeserver: config.homeserver, user: config.user, password: config.password)
     state.credentials = credentials
     try persist()

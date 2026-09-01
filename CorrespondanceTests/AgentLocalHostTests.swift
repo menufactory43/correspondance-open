@@ -133,4 +133,22 @@ final class AgentLocalHostTests: XCTestCase {
       "cinquante minutes de silence, c'est encore normal"
     )
   }
+
+  // MARK: - Reprise au lancement
+
+  func testVouluAvecAmorceEtBinaireOnRelance() {
+    XCTAssertTrue(AgentLocalHost.shouldResume(wanted: true, amorcePresente: true, binairePresent: true))
+  }
+
+  func testUnArreterAnterieurEstRespecte() {
+    XCTAssertFalse(AgentLocalHost.shouldResume(wanted: false, amorcePresente: true, binairePresent: true))
+  }
+
+  func testSansAmorceOnNeRelancePas() {
+    XCTAssertFalse(AgentLocalHost.shouldResume(wanted: true, amorcePresente: false, binairePresent: true))
+  }
+
+  func testSansBinaireOnNeRelancePas() {
+    XCTAssertFalse(AgentLocalHost.shouldResume(wanted: true, amorcePresente: true, binairePresent: false))
+  }
 }

@@ -112,6 +112,9 @@ struct CorrespondanceApp: App {
 final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     LaunchGate.noteDidFinishLaunching()
+    // cc meurt avec l'app ; il renaît avec elle, si on l'a voulu et que son
+    // amorce est là. Sans ça, chaque relance de l'app demandait de « ré-activer ».
+    AgentLocalHost.resume(agent: MatrixIdentity.agentName)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
