@@ -177,7 +177,10 @@ struct ACPConversation {
     if body.isEmpty, stop != "end_turn" {
       body = "Le moteur s'est arrêté : \(stop.replacingOccurrences(of: "_", with: " "))."
     }
-    return AgentTurn(text: body, sessionID: session, isError: stop == "refusal" || stop == "error")
+    return AgentTurn(
+      text: body, sessionID: session, isError: stop == "refusal" || stop == "error",
+      tools: tools, tokens: tokens
+    )
   }
 }
 

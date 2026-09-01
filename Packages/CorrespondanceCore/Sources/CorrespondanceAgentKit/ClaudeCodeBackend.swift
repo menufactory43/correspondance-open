@@ -5,11 +5,18 @@ public struct AgentTurn: Sendable, Equatable {
   public var text: String
   public var sessionID: String?
   public var isError: Bool
+  /// Les outils employés pendant le tour — la matière du journal de la room
+  /// console. Vide pour un moteur qui ne les rapporte pas (la CLI en direct).
+  public var tools: [String]
+  /// Les jetons consommés, quand le moteur les compte.
+  public var tokens: Int?
 
-  public init(text: String, sessionID: String?, isError: Bool = false) {
+  public init(text: String, sessionID: String?, isError: Bool = false, tools: [String] = [], tokens: Int? = nil) {
     self.text = text
     self.sessionID = sessionID
     self.isError = isError
+    self.tools = tools
+    self.tokens = tokens
   }
 }
 

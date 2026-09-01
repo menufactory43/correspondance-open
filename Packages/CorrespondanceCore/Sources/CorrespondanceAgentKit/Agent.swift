@@ -4,7 +4,15 @@ import Foundation
 /// La boucle de « cc » : un `/sync` sans fin, et pour chaque ordre d'un
 /// propriétaire, un tour de Claude dont la réponse revient là où l'ordre a été donné.
 public actor Agent {
+  /// La config du fichier — l'amorce, et le repli tant que le Relais n'a rien dit.
   public let config: AgentConfig
+  /// La config vivante : le fichier revu par l'event d'état de la room console.
+  /// C'est elle qu'on lit partout ; changer un réglage dans l'app prend effet
+  /// au `/sync` suivant, sans SSH ni redémarrage.
+  private var live: AgentConfig
+  /// La room console de cet agent, découverte par l'event de config qu'elle
+  /// porte — l'app n'a pas à nous dire laquelle c'est.
+  private var consoleRoomID: String?
   private let client: MatrixClient
   private let backend: any AgentBackend
   private let stateURL: URL
@@ -49,6 +57,7 @@ public actor Agent {
     log: @escaping @Sendable (String) -> Void = { print($0) }
   ) {
     self.config = config
+    self.live = config
     self.backend = backend
     self.stateURL = stateURL
     self.state = AgentState.load(from: stateURL)
@@ -98,13 +107,14 @@ public actor Agent {
       // relit pas les timelines — l'agent ne répond qu'à ce qui vient.
       let initial = try await client.sync(since: nil, timeoutMilliseconds: 0)
       absorbMembers(from: initial)
+      absorbRemoteConfig(from: initial)
       absorbSettings(from: initial)
       await acceptInvites(in: initial)
       state.nextBatch = initial.nextBatch
       try persist()
       log("état initial reçu — \(initial.rooms?.join?.count ?? 0) rooms")
     }
-    log("à l'écoute de « \(config.trigger) » pour \(config.owners.joined(separator: ", ")) — plafond \(config.hourlyCap)/h")
+    log("à l'écoute de « \(live.trigger) » pour \(live.owners.joined(separator: ", ")) — plafond \(live.hourlyCap)/h")
 
     // La machine des moteurs, c'est celle-ci : on scanne, et on le dit dans
     // les rooms en tête-à-tête (la note à soi en tête) — l'app le lit dans les
@@ -116,13 +126,14 @@ public actor Agent {
         let response = try await client.sync(since: state.nextBatch, timeoutMilliseconds: 30_000)
         backoff = 2
         absorbMembers(from: response)
+        absorbRemoteConfig(from: response)
         absorbSettings(from: response)
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
-            guard let request = Trigger.request(from: event, roomID: roomID, config: config, notBefore: notBefore)
+            guard let request = Trigger.request(from: event, roomID: roomID, config: live, notBefore: notBefore)
             else { continue }
             dispatch(request)
           }
@@ -148,7 +159,7 @@ public actor Agent {
           && event.string(at: "state_key") == config.botUserID
           && event.string(at: "content.membership") == "invite"
       }?.string(at: "sender")
-      guard let inviter, config.owners.contains(inviter) else {
+      guard let inviter, live.owners.contains(inviter) else {
         log("invitation ignorée dans \(roomID) (par \(inviter ?? "inconnu"))")
         continue
       }
@@ -190,8 +201,42 @@ public actor Agent {
       }
       members[roomID] = set
     }
-    let allowed = Set(config.owners + [config.botUserID])
+    let allowed = Set(live.owners + [live.botUserID])
     return (members[roomID] ?? []).isSubset(of: allowed)
+  }
+
+  /// La config que l'app a écrite dans la room console, quand ce `/sync` la
+  /// porte. Le fichier de l'hôte reste le repli : un event minuscule ne
+  /// remplace pas une config, il la corrige champ par champ.
+  private func absorbRemoteConfig(from response: MatrixSyncResponse) {
+    for (roomID, room) in response.rooms?.join ?? [:] {
+      let events = (room.state?.events ?? []) + (room.timeline?.events ?? [])
+      for event in events where event.type == AgentEvents.configType {
+        guard let content = event.content, let remote = AgentRemoteConfig(content: content) else { continue }
+        guard remote.agent == config.user else { continue }
+        guard remote.isReadable else {
+          log("config v\(remote.version) reçue dans \(roomID) — trop récente pour moi (v\(AgentRemoteConfig.currentVersion)), je garde la mienne")
+          continue
+        }
+        guard let sender = event.sender, config.owners.contains(sender) else {
+          // Une config écrite par quelqu'un d'autre qu'un propriétaire : jamais.
+          // C'est ce qui empêche un tiers dans une room de reconfigurer l'agent.
+          //
+          // On lit les propriétaires du **fichier**, pas ceux du Relais : qui a
+          // le droit de reconfigurer est ancré dans l'amorce, sur l'hôte. Un
+          // event peut élargir qui *déclenche* l'agent, jamais qui le *règle*.
+          log("config ignorée dans \(roomID) : écrite par \(event.sender ?? "inconnu")")
+          continue
+        }
+        consoleRoomID = roomID
+        let updated = config.applying(remote)
+        if updated != live {
+          live = updated
+          cap = HourlyCap(limit: updated.hourlyCap)
+          log("config reçue du Relais (\(roomID)) : déclencheur « \(updated.trigger) », moteur \(updated.backend.rawValue), palier \(AgentConfig.Presets.name(of: updated.claude.allowedTools)), plafond \(updated.hourlyCap)/h")
+        }
+      }
+    }
   }
 
   /// Le réglage que l'app a écrit, quand ce `/sync` en parle. Un `/sync` qui
@@ -206,10 +251,10 @@ public actor Agent {
 
   func mode(for roomID: String) async -> AgentConfig.RoomMode {
     await AgentMode.resolve(
-      roomMode: config.rooms[roomID]?.mode,
+      roomMode: live.rooms[roomID]?.mode,
       isPrivateWithOwners: isPrivateWithOwners(roomID),
       accountDataDefault: accountDefaultMode,
-      configuredDefault: config.defaultMode
+      configuredDefault: live.defaultMode
     )
   }
 
@@ -226,12 +271,13 @@ public actor Agent {
     }
     guard cap.admit() else {
       let wait = Int((cap.nextSlot() ?? 0) / 60) + 1
-      await reply("Plafond horaire atteint (\(config.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
+      await reply("Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
       return
     }
     busyRooms.insert(request.roomID)
     defer { busyRooms.remove(request.roomID) }
 
+    let startedTurn = Date()
     let prompt = request.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : request.prompt
     log("[\(request.roomID)] \(request.sender) → « \(prompt.prefix(80)) »")
 
@@ -250,7 +296,7 @@ public actor Agent {
     // les porte dans la room, un 👍 y répond. Sans permission activée : rien.
     var spool: URL?
     var watcher: Task<Void, Never>?
-    if config.claude.permission.enabled {
+    if live.claude.permission.enabled {
       let dir = stateURL.deletingLastPathComponent().appending(path: "permissions/\(UUID().uuidString)")
       try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
@@ -270,7 +316,7 @@ public actor Agent {
       // dépôt n'est lié. C'est le rayon d'explosion, et c'est le garde-fou qui
       // remplace la question qu'on ne pose plus.
       let cwd = Workspace.prepare(
-        Workspace.directory(agent: config.user, roomID: request.roomID, binding: config.rooms[request.roomID]?.cwd)
+        Workspace.directory(agent: live.user, roomID: request.roomID, binding: live.rooms[request.roomID]?.cwd)
       )
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
@@ -280,9 +326,35 @@ public actor Agent {
       let text = turn.text.isEmpty ? "(Claude n'a rien répondu.)" : turn.text
       await reply(text, to: request)
       log("[\(request.roomID)] ← \(text.count) caractères\(turn.isError ? " (erreur)" : "")")
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
     } catch {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
+    }
+  }
+
+  // MARK: - Journal
+
+  /// Chaque tour laisse une trace dans la room console : qui a demandé, quoi,
+  /// quels outils ont servi, combien de temps. Depuis qu'on donne la pleine
+  /// permission, c'est ce qui rend l'agent relisible — et c'est le troisième
+  /// garde-fou avec le dossier borné et les propriétaires seuls.
+  ///
+  /// Rien n'est posté s'il n'y a pas de room console : on n'invente pas un
+  /// endroit où déverser ce que les gens se disent.
+  private func journal(_ request: AgentRequest, seconds: Double, tools: [String], tokens: Int?) async {
+    guard let consoleRoomID else { return }
+    do {
+      try await client.sendEvent(
+        roomID: consoleRoomID,
+        type: AgentEvents.journalType,
+        content: AgentEvents.journal(
+          agent: live.user, roomID: request.roomID, sender: request.sender,
+          prompt: request.prompt, tools: tools, seconds: seconds, tokens: tokens
+        )
+      )
+    } catch {
+      log("journal impostable : \(error.localizedDescription)")
     }
   }
 
@@ -292,7 +364,7 @@ public actor Agent {
   /// room en tête-à-tête avec les propriétaires. Les ponts ignorent ce type,
   /// et on ne le poste de toute façon jamais devant des tiers.
   private func publishStatus(in rooms: [String]? = nil) async {
-    let config = self.config
+    let config = self.live
     if statusLine == nil {
       let scan = await Task.detached { EngineScan.scan(config: config) }.value
       statusLine = scan.statusLine(
@@ -373,7 +445,7 @@ public actor Agent {
           let target = event.content?.string(at: "m.relates_to.event_id"),
           let pending = pendingPermissions[target]
     else { return false }
-    guard let sender = event.sender, config.owners.contains(sender),
+    guard let sender = event.sender, live.owners.contains(sender),
           let key = event.content?.string(at: "m.relates_to.key")
     else { return true } // la question est à nous, mais pas la réaction : on l'ignore
     let allow: Bool
