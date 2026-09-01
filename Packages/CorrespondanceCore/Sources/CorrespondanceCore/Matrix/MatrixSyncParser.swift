@@ -442,6 +442,13 @@ public struct MatrixSyncParser: Sendable {
       // Cible inconnue et pas de repli (Signal) : la citation attend, on ne la jette pas.
     }
 
+    // Les mentions ne survivent pas au corps nu : mautrix y pose le nom seul et
+    // range l'arobase dans la pilule HTML. On la lui rend — après le repli de
+    // citation, dont le texte ne parle pas de ce message-ci.
+    body = MatrixMentions.restoringPills(
+      in: body, formattedBody: content.string(at: "formatted_body")
+    )
+
     // `com.beeper.linkpreviews` : l'aperçu que l'expéditeur a lui-même produit.
     let linkPreview = Self.bridgedLinkPreview(in: content)
 
@@ -571,10 +578,19 @@ public struct MatrixSyncParser: Sendable {
   /// `body` racine est un repli préfixé d'une étoile — l'afficher ajouterait
   /// une astérisque au message à chaque correction.
   public static func newText(in content: MatrixJSON) -> String? {
-    if let body = content.string(at: "m.new_content.body") { return body }
+    // Un message corrigé garde ses mentions : elles s'écrivent au même endroit,
+    // le nom dans le corps et l'arobase dans la pilule.
+    if let body = content.string(at: "m.new_content.body") {
+      return MatrixMentions.restoringPills(
+        in: body, formattedBody: content.string(at: "m.new_content.formatted_body")
+      )
+    }
     // Certains ponts ne posent que le repli : on lui retire son étoile.
     guard let fallback = content.string(at: "body") else { return nil }
-    return fallback.hasPrefix("* ") ? String(fallback.dropFirst(2)) : fallback
+    let text = fallback.hasPrefix("* ") ? String(fallback.dropFirst(2)) : fallback
+    return MatrixMentions.restoringPills(
+      in: text, formattedBody: content.string(at: "formatted_body")
+    )
   }
 
   /// Le premier aperçu de `com.beeper.linkpreviews` qui porte une adresse. Les
