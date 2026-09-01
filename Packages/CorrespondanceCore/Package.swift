@@ -9,9 +9,6 @@ let package = Package(
         .library(name: "CorrespondanceCore", targets: ["CorrespondanceCore"]),
         .library(name: "CorrespondanceUI", targets: ["CorrespondanceUI"]),
         .library(name: "CorrespondanceAgentKit", targets: ["CorrespondanceAgentKit"]),
-        // Le seul bout d'Objective-C du dépôt : rattraper une exception AppKit,
-        // ce que Swift ne sait pas faire. Cf. CorrespondanceExceptionCatcher.h.
-        .library(name: "CorrespondanceObjC", targets: ["CorrespondanceObjC"]),
         .executable(name: "correspondance-agent", targets: ["correspondance-agent"]),
         // L'inbox comme outil : un serveur MCP que Claude Desktop ou Zed lancent.
         .executable(name: "correspondance-mcp", targets: ["correspondance-mcp"]),
@@ -19,7 +16,6 @@ let package = Package(
     targets: [
         // Le client Matrix REST, Foundation pur : compile sous Linux pour l'agent.
         .target(name: "CorrespondanceMatrixClient"),
-        .target(name: "CorrespondanceObjC"),
         .target(name: "CorrespondanceCore", dependencies: ["CorrespondanceMatrixClient"]),
         .target(name: "CorrespondanceUI", dependencies: ["CorrespondanceCore"]),
         // L'agent « cc » : un client Matrix ordinaire qui parle à Claude Code.
