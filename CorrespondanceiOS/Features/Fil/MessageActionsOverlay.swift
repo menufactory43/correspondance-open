@@ -5,12 +5,14 @@ import SwiftUI
 /// Ce qui s'ouvre sur un appui long : la bulle, seule sur un fond de verre,
 /// les smileys au-dessus d'elle (les six réactions rapides et un **+** pour
 /// tous les autres), et en dessous la liste des actions — répondre, modifier,
-/// copier, supprimer. Le geste de Messages et de WhatsApp, sans menu système :
+/// copier, sélectionner quelques mots, supprimer. Le geste de Messages et de WhatsApp, sans menu système :
 /// le `contextMenu` de SwiftUI ne sait pas coiffer son aperçu d'une rangée.
 struct MessageActionsOverlay: View {
   let message: ChatMessage
   let conversationID: String
   var senderLabel: String?
+  /// « Sélectionner » : la feuille s'ouvre depuis le fil, une fois l'overlay parti.
+  var onSelectText: ((String) -> Void)?
   let onDismiss: () -> Void
 
   @Environment(RelayStore.self) private var store
@@ -154,6 +156,14 @@ struct MessageActionsOverlay: View {
         action("Copier le texte", systemImage: "doc.on.doc") {
           Platform.copyToPasteboard(message.text)
           close()
+        }
+        if let onSelectText {
+          divider
+          action("Sélectionner", systemImage: "character.cursor.ibeam") {
+            let text = message.text
+            close()
+            onSelectText(text)
+          }
         }
       }
       if message.isFromMe {

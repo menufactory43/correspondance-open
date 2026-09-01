@@ -21,6 +21,8 @@ struct ThreadView: View {
   @State private var isShowingInfo = false
   /// La bulle sous appui long, et le nom qu'elle portait dans le fil.
   @State private var focused: FocusedMessage?
+  /// Le texte d'une bulle ouvert pour en sélectionner quelques mots.
+  @State private var selectingText: SelectedText?
   /// Vrai tant que le bas du fil est à l'écran : le chevron n'a alors rien à faire.
   @State private var isNearBottom = true
   /// La position pilotable du fil, pour compenser le clavier qui pousse par le bas.
@@ -55,6 +57,11 @@ struct ThreadView: View {
     var senderLabel: String?
   }
 
+  struct SelectedText: Identifiable {
+    let text: String
+    var id: String { text }
+  }
+
   var body: some View {
     thread
       .background(theme.paper.ignoresSafeArea())
@@ -66,7 +73,8 @@ struct ThreadView: View {
           MessageActionsOverlay(
             message: focused.message,
             conversationID: conversationID,
-            senderLabel: focused.senderLabel
+            senderLabel: focused.senderLabel,
+            onSelectText: { selectingText = SelectedText(text: $0) }
           ) {
             self.focused = nil
           }
@@ -80,6 +88,10 @@ struct ThreadView: View {
       .toolbar { toolbar }
       .toolbar(focused == nil ? .visible : .hidden, for: .navigationBar)
       .toolbarBackground(.hidden, for: .navigationBar)
+      .sheet(item: $selectingText) { selected in
+        SelectTextSheet(text: selected.text)
+          .environment(themes)
+      }
       .sheet(isPresented: $isShowingInfo) {
         ThreadInfoSheet(conversationID: conversationID)
           .environment(store)

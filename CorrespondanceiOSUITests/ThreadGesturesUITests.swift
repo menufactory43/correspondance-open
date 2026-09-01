@@ -150,4 +150,31 @@ final class ThreadGesturesUITests: XCTestCase {
     app.buttons["Réagir 👍"].tap()
     XCTAssertTrue(app.buttons["Réagir 👍"].waitForNonExistence(timeout: 5), "l'overlay ne s'est pas refermé")
   }
+
+  /// « Sélectionner » ouvre le texte seul, avec les poignées du système :
+  /// on peut n'en copier que quelques mots au lieu de la bulle entière.
+  func testSelectOpensSelectableText() {
+    let app = XCUIApplication()
+    openGroup(app)
+
+    let bubble = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@", "Reçu,"))
+      .allElementsBoundByIndex
+      .last
+    XCTAssertNotNil(bubble)
+    bubble!.press(forDuration: 0.6)
+
+    let select = app.buttons["Sélectionner"]
+    XCTAssertTrue(select.waitForExistence(timeout: 5), "pas d'action « Sélectionner »")
+    select.tap()
+
+    let field = app.textViews["Texte à sélectionner"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5), "la feuille de sélection ne s'est pas ouverte")
+    XCTAssertFalse((field.value as? String ?? "").isEmpty, "le texte de la bulle n'est pas dans la feuille")
+    XCTAssertTrue(app.buttons["Tout copier"].exists)
+    snapshot(app, "05-selectionner")
+
+    app.buttons["Fermer"].tap()
+    XCTAssertTrue(field.waitForNonExistence(timeout: 5), "la feuille ne s'est pas refermée")
+  }
 }
