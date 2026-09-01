@@ -509,3 +509,15 @@ xcodebuild -project Correspondance.xcodeproj -scheme Correspondance \
 open /tmp/dd-unclic/Build/Products/Debug/Correspondance.app --env CORRESPONDANCE_HOME=unclic
 bash infra/relais-spike/stop.sh                 # aucun processus laissé derrière
 ```
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : `start.sh`, `/_matrix/client/versions` (26.8.1), les deux appels `_synapse/admin`
+en 404, `matrice-admin.sh` (commandes `#admins` : création de compte OK, `list-devices-metadata`
+rend bien du `Debug` Rust), `mesurer.sh`, `pair.sh`, capture `app-connectee.png`. Aucun
+processus orphelin avant et après. **Un écart de mesure** : juste après le démarrage, `ps -o rss`
+donne 58 + 26 + 23 = **107 Mo** ; les 46 Mo du rapport sont pris après un quart d'heure au
+repos. Retenir « 50 à 110 Mo » — encore cinq à dix fois moins que Synapse + Postgres. Phase
+acceptée ; l'étape 6 (cc sur ce Relais) reste à faire, son verdict est acquis par la matrice.
