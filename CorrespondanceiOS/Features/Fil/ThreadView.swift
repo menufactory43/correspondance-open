@@ -143,8 +143,8 @@ struct ThreadView: View {
             timeSeparator(separator, network: group.networkOrigin)
           }
           // La photo de l'auteur dans la marge d'une prise de parole reçue,
-          // comme sur le Mac. Alignée sur la première bulle, pas sur le nom.
-          HStack(alignment: .top, spacing: 8) {
+          // comme sur le Mac : en bas du groupe, en face de la dernière bulle.
+          HStack(alignment: .bottom, spacing: 8) {
             if !group.isFromMe, let first = group.messages.first, !first.isSystemEvent {
               MessageAvatarView(
                 message: first,
@@ -152,7 +152,6 @@ struct ThreadView: View {
                 size: 26,
                 theme: theme
               )
-              .padding(.top, group.senderLabel == nil ? 2 : 18)
             }
             VStack(alignment: group.isFromMe ? .trailing : .leading, spacing: 3) {
               ForEach(Array(group.messages.enumerated()), id: \.element.id) { index, message in

@@ -86,46 +86,68 @@ struct MessageBubble: View {
         quoteChip(quote)
       }
 
-      ForEach(visibleAttachments) { attachment in
-        attachmentView(attachment)
-      }
+      // Le corps SEUL — pièces jointes, bulle, carte de lien. C'est lui que
+      // les pastilles mordent : accrochées à la pile entière, elles se
+      // seraient posées sous « Modifié » au lieu du coin de la bulle.
+      VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
+        ForEach(visibleAttachments) { attachment in
+          attachmentView(attachment)
+        }
 
-      if let poll = message.poll {
-        PollView(
-          poll: poll,
-          theme: theme,
-          typeface: typeface,
-          isFromMe: message.isFromMe,
-          onVote: onVotePoll
-        )
-      } else if message.isRetracted {
-        retractedBubble
-      } else if message.isEmojiOnly {
-        Text(displayText)
-          .font(.system(size: 44))
-          .padding(.horizontal, 2)
-          .accessibilityLabel(displayText)
-      } else if showsTextBubble {
-        Text(highlighted)
-          .font(Typography.bubble(typeface))
-          .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
-          .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
-          // Un mot plus long que la bulle — un chemin, une URL — : sans ceci,
-          // `Text` tronque la ligne d'une ellipse au lieu de couper le mot.
-          .fixedSize(horizontal: false, vertical: true)
-          // Pas de sélection de texte : elle prendrait l'appui long, qui
-          // ouvre les actions — et « Copier le texte » y est.
-          .padding(.horizontal, 13)
-          .padding(.vertical, 9)
-          .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-              .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
+        if let poll = message.poll {
+          PollView(
+            poll: poll,
+            theme: theme,
+            typeface: typeface,
+            isFromMe: message.isFromMe,
+            onVote: onVotePoll
           )
-      }
+        } else if message.isRetracted {
+          retractedBubble
+        } else if message.isEmojiOnly {
+          Text(displayText)
+            .font(.system(size: 44))
+            .padding(.horizontal, 2)
+            .accessibilityLabel(displayText)
+        } else if showsTextBubble {
+          Text(highlighted)
+            .font(Typography.bubble(typeface))
+            .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
+            .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+            // Un mot plus long que la bulle — un chemin, une URL — : sans ceci,
+            // `Text` tronque la ligne d'une ellipse au lieu de couper le mot.
+            .fixedSize(horizontal: false, vertical: true)
+            // Pas de sélection de texte : elle prendrait l'appui long, qui
+            // ouvre les actions — et « Copier le texte » y est.
+            .padding(.horizontal, 13)
+            .padding(.vertical, 9)
+            .background(
+              RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
+            )
+        }
 
-      if let link = previewedLink {
-        LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
+        if let link = previewedLink {
+          LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
+        }
       }
+      // Les pastilles MORDENT le coin bas de la bulle, du côté opposé à
+      // l'expéditeur : à moitié dedans, à moitié dehors, comme Messages.
+      .overlay(alignment: message.isFromMe ? .bottomLeading : .bottomTrailing) {
+        if !message.reactions.isEmpty {
+          ReactionPills(
+            reactions: message.reactions,
+            theme: theme,
+            typeface: typeface,
+            emojiSize: 13,
+            showsSendersOnLongPress: true,
+            onTap: onReact
+          )
+          .offset(x: message.isFromMe ? -8 : 8, y: ReactionPills.overhang)
+        }
+      }
+      // Le débord se réserve, sinon la suite passerait par-dessus.
+      .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
       if let onCancelPending {
         Button("Annuler", action: onCancelPending)
@@ -141,9 +163,6 @@ struct MessageBubble: View {
           .foregroundStyle(theme.inkTertiary)
       }
 
-      if !message.reactions.isEmpty {
-        reactionRow
-      }
     }
     .opacity(message.isPending ? 0.55 : 1)
     .contentShape(Rectangle())
@@ -232,31 +251,6 @@ struct MessageBubble: View {
         .accessibilityHint("Va au message cité")
     } else {
       content
-    }
-  }
-
-  private var reactionRow: some View {
-    HStack(spacing: 4) {
-      ForEach(message.reactions) { reaction in
-        Button {
-          onReact?(reaction.emoji)
-        } label: {
-          HStack(spacing: 3) {
-            Text(reaction.emoji).font(.system(size: 13))
-            if reaction.count > 1 {
-              Text("\(reaction.count)")
-                .font(Typography.meta(typeface))
-                .foregroundStyle(theme.inkSecondary)
-            }
-          }
-          .padding(.horizontal, 7)
-          .padding(.vertical, 3)
-          .background(Capsule().fill(theme.paperSecondary))
-          .overlay(Capsule().stroke(reaction.isMine ? theme.accent : theme.edge, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(reaction.emoji), \(reaction.count)")
-      }
     }
   }
 

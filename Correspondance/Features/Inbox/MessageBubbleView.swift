@@ -81,44 +81,65 @@ struct MessageBubbleView: View {
           quoteChip(quote)
         }
 
-        ForEach(visibleAttachments) { attachment in
-          attachmentView(attachment)
-        }
+        // Le corps SEUL — pièces jointes, bulle, carte de lien. C'est lui que
+        // les pastilles mordent : accrochées à la pile entière, elles se
+        // seraient posées sous « Modifié » au lieu du coin de la bulle.
+        VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
+          ForEach(visibleAttachments) { attachment in
+            attachmentView(attachment)
+          }
 
-        if let poll = message.poll {
-          PollView(
-            poll: poll,
-            theme: theme,
-            typeface: typeface,
-            isFromMe: message.isFromMe,
-            onVote: onVotePoll
-          )
-        } else if message.isRetracted {
-          retractedBubble
-        } else if message.isEmojiOnly {
-          emojiOnlyBody
-        } else if showsTextBubble {
-          Text(highlighted)
-            .font(Typography.bubble(typeface, scale: textScale))
-            // L'interligne de lecture : le texte ne vit plus à l'interligne nu
-            // de la fonte. Dérivé du thème et du corps effectif — cf. `WritingTheme`.
-            .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
-            .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
-            // Un mot plus long que la bulle — un chemin, une URL — : sans
-            // ceci, `Text` tronque la ligne d'une ellipse au lieu de couper
-            // le mot. On lui rend sa hauteur libre, il replie.
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-              RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
+          if let poll = message.poll {
+            PollView(
+              poll: poll,
+              theme: theme,
+              typeface: typeface,
+              isFromMe: message.isFromMe,
+              onVote: onVotePoll
             )
-        }
+          } else if message.isRetracted {
+            retractedBubble
+          } else if message.isEmojiOnly {
+            emojiOnlyBody
+          } else if showsTextBubble {
+            Text(highlighted)
+              .font(Typography.bubble(typeface, scale: textScale))
+              // L'interligne de lecture : le texte ne vit plus à l'interligne nu
+              // de la fonte. Dérivé du thème et du corps effectif — cf. `WritingTheme`.
+              .lineSpacing(theme.bubbleLineSpacing(forBodySize: bodySize))
+              .foregroundStyle(message.isFromMe ? theme.bubbleOutInk : theme.bubbleInInk)
+              // Un mot plus long que la bulle — un chemin, une URL — : sans
+              // ceci, `Text` tronque la ligne d'une ellipse au lieu de couper
+              // le mot. On lui rend sa hauteur libre, il replie.
+              .fixedSize(horizontal: false, vertical: true)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 8)
+              .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
+              )
+          }
 
-        if let link = previewedLink {
-          LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
+          if let link = previewedLink {
+            LinkPreviewCard(url: link, theme: theme, typeface: typeface, bridged: bridgedPreview)
+          }
         }
+        // Les pastilles MORDENT le coin bas de la bulle, du côté opposé à
+        // l'expéditeur : à moitié dedans, à moitié dehors, comme Messages.
+        .overlay(alignment: message.isFromMe ? .bottomLeading : .bottomTrailing) {
+          if !message.reactions.isEmpty {
+            ReactionPills(
+              reactions: message.reactions,
+              theme: theme,
+              typeface: typeface,
+              emojiSize: 11,
+              onTap: onReact
+            )
+            .offset(x: message.isFromMe ? -8 : 8, y: ReactionPills.overhang)
+          }
+        }
+        // Le débord se réserve, sinon la suite passerait par-dessus.
+        .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
         if let onCancelPending {
           Button("Annuler", action: onCancelPending)
@@ -136,10 +157,6 @@ struct MessageBubbleView: View {
             .help(footnote.help)
             .accessibilityLabel(footnote.help)
         }
-
-        if !message.reactions.isEmpty {
-          reactionRow
-        }
       }
       .opacity(message.isPending ? 0.55 : 1)
       .padding(.horizontal, 4)
@@ -150,7 +167,7 @@ struct MessageBubbleView: View {
       .help(message.sentAt.formatted(date: .abbreviated, time: .shortened))
       .accessibilityElement(children: .combine)
       .accessibilityValue(message.sentAt.formatted(date: .omitted, time: .shortened))
-      .contextMenu { bubbleMenu }
+      .contextMenu { bubbleMenu(full: true) }
       // LA LONGUEUR DE LIGNE. Le `Spacer` ne borne que la fenêtre étroite ; sur
       // un large écran une phrase traversait tout le fil, et l'œil ne retrouvait
       // plus le début de la ligne suivante. Plafond à la largeur de lettre de
@@ -290,7 +307,7 @@ struct MessageBubbleView: View {
       }
 
       Menu {
-        bubbleMenu
+        bubbleMenu(full: false)
       } label: {
         Image(systemName: "ellipsis")
       }
@@ -373,51 +390,24 @@ struct MessageBubbleView: View {
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
   }
 
-  /// Pastilles sous la bulle : emoji, compteur au-delà d'une personne, et un liseré
-  /// quand j'en fais partie. Cliquer une pastille repose (donc retire) le même emoji.
-  private var reactionRow: some View {
-    HStack(spacing: 4) {
-      ForEach(message.reactions) { reaction in
-        Button {
-          onReact?(reaction.emoji)
-        } label: {
-          HStack(spacing: 3) {
-            Text(reaction.emoji).font(.system(size: 11))
-            if reaction.count > 1 {
-              Text("\(reaction.count)")
-                .font(Typography.meta(typeface))
-                .foregroundStyle(theme.inkSecondary)
-            }
-          }
-          .padding(.horizontal, 6)
-          .padding(.vertical, 2)
-          .background(
-            Capsule().fill(theme.paperSecondary)
-          )
-          .overlay(
-            Capsule().stroke(reaction.isMine ? theme.accent : theme.edge, lineWidth: 1)
-          )
-        }
-        .buttonStyle(.plain)
-        .help(reaction.senders.isEmpty ? reaction.emoji : reaction.senders.joined(separator: ", "))
-        .accessibilityLabel("\(reaction.emoji), \(reaction.count)")
-      }
-    }
-  }
-
+  /// Le menu de la bulle. `full` : le clic droit, seul chemin clavier vers
+  /// réagir et répondre, les porte ; le « … » de la rangée de survol non — les
+  /// deux boutons sont déjà à sa gauche, les répéter ne faisait que rallonger.
   @ViewBuilder
-  private var bubbleMenu: some View {
-    if let onReply {
-      Button("Répondre en citant") { onReply() }
-      Divider()
-    }
-    if onReact != nil {
-      ForEach(InboxStore.quickReactions, id: \.self) { emoji in
-        Button {
-          onReact?(emoji)
-        } label: {
-          // Le même emoji déjà posé : le menu propose alors de le retirer.
-          Text(message.myReactionEmoji == emoji ? "\(emoji)  Retirer" : emoji)
+  private func bubbleMenu(full: Bool) -> some View {
+    if full {
+      if let onReply {
+        Button("Répondre en citant") { onReply() }
+        Divider()
+      }
+      if onReact != nil {
+        ForEach(InboxStore.quickReactions, id: \.self) { emoji in
+          Button {
+            onReact?(emoji)
+          } label: {
+            // Le même emoji déjà posé : le menu propose alors de le retirer.
+            Text(message.myReactionEmoji == emoji ? "\(emoji)  Retirer" : emoji)
+          }
         }
       }
     }

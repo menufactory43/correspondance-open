@@ -20,6 +20,8 @@ struct MessageActionsOverlay: View {
   @State private var isPickingEmoji = false
   @State private var pendingDeletion = false
   @State private var hasAppeared = false
+  /// Poser ou retirer une réaction se sent au doigt, comme dans Messages.
+  @State private var reacted = 0
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -45,6 +47,7 @@ struct MessageActionsOverlay: View {
       .scaleEffect(hasAppeared || reduceMotion ? 1 : 0.94)
       .opacity(hasAppeared || reduceMotion ? 1 : 0)
     }
+    .sensoryFeedback(.selection, trigger: reacted)
     .onAppear {
       withAnimation(.spring(duration: 0.28, bounce: 0.2)) { hasAppeared = true }
     }
@@ -198,6 +201,7 @@ struct MessageActionsOverlay: View {
   // MARK: - Faire
 
   private func react(_ emoji: String) {
+    reacted += 1
     let fil = conversationID
     let bulle = message.id
     Task { @MainActor in await store.react(conversationID: fil, messageID: bulle, emoji: emoji) }

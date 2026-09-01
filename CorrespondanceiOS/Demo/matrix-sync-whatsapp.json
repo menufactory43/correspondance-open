@@ -503,6 +503,49 @@
          }
         }
        }
+      },
+      {
+       "type": "m.reaction",
+       "event_id": "$rea-g3",
+       "sender": "@meffysto:correspondance.local",
+       "origin_server_ts": 1756400520000,
+       "content": {
+        "m.relates_to": {
+         "rel_type": "m.annotation",
+         "event_id": "$msg-groupe-1",
+         "key": "👍"
+        }
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$msg-groupe-suite-1",
+       "sender": "@whatsapp_lid-22222222222:correspondance.local",
+       "origin_server_ts": 1756400700000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Huit heures pile, oui."
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$msg-groupe-suite-2",
+       "sender": "@whatsapp_lid-22222222222:correspondance.local",
+       "origin_server_ts": 1756400710000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Je passe prendre Bob en chemin, il est sur la route."
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$msg-groupe-suite-3",
+       "sender": "@whatsapp_lid-22222222222:correspondance.local",
+       "origin_server_ts": 1756400720000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Et j'ai trouvé la photo du gîte 👇"
+       }
       }
      ]
     }
