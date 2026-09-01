@@ -16,6 +16,8 @@ struct MessageBubble: View {
   var typeface: WritingTypeface = .quattro
   /// Nom coloré au-dessus du groupe, en conversation de groupe.
   var senderLabel: String?
+  /// Sa place dans la prise de parole : c'est elle qui resserre les coins.
+  var position: BubblePosition = .alone
   var showsLinkPreviews = true
   var onReply: (() -> Void)?
   /// Voter sur le sondage de cette bulle. `nil` = sondage en lecture seule.
@@ -36,6 +38,8 @@ struct MessageBubble: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var dragOffset: CGFloat = 0
+  /// Le seuil de citation est franchi : le doigt l'a senti, on ne le redit pas.
+  @State private var hasCrossedThreshold = false
   /// Le média sur lequel la visionneuse s'ouvre. `nil` = elle est fermée.
   @State private var opened: OpenedMedia?
   /// Le fichier joint dont on regarde l'aperçu Quick Look.
@@ -48,6 +52,11 @@ struct MessageBubble: View {
   }
 
   private var bodySize: CGFloat { Typography.bubbleSize() }
+
+  /// Les quatre rayons de cette bulle-là. Cf. `BubbleShape`.
+  private var corners: BubbleCorners {
+    BubbleShape.corners(isFromMe: message.isFromMe, position: position, radius: 18)
+  }
 
   var body: some View {
     // Une proposition n'est pas une bulle : ni auteur, ni balayage pour citer,
@@ -73,7 +82,7 @@ struct MessageBubble: View {
         Text(senderLabel)
           .font(Typography.meta(typeface))
           .fontWeight(.semibold)
-          .foregroundStyle(Self.senderColor(senderLabel, theme: theme))
+          .foregroundStyle(SenderTint.color(for: senderLabel, theme: theme))
           .padding(.leading, 14)
           .accessibilityHidden(true)
       }
@@ -84,8 +93,19 @@ struct MessageBubble: View {
         if !message.isFromMe { Spacer(minLength: 44) }
       }
     }
+    // La flèche paraît dans la marge libérée, dès que le geste est franc.
+    .overlay(alignment: .leading) {
+      Image(systemName: "arrowshape.turn.up.left")
+        .font(.system(size: 14, weight: .semibold))
+        .foregroundStyle(theme.inkTertiary)
+        .opacity(min(max((dragOffset - 20) / 14, 0), 1))
+        .offset(x: -26)
+        .accessibilityHidden(true)
+    }
     .offset(x: dragOffset)
     .gesture(replyDrag)
+    // Le seuil se sent sous le doigt : une fois par geste, à son franchissement.
+    .sensoryFeedback(.impact(weight: .light), trigger: hasCrossedThreshold) { _, new in new }
     .frame(maxWidth: .infinity, alignment: message.isFromMe ? .trailing : .leading)
   }
 
@@ -104,7 +124,7 @@ struct MessageBubble: View {
             media: albumMedia,
             layout: album,
             width: Self.mediaWidth,
-            cornerRadius: 16,
+            corners: corners,
             theme: theme,
             onOpen: { opened = OpenedMedia($0) }
           )
@@ -149,10 +169,7 @@ struct MessageBubble: View {
             // ouvre les actions — et « Copier le texte » y est.
             .padding(.horizontal, 13)
             .padding(.vertical, 9)
-            .background(
-              RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
-            )
+            .background(corners.shape.fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn))
         }
 
         if let link = previewedLink {
@@ -228,14 +245,19 @@ struct MessageBubble: View {
       .onChanged { value in
         guard onReply != nil, value.translation.width > 0 else { return }
         dragOffset = min(value.translation.width * 0.5, 56)
+        if dragOffset > Self.replyThreshold { hasCrossedThreshold = true }
       }
       .onEnded { _ in
-        let triggered = dragOffset > 34
+        let triggered = dragOffset > Self.replyThreshold
+        hasCrossedThreshold = false
         if reduceMotion { dragOffset = 0 }
         else { withAnimation(.spring(duration: 0.28)) { dragOffset = 0 } }
         if triggered { onReply?() }
       }
   }
+
+  /// Au-delà, le geste vaut citation.
+  private static let replyThreshold: CGFloat = 34
 
   // MARK: - Morceaux
 
@@ -456,19 +478,5 @@ struct MessageBubble: View {
       copy.localPath = path
     }
     return copy
-  }
-
-  /// La couleur d'un nom dans un groupe. Stable (dérivée du nom), et tirée des
-  /// teintes du thème plutôt que d'une palette étrangère : le fil garde son
-  /// ambiance même quand douze personnes y parlent.
-  static func senderColor(_ name: String, theme: WritingTheme) -> Color {
-    var hash = 0
-    for scalar in name.unicodeScalars { hash = (hash &* 31) &+ Int(scalar.value) }
-    let hue = Double(abs(hash) % 360) / 360
-    return Color(
-      hue: hue,
-      saturation: theme.isDark ? 0.45 : 0.62,
-      brightness: theme.isDark ? 0.86 : 0.52
-    )
   }
 }

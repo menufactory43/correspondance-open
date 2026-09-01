@@ -22,6 +22,8 @@ struct ThreadComposer: View {
   @State private var isImportingFile = false
   @State private var isTakingPhoto = false
   @State private var isPickingSendLater = false
+  /// Le compte des départs : ce qui fait vibrer le téléphone quand ça part.
+  @State private var sentCount = 0
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -87,6 +89,8 @@ struct ThreadComposer: View {
     .padding(.horizontal, Spacing.sm)
     .padding(.top, 8)
     .padding(.bottom, 8)
+    // Le message part : la main le sent partir.
+    .sensoryFeedback(.impact(weight: .medium), trigger: sentCount)
     .onChange(of: photoItems) { _, items in
       guard !items.isEmpty else { return }
       Task { await importPhotos(items) }
@@ -184,6 +188,7 @@ struct ThreadComposer: View {
     } else if store.canSend(conversationID) {
       Button {
         isFocused = false
+        sentCount += 1
         Task { await store.send(conversationID: conversationID) }
       } label: {
         Image(systemName: "arrow.up")
@@ -197,6 +202,7 @@ struct ThreadComposer: View {
     } else if store.recorder.isRecording {
       Button {
         guard let taken = store.recorder.stop() else { return }
+        sentCount += 1
         Task { await store.sendVoiceMessage(taken.url, voice: taken.voice, conversationID: conversationID) }
       } label: {
         Image(systemName: "arrow.up")

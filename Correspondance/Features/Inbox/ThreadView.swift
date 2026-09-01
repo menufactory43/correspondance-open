@@ -43,6 +43,10 @@ struct ThreadView: View {
   /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
   /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
   @State private var isNearBottom = true
+  /// La bulle vers laquelle on vient de sauter depuis une citation — surlignée un instant.
+  @State private var flashedMessageID: String?
+  /// Ce qui est arrivé pendant qu'on lisait plus haut.
+  @State private var missedCount = 0
 
   private var theme: WritingTheme { themes.theme }
   private var thread: [ChatMessage] {
@@ -192,7 +196,7 @@ struct ThreadView: View {
                 typeface: themes.typeface
               )
             }
-            groupRow(group)
+            groupRow(group, proxy: proxy)
           }
 
           if let delivery = store.selectedConversation?.lastDelivery,
@@ -217,14 +221,17 @@ struct ThreadView: View {
               .id("scheduled-\(scheduled.id)")
           }
 
-          // « Alice écrit… », là où sa bulle apparaîtra.
+          // Les trois points, là où la bulle apparaîtra.
           if let id = store.selectedConversationID, let typing = store.typingLabel(id) {
-            Text(typing)
-              .font(Typography.meta(themes.typeface))
-              .foregroundStyle(theme.inkTertiary)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.leading, 4)
-              .accessibilityLabel(typing)
+            TypingBubble(
+              name: store.selectedConversation?.isGroup == true ? typing : nil,
+              accessibilityLabel: typing,
+              theme: theme,
+              typeface: themes.typeface,
+              cornerRadius: 14
+            )
+            .padding(.leading, 4)
+            .transition(.opacity)
           }
 
           // LE bas du fil : sous le dernier message il y a l'accusé, les envois
@@ -241,6 +248,21 @@ struct ThreadView: View {
       .contentMargins(.top, ThreadMetrics.topClearance, for: .scrollContent)
       .defaultScrollAnchor(.bottom)
       .overlay(alignment: .top) { TopScrollFade(theme: theme) }
+      // La pilule ↓ : elle ne paraît que lorsqu'on a remonté, et dit combien
+      // de messages sont arrivés depuis.
+      .overlay(alignment: .bottomTrailing) {
+        if !isNearBottom, isShowingThread {
+          ScrollToBottomButton(unreadCount: missedCount, theme: theme, size: 34) {
+            missedCount = 0
+            isNearBottom = true
+            withAnimation(.easeOut(duration: 0.2)) {
+              proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+            }
+          }
+          .padding(.trailing, Spacing.md)
+          .padding(.bottom, Spacing.sm)
+        }
+      }
       // Une réaction, une citation, un aperçu qui arrive après coup : le fil
       // grandit sans que son compte bouge, et le bas doit tenir quand même.
       .keepScrolledToBottom(isNearBottom: $isNearBottom) { keepBottom(proxy) }
@@ -259,6 +281,7 @@ struct ThreadView: View {
         pinToBottom(proxy)
       }
       .onChange(of: store.messages.count) { oldCount, newCount in
+        if newCount > oldCount, !isNearBottom { missedCount += newCount - oldCount }
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
@@ -267,6 +290,7 @@ struct ThreadView: View {
       }
       .onChange(of: store.selectedConversationID) { _, _ in
         LaunchTrace.event("select")
+        missedCount = 0
         isShowingThread = false
         launchTail = ThreadMetrics.launchTailCount
         windowCount = ThreadMetrics.windowCount
@@ -300,7 +324,7 @@ struct ThreadView: View {
   /// La photo se coupe dans Réglages ; les événements de conversation, eux, ne
   /// sont de personne et gardent toute la largeur.
   @ViewBuilder
-  private func groupRow(_ group: MessageGroup) -> some View {
+  private func groupRow(_ group: MessageGroup, proxy: ScrollViewProxy) -> some View {
     let first = group.messages.first
     let showsAvatar = themes.showsMessageAvatars
       && !group.isFromMe
@@ -321,11 +345,11 @@ struct ThreadView: View {
         if let label = group.senderLabel {
           Text(label)
             .font(Typography.meta(themes.typeface))
-            .foregroundStyle(theme.inkSecondary)
+            .foregroundStyle(SenderTint.color(for: label, theme: theme))
             .lineLimit(1)
             .padding(.leading, ThreadMetrics.senderLabelLeading)
         }
-        ForEach(group.messages) { message in
+        ForEach(Array(group.messages.enumerated()), id: \.element.id) { index, message in
           if let proposal = message.agentProposal {
             AgentProposalCard(
               proposal: proposal,
@@ -342,13 +366,20 @@ struct ThreadView: View {
           } else {
             // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
             // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.
-            bubble(for: message)
+            bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
               .equatable()
               .id(message.id)
               .messageArrival(
                 .encre,
                 isFresh: isFresh(message),
                 isEnabled: !reduceMotion
+              )
+              // Le surlignage d'arrivée après un saut de citation : la rangée
+              // s'éclaire puis s'éteint, le temps que l'œil trouve.
+              .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                  .fill(theme.accent.opacity(flashedMessageID == message.id ? 0.14 : 0))
+                  .padding(-3)
               )
           }
         }
@@ -362,7 +393,7 @@ struct ThreadView: View {
   /// vérificateur de types s'y perdait.
   /// Le type concret, pas `some View` : `.equatable()` a besoin de savoir que
   /// c'est une `MessageBubbleView` pour se servir de son `==`.
-  private func bubble(for message: ChatMessage) -> MessageBubbleView {
+  private func bubble(for message: ChatMessage, position: BubblePosition, proxy: ScrollViewProxy) -> MessageBubbleView {
     let automatable = automationAvailable(for: message)
     // « Modifier » ouvre le composer en mode correction ; c'est le magasin qui
     // choisit ensuite le chemin — automatisation Messages ou `m.replace`.
@@ -380,6 +411,11 @@ struct ThreadView: View {
       showsLinkPreviews: themes.showsLinkPreviews,
       highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
       isCurrentMatch: store.threadSearchCurrentID == message.id,
+      position: position,
+      // Survoler une bulle, c'est la viser : ⌘R, ⌘T et ⌘⌥R agissaient sinon
+      // sur le dernier message du fil, jamais sur celui qu'on regardait.
+      onHoverBegan: { store.selectMessage(message.id) },
+      onQuoteTap: message.replyTo?.messageID.map { targetID in { jumpTo(targetID, proxy: proxy) } },
       onReact: { emoji in
         Task { await store.react(messageID: message.id, emoji: emoji) }
       },
@@ -429,6 +465,26 @@ struct ThreadView: View {
     Task {
       try? await Task.sleep(for: .seconds(1.2))
       if store.messages.last?.id == id { settledMessageID = id }
+    }
+  }
+
+  /// Le saut vers un message cité : on y va — en ouvrant la fenêtre jusqu'à lui
+  /// s'il est plus haut qu'elle, comme le fait ⌘F — on le surligne, l'éclat s'éteint.
+  private func jumpTo(_ messageID: String, proxy: ScrollViewProxy) {
+    isNearBottom = false
+    if !thread.contains(where: { $0.id == messageID }) {
+      guard let index = store.messages.firstIndex(where: { $0.id == messageID }) else { return }
+      windowCount = max(windowCount, store.messages.count - index + 10)
+      launchTail = nil
+      DispatchQueue.main.async { proxy.scrollTo(messageID, anchor: .center) }
+    } else {
+      withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo(messageID, anchor: .center) }
+    }
+    withAnimation(.easeOut(duration: 0.2)) { flashedMessageID = messageID }
+    Task { @MainActor in
+      try? await Task.sleep(for: .seconds(1.2))
+      guard flashedMessageID == messageID else { return }
+      withAnimation(.easeOut(duration: 0.5)) { flashedMessageID = nil }
     }
   }
 

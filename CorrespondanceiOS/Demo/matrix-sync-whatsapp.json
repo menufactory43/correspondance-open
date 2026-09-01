@@ -282,7 +282,8 @@
       }
      ]
     },
-    "timeline": {
+    "ephemeral": { "events": [ { "type": "m.typing", "content": { "user_ids": ["@whatsapp_lid-22222222222:correspondance.local"] } } ] },
+      "timeline": {
      "limited": false,
      "events": [
       {

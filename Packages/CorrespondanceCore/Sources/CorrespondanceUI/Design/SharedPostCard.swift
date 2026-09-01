@@ -16,6 +16,10 @@ public struct SharedPostCard: View {
   public var cornerRadius: CGFloat = 12
 
   @Environment(\.openURL) private var openURL
+  /// La proportion réelle de l'affiche, apprise de la vignette. Le 4/5 n'est
+  /// qu'une attente : un reel est debout en 9/16, et le cadrer carré coupait
+  /// la moitié de ce qui y est écrit.
+  @State private var aspect: CGFloat = 4 / 5
 
   public init(
     post: SharedPost,
@@ -40,12 +44,22 @@ public struct SharedPostCard: View {
           MediaTileImage(
             url: media.resolvedFileURL,
             isVideo: media.isVideo,
+            // Trop haute pour la carte : on la montre entière plutôt que d'en
+            // rogner le texte incrusté, qui EST souvent le propos du post.
+            contentMode: width / aspect > Self.maxMediaHeight ? .fit : .fill,
             placeholder: theme.bubbleIn,
             accentInk: theme.inkTertiary
           )
           // Le format d'un reel, pas celui d'une vignette de lien : c'est
           // debout que se regarde ce qui a été filmé debout.
-          .frame(width: width, height: width * 4 / 5)
+          .frame(width: width, height: min(width / aspect, Self.maxMediaHeight))
+          .task(id: media.resolvedFileURL) {
+            guard let url = media.resolvedFileURL,
+                  let poster = await MediaThumbnails.thumbnail(for: url, isVideo: media.isVideo),
+                  poster.size.height > 0
+            else { return }
+            aspect = poster.size.width / poster.size.height
+          }
           .overlay(alignment: .bottom) {
             Rectangle().fill(theme.edge).frame(height: 1)
           }
@@ -87,6 +101,9 @@ public struct SharedPostCard: View {
     .accessibilityLabel(accessibilityLabel)
     .accessibilityHint("Ouvre la publication dans Instagram")
   }
+
+  /// Une affiche ne mange pas tout le fil : au-delà, on la borne.
+  private static let maxMediaHeight: CGFloat = 360
 
   private var accessibilityLabel: String {
     [post.previewText, post.caption].compactMap { $0 }.joined(separator: " : ")

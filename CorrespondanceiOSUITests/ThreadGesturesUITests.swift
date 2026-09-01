@@ -69,6 +69,42 @@ final class ThreadGesturesUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Actions de la conversation"].isHittable)
   }
 
+  /// Le balayage EN COURS : la flèche paraît dans la marge libérée. La capture
+  /// se prend pendant que le doigt tient, depuis une autre file — un geste
+  /// terminé ne montre plus rien.
+  func testSwipeShowsTheReplyGlyphWhileDragging() {
+    let app = XCUIApplication()
+    openGroup(app)
+
+    let bubble = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS %@", "Reçu,"))
+      .allElementsBoundByIndex
+      .last
+    XCTAssertNotNil(bubble, "aucune bulle reçue dans le fil")
+    let start = bubble!.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+    let end = start.withOffset(CGVector(dx: 80, dy: 0))
+
+    let taken = XCTestExpectation(description: "capture pendant le glissement")
+    var png: Data?
+    DispatchQueue.global().asyncAfter(deadline: .now() + 1.2) {
+      png = XCUIScreen.main.screenshot().pngRepresentation
+      taken.fulfill()
+    }
+    start.press(forDuration: 0.3, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 2.5)
+    wait(for: [taken], timeout: 10)
+
+    let data = try? XCTUnwrap(png)
+    XCTAssertNotNil(data, "aucune capture pendant le glissement")
+    if let data {
+      if let dir = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] {
+        try? data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("05-balayage.png"))
+      }
+      let attachment = XCTAttachment(uniformTypeIdentifier: "public.png", name: "05-balayage", payload: data)
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+  }
+
   func testLongPressShowsReactionsAndActions() {
     let app = XCUIApplication()
     openGroup(app)

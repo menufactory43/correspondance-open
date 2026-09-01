@@ -31,6 +31,16 @@ struct ThreadView: View {
   @State private var metrics = ScrollMetrics()
   /// La bulle vers laquelle on vient de sauter depuis une citation — surlignée un instant.
   @State private var flashedMessageID: String?
+  /// L'instant où le fil s'est ouvert : ce qui était là avant est déjà posé,
+  /// ce qui arrive après prend l'encre — mes propres envois compris.
+  @State private var openedAt = Date()
+  /// Le dernier message dont l'encre a fini de prendre : le défilement peut
+  /// refaire naître sa rangée, elle ne se retracera pas.
+  @State private var settledMessageID: String?
+  /// Ce qui est arrivé pendant qu'on lisait plus haut.
+  @State private var missedCount = 0
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -82,7 +92,10 @@ struct ThreadView: View {
             .environment(themes)
         }
       }
-      .task(id: conversationID) { await store.open(conversationID: conversationID) }
+      .task(id: conversationID) {
+        openedAt = Date()
+        await store.open(conversationID: conversationID)
+      }
   }
 
   @ToolbarContentBuilder
@@ -163,6 +176,7 @@ struct ThreadView: View {
                     theme: theme,
                     typeface: typeface,
                     senderLabel: index == 0 ? group.senderLabel : nil,
+                    position: BubblePosition(index: index, count: group.messages.count),
                     onReply: { store.setReplyTarget(message.id, conversationID: conversationID) },
                     onVotePoll: message.poll == nil ? nil : { (answerID: String) in
                       let fil = conversationID
@@ -192,6 +206,7 @@ struct ThreadView: View {
                     onIgnoreProposal: { store.ignoreAgentProposal(message, conversationID: conversationID) }
                   )
                   .id(message.id)
+                  .messageArrival(.encre, isFresh: isFresh(message), isEnabled: !reduceMotion)
                   // Le surlignage d'arrivée après un saut de citation : toute
                   // la rangée s'éclaire puis s'éteint, le temps que l'œil trouve.
                   .background(
@@ -206,15 +221,17 @@ struct ThreadView: View {
           .frame(maxWidth: .infinity, alignment: group.isFromMe ? .trailing : .leading)
         }
 
-        // « Alice écrit… », au bas du fil, là où sa bulle apparaîtra.
+        // Les trois points, au bas du fil, là où la bulle apparaîtra.
         if let typing = store.typingLabel(conversationID) {
-          Text(typing)
-            .font(Typography.meta(typeface))
-            .foregroundStyle(theme.inkTertiary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 6)
-            .transition(.opacity)
-            .accessibilityLabel(typing)
+          TypingBubble(
+            name: conversation?.isGroup == true ? typing : nil,
+            accessibilityLabel: typing,
+            theme: theme,
+            typeface: typeface,
+            cornerRadius: 18
+          )
+          .padding(.leading, 6)
+          .transition(.opacity)
         }
 
         if let receipt = readReceiptLabel {
@@ -254,6 +271,7 @@ struct ThreadView: View {
       }
       let nearBottom = !new.isScrollable || new.distanceToBottom <= 60
       if nearBottom != isNearBottom {
+        if nearBottom { missedCount = 0 }
         withAnimation(.easeOut(duration: 0.2)) { isNearBottom = nearBottom }
       }
     }
@@ -261,27 +279,30 @@ struct ThreadView: View {
     // a quitté le bas du fil, et un appui y ramène.
     .overlay(alignment: .bottomTrailing) {
       if !isNearBottom {
-        Button {
+        ScrollToBottomButton(unreadCount: missedCount, theme: theme) {
           scrollToBottom(duration: 0.3)
-        } label: {
-          Image(systemName: "chevron.down")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(theme.ink)
-            .frame(width: 38, height: 38)
-            // Verre NON interactif : le mode interactif héberge la vue dans
-            // une couche de verre qui avale les touches en overlay — vérifié
-            // au test d'interface, le bouton devenait intouchable.
-            .glassSurface(cornerRadius: 19, fallbackFill: theme.paperSecondary, border: theme.edge)
         }
         .padding(.trailing, Spacing.sm)
         .padding(.bottom, 10)
-        .accessibilityLabel("Aller au dernier message")
       }
     }
     // `initial: true` : à l'ouverture aussi. Le fil de démonstration a ses
     // messages avant d'être à l'écran — sans ce premier appel, personne ne
     // corrigeait le placement de l'ancre.
-    .onChange(of: messages.last?.id, initial: true) { _, _ in
+    .onChange(of: messages.last?.id, initial: true) { old, new in
+      // Ce qui arrive alors qu'on lit plus haut se compte : la pilule ↓ le dit.
+      if old != nil, old != new, !isNearBottom { missedCount += 1 }
+      // L'encre a pris : passé le geste, la bulle est une bulle comme les autres.
+      if let new {
+        Task { @MainActor in
+          try? await Task.sleep(for: .seconds(1.2))
+          if messages.last?.id == new { settledMessageID = new }
+        }
+      }
+      // Ce qui arrive pendant qu'on relit plus haut ne nous ramène pas de
+      // force en bas : la pilule ↓ le dit, et on y va quand on veut. Mes
+      // propres envois, eux, se suivent toujours.
+      guard isNearBottom || new == nil || messages.last?.isFromMe == true else { return }
       // Un souffle : la bulle qui vient d'arriver doit être mesurée avant
       // qu'on sache où est le nouveau bas.
       Task { @MainActor in
@@ -328,6 +349,16 @@ struct ThreadView: View {
         }
       }
     }
+  }
+
+  /// L'encre ne prend que sur une VRAIE arrivée : le dernier message, posté
+  /// après l'ouverture du fil, et pas depuis assez longtemps pour être déjà vu.
+  /// Ce qu'on trouve en ouvrant une conversation paraît sans cérémonie.
+  private func isFresh(_ message: ChatMessage) -> Bool {
+    message.id == messages.last?.id
+      && message.id != settledMessageID
+      && message.sentAt > openedAt
+      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
   }
 
   /// Le saut vers un message cité : on y va, on le surligne, l'éclat s'éteint.

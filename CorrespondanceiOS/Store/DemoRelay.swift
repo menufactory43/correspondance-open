@@ -101,6 +101,9 @@ enum DemoRelay {
   struct Catalogue {
     var conversations: [Conversation] = []
     var messages: [String: [ChatMessage]] = [:]
+    /// Qui écrit, par fil — l'EDU `m.typing` des payloads, lue par le vrai
+    /// analyseur : sans elle, la bulle à trois points n'a rien à montrer.
+    var typingLabels: [String: String] = [:]
     var state = InboxState()
   }
 
@@ -121,7 +124,9 @@ enum DemoRelay {
     seed(
       mxc: "mxc://correspondance.local/demo-reel-1",
       contentType: "image/jpeg",
-      size: CGSize(width: 540, height: 675),
+      // Un reel est debout, en 9/16 : c'est ce format-là que la carte doit
+      // savoir montrer sans rogner le texte incrusté.
+      size: CGSize(width: 540, height: 960),
       hue: 0.72
     )
   }
@@ -156,6 +161,9 @@ enum DemoRelay {
       guard let conversation = model.conversation(selfUserID: selfUserID) else { continue }
       catalogue.conversations.append(conversation)
       catalogue.messages[conversation.id] = model.sortedMessages
+      if let typing = model.typingLabelFR(now: Date(), selfUserID: selfUserID) {
+        catalogue.typingLabels[conversation.id] = typing
+      }
     }
 
     // Un peu d'état, pour que les sections et les filtres aient quelque chose à

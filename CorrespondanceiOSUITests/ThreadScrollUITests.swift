@@ -26,6 +26,14 @@ final class ThreadScrollUITests: XCTestCase {
     app.swipeDown()
     XCTAssertTrue(chevron.waitForExistence(timeout: 5), "le chevron n'est pas apparu en remontant")
 
+    let png = XCUIScreen.main.screenshot().pngRepresentation
+    if let dir = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] {
+      try? png.write(to: URL(fileURLWithPath: dir).appendingPathComponent("06-pilule.png"))
+    }
+    let attachment = XCTAttachment(uniformTypeIdentifier: "public.png", name: "06-pilule", payload: png)
+    attachment.lifetime = .keepAlways
+    add(attachment)
+
     // Le taper ramène au bas du fil — où le chevron n'a plus rien à faire.
     chevron.tap()
     XCTAssertTrue(chevron.waitForNonExistence(timeout: 5), "le chevron n'a pas ramené au dernier message")

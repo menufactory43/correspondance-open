@@ -544,7 +544,7 @@ struct MemberAvatar: View {
       if let image {
         Image(platformImage: image).resizable().scaledToFill()
       } else {
-        Circle().fill(MessageBubble.senderColor(name, theme: theme))
+        Circle().fill(SenderTint.color(for: name, theme: theme))
         Text(initials)
           .font(.system(size: size * 0.36, weight: .semibold, design: .rounded))
           .foregroundStyle(.white.opacity(0.95))

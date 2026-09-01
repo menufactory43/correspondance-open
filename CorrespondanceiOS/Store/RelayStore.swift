@@ -119,6 +119,7 @@ final class RelayStore {
       let catalogue = DemoRelay.catalogue()
       conversations = catalogue.conversations
       messages = catalogue.messages
+      typingLabels = catalogue.typingLabels
       state = catalogue.state
     }
   }

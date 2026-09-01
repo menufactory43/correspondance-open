@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import CorrespondanceCore
 import CorrespondanceUI
@@ -15,6 +16,13 @@ struct MessageBubbleView: View {
   var highlightQuery: String = ""
   /// Ce message est celui que la navigation ⌘F vise en ce moment.
   var isCurrentMatch: Bool = false
+  /// Sa place dans la prise de parole : c'est elle qui resserre les coins.
+  var position: BubblePosition = .alone
+  /// Le curseur entre sur la rangée. Aucun état visible ne s'ensuit : c'est
+  /// seulement ce qui dit à ⌘R, ⌘T et ⌘⌥R quelle bulle on est en train de viser.
+  var onHoverBegan: (() -> Void)?
+  /// Taper la citation : remonter au message cité. `nil` = citation inerte.
+  var onQuoteTap: (() -> Void)?
   /// `nil` en aperçu : la bulle est alors purement décorative.
   var onReact: ((String) -> Void)?
   var onReply: (() -> Void)?
@@ -90,7 +98,7 @@ struct MessageBubbleView: View {
               media: albumMedia,
               layout: album,
               width: Self.mediaWidth,
-              cornerRadius: 12,
+              corners: corners,
               theme: theme,
               onOpen: openMedia
             )
@@ -132,10 +140,7 @@ struct MessageBubbleView: View {
               .fixedSize(horizontal: false, vertical: true)
               .padding(.horizontal, 12)
               .padding(.vertical, 8)
-              .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn)
-              )
+              .background(corners.shape.fill(message.isFromMe ? theme.bubbleOut : theme.bubbleIn))
           }
 
           if let link = previewedLink {
@@ -211,6 +216,7 @@ struct MessageBubbleView: View {
     // vide éteignait la rangée qu'on allait cliquer.
     .contentShape(Rectangle())
     .onHover { hovering in
+      if hovering { onHoverBegan?() }
       if reduceMotion {
         isHovered = hovering
       } else {
@@ -235,6 +241,11 @@ struct MessageBubbleView: View {
     } message: { deletion in
       Text(deletion.detailFR)
     }
+  }
+
+  /// Les quatre rayons de cette bulle-là. Cf. `BubbleShape`.
+  private var corners: BubbleCorners {
+    BubbleShape.corners(isFromMe: message.isFromMe, position: position, radius: 14)
   }
 
   /// Le corps EFFECTIF de la bulle, échelle comprise. Trois choses s'y
@@ -384,9 +395,11 @@ struct MessageBubbleView: View {
     return (parts.joined(separator: " · "), help.joined(separator: "\n\n"))
   }
 
-  /// Citation compacte au-dessus de la bulle : un filet, l'auteur, une ligne de texte.
+  /// Citation compacte au-dessus de la bulle : un filet, l'auteur, une ligne de
+  /// texte — et le chemin de retour vers l'original, comme sur l'iPhone.
+  @ViewBuilder
   private func quoteChip(_ quote: QuotedMessage) -> some View {
-    HStack(spacing: 6) {
+    let content = HStack(spacing: 6) {
       RoundedRectangle(cornerRadius: 1, style: .continuous)
         .fill(theme.accent.opacity(0.6))
         .frame(width: 2)
@@ -407,6 +420,18 @@ struct MessageBubbleView: View {
     .padding(.leading, 2)
     .frame(maxWidth: 420, alignment: .leading)
     .accessibilityLabel("En réponse à \(quote.senderName) : \(quote.text)")
+
+    if let onQuoteTap {
+      Button(action: onQuoteTap) { content }
+        .buttonStyle(.plain)
+        // Le doigt dit que ça mène quelque part — le seul indice, la citation
+        // ne changeant pas d'aspect.
+        .onHover { $0 ? NSCursor.pointingHand.push() : NSCursor.pop() }
+        .help("Aller au message cité")
+        .accessibilityHint("Va au message cité")
+    } else {
+      content
+    }
   }
 
   /// Le menu de la bulle. `full` : le clic droit, seul chemin clavier vers
@@ -654,6 +679,8 @@ extension MessageBubbleView: Equatable {
       && lhs.showsLinkPreviews == rhs.showsLinkPreviews
       && lhs.highlightQuery == rhs.highlightQuery
       && lhs.isCurrentMatch == rhs.isCurrentMatch
+      && lhs.position == rhs.position
+      && (lhs.onQuoteTap == nil) == (rhs.onQuoteTap == nil)
       && (lhs.onReact == nil) == (rhs.onReact == nil)
       && (lhs.onReply == nil) == (rhs.onReply == nil)
       && (lhs.onEdit == nil) == (rhs.onEdit == nil)

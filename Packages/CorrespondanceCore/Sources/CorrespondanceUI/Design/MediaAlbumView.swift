@@ -11,7 +11,9 @@ public struct MediaAlbumView: View {
   public let media: [MessageAttachment]
   public let layout: MediaAlbumLayout
   public var width: CGFloat
-  public var cornerRadius: CGFloat
+  /// Les coins de la bulle, enchaînement compris : une mosaïque au milieu d'une
+  /// prise de parole se resserre du même côté que les bulles de texte.
+  public var corners: BubbleCorners
   public let theme: WritingTheme
   /// Ouvrir la visionneuse sur la tuile touchée. `nil` = mosaïque inerte.
   public var onOpen: ((Int) -> Void)?
@@ -23,14 +25,14 @@ public struct MediaAlbumView: View {
     media: [MessageAttachment],
     layout: MediaAlbumLayout,
     width: CGFloat,
-    cornerRadius: CGFloat,
+    corners: BubbleCorners,
     theme: WritingTheme,
     onOpen: ((Int) -> Void)? = nil
   ) {
     self.media = media
     self.layout = layout
     self.width = width
-    self.cornerRadius = cornerRadius
+    self.corners = corners
     self.theme = theme
     self.onOpen = onOpen
   }
@@ -48,11 +50,8 @@ public struct MediaAlbumView: View {
       }
     }
     .frame(width: width, height: width / layout.aspectRatio)
-    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    .overlay(
-      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        .strokeBorder(theme.edge.opacity(0.5), lineWidth: 1)
-    )
+    .clipShape(corners.shape)
+    .overlay(corners.shape.strokeBorder(theme.edge.opacity(0.5), lineWidth: 1))
   }
 
   @ViewBuilder
@@ -97,6 +96,9 @@ public struct MediaTileImage: View {
   public let url: URL?
   public var isVideo: Bool = false
   public var showsPlayGlyph: Bool = true
+  /// `.fill` rogne pour remplir — c'est ce que veut une tuile. `.fit` montre
+  /// l'image entière : une affiche debout garde alors son texte incrusté.
+  public var contentMode: ContentMode = .fill
   public var placeholder: Color
   public var accentInk: Color
 
@@ -106,12 +108,14 @@ public struct MediaTileImage: View {
     url: URL?,
     isVideo: Bool = false,
     showsPlayGlyph: Bool = true,
+    contentMode: ContentMode = .fill,
     placeholder: Color,
     accentInk: Color
   ) {
     self.url = url
     self.isVideo = isVideo
     self.showsPlayGlyph = showsPlayGlyph
+    self.contentMode = contentMode
     self.placeholder = placeholder
     self.accentInk = accentInk
     // Déjà décodée : la tuile naît avec, sans passer par le rectangle d'attente.
@@ -125,7 +129,7 @@ public struct MediaTileImage: View {
         if let image {
           Image(platformImage: image)
             .resizable()
-            .aspectRatio(contentMode: .fill)
+            .aspectRatio(contentMode: contentMode)
         } else {
           Image(systemName: isVideo ? "video" : "photo")
             .font(.system(size: 16))
