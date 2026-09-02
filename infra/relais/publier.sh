@@ -90,9 +90,11 @@ if [ -n "$SALE" ]; then
   printf '%s\n' "$SALE" | sed 's/^/    /' | head -12
   if [ "$QUAND_MEME" = 1 ]; then
     echo "  (--quand-meme : on publie quand même, sans commit qui corresponde)"
-  else
+  elif [ "$VRAIMENT" = 1 ]; then
     echo "!! rien n'est publié : commit d'abord, pour qu'un binaire ait une version." >&2
     exit 1
+  else
+    echo "  (--dry-run : rien ne part, mais --vraiment refuserait ici)"
   fi
   echo
 fi
@@ -129,9 +131,11 @@ if [ "$manques" -gt 0 ] || [ "$derives" -gt 0 ]; then
   [ "$derives" -gt 0 ] && echo "  → un script qui dérive se recopie : les deux construire.sh le font"
   if [ "$QUAND_MEME" = 1 ]; then
     echo "  (--quand-meme : on continue quand même)"
-  else
+  elif [ "$VRAIMENT" = 1 ]; then
     echo "!! rien n'est publié. --quand-meme pour passer outre, en le sachant." >&2
     exit 1
+  else
+    echo "  (--dry-run : rien ne part, mais --vraiment refuserait ici)"
   fi
 fi
 echo
@@ -183,30 +187,78 @@ echo
 # le retire (`xattr -d`) — c'est ce qui marche depuis la phase 3. Lancé comme
 # processus enfant d'une app signée, la quarantaine est héritée du
 # téléchargement de l'app, pas du nôtre : mesuré en phase 6, § D.
+#
+# Un binaire seul (pas un .app, pas un .dmg) ne peut pas être agrafé : `stapler`
+# n'agrafe que des paquets. Le ticket reste donc en ligne, et Gatekeeper le
+# demande au premier lancement — une machine hors réseau évaluera le binaire
+# sans ticket.
+#
+# Ce bloc **signe** au lieu de dire comment signer. Il l'a longtemps imprimé :
+# les six binaires du Relais ont été signés à la main, et les deux de l'agent,
+# déposés après coup, ne l'ont jamais été. Un binaire ad-hoc n'est pas signé du
+# tout — `flags=0x20002(adhoc,linker-signed)` est ce que le linker pose d'office
+# sur arm64.
 IDENTITE="$(security find-identity -v -p codesigning 2>/dev/null | grep -c 'Developer ID Application' || true)"
+NOTARY_PROFILE="${CORRESPONDANCE_NOTARY_PROFILE:-notarisation}"
 echo "Signature et notarisation"
-if [ "$IDENTITE" -gt 0 ]; then
-  echo "  identité Developer ID Application trouvée sur cette machine"
-else
-  echo "  aucune identité « Developer ID Application » sur cette machine :"
-  echo "    — il en faut une (compte développeur payant) pour signer ;"
-  echo "    — sans elle, --signer s'arrête ici plutôt que de publier du non signé en le taisant."
-fi
-cat <<'NOTES'
-  Ce qu'il faudrait, binaire par binaire (les ponts amont ne sont pas signés :
-  les republier chez nous est justement ce qui permet de les signer) :
-    codesign --force --options runtime --timestamp \
-      --sign "Developer ID Application: <nom> (<équipe>)" <binaire>
-    ditto -c -k --keepParent <binaire> <binaire>.zip
-    xcrun notarytool submit <binaire>.zip --keychain-profile <profil> --wait
-  Un binaire seul (pas un .app, pas un .dmg) ne peut pas être « stapled » :
-  xcrun stapler n'agrafe que des paquets. Le ticket de notarisation reste donc
-  en ligne, et Gatekeeper le demande au premier lancement — ce qui veut dire
-  qu'une machine hors réseau évaluera le binaire sans ticket.
-NOTES
 if [ "$SIGNER" = 1 ] && [ "$IDENTITE" = 0 ]; then
-  echo "!! --signer demandé sans identité : rien n'est publié." >&2
+  echo "!! --signer demandé sans identité « Developer ID Application » sur cette machine." >&2
+  echo "   Il en faut une (compte développeur payant) ; rien n'est publié." >&2
   exit 1
+fi
+
+# Pas de `| grep -q` ici : `grep -q` ferme le tuyau dès qu'il trouve, `codesign`
+# reçoit un SIGPIPE, et `pipefail` rend 141 — un binaire signé passait donc pour
+# non signé, et on aurait re-signé puis re-notarisé les six pour rien. On lit
+# une fois, on cherche dans la chaîne.
+contient() { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac }
+deja_signe() { contient "Authority=Developer ID Application" "$(codesign -dvv "$1" 2>&1 || true)"; }
+est_macho() { contient "Mach-O" "$(file "$1" 2>/dev/null || true)"; }
+A_SIGNER=()
+for nom in "${FICHIERS[@]}"; do
+  f="$DOSSIER/$nom"
+  # Le DMG est signé et notarisé par scripts/release-mac.sh, qui sait l'agrafer.
+  # Un ELF ne se signe pas : la tranche Linux de l'agent reste nue, et c'est
+  # sans objet — Gatekeeper n'existe pas là-bas.
+  case "$nom" in *.dmg) continue ;; esac
+  est_macho "$f" || continue
+  if deja_signe "$f"; then
+    printf '  ✓ %-34s déjà signé Developer ID\n' "$nom"
+  else
+    printf '  ○ %-34s pas signé (ad-hoc)\n' "$nom"
+    A_SIGNER+=("$nom")
+  fi
+done
+
+if [ ${#A_SIGNER[@]} -gt 0 ] && [ "$SIGNER" = 0 ]; then
+  echo "  → ${#A_SIGNER[@]} binaire(s) à signer : relance avec --signer (profil notarytool « $NOTARY_PROFILE »)"
+fi
+
+if [ "$SIGNER" = 1 ] && [ ${#A_SIGNER[@]} -gt 0 ]; then
+  for nom in "${A_SIGNER[@]}"; do
+    codesign --force --options runtime --timestamp --sign "Developer ID Application" "$DOSSIER/$nom"
+    printf '  ✎ %-34s signé\n' "$nom"
+  done
+  # Une seule soumission pour tout le lot : notarytool accepte une archive qui
+  # porte plusieurs binaires, et chaque aller-retour coûte des minutes.
+  LOT="$(mktemp -d)"; mkdir -p "$LOT/lot"
+  for nom in "${A_SIGNER[@]}"; do cp -f "$DOSSIER/$nom" "$LOT/lot/$nom"; done
+  ditto -c -k --keepParent "$LOT/lot" "$LOT/lot.zip"
+  echo "  → notarisation du lot (profil « $NOTARY_PROFILE ») — quelques minutes"
+  xcrun notarytool submit "$LOT/lot.zip" --keychain-profile "$NOTARY_PROFILE" --wait > "$LOT/notarisation.txt" 2>&1 || true
+  grep -E '^ *(id|status|message):' "$LOT/notarisation.txt" | sed 's/^/    /'
+  # Le dernier `status:` est le verdict ; les précédents sont ceux de l'attente.
+  STATUT="$(grep -E '^ *status:' "$LOT/notarisation.txt" | tail -1 | awk '{print $2}')"
+  cp -f "$LOT/notarisation.txt" "$DOSSIER/notarisation.log" 2>/dev/null || true
+  rm -rf "$LOT"
+  [ "$STATUT" = "Accepted" ] || { echo "!! notarisation non acceptée ($STATUT) — rien n'est publié." >&2; exit 1; }
+  # Signer change les octets : les sommes d'avant ne valent plus rien.
+  ( cd "$DOSSIER" && rm -f SHA256SUMS &&
+    for f in *; do
+      case "$f" in SHA256SUMS|NOTES.md|construction.log|*.log) continue ;; esac
+      printf '%s  %s\n' "$(somme "$f")" "$f"
+    done > SHA256SUMS )
+  echo "  ✓ SHA256SUMS régénéré après signature"
 fi
 echo
 
