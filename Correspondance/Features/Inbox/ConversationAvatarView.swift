@@ -99,6 +99,7 @@ struct ConversationAvatarView: View {
   private var badgeTint: Color {
     switch conversation.network {
     case .selfNote: Color(red: 0.55, green: 0.52, blue: 0.48)
+    case .agent: theme.accent
     case .iMessage: Color(red: 0.25, green: 0.75, blue: 0.45)
     case .signal: theme.accent
     case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)

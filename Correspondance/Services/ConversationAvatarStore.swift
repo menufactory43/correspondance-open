@@ -34,8 +34,9 @@ actor ConversationAvatarStore {
 
     let resolved: Data?
     switch conversation.network {
-    // La note à soi n'a pas de visage : la vue lui laisse son symbole.
-    case .selfNote:
+    // La note à soi n'a pas de visage : la vue lui laisse son symbole. Un
+    // agent non plus : c'est l'étincelle.
+    case .selfNote, .agent:
       resolved = nil
     case .iMessage:
       // Un groupe iMessage porte sa propre photo (chat.properties → pièce jointe) ;

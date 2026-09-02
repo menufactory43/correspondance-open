@@ -339,6 +339,37 @@ public actor MatrixBridgeService {
     return "\(MessageNetwork.selfNote.rawValue):\(roomID)"
   }
 
+  /// Le tête-à-tête avec un agent : le fil existant s'il y en a un — un
+  /// salon marqué `agent` où il n'y a que lui et moi — sinon un salon neuf,
+  /// marqué à la création, où l'agent est invité. Il accepte à sa prochaine
+  /// synchro, parce qu'un propriétaire l'a invité.
+  public func openAgentConversation(agent: String) async throws -> String {
+    let agentID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
+    hydrateIfNeeded()
+    if let existing = rooms.values.first(where: { room in
+      room.network == .agent && room.agentNames(selfUserID: selfUserID) == [agent]
+        && room.remoteMembers(selfUserID: selfUserID).allSatisfy { MatrixIdentity.isAgent($0.userID) }
+    }) {
+      return existing.conversationID
+    }
+    let roomID = try await client.createPrivateRoom(
+      name: agent, invite: [agentID], isDirect: true,
+      initialState: [(
+        type: AgentWire.conversationType,
+        content: .object([AgentWire.ConversationKey.kind: .string(AgentWire.ConversationKind.agent)])
+      )]
+    )
+    var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
+    model.network = .agent
+    model.explicitName = agent
+    model.members[selfUserID] = MatrixRoomModel.Member(displayName: nil, membership: "join")
+    model.members[agentID] = MatrixRoomModel.Member(displayName: agent, membership: "invite")
+    rooms[roomID] = model
+    dirtyRoomIDs.insert(roomID)
+    return model.conversationID
+  }
+
+
   public struct Member: Sendable, Hashable {
     public let userID: String
     public let displayName: String?

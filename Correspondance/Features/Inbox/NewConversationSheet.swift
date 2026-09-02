@@ -23,7 +23,15 @@ struct NewConversationSheet: View {
 
   /// Un réseau bridgé n'apparaît que si le homeserver répond : sinon le bouton ne mènerait nulle part.
   private var availableNetworks: [MessageNetwork] {
-    MessageNetwork.allCases.filter { !$0.isMatrixBridged || store.isMatrixConnected }
+    MessageNetwork.allCases.filter { $0 != .agent && (!$0.isMatrixBridged || store.isMatrixConnected) }
+  }
+
+  /// Les agents du Relais, comme des contacts : un tête-à-tête s'ouvre d'un
+  /// clic, sans passer par la note à soi. Filtrés par ce qu'on tape.
+  private var agents: [String] {
+    guard store.isMatrixConnected else { return [] }
+    let q = trimmedQuery.lowercased()
+    return store.agentDirectory.filter { q.isEmpty || $0.lowercased().contains(q) }
   }
 
   /// Ce que le réseau attend dans le champ. WhatsApp se compose, Instagram et
@@ -92,6 +100,30 @@ struct NewConversationSheet: View {
         }
 
       List {
+        if !agents.isEmpty {
+          Section("Agents") {
+            ForEach(agents, id: \.self) { agent in
+              Button {
+                Task {
+                  await store.openAgentConversation(agent: agent)
+                  dismiss()
+                }
+              } label: {
+                Label {
+                  VStack(alignment: .leading, spacing: 2) {
+                    Text(agent).foregroundStyle(theme.ink)
+                    Text("agent sur le Relais — il répond à tout ce que tu lui écris")
+                      .font(.caption)
+                      .foregroundStyle(theme.inkSecondary)
+                  }
+                } icon: {
+                  Image(systemName: MessageNetwork.agent.systemImage)
+                }
+              }
+            }
+          }
+        }
+
         if canWriteFreeform && !hits.contains(where: { $0.handle.caseInsensitiveCompare(trimmedQuery) == .orderedSame }) {
           Button {
             compose(handle: trimmedQuery, title: trimmedQuery)
@@ -118,7 +150,10 @@ struct NewConversationSheet: View {
     }
     .frame(minWidth: 420, minHeight: 460)
     .background(theme.paper)
-    .task { await refreshHits() }
+    .task {
+      await store.refreshAgentDirectory()
+      await refreshHits()
+    }
     .sheet(isPresented: $isCreatingGroup) {
       NewGroupSheet()
         .environment(store)

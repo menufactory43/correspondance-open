@@ -13,6 +13,11 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// Relais, dans un salon dont on est le seul membre — de quoi se laisser un
   /// mot, une adresse, une photo, et le retrouver sur l'autre appareil.
   case selfNote
+  /// Un tête-à-tête avec un agent : un salon natif du Relais, marqué comme tel
+  /// à la création (`AgentWire.conversationType`), où l'agent répond à tout
+  /// message sans qu'on le nomme. Pas de pont, pas de contact : l'autre, c'est
+  /// un moteur qui tourne quelque part.
+  case agent
 
   public var id: String { rawValue }
 
@@ -24,6 +29,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .instagram: "Instagram"
     case .messenger: "Messenger"
     case .selfNote: "Note à soi"
+    case .agent: "Agent"
     }
   }
 
@@ -37,6 +43,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     // réseau qu'Apple ne nomme pas. Disponible depuis macOS 11 / iOS 14.
     case .messenger: "bolt.horizontal.circle.fill"
     case .selfNote: "note.text"
+    case .agent: "sparkles"
     }
   }
 
@@ -47,7 +54,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// Ce fil passe-t-il par le Relais ? Tous les réseaux bridgés, **et** la note
   /// à soi — qui n'a pas de pont, mais bien un salon. Distinct de
   /// `isMatrixBridged`, qui répond « ce réseau a-t-il un bot à connecter ».
-  public var livesOnRelay: Bool { isMatrixBridged || self == .selfNote }
+  public var livesOnRelay: Bool { isMatrixBridged || self == .selfNote || self == .agent }
 
   /// Réseaux bridgés, dans l'ordre de l'enum — ce qui pilote les boutons de Réglages.
   public static var matrixBridged: [MessageNetwork] { allCases.filter(\.isMatrixBridged) }

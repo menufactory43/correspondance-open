@@ -19,7 +19,7 @@ extension InboxStore {
     switch conversation.network {
     case .iMessage: return false
     // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote: return isMatrixConnected
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent: return isMatrixConnected
     }
   }
 

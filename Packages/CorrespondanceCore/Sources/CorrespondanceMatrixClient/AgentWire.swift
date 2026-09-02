@@ -36,6 +36,20 @@ public enum AgentWire {
   /// ton status ». C'est ce qui évite un redémarrage après un login ou une
   /// installation sur la machine de l'agent.
   public static let commandType = "fr.correspondance.agent.command"
+  /// Ce qu'est un salon natif du Relais — event **d'état** posé par l'app à la
+  /// création. `kind: agent` : un tête-à-tête avec un agent, où il répond à
+  /// tout message d'un propriétaire, sans mention. Sans ce marqueur, un salon
+  /// natif n'est rien pour l'app, et l'agent y exige sa mention : ni la note
+  /// à soi ni un salon de gestion ne deviennent un tête-à-tête par accident.
+  public static let conversationType = "fr.correspondance.conversation"
+
+  public enum ConversationKey {
+    public static let kind = "kind"
+  }
+
+  public enum ConversationKind {
+    public static let agent = "agent"
+  }
 
   public enum CommandKey {
     public static let agent = "agent"

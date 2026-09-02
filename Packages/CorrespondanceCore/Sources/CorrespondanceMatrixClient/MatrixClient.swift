@@ -267,6 +267,28 @@ public actor MatrixClient {
   /// Un salon privé dont je suis le seul membre — la note à soi. Aucune
   /// invitation : personne d'autre n'y entre, et rien n'est chiffré (le
   /// Relais est privé, cf. ADR 0001).
+  /// Un salon privé avec des invités et un état initial — le tête-à-tête avec
+  /// un agent, marqué dès la création (`AgentWire.conversationType`), parce
+  /// qu'un marqueur posé après coup laisserait un instant où le salon n'est
+  /// rien pour personne.
+  public func createPrivateRoom(
+    name: String, invite: [String], isDirect: Bool, initialState: [(type: String, content: MatrixJSON)]
+  ) async throws -> String {
+    let body: MatrixJSON = .object([
+      "preset": .string("private_chat"),
+      "name": .string(name),
+      "visibility": .string("private"),
+      "is_direct": .bool(isDirect),
+      "invite": .array(invite.map(MatrixJSON.string)),
+      "initial_state": .array(initialState.map { .object(["type": .string($0.type), "state_key": .string(""), "content": $0.content]) }),
+    ])
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
+    guard let roomID = json.string(at: "room_id") else {
+      throw MatrixError.decoding("createRoom sans room_id")
+    }
+    return roomID
+  }
+
   public func createSelfRoom(name: String) async throws -> String {
     let body: MatrixJSON = .object([
       "preset": .string("private_chat"),

@@ -13,6 +13,9 @@ public actor Agent {
   /// La room console de cet agent, découverte par l'event de config qu'elle
   /// porte — l'app n'a pas à nous dire laquelle c'est.
   private var consoleRoomID: String?
+  /// Les salons que l'app a marqués tête-à-tête (`kind: agent`) : on y répond
+  /// à tout message d'un propriétaire, sans mention.
+  private var teteATeteRooms: Set<String> = []
   private let client: MatrixClient
   private let backend: any AgentBackend
   private let stateURL: URL
@@ -198,6 +201,7 @@ public actor Agent {
       // relit pas les timelines — l'agent ne répond qu'à ce qui vient.
       let initial = try await client.sync(since: nil, timeoutMilliseconds: 0)
       absorbMembers(from: initial)
+      absorbRoomKinds(from: initial)
       absorbRemoteConfig(from: initial)
       absorbSettings(from: initial)
       await acceptInvites(in: initial)
@@ -217,6 +221,7 @@ public actor Agent {
         let response = try await client.sync(since: state.nextBatch, timeoutMilliseconds: 30_000)
         backoff = 2
         absorbMembers(from: response)
+        absorbRoomKinds(from: response)
         absorbRemoteConfig(from: response)
         absorbSettings(from: response)
         await absorbCommands(from: response)
@@ -229,8 +234,10 @@ public actor Agent {
               if let request = atelierRequest(from: event, roomID: roomID) { dispatch(request) }
               continue
             }
-            guard let request = Trigger.request(from: event, roomID: roomID, config: live, notBefore: notBefore)
-            else { continue }
+            guard let request = Trigger.request(
+              from: event, roomID: roomID, config: live, notBefore: notBefore,
+              requiresTrigger: !teteATeteRooms.contains(roomID)
+            ) else { continue }
             dispatch(request)
           }
         }
@@ -268,6 +275,22 @@ public actor Agent {
         await publishStatus(in: [roomID])
       } catch {
         log("impossible de rejoindre \(roomID) : \(error.localizedDescription)")
+      }
+    }
+  }
+
+  /// Le marqueur de l'app sur un salon natif : c'est un event d'état, il
+  /// arrive avec le premier `/sync` qui porte le salon.
+  private func absorbRoomKinds(from response: MatrixSyncResponse) {
+    for (roomID, room) in response.rooms?.join ?? [:] {
+      for event in (room.state?.events ?? []) + (room.timeline?.events ?? [])
+      where event.type == AgentWire.conversationType {
+        let kind = event.content?.string(at: AgentWire.ConversationKey.kind)
+        if kind == AgentWire.ConversationKind.agent {
+          if teteATeteRooms.insert(roomID).inserted { log("[\(roomID)] tête-à-tête : je réponds sans mention") }
+        } else {
+          teteATeteRooms.remove(roomID)
+        }
       }
     }
   }

@@ -55,7 +55,8 @@ actor SenderAvatarStore {
     let resolved: Data?
     switch network {
     // La note à soi n'a qu'un auteur, et c'est moi : rien à aller chercher.
-    case .selfNote:
+    // Un agent a sa propre tête, posée ailleurs que par le carnet d'adresses.
+    case .selfNote, .agent:
       resolved = nil
     case .iMessage:
       // En groupe, chat.db donne le handle de l'auteur : le carnet d'adresses

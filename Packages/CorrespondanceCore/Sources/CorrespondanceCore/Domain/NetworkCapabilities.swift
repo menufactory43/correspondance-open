@@ -96,6 +96,9 @@ public struct NetworkCapabilities: Sendable, Hashable {
         renamesGroup: true,
         sendsVoiceMessages: true
       )
+    // Un agent lit du texte : pas de vocal, pas de groupe à gérer.
+    case .agent:
+      NetworkCapabilities(editsSentMessages: true)
     }
   }
 }

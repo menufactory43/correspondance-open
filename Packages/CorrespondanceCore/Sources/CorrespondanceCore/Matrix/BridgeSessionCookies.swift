@@ -85,7 +85,7 @@ public struct BridgeSessionCookies: Equatable, Sendable {
       switch network {
       case .instagram: .instagram
       case .messenger: .messenger
-      case .iMessage, .signal, .whatsapp, .selfNote: nil
+      case .iMessage, .signal, .whatsapp, .selfNote, .agent: nil
       }
     }
   }

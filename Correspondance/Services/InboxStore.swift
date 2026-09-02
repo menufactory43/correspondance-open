@@ -1247,7 +1247,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
       guard isMatrixConnected else {
         lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
         return
@@ -2165,7 +2165,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -3050,7 +3050,7 @@ final class InboxStore {
           try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
         }
       }
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -3628,7 +3628,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote:
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
       let began = ContinuousClock.now
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {

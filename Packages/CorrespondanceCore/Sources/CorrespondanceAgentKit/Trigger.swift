@@ -61,11 +61,17 @@ public enum Trigger {
   /// L'event est-il un ordre pour l'agent ? Il faut un `m.room.message` texte,
   /// d'un propriétaire, postérieur au démarrage (pas de rejouage de l'historique
   /// au premier `/sync`), qui commence par le déclencheur.
+  ///
+  /// `requiresTrigger: false` : un tête-à-tête marqué par l'app
+  /// (`AgentWire.conversationType`, `kind: agent`) — tout message d'un
+  /// propriétaire est une demande, et un déclencheur en tête, s'il y est, se
+  /// retire. Le reste ne change pas : ni fantôme, ni tiers, ni historique.
   public static func request(
     from event: MatrixEvent,
     roomID: String,
     config: AgentConfig,
-    notBefore: Date
+    notBefore: Date,
+    requiresTrigger: Bool = true
   ) -> AgentRequest? {
     guard event.type == "m.room.message",
           let eventID = event.eventID,
@@ -79,7 +85,15 @@ public enum Trigger {
     guard msgtype == "m.text" || msgtype == "m.notice" else { return nil }
     let body = event.content?.string(at: "m.new_content.body")
       ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
-    guard let prompt = prompt(in: body, trigger: config.trigger) else { return nil }
+    let prompt: String
+    if let mentionne = Self.prompt(in: body, trigger: config.trigger) {
+      prompt = mentionne
+    } else if !requiresTrigger {
+      prompt = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    } else {
+      return nil
+    }
+    guard !prompt.isEmpty else { return nil }
     return AgentRequest(roomID: roomID, eventID: eventID, sender: sender, prompt: prompt, sentAt: event.sentAt)
   }
 

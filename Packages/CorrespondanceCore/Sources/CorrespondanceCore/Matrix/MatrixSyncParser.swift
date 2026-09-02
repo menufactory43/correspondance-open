@@ -1,3 +1,4 @@
+import CorrespondanceMatrixClient
 import Foundation
 
 /// Applique un payload `/sync` sur un ensemble de salons. Pur et déterministe.
@@ -241,6 +242,13 @@ public struct MatrixSyncParser: Sendable {
          let phone = MatrixIdentity.phoneNumber(in: displayName)
       {
         model.bridgePhoneNumber = phone
+      }
+
+    case AgentWire.conversationType:
+      // Le marqueur que l'app pose à la création d'un tête-à-tête avec un
+      // agent : c'est lui, et lui seul, qui fait d'un salon natif un fil.
+      if content.string(at: AgentWire.ConversationKey.kind) == AgentWire.ConversationKind.agent {
+        model.network = .agent
       }
 
     case let type where Self.bridgeStateTypes.contains(type):

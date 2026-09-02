@@ -158,6 +158,9 @@ extension InboxStore {
     // Repli sur le nom par défaut tant qu'aucune console n'existe : c'est le
     // premier agent qu'on active, et il faut bien pouvoir l'inviter.
     agentDirectory = noms.isEmpty ? [agentName] : noms
+    // C'est ce qui fait qu'un `@claude` ou un `@grok` a sa propre tête dans
+    // le fil au lieu de celle de la correspondante.
+    MatrixIdentity.registerAgents(noms)
   }
 
   /// Les agents connus qui **ne sont pas** dans le fil ouvert. Vide quand il
@@ -271,6 +274,24 @@ extension InboxStore {
     if apres.mode == .direct { return true }
     let voix = await agentVoicesInSelectedConversation()
     return voix.contains { $0.agent != apres.agent && $0.mode == .direct }
+  }
+
+  /// Ouvre le tête-à-tête avec un agent — le fil existant, ou un salon neuf
+  /// où il est invité — et le sélectionne. La voix y est posée « à voix
+  /// haute » : dans un fil où il n'y a que lui et moi, un brouillon à valider
+  /// n'aurait personne à protéger.
+  func openAgentConversation(agent: String) async {
+    do {
+      let id = try await matrix.openAgentConversation(agent: agent)
+      await reloadFromRelay()
+      mode = .inbox
+      await select(id)
+      if await agentVoicesInSelectedConversation().first(where: { $0.agent == agent })?.mode != .direct {
+        _ = await setAgentVoice(.direct, agent: agent)
+      }
+    } catch {
+      lastErrorMessage = error.localizedDescription
+    }
   }
 
   /// Demande à un agent de rescanner sa machine. Le retour dit si l'ordre est

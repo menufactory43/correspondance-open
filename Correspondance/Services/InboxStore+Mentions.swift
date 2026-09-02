@@ -44,8 +44,9 @@ extension InboxStore {
     var known: Set<String> = []
 
     switch conversation.network {
-    // Personne à mentionner dans une note à soi.
-    case .selfNote:
+    // Personne à mentionner dans une note à soi, ni dans un tête-à-tête avec
+    // un agent : il répond sans qu'on le nomme.
+    case .selfNote, .agent:
       break
     case .iMessage:
       for handle in conversation.participantHandles {

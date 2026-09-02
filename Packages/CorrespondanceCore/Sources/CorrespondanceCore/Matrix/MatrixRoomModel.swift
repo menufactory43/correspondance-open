@@ -355,9 +355,45 @@ public struct MatrixRoomModel: Sendable {
     return conversation
   }
 
+  /// Les agents du salon, par leur nom court — `cc`, `claude`. Présents ou
+  /// invités : un agent invité lira dès qu'il entrera.
+  public func agentNames(selfUserID: String) -> [String] {
+    members
+      .filter { key, value in value.isActive && key != selfUserID && MatrixIdentity.isAgent(key) }
+      .map { MatrixIdentity.localpart($0.key) }
+      .sorted()
+  }
+
+  /// Un tête-à-tête avec un agent : le titre est son nom, la tête est la
+  /// sienne, et il n'y a personne d'autre à qui faire lire un « Vu ».
+  func agentConversation(selfUserID: String) -> Conversation {
+    let agents = agentNames(selfUserID: selfUserID)
+    let last = lastListedMessage
+    let titre = (explicitName?.isEmpty == false ? explicitName! : nil)
+      ?? (agents.isEmpty ? MessageNetwork.agent.labelFR : agents.joined(separator: ", "))
+    var conversation = Conversation(
+      id: conversationID,
+      network: .agent,
+      address: roomID,
+      title: titre,
+      preview: last?.listPreview(isGroup: false) ?? "Écrire à \(titre)…",
+      lastMessageAt: last?.sentAt ?? lastEventAt,
+      unreadCount: unreadCount,
+      isArchived: false,
+      transportKey: roomID,
+      isGroup: false
+    )
+    conversation.lastMessageIsFromMe = last?.isFromMe ?? false
+    if conversation.lastMessageAt == .distantPast {
+      conversation.lastMessageAt = Date(timeIntervalSince1970: 0)
+    }
+    return conversation
+  }
+
   /// `nil` tant que le salon n'est pas un portail de bridge reconnu (salon de gestion, espace…).
   public func conversation(selfUserID: String) -> Conversation? {
     guard let network else { return nil }
+    if network == .agent { return agentConversation(selfUserID: selfUserID) }
     let group = isGroup(selfUserID: selfUserID)
     let last = lastListedMessage
     let preview = last?.listPreview(isGroup: group)
@@ -409,7 +445,28 @@ public enum MatrixIdentity {
   /// Les agents que l'app sait reconnaître par leur localpart. Un expéditeur
   /// de cette liste n'est ni le contact ni un fantôme de pont : il a sa propre
   /// tête dans le fil, jamais celle de la personne à qui l'on écrit.
-  public static let knownAgents: [String] = ["cc", "hermes"]
+  ///
+  /// La liste n'est plus en dur : c'est l'annuaire du Relais qui la remplit
+  /// (`registerAgents`), sinon un agent nommé `claude` ou `grok` portait le
+  /// visage de la correspondante et donnait des « Vu » — vu en vrai le jour
+  /// où un troisième agent est arrivé. `cc` et `hermes` restent le repli
+  /// tant que l'annuaire n'a pas été lu.
+  public static var knownAgents: [String] {
+    registryLock.lock()
+    defer { registryLock.unlock() }
+    return agentsRegistry
+  }
+
+  nonisolated(unsafe) private static var agentsRegistry: [String] = ["cc", "hermes"]
+  private static let registryLock = NSLock()
+
+  /// L'annuaire, tel que le Relais le porte. Les deux noms de repli restent :
+  /// un annuaire vide ne doit pas faire oublier cc.
+  public static func registerAgents(_ names: [String]) {
+    registryLock.lock()
+    defer { registryLock.unlock() }
+    agentsRegistry = Array(Set(agentsRegistry + names)).sorted()
+  }
 
   public static func isAgent(_ userID: String) -> Bool {
     guard userID.hasPrefix("@"), let colon = userID.firstIndex(of: ":") else { return false }
