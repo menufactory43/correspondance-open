@@ -7,6 +7,7 @@
 #   bash infra/relais/construire.sh                       # tout, dans ~/unclic-publication
 #   bash infra/relais/construire.sh --quoi ponts          # les quatre ponts seulement
 #   bash infra/relais/construire.sh --quoi continuwuity   # le homeserver macOS seulement
+#   bash infra/relais/construire.sh --quoi tailcat        # le mandataire macOS seulement
 #   bash infra/relais/construire.sh --quoi sommes         # ne fait que régénérer SHA256SUMS
 #   bash infra/relais/construire.sh --sortie /tmp/pub --src /tmp/src
 #
@@ -16,7 +17,12 @@
 #    connaît que Linux, et les fonctionnalités par défaut supposent Linux
 #    (io_uring, systemd, journald). On construit donc au même tag, avec la ligne
 #    de fonctionnalités qui passe sur Darwin.
-# 2. **Les ponts mautrix officiels chargent encore libolm** (`@rpath/libolm.3.dylib`),
+# 2. **Tailcat ne publie aucun binaire macOS** (phase 7a) : la release v0.4.0
+#    porte Linux et Windows, et macOS y passe par un tap Homebrew — que le spike
+#    s'interdit dans la pile livrée. On construit donc au même tag. C'est ce
+#    binaire-là que l'app embarque (`Contents/Helpers/tailcat`), et l'installeur
+#    Linux, lui, prend l'archive amont.
+# 3. **Les ponts mautrix officiels chargent encore libolm** (`@rpath/libolm.3.dylib`),
 #    abandonnée amont depuis 2024 pour faiblesses cryptographiques et retirée de
 #    Homebrew. `-tags goolm` remplace la bibliothèque C par l'implémentation Go
 #    de mautrix : plus de dylib à poser, à signer, à notariser.
@@ -27,6 +33,8 @@ set -euo pipefail
 
 CONTINUWUITY_TAG=v26.8.1
 MAUTRIX_TAG=v0.2608.0
+TAILCAT_TAG=v0.4.0
+TAILCAT_GIT=https://github.com/tailscale/tailcat.git
 CONTINUWUITY_GIT=https://forgejo.ellis.link/continuwuation/continuwuity.git
 # La ligne de la phase 3, § 8 — mot pour mot.
 CONTINUWUITY_FEATURES=brotli_compression,element_hacks,gzip_compression,media_thumbnail,ring,url_preview,zstd_compression,bindgen-runtime,console
@@ -48,7 +56,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-case "$QUOI" in tout|ponts|continuwuity|sommes) ;; *) echo "!! --quoi : tout | ponts | continuwuity | sommes" >&2; exit 2 ;; esac
+case "$QUOI" in tout|ponts|continuwuity|tailcat|sommes) ;; *) echo "!! --quoi : tout | ponts | continuwuity | tailcat | sommes" >&2; exit 2 ;; esac
 
 dire() { printf '→ %s\n' "$*"; }
 mourir() { printf '✗ %s\n' "$*" >&2; exit 1; }
@@ -96,7 +104,27 @@ construire_continuwuity() {
     "$(wc -c < "$SORTIE/continuwuity-macos-arm64" | tr -d ' ')" "$(somme "$SORTIE/continuwuity-macos-arm64")"
 }
 
-# ================================================================ 2. les ponts
+# =============================================================== 2. Tailcat
+# `-trimpath` pour que le binaire ne porte pas les chemins de cette machine :
+# il est publié, il n'a pas à dire où vit le dossier personnel de qui l'a
+# construit. Go est reproductible à condition d'une même version de Go et d'un
+# même tag ; la somme est relevée à chaque construction, comme pour les ponts.
+construire_tailcat() {
+  command -v go >/dev/null || mourir "go est nécessaire (brew install go — pour construire, pas pour installer)"
+  cloner "$TAILCAT_GIT" "$TAILCAT_TAG" tailcat
+  local d="$SRC/tailcat" t0 t1
+  t0=$(chrono)
+  ( cd "$d" && GOFLAGS=-trimpath GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 \
+      go build -o "$SORTIE/tailcat-darwin-arm64" ./cmd/tailcat ) \
+    || mourir "tailcat-darwin-arm64 : la construction a échoué"
+  t1=$(chrono)
+  chmod 755 "$SORTIE/tailcat-darwin-arm64"
+  dire "tailcat-darwin-arm64 : $(duree "$t0" "$t1"), $(somme "$SORTIE/tailcat-darwin-arm64")"
+  mesure tailcat-darwin-arm64 "$(duree "$t0" "$t1")" \
+    "$(wc -c < "$SORTIE/tailcat-darwin-arm64" | tr -d ' ')" "$(somme "$SORTIE/tailcat-darwin-arm64")"
+}
+
+# ================================================================ 3. les ponts
 # Un pont, une cible. `maubuild` est l'outil du dépôt lui-même (déclaré en
 # `tool` dans go.mod) : il pose les ldflags de version que `--version` affiche,
 # et lit TARGET_GOOS/TARGET_GOARCH pour croiser.
@@ -196,7 +224,7 @@ construire_ponts() {
   done
 }
 
-# ============================================================== 3. les scripts
+# ============================================================== 4. les scripts
 # `relais-install.sh` et `relais-uninstall.sh` sont publiés **avec** les binaires
 # qu'ils posent : c'est ce qui rend leurs sha256 vérifiables. Un installeur
 # publié à part d'une release pointerait sur des sommes qu'il ne connaît pas.
@@ -207,7 +235,7 @@ scripts() {
   dire "relais-install.sh et relais-uninstall.sh copiés depuis $ici"
 }
 
-# ================================================================ 4. les sommes
+# ================================================================ 5. les sommes
 sommes() {
   ( cd "$SORTIE" && rm -f SHA256SUMS &&
     for f in *; do
@@ -222,7 +250,8 @@ DEBUT=$(chrono)
 case "$QUOI" in
   continuwuity) construire_continuwuity; scripts ;;
   ponts)        construire_ponts; scripts ;;
-  tout)         construire_continuwuity; construire_ponts; scripts ;;
+  tailcat)      construire_tailcat; scripts ;;
+  tout)         construire_continuwuity; construire_tailcat; construire_ponts; scripts ;;
   sommes)       scripts ;;
 esac
 sommes
@@ -232,4 +261,5 @@ echo
 echo "✓ construit en $(duree "$DEBUT" "$FIN") dans $SORTIE"
 echo "  Mesures : $JOURNAL"
 echo "  Les ponts macOS ne chargent plus libolm : otool -L $SORTIE/mautrix-whatsapp-darwin-arm64"
+echo "  Le mandataire que l'app embarque : $SORTIE/tailcat-darwin-arm64 (phase de build « Embed tailcat »)"
 echo "  Publier (rien n'est poussé sans le dire) : bash infra/relais/publier.sh --dry-run"

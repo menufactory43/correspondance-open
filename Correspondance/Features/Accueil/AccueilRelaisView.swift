@@ -19,6 +19,8 @@ struct AccueilRelaisView: View {
   @State private var installateur = RelaisInstallateur()
   @State private var codeAppairage = ""
   @State private var motsDeVerification: [String] = []
+  /// Par où le code se joint — « via Tailcat », « via Tailscale ».
+  @State private var cheminDuCode: CheminDuRelais?
   @State private var erreurCode: String?
   @State private var copie = false
 
@@ -168,11 +170,11 @@ struct AccueilRelaisView: View {
   private func installer() async {
     await installateur.installer { code in
       motsDeVerification = code.fingerprintWords()
-      await store.connectMatrix(
-        homeserver: code.homeserver.absoluteString,
-        user: code.userID,
-        password: code.password
-      )
+      cheminDuCode = code.chemin
+      // Le même chemin que le champ des réglages, y compris Tailcat. Sur ce
+      // Mac le code n'en porte pas — le Relais est ici —, mais l'écrire une
+      // seule fois est ce qui évite qu'un des deux écrans l'oublie.
+      erreurCode = await store.connecterParLeCode(code)
     }
   }
 
@@ -185,7 +187,8 @@ struct AccueilRelaisView: View {
         + "d'appairage qu'elle affiche à la fin qui en porte un. Il périme en quinze minutes."
     ) {
       SettingsRow(
-        label: "Allumée en permanence, tout marche partout. Il faut Tailscale sur l'iPhone.",
+        label: "Allumée en permanence, tout marche partout. Le Mac s'y connecte tout seul ; "
+          + "l'iPhone a encore besoin de Tailscale.",
         detail: commande,
         systemImage: "server.rack"
       ) {
@@ -219,6 +222,15 @@ struct AccueilRelaisView: View {
             .font(Typography.meta(themes.typeface))
             .foregroundStyle(theme.inkTertiary)
         }
+        if let cheminDuCode {
+          Text("Chemin : \(cheminDuCode.titreFR)")
+            .font(Typography.meta(themes.typeface))
+            .foregroundStyle(theme.inkSecondary)
+          Text(cheminDuCode.detailFR)
+            .font(Typography.meta(themes.typeface))
+            .foregroundStyle(theme.inkTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
         if let erreurCode {
           Text(erreurCode)
             .font(Typography.meta(themes.typeface))
@@ -243,21 +255,20 @@ struct AccueilRelaisView: View {
     erreurCode = nil
     guard let code = RelayPairingCode(encoded: codeAppairage) else {
       motsDeVerification = []
+      cheminDuCode = nil
       erreurCode = "ce code n'est pas lisible — recopie-le en entier"
       return
     }
     guard !code.isExpired() else {
       motsDeVerification = []
+      cheminDuCode = nil
       erreurCode = "ce code a expiré — relance l'installeur sur la machine du Relais"
       return
     }
     motsDeVerification = code.fingerprintWords()
+    cheminDuCode = code.chemin
     Task {
-      await store.connectMatrix(
-        homeserver: code.homeserver.absoluteString,
-        user: code.userID,
-        password: code.password
-      )
+      erreurCode = await store.connecterParLeCode(code)
       codeAppairage = ""
     }
   }

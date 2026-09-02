@@ -16,6 +16,9 @@ struct SettingsMatrixPane: View {
   /// Le formulaire au-dessous reste pour qui préfère tout taper.
   @State private var codeAppairage = ""
   @State private var motsDeVerification: [String] = []
+  /// Par où ce code se joint — montré **avant** de se connecter, pendant qu'on
+  /// peut encore refuser.
+  @State private var cheminDuCode: CheminDuRelais?
   @State private var erreurCode: String?
   /// Le modèle des deux écrans du chiffrement. Créé à la première connexion et
   /// jeté à la déconnexion : il porte l'identité du compte, et un modèle qui
@@ -129,6 +132,15 @@ struct SettingsMatrixPane: View {
                 .font(Typography.meta(themes.typeface))
                 .foregroundStyle(theme.inkTertiary)
             }
+            if let cheminDuCode {
+              Text("Chemin : \(cheminDuCode.titreFR)")
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkSecondary)
+              Text(cheminDuCode.detailFR)
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
             if let erreurCode {
               Text(erreurCode)
                 .font(Typography.meta(themes.typeface))
@@ -206,37 +218,21 @@ struct SettingsMatrixPane: View {
     erreurCode = nil
     guard let code = RelayPairingCode(encoded: codeAppairage) else {
       motsDeVerification = []
+      cheminDuCode = nil
       erreurCode = "ce code n'est pas lisible — recopie-le en entier, ou scanne-le"
       return
     }
     guard !code.isExpired() else {
       motsDeVerification = []
+      cheminDuCode = nil
       erreurCode = "ce code a expiré — relance `pair.sh` sur le Relais pour en avoir un autre"
       return
     }
     motsDeVerification = code.fingerprintWords()
+    cheminDuCode = code.chemin
     isConnecting = true
     Task {
-      // Un code qui porte un jeton Tailcat se joint **sans tunnel ssh et sans
-      // Tailscale** : on ouvre le mandataire d'abord, et on remplace l'adresse
-      // du code par le nom magique que ce mandataire sait joindre. Si tailcat
-      // manque ou refuse, on tombe sur l'adresse ordinaire du code plutôt que
-      // d'échouer — un Relais joignable autrement doit rester joignable.
-      var adresse = code.homeserver.absoluteString
-      if let jeton = code.tailcat {
-        do {
-          let port = try await store.ouvrirTailcat(jeton: jeton)
-          adresse = "http://server.tailcat:\(code.homeserver.port ?? 8010)"
-          erreurCode = "Relais joint par Tailcat (mandataire local \(port))."
-        } catch {
-          erreurCode = "Tailcat n'a pas pu ouvrir de chemin : \(error.localizedDescription)"
-        }
-      }
-      await store.connectMatrix(
-        homeserver: adresse,
-        user: code.userID,
-        password: code.password
-      )
+      erreurCode = await store.connecterParLeCode(code)
       codeAppairage = ""
       isConnecting = false
     }

@@ -34,13 +34,6 @@
 		<true/>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<!-- Le nom magique du mandataire Tailcat. Le trafic y est en HTTP
-			     clair, mais il ne quitte jamais la machine en clair : il entre
-			     dans un tunnel WireGuard chiffré de bout en bout avant le
-			     premier octet sur le réseau. Sans cette exception, ATS refuse
-			     la requête avec « requires the use of a secure connection » et
-			     l'écran dit « le homeserver ne répond pas », ce qui accuse le
-			     Relais d'une panne qui n'est pas la sienne. -->
 			<key>server.tailcat</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>

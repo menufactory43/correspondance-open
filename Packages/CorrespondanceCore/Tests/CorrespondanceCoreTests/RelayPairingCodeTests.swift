@@ -154,3 +154,88 @@ final class RelayPairingCodeTailcatTests: XCTestCase {
   }
   #endif
 }
+
+#if os(macOS)
+/// Où l'app va chercher tailcat. Le choix de la phase 7b : **embarqué**, pas
+/// téléchargé — donc le bundle passe avant tout le reste, et l'absence se dit.
+final class TailcatProxyBinaireTests: XCTestCase {
+
+  func testLEnvironnementPasseAvantLeBundle() throws {
+    // C'est ainsi qu'une preuve ou un test désigne un binaire précis sans
+    // dépendre d'une build d'app.
+    let url = TailcatProxy.binaireParDefaut(
+      environment: ["CORRESPONDANCE_TAILCAT": "/tmp/un-tailcat-a-moi"])
+    XCTAssertEqual(url?.path, "/tmp/un-tailcat-a-moi")
+  }
+
+  func testLeTildeEstDeveloppe() {
+    let url = TailcatProxy.binaireParDefaut(environment: ["CORRESPONDANCE_TAILCAT": "~/tc"])
+    XCTAssertEqual(url?.path, NSHomeDirectory() + "/tc")
+    XCTAssertFalse(url?.path.contains("~") ?? true)
+  }
+
+  func testUnCheminVideNeComptePas() throws {
+    // Une variable posée à vide (un `export` malheureux) ne doit pas faire
+    // chercher un binaire nommé « » : on retombe sur les candidats.
+    let url = TailcatProxy.binaireParDefaut(environment: ["CORRESPONDANCE_TAILCAT": ""])
+    XCTAssertNotEqual(url?.path, "")
+  }
+
+  func testLeBundlePasseAvantHomebrew() throws {
+    // Le bundle d'abord : un tailcat de Homebrew n'est ni signé avec l'app, ni
+    // notarisé avec elle, ni forcément à la version que nous avons éprouvée.
+    let bac = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appending(path: "chemin-tailcat-\(UUID().uuidString)/Faux.app")
+    let helper = bac.appending(path: "Contents/Helpers")
+    try FileManager.default.createDirectory(at: helper, withIntermediateDirectories: true)
+    let binaire = helper.appending(path: "tailcat")
+    try Data("#!/bin/sh\n".utf8).write(to: binaire)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binaire.path)
+    defer { try? FileManager.default.removeItem(at: bac.deletingLastPathComponent()) }
+
+    let bundle = Bundle(url: bac) ?? Bundle.main
+    // `Bundle(url:)` refuse un dossier sans Info.plist : on éprouve alors la
+    // règle sur le chemin, qui est ce que la fonction compose.
+    let attendu = bac.appending(path: "Contents/Helpers/tailcat").path
+    XCTAssertTrue(FileManager.default.isExecutableFile(atPath: attendu))
+    if bundle.bundleURL == bac {
+      XCTAssertEqual(TailcatProxy.binaireParDefaut(environment: [:], bundle: bundle)?.path, attendu)
+    }
+  }
+
+  func testLAbsenceSeDitEnParlantDuBundle() {
+    // Le message doit envoyer au bon endroit : c'est le bundle qui doit le
+    // porter, pas la machine.
+    let message = TailcatErreur.binaireIntrouvable.localizedDescription
+    XCTAssertTrue(message.contains("bundle"))
+    XCTAssertTrue(message.contains("construire.sh"))
+  }
+
+  @MainActor
+  func testUnMandataireSansBinaireNeDemarrePas() async {
+    let mandataire = TailcatProxy(binaire: nil)
+    do {
+      _ = try await mandataire.demarrer(jeton: "tcPeuImporte")
+      XCTFail("un mandataire sans binaire ne peut pas démarrer")
+    } catch let erreur as TailcatErreur {
+      guard case .binaireIntrouvable = erreur else { return XCTFail("mauvaise erreur") }
+    } catch {
+      XCTFail("mauvaise erreur : \(error)")
+    }
+    XCTAssertFalse(mandataire.estActif)
+  }
+
+  @MainActor
+  func testLaMonteeDuDelaiEntreDeuxRelances() {
+    // Comme `cc` : on relance, on espace, et on renonce en le disant plutôt
+    // que de tourner en boucle sur un jeton périmé.
+    let b = TailcatProxy.Backoff()
+    XCTAssertEqual(b.delai(essai: 0), 0)
+    XCTAssertEqual(b.delai(essai: 1), 1)
+    XCTAssertEqual(b.delai(essai: 3), 4)
+    XCTAssertEqual(b.delai(essai: 20), b.plafond)
+    XCTAssertFalse(b.renonce(apres: 7))
+    XCTAssertTrue(b.renonce(apres: 8))
+  }
+}
+#endif

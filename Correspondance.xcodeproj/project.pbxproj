@@ -18,6 +18,7 @@
 		07B6C02B1DE1EC005EB56849 /* matrix-sync-instagram.json in Resources */ = {isa = PBXBuildFile; fileRef = 97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */; };
 		09407B8BC2003E1E1793E51D /* RelayLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECED9025AA8FF631D0B21DD6 /* RelayLoginView.swift */; };
 		09920FA5A8F844AD8A1C8B2F /* AccueilRelaisView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE71F29E53D51CEA9212BC6 /* AccueilRelaisView.swift */; };
+		0CE71C35D265ED0C1CD59F9B /* ChiffrementSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC0383C1181CA2682CE7389 /* ChiffrementSections.swift */; };
 		0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D0AAF2E6C20E0A73F21794 /* NotificationService.swift */; };
 		0FAC592A7C8307E415C94859 /* AgentLocalHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31AB92201C9D559702DC4BB /* AgentLocalHostTests.swift */; };
 		1473C4F2298AE3C138B95AAA /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */; };
@@ -80,7 +81,6 @@
 		7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */; };
 		83429DD41B742E4DEB048235 /* SettingsAppearancePane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2362886157441127E0488B /* SettingsAppearancePane.swift */; };
 		837364980DCFAF643A2E9899 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5134D90E3C3D585B478FDD21 /* SettingsView.swift */; };
-		A7C1FF0400000000000000A4 /* ChiffrementSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1FF0300000000000000A3 /* ChiffrementSections.swift */; };
 		8520F818A51D69AE23716712 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */; };
 		87C73BA02A60E838C154E1EE /* QuickReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */; };
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
@@ -102,6 +102,7 @@
 		9DE1C25B859BECA488321758 /* InboxStore+Deletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */; };
 		9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */; };
 		9F89566B2CF8355D9B1FDE01 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4416D0B9EBE11AE72CF12470 /* GlobalHotKey.swift */; };
+		A171B8935A5FDF5CB8909CC5 /* SettingsChiffrementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD009EF0F180EBDC397C89AF /* SettingsChiffrementCards.swift */; };
 		A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */; };
 		A7E4683BE328EF7B138AD137 /* QuickReplyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200371D508DA6447F58B59 /* QuickReplyPanel.swift */; };
 		AA6BA0E7020906B49E8D0389 /* ThreadGesturesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */; };
@@ -120,7 +121,6 @@
 		C24D8539867956DA1A0AA941 /* GroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
-		A7C1FF0200000000000000A2 /* SettingsChiffrementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
 		C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA76B9F9792DFFD335C3F85C /* ContactBook.swift */; };
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
@@ -228,7 +228,6 @@
 		24200371D508DA6447F58B59 /* QuickReplyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyPanel.swift; sourceTree = "<group>"; };
 		258F2B6AE43BCA594215DA3E /* Correspondance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Correspondance.entitlements; sourceTree = "<group>"; };
 		287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsMatrixPane.swift; sourceTree = "<group>"; };
-		A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChiffrementCards.swift; sourceTree = "<group>"; };
 		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Mentions.swift"; sourceTree = "<group>"; };
 		33A2DEA6220E02771BAD4467 /* ThemePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePreferences.swift; sourceTree = "<group>"; };
@@ -256,7 +255,6 @@
 		503F3F88679B6D47523DF6E9 /* RelayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayStore.swift; sourceTree = "<group>"; };
 		506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageChatDatabaseTests.swift; sourceTree = "<group>"; };
 		5134D90E3C3D585B478FDD21 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		A7C1FF0300000000000000A3 /* ChiffrementSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChiffrementSections.swift; sourceTree = "<group>"; };
 		55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAvatarView.swift; sourceTree = "<group>"; };
 		56ABFEA2CE8EC6FCC0E82519 /* SettingsSendingPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSendingPane.swift; sourceTree = "<group>"; };
 		5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CorrespondanceiOSNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -353,6 +351,8 @@
 		F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentVideoView.swift; sourceTree = "<group>"; };
 		FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
 		FCA69D19E658DA849410EE74 /* IMessageAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomation.swift; sourceTree = "<group>"; };
+		FCC0383C1181CA2682CE7389 /* ChiffrementSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChiffrementSections.swift; sourceTree = "<group>"; };
+		FD009EF0F180EBDC397C89AF /* SettingsChiffrementCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChiffrementCards.swift; sourceTree = "<group>"; };
 		FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadInfoSheet.swift; sourceTree = "<group>"; };
 		FF7B025A4B0231C9AC292DC9 /* ThreadVoiceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadVoiceUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -433,8 +433,8 @@
 		35D42CF5DEB1FD3B6E91579F /* Reglages */ = {
 			isa = PBXGroup;
 			children = (
+				FCC0383C1181CA2682CE7389 /* ChiffrementSections.swift */,
 				5134D90E3C3D585B478FDD21 /* SettingsView.swift */,
-				A7C1FF0300000000000000A3 /* ChiffrementSections.swift */,
 			);
 			path = Reglages;
 			sourceTree = "<group>";
@@ -613,10 +613,10 @@
 				A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */,
 				6C2362886157441127E0488B /* SettingsAppearancePane.swift */,
 				471DBB431518CAF077924600 /* SettingsAutomationPane.swift */,
+				FD009EF0F180EBDC397C89AF /* SettingsChiffrementCards.swift */,
 				192CF26CAA43E2A421A52262 /* SettingsChrome.swift */,
 				95ED3D336C908CA8FB5DE7FA /* SettingsDictationPane.swift */,
 				287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */,
-				A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */,
 				CC8813E85552216BB19289AD /* SettingsPermissionsPane.swift */,
 				56ABFEA2CE8EC6FCC0E82519 /* SettingsSendingPane.swift */,
 				B758EF0696E62CAE3AD887FF /* SettingsView.swift */,
@@ -844,6 +844,7 @@
 				E1932BFAE807797A54C87061 /* Sources */,
 				C84BE8061D3051A37A0DEA11 /* Embed Resources */,
 				0CE527D1E2F569B1545F2958 /* Embed correspondance-agent */,
+				379F86502E4370A53E56F04E /* Embed tailcat */,
 				F1CBB850AC822DD73ED3DB22 /* Frameworks */,
 			);
 			buildRules = (
@@ -1003,6 +1004,25 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\nAPP=\"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}\"\nmkdir -p \"$APP/MacOS\" \"$APP/Library/LaunchAgents\"\ncp -f \"${SRCROOT}/Correspondance/Resources/LaunchAgents/app.correspondance.agent.plist\" \\\n  \"$APP/Library/LaunchAgents/app.correspondance.agent.plist\"\n# Le binaire vient du paquet Swift. On le construit dans un dossier à\n# part pour ne pas mêler ses artefacts à ceux d'Xcode.\nBUILD_DIR=\"${SRCROOT}/Packages/CorrespondanceCore/.build-agent\"\nSWIFT_CONF=$([ \"${CONFIGURATION}\" = \"Release\" ] && echo release || echo debug)\n# Un échec de construction FAIT ÉCHOUER LE BUILD. Auparavant on\n# sortait en 0 avec un simple « warning » : l'app gardait alors le\n# binaire précédent, Xcode affichait BUILD SUCCEEDED, et on testait du\n# vieux code sans le savoir. Un binaire périmé qui a l'air frais coûte\n# des heures — une build rouge en coûte cinq minutes.\nif ! xcrun swift build --package-path \"${SRCROOT}/Packages/CorrespondanceCore\" \\\n      --product correspondance-agent -c \"$SWIFT_CONF\" \\\n      --scratch-path \"$BUILD_DIR\" > /tmp/correspondance-agent-build.log 2>&1; then\n  echo \"error: correspondance-agent n'a pas pu être construit — l'app embarquerait un binaire périmé\"\n  tail -20 /tmp/correspondance-agent-build.log\n  exit 1\nfi\nBIN=$(xcrun swift build --package-path \"${SRCROOT}/Packages/CorrespondanceCore\" \\\n      --product correspondance-agent -c \"$SWIFT_CONF\" --scratch-path \"$BUILD_DIR\" \\\n      --show-bin-path 2>/dev/null)/correspondance-agent\nif [ -f \"$BIN\" ]; then\n  cp -f \"$BIN\" \"$APP/MacOS/correspondance-agent\"\n  echo \"Embedded agent: $BIN\"\nelse\n  echo \"error: binaire de l'agent introuvable ($BIN)\"\n  exit 1\nfi\n";
 		};
+		379F86502E4370A53E56F04E /* Embed tailcat */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed tailcat";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nAPP=\"${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}\"\nSRC_BIN=\"${CORRESPONDANCE_PUBLICATION:-$HOME/unclic-publication}/tailcat-darwin-arm64\"\nif [ ! -f \"$SRC_BIN\" ]; then\n  echo \"warning: tailcat-darwin-arm64 absent — l'app dira « tailcat n'est pas dans ce bundle » (bash infra/relais/construire.sh --quoi tailcat)\"\n  rm -f \"$APP/Helpers/tailcat\"\n  exit 0\nfi\nmkdir -p \"$APP/Helpers\"\ncp -f \"$SRC_BIN\" \"$APP/Helpers/tailcat\"\nchmod 755 \"$APP/Helpers/tailcat\"\n# Un exécutable imbriqué se signe SÉPARÉMENT : la signature de l'app\n# ne fait que le sceller. Sans ça, une build notarisée porterait un\n# binaire « not signed at all » et Gatekeeper refuserait l'app\n# entière — pas seulement le mandataire.\nIDENTITE=\"${EXPANDED_CODE_SIGN_IDENTITY_NAME:-${CODE_SIGN_IDENTITY:--}}\"\ncodesign --force --options runtime --timestamp=none \\\n  --sign \"$IDENTITE\" \"$APP/Helpers/tailcat\" 2>/dev/null \\\n  || codesign --force --options runtime --sign - \"$APP/Helpers/tailcat\"\necho \"Embedded tailcat: $SRC_BIN → $APP/Helpers/tailcat\"\n";
+		};
 		C84BE8061D3051A37A0DEA11 /* Embed Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1063,6 +1083,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E2296A5D41724BA640CAA65A /* CameraCapture.swift in Sources */,
+				0CE71C35D265ED0C1CD59F9B /* ChiffrementSections.swift in Sources */,
 				C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */,
 				15E4C012BB79A18497E1C846 /* ConversationAvatar.swift in Sources */,
 				66CD3CC0DFBB21B5236788CE /* ConversationRow.swift in Sources */,
@@ -1089,7 +1110,6 @@
 				8CE15690F8A69B4D6A577D11 /* SelectTextSheet.swift in Sources */,
 				5E84670E494B604BE024AE31 /* SendLaterSheet.swift in Sources */,
 				837364980DCFAF643A2E9899 /* SettingsView.swift in Sources */,
-				A7C1FF0400000000000000A4 /* ChiffrementSections.swift in Sources */,
 				E3F1D34B0B88C8E7035C29EE /* ThemePreferences.swift in Sources */,
 				76E873AC961652BB6447FF67 /* ThreadComposer.swift in Sources */,
 				C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */,
@@ -1183,10 +1203,10 @@
 				D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */,
 				83429DD41B742E4DEB048235 /* SettingsAppearancePane.swift in Sources */,
 				0697C1C5E290F34B64FD7ADD /* SettingsAutomationPane.swift in Sources */,
+				A171B8935A5FDF5CB8909CC5 /* SettingsChiffrementCards.swift in Sources */,
 				77CEA32444389E9AEF289985 /* SettingsChrome.swift in Sources */,
 				7A2860B411E6B8681020D48A /* SettingsDictationPane.swift in Sources */,
 				C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */,
-				A7C1FF0200000000000000A2 /* SettingsChiffrementCards.swift in Sources */,
 				987B506EA4A578724136E2A8 /* SettingsPermissionsPane.swift in Sources */,
 				DF853DCFFE8A5216ACE7A404 /* SettingsSendingPane.swift in Sources */,
 				EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */,

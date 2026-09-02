@@ -40,6 +40,7 @@ struct RelaisEtape: Equatable, Sendable {
     case "configuration": "Configuration"
     case "services": "Démarrage des services"
     case "attente": "Attente du Relais"
+    case "tailcat": "Chemin sans Tailscale"
     case "compte": "Compte propriétaire"
     case "ponts": "Les quatre réseaux"
     case "preuve": "Preuve de connexion"

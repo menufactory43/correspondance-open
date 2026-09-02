@@ -18,6 +18,7 @@
 #   relais-install.sh, relais-uninstall.sh   les scripts, tels qu'ils sont ici
 #   continuwuity-macos-arm64                 l'amont ne publie aucun binaire macOS
 #   mautrix-*-darwin-arm64                   nos ponts goolm : ils ne chargent plus libolm
+#   tailcat-darwin-arm64                     l'amont ne publie pas macOS (tap Homebrew)
 #   SHA256SUMS                               relevé sur les fichiers publiés, pas ailleurs
 # Rien pour Linux : les releases amont suffisent, et l'installeur les prend là.
 set -euo pipefail

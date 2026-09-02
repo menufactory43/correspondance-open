@@ -182,6 +182,7 @@ final class InboxStore {
   /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
   /// aussi longtemps que l'app : le tuer couperait le `/sync`.
   @ObservationIgnored private var tailcat: TailcatProxy?
+  @ObservationIgnored private var observateurDeFermeture: (any NSObjectProtocol)?
   @ObservationIgnored private var loadTask: Task<Void, Never>?
   /// Boucle `/sync` : un long-poll qui ne s'arrête jamais, sans intervalle à régler.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
@@ -1736,6 +1737,10 @@ final class InboxStore {
     matrixSyncTask?.cancel()
     matrixSyncTask = nil
     stopBridgeLoginPolling()
+    // Le mandataire meurt avec la session. Le laisser vivre tiendrait un tunnel
+    // WireGuard ouvert vers une machine qu'on ne regarde plus, et il n'aurait
+    // plus rien à porter.
+    fermerTailcat()
     await matrix.disconnect()
     isMatrixConnected = false
     conversations.removeAll { $0.network.livesOnRelay }
@@ -1769,9 +1774,75 @@ final class InboxStore {
   func ouvrirTailcat(jeton: String) async throws -> Int {
     let mandataire = tailcat ?? TailcatProxy()
     tailcat = mandataire
+    // Le mandataire renaît s'il tombe — et son port change à chaque naissance
+    // (`--listen=127.0.0.1:0`). Sans ce rappel, l'app garderait l'ancien port,
+    // parlerait à un port fermé, et croirait le Relais muet.
+    mandataire.auRedemarrage = { [weak self] port in
+      guard let self else { return }
+      await self.matrix.utiliserMandataireSOCKS(port: port)
+      Self.relayLog.info("tailcat relancé, mandataire re-posé sur 127.0.0.1:\(port, privacy: .public)")
+    }
     let port = try await mandataire.demarrer(jeton: jeton)
     await matrix.utiliserMandataireSOCKS(port: port)
+    surveillerLaFermeture()
     return port
+  }
+
+  /// Se connecter **à partir d'un code d'appairage** : le chemin d'abord, la
+  /// session ensuite.
+  ///
+  /// Écrit ici et pas dans une vue parce qu'il y a deux écrans qui appairent —
+  /// l'accueil et les réglages — et que deux copies de cette suite-là
+  /// divergeraient : c'est déjà arrivé, l'accueil ignorait Tailcat.
+  ///
+  /// L'ordre n'est pas négociable : le mandataire est posé **avant** le
+  /// `/login`. Posé après, le mot de passe serait déjà parti par le chemin
+  /// qu'on voulait éviter. Et si Tailcat refuse, on tombe sur l'adresse du
+  /// code plutôt que d'échouer — un Relais joignable autrement doit rester
+  /// joignable.
+  @discardableResult
+  func connecterParLeCode(_ code: RelayPairingCode) async -> String? {
+    var adresse = code.homeserver.absoluteString
+    var note: String?
+    if let jeton = code.tailcat, !jeton.isEmpty {
+      do {
+        let port = try await ouvrirTailcat(jeton: jeton)
+        adresse = "http://server.tailcat:\(code.homeserver.port ?? 8010)"
+        note = "Relais joint via Tailcat (mandataire local \(port))."
+      } catch {
+        note = "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription) "
+          + "— on tente l'adresse du code."
+      }
+    }
+    await connectMatrix(homeserver: adresse, user: code.userID, password: code.password)
+    return note
+  }
+
+  /// Arrête le mandataire et **retire** la configuration de mandataire du
+  /// client : sans le second geste, une reconnexion par une adresse ordinaire
+  /// repartirait vers un port mort.
+  func fermerTailcat() {
+    guard let mandataire = tailcat else { return }
+    mandataire.arreter()
+    tailcat = nil
+    if let observateurDeFermeture {
+      NotificationCenter.default.removeObserver(observateurDeFermeture)
+      self.observateurDeFermeture = nil
+    }
+    Task { await matrix.utiliserMandataireSOCKS(port: nil) }
+  }
+
+  /// La fermeture de l'app, observée **ici** plutôt que dans le délégué : le
+  /// délégué n'a pas de chemin vers ce magasin (il naît dans un `@State`), et
+  /// faire descendre une référence jusqu'à lui pour un seul `terminate()`
+  /// coûterait plus que ça ne rapporte.
+  private func surveillerLaFermeture() {
+    guard observateurDeFermeture == nil else { return }
+    observateurDeFermeture = NotificationCenter.default.addObserver(
+      forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.fermerTailcat() }
+    }
   }
 
   func refreshMatrixStatus() async {
