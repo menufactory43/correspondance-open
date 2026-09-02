@@ -117,6 +117,16 @@ struct SettingsAgentsPane: View {
         ) { EmptyView() }
       }
 
+      if let status = console.status, !status.enginesToConnect.isEmpty {
+        SettingsRow(
+          label: "À connecter là-bas",
+          detail: status.enginesToConnect.joined(separator: ", ")
+            + " — installé sur sa machine, mais sans session : le login se fait là-bas, "
+            + "dans un terminal, et l'agent le verra à son prochain démarrage.",
+          systemImage: "person.crop.circle.badge.exclamationmark"
+        ) { EmptyView() }
+      }
+
       if local, let journal = AgentLocalHost.logURL(agent: agent) {
         SettingsRow(label: "Journal", detail: journal.path(), systemImage: "waveform.path") {
           Button("Ouvrir") { NSWorkspace.shared.open(journal) }

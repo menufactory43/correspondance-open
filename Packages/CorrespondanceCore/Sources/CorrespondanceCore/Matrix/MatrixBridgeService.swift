@@ -405,9 +405,20 @@ public actor MatrixBridgeService {
     /// Les moteurs prêts **sur la machine de l'agent**, lus dans
     /// « prêts : claude, hermes ». Vide veut dire « il n'en a annoncé aucun »,
     /// pas « il n'y en a pas » : un agent d'avant le scan n'en publie aucun.
-    public var enginesReady: [String] {
-      guard let apres = engines.range(of: "prêts : ") else { return [] }
-      return engines[apres.upperBound...]
+    public var enginesReady: [String] { liste(apres: "prêts : ") }
+
+    /// Les moteurs **installés mais pas connectés** sur la machine de l'agent,
+    /// lus dans « à connecter : grok ». L'agent ne les dit pas prêts : un tour
+    /// dessus n'est qu'une erreur d'authentification. On les montre pour que
+    /// le geste se fasse là-bas, pas pour les proposer.
+    public var enginesToConnect: [String] { liste(apres: "à connecter : ") }
+
+    /// Une liste du status : après son étiquette, jusqu'au prochain « · ».
+    private func liste(apres etiquette: String) -> [String] {
+      guard let apres = engines.range(of: etiquette) else { return [] }
+      let reste = engines[apres.upperBound...]
+      let fin = reste.range(of: " · ")?.lowerBound ?? reste.endIndex
+      return reste[..<fin]
         .split(separator: ",")
         .map { $0.trimmingCharacters(in: .whitespaces) }
         .filter { !$0.isEmpty && $0 != "aucun" }

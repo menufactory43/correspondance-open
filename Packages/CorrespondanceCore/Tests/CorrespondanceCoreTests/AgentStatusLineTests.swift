@@ -16,6 +16,16 @@ final class AgentStatusLineTests: XCTestCase {
     XCTAssertEqual(ligne.host, "umbrel")
     XCTAssertEqual(ligne.backend, "acp")
     XCTAssertEqual(ligne.enginesReady, ["claude", "hermes"])
+    XCTAssertEqual(ligne.enginesToConnect, [])
+  }
+
+  /// L'agent sépare les prêts de ceux à connecter ; la liste des prêts
+  /// s'arrête au « · », sinon « à connecter : grok » se lirait comme un prêt.
+  func testLesMoteursAConnecterNeSontPasDesPrets() {
+    let ligne = status("cc tourne sur umbrel depuis 14 h 02 · moteur acp · prêts : claude · à connecter : grok, codex")
+    XCTAssertEqual(ligne.enginesReady, ["claude"])
+    XCTAssertEqual(ligne.enginesToConnect, ["grok", "codex"])
+    XCTAssertEqual(ligne.backend, "acp")
   }
 
   /// L'agent poste aussi une ligne sans hôte (avant qu'on ne l'y mette). On
