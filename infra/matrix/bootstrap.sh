@@ -31,11 +31,13 @@ SIGNAL_IMAGE_TAG="${SIGNAL_IMAGE_TAG:-v26.08}"
 # Push iOS (Sygnal). Ces trois-là ne se génèrent pas : ils viennent du portail
 # Apple. On les passe en variables d'environnement à la première passe, ils
 # atterrissent dans le .env du NUC et n'en bougent plus.
-# Cf. docs/MATRIX-SETUP.md § « Push iOS — Sygnal ».
+# Cf. docs/MATRIX-SETUP.md § « Notifications ».
 APNS_KEY_ID="${APNS_KEY_ID:-}"
 APNS_TEAM_ID="${APNS_TEAM_ID:-}"
-# sandbox = Xcode et TestFlight interne ; production = App Store.
-APNS_PLATFORM="${APNS_PLATFORM:-sandbox}"
+# Il n'y a plus de APNS_PLATFORM : depuis que la passerelle est publique et
+# partagée par tous les Relais, elle sert les deux environnements APNs en même
+# temps — `com.correspondance.ios` en production et `com.correspondance.ios.dev`
+# en sandbox. C'est l'app qui choisit, par son app_id (cf. sygnal.yaml.tmpl).
 
 # ---------------------------------------------------------------- phase locale
 if [[ "${1:-}" != "--remote" ]]; then
@@ -51,7 +53,7 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' APNS_PLATFORM='${APNS_PLATFORM}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
@@ -113,7 +115,6 @@ remember_env_value() {
 }
 remember_env_value APNS_KEY_ID "${APNS_KEY_ID}"
 remember_env_value APNS_TEAM_ID "${APNS_TEAM_ID}"
-remember_env_value APNS_PLATFORM "${APNS_PLATFORM}"
 set -a; . "./$ENVFILE"; set +a
 
 # 2) Clé de signature + log config Synapse (via `generate`, une seule fois).
@@ -248,7 +249,6 @@ echo "→ Écriture de sygnal.yaml"
 sed \
   -e "s|__APNS_KEY_ID__|${APNS_KEY_ID:-__APNS_KEY_ID__}|g" \
   -e "s|__APNS_TEAM_ID__|${APNS_TEAM_ID:-__APNS_TEAM_ID__}|g" \
-  -e "s|__APNS_PLATFORM__|${APNS_PLATFORM:-sandbox}|g" \
   templates/sygnal.yaml.tmpl > data/sygnal/sygnal.yaml
 chmod 600 data/sygnal/sygnal.yaml
 
@@ -342,7 +342,7 @@ docker-compose ps
 echo
 echo "✓ Pile Matrix prête (WhatsApp + Instagram + Messenger + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
 if [[ "$APNS_READY" == 1 ]]; then
-  echo "✓ Push iOS : Sygnal armé pour com.correspondance.ios (${APNS_PLATFORM})."
+  echo "✓ Push iOS : Sygnal armé pour com.correspondance.ios (production) et com.correspondance.ios.dev (sandbox)."
 else
-  echo "⚠ Push iOS : Sygnal démarré sans clé APNs utilisable — voir docs/MATRIX-SETUP.md § « Push iOS — Sygnal »."
+  echo "⚠ Push iOS : Sygnal démarré sans clé APNs utilisable — voir docs/MATRIX-SETUP.md § « Notifications »."
 fi

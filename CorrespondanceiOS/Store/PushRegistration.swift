@@ -27,6 +27,32 @@ final class PushRegistration {
   /// réseau `matrix` du NUC. L'iPhone ne la résout pas et n'a pas à le faire —
   /// c'est le Relais qui appelle Sygnal, jamais nous.
   static let sygnalURL = URL(string: "http://sygnal:5000/_matrix/push/v1/notify")!
+
+  /// L'`app_id` du pusher — la clé qui choisit l'entrée d'`apps:` dans
+  /// `sygnal.yaml`, donc **l'environnement APNs**. Il y en a deux, parce
+  /// qu'APNs en a deux : un jeton de sandbox ne vaut rien en production et
+  /// réciproquement, et l'erreur est silencieuse (`BadDeviceToken`).
+  ///
+  /// Le choix se fait sur `#if DEBUG` et non sur un réglage de build à part,
+  /// parce que `DEBUG` est posé par la configuration **Debug** — exactement
+  /// celle qu'Xcode lance sur un appareil, avec un profil de développement,
+  /// donc `aps-environment: development`, donc un jeton de sandbox. Release
+  /// (TestFlight, App Store) est signée à l'export `app-store-connect`, où
+  /// Xcode réécrit `aps-environment` en `production`. Les deux bascules sont
+  /// tirées par le même levier ; un réglage séparé pourrait dériver de la
+  /// signature, `DEBUG` ne le peut pas.
+  ///
+  /// Le seul cas qui reste bancal est une build **Release** posée sur un
+  /// appareil depuis Xcode (export `development`) : app_id de production,
+  /// jeton de sandbox. Ce n'est pas un chemin qu'on emprunte.
+  static let pusherAppID: String = {
+    #if DEBUG
+      "com.correspondance.ios.dev"
+    #else
+      MatrixClient.iOSPusherAppID
+    #endif
+  }()
+
   private static let lastPushkeyKey = "correspondance.ios.lastPushkey"
 
   private(set) var authorization: UNAuthorizationStatus = .notDetermined
@@ -104,7 +130,8 @@ final class PushRegistration {
       try await store.matrix.setPusher(
         pushkey: pushkey,
         sygnalURL: Self.sygnalURL,
-        deviceDisplayName: UIDevice.current.name
+        deviceDisplayName: UIDevice.current.name,
+        appID: Self.pusherAppID
       )
       isRegistered = true
       lastError = nil
@@ -121,7 +148,9 @@ final class PushRegistration {
     guard let store, !store.isDemo else { return }
     let key = pushkey ?? UserDefaults.standard.string(forKey: Self.lastPushkeyKey)
     guard let key, !key.isEmpty else { return }
-    try? await store.matrix.removePusher(pushkey: key)
+    // Le même `app_id` qu'à la déclaration : retirer un pusher, c'est nommer le
+    // couple (app_id, pushkey) exact. Avec l'autre, on laisserait le vrai en place.
+    try? await store.matrix.removePusher(pushkey: key, appID: Self.pusherAppID)
     isRegistered = false
   }
 

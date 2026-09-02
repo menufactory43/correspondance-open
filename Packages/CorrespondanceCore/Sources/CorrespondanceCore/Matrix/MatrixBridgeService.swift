@@ -991,22 +991,34 @@ public actor MatrixBridgeService {
   // MARK: - Push
 
   /// Déclare le pusher de cet appareil auprès du Relais.
-  /// `sygnalURL` est celle que **Synapse** voit, pas nous.
+  ///
+  /// `sygnalURL` est celle que **le Relais** voit, pas nous : depuis que la
+  /// passerelle est publique, c'est une URL HTTPS qu'un Relais de n'importe où
+  /// sait joindre. `appID` choisit l'entrée d'`apps:` dans `sygnal.yaml`, donc
+  /// l'environnement APNs — c'est l'app qui le décide (`#if DEBUG`), Core ne
+  /// fait que le transmettre.
   public func setPusher(
     pushkey: String,
     sygnalURL: URL,
-    deviceDisplayName: String
+    deviceDisplayName: String,
+    appID: String = MatrixClient.iOSPusherAppID
   ) async throws {
     try await client.setPusher(
       pushkey: pushkey,
       sygnalURL: sygnalURL,
-      deviceDisplayName: deviceDisplayName
+      deviceDisplayName: deviceDisplayName,
+      appID: appID
     )
   }
 
   /// Retire le pusher — à la déconnexion, tant que le jeton d'accès vaut encore.
-  public func removePusher(pushkey: String) async throws {
-    try await client.removePusher(pushkey: pushkey)
+  /// Le même `appID` qu'à la déclaration : un pusher se nomme par le couple
+  /// (`app_id`, `pushkey`), et se tromper laisserait le vrai en place.
+  public func removePusher(
+    pushkey: String,
+    appID: String = MatrixClient.iOSPusherAppID
+  ) async throws {
+    try await client.removePusher(pushkey: pushkey, appID: appID)
   }
 
   // MARK: - État de conversation (Relais)

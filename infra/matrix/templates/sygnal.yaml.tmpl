@@ -2,8 +2,9 @@
 #
 # Réécrit à chaque passe de bootstrap.sh depuis ce gabarit : la source de
 # vérité est le dépôt, jamais le fichier posé sur le NUC. Les placeholders
-# __APNS_KEY_ID__ / __APNS_TEAM_ID__ / __APNS_PLATFORM__ sont remplacés par
-# les valeurs du .env (cf. docs/MATRIX-SETUP.md § « Push iOS — Sygnal »).
+# __APNS_KEY_ID__ / __APNS_TEAM_ID__ sont remplacés par les valeurs du .env
+# (cf. docs/MATRIX-SETUP.md § « Notifications »). Il n'y a plus de
+# __APNS_PLATFORM__ : les deux environnements APNs sont servis à la fois.
 #
 # Ce que Sygnal reçoit de Synapse : un POST /_matrix/push/v1/notify par
 # événement à notifier. Ce qu'il en fait : un push APNs vers le pushkey de
@@ -49,9 +50,23 @@ metrics:
     enabled: false
 
 apps:
-  # La clé de cette entrée est l'`app_id` que l'app iOS écrit dans son pusher
+  # La clé de chaque entrée est l'`app_id` que l'app iOS écrit dans son pusher
   # (MatrixClient.setPusher). Les deux doivent coïncider au caractère près,
   # sinon Synapse appelle Sygnal pour rien : « no app configured ».
+  #
+  # Il y en a DEUX parce qu'APNs a deux mondes séparés, et qu'un jeton obtenu
+  # dans l'un ne vaut RIEN dans l'autre — se tromper donne un « BadDeviceToken »
+  # silencieux, la panne de push la plus coûteuse à diagnostiquer. La passerelle
+  # étant désormais publique et partagée par tous les Relais (décision du
+  # propriétaire, 2 sept. 2026), elle doit servir les deux à la fois : on ne
+  # peut plus basculer un réglage global entre une build Xcode et l'App Store.
+  #
+  # Ce qui les distingue est `platform` ; ce qui les réunit est `topic`, qui
+  # n'est PAS l'app_id mais l'identifiant de bundle de l'app — le même dans les
+  # deux mondes, à la lettre. Même clé .p8 : une clé APNs signe pour les deux.
+
+  # App Store et TestFlight (toutes les builds Release, dont celles du
+  # propriétaire). L'app_id nu.
   com.correspondance.ios:
     type: apns
     # Clé de signature APNs (.p8), montée en lecture seule depuis
@@ -59,13 +74,21 @@ apps:
     keyfile: /secrets/apns.p8
     key_id: __APNS_KEY_ID__
     team_id: __APNS_TEAM_ID__
-    # Le « topic » APNs est l'identifiant de bundle de l'app, à la lettre.
     topic: com.correspondance.ios
-    # sandbox = builds Xcode et TestFlight *interne* ; production = App Store et
-    # TestFlight externe. Un jeton obtenu sur l'un ne vaut RIEN sur l'autre :
-    # se tromper ici donne un « BadDeviceToken » silencieux.
-    platform: __APNS_PLATFORM__
+    platform: production
     # `alert` et non `background` : c'est ce qui autorise l'extension de service
     # à s'exécuter (aps.mutable-content) et à réécrire le texte de la
     # notification avant qu'elle ne s'affiche.
+    push_type: alert
+
+  # Builds lancées depuis Xcode (`aps-environment: development` dans les
+  # entitlements). L'app_id porte le suffixe `.dev`, posé par le `#if DEBUG` de
+  # PushRegistration.pusherAppID — le bundle, lui, ne change pas.
+  com.correspondance.ios.dev:
+    type: apns
+    keyfile: /secrets/apns.p8
+    key_id: __APNS_KEY_ID__
+    team_id: __APNS_TEAM_ID__
+    topic: com.correspondance.ios
+    platform: sandbox
     push_type: alert
