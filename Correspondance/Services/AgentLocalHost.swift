@@ -287,10 +287,29 @@ enum AgentLocalHost {
 /// pas dépendre de l'AgentKit (`Process` n'existe pas sur iOS). Les deux
 /// définitions sont tenues ensemble par un test.
 enum AgentPaths {
-  static func directory(agent: String, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+  /// **`CORRESPONDANCE_HOME` déplace ce dossier**, exactement comme il déplace
+  /// les données de l'app et son entrée du Trousseau. Sans ça, un essai
+  /// écrivait l'amorce de son cc par-dessus celle du cc de production —
+  /// `docs/MATRIX-SETUP.md` signalait le piège et conseillait de sauter
+  /// l'étape ; il est corrigé, pas contourné. L'agent recalcule le même chemin
+  /// de son côté (`AgentHome.folderName`) : il hérite de la variable en tant
+  /// que processus enfant, donc les deux tombent d'accord sans se parler.
+  static func directory(
+    agent: String,
+    home: URL = FileManager.default.homeDirectoryForCurrentUser,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> URL {
+    home.appending(path: folderName(agent: agent, environment: environment))
+  }
+
+  static func folderName(
+    agent: String,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> String {
     let name = sanitize(agent)
-    if name == "cc" { return home.appending(path: ".correspondance-agent") }
-    return home.appending(path: ".correspondance-\(name)")
+    let base = name == "cc" ? ".correspondance-agent" : ".correspondance-\(name)"
+    guard let essai = CorrespondanceHome.resolvedName(from: environment) else { return base }
+    return "\(base)-\(essai)"
   }
 
   static func sanitize(_ agent: String) -> String {

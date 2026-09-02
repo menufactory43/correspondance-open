@@ -18,6 +18,12 @@ public struct MatrixRoomModel: Sendable {
   /// `com.beeper.room_type` de l'état de bridge : `dm` / `group`. Fait foi sur le comptage
   /// des membres (le bridge ajoute aussi notre propre ghost dans les DM).
   public var bridgeRoomType: String?
+  /// L'algorithme de `m.room.encryption`, s'il est posé. C'est **le seul fait**
+  /// qui distingue un salon chiffré d'un salon en clair, et l'app doit le
+  /// connaître même quand elle ne sait pas déchiffrer : un cadenas qui ment est
+  /// pire que pas de cadenas, et un cadenas absent alors que le salon est
+  /// chiffré ment aussi.
+  public var encryptionAlgorithm: String?
   public var members: [String: Member] = [:]
   public var heroes: [String] = []
   public var unreadCount: Int = 0
@@ -411,6 +417,7 @@ public struct MatrixRoomModel: Sendable {
       transportKey: roomID,
       isGroup: group
     )
+    conversation.encryptionAlgorithm = encryptionAlgorithm
     conversation.remoteAvatarID = avatarMXC
     // Un groupe sans photo se raconte par ses visages ; un DM, lui, a déjà le sien.
     conversation.memberAvatarIDs = (group && avatarMXC == nil)

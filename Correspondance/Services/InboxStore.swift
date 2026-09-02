@@ -93,6 +93,9 @@ final class InboxStore {
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
   var matrixStatusFR: String = "…"
+  /// « chiffrement : actif · cet appareil : vérifié · sauvegarde : faite »,
+  /// ou la raison pour laquelle une de ces trois choses manque.
+  var chiffrementFR: String = "…"
   var contactsStatusFR: String = "…"
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
@@ -183,6 +186,10 @@ final class InboxStore {
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
   let matrix = MatrixBridgeService()
+  /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
+  /// aussi longtemps que l'app : le tuer couperait le `/sync`.
+  @ObservationIgnored private var tailcat: TailcatProxy?
+  @ObservationIgnored private var observateurDeFermeture: (any NSObjectProtocol)?
   @ObservationIgnored private var loadTask: Task<Void, Never>?
   /// Boucle `/sync` : un long-poll qui ne s'arrête jamais, sans intervalle à régler.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
@@ -1737,6 +1744,10 @@ final class InboxStore {
     matrixSyncTask?.cancel()
     matrixSyncTask = nil
     stopBridgeLoginPolling()
+    // Le mandataire meurt avec la session. Le laisser vivre tiendrait un tunnel
+    // WireGuard ouvert vers une machine qu'on ne regarde plus, et il n'aurait
+    // plus rien à porter.
+    fermerTailcat()
     await matrix.disconnect()
     isMatrixConnected = false
     conversations.removeAll { $0.network.livesOnRelay }
@@ -1760,9 +1771,110 @@ final class InboxStore {
     startMatrixSync()
   }
 
+  /// Ouvre le chemin Tailcat vers le Relais et branche tout le trafic Matrix
+  /// dessus. Rend le port local du mandataire.
+  ///
+  /// Le mandataire est posé **avant** la connexion : posé après, le `/login`
+  /// serait déjà parti en direct, ce qui est précisément ce qu'on voulait
+  /// éviter — et un mot de passe serait passé par le chemin qu'on ne veut plus.
+  @discardableResult
+  func ouvrirTailcat(jeton: String) async throws -> Int {
+    let mandataire = tailcat ?? TailcatProxy()
+    tailcat = mandataire
+    // Le mandataire renaît s'il tombe — et son port change à chaque naissance
+    // (`--listen=127.0.0.1:0`). Sans ce rappel, l'app garderait l'ancien port,
+    // parlerait à un port fermé, et croirait le Relais muet.
+    mandataire.auRedemarrage = { [weak self] port in
+      guard let self else { return }
+      await self.matrix.utiliserMandataireSOCKS(port: port)
+      Self.relayLog.info("tailcat relancé, mandataire re-posé sur 127.0.0.1:\(port, privacy: .public)")
+    }
+    let port = try await mandataire.demarrer(jeton: jeton)
+    await matrix.utiliserMandataireSOCKS(port: port)
+    surveillerLaFermeture()
+    return port
+  }
+
+  /// Se connecter **à partir d'un code d'appairage** : le chemin d'abord, la
+  /// session ensuite.
+  ///
+  /// Écrit ici et pas dans une vue parce qu'il y a deux écrans qui appairent —
+  /// l'accueil et les réglages — et que deux copies de cette suite-là
+  /// divergeraient : c'est déjà arrivé, l'accueil ignorait Tailcat.
+  ///
+  /// L'ordre n'est pas négociable : le mandataire est posé **avant** le
+  /// `/login`. Posé après, le mot de passe serait déjà parti par le chemin
+  /// qu'on voulait éviter. Et si Tailcat refuse, on tombe sur l'adresse du
+  /// code plutôt que d'échouer — un Relais joignable autrement doit rester
+  /// joignable.
+  @discardableResult
+  func connecterParLeCode(_ code: RelayPairingCode) async -> String? {
+    var adresse = code.homeserver.absoluteString
+    var note: String?
+    if let jeton = code.tailcat, !jeton.isEmpty {
+      do {
+        let port = try await ouvrirTailcat(jeton: jeton)
+        adresse = "http://server.tailcat:\(code.homeserver.port ?? 8010)"
+        note = "Relais joint via Tailcat (mandataire local \(port))."
+      } catch {
+        note = "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription) "
+          + "— on tente l'adresse du code."
+      }
+    }
+    await connectMatrix(homeserver: adresse, user: code.userID, password: code.password)
+    return note
+  }
+
+  /// Arrête le mandataire et **retire** la configuration de mandataire du
+  /// client : sans le second geste, une reconnexion par une adresse ordinaire
+  /// repartirait vers un port mort.
+  func fermerTailcat() {
+    guard let mandataire = tailcat else { return }
+    mandataire.arreter()
+    tailcat = nil
+    if let observateurDeFermeture {
+      NotificationCenter.default.removeObserver(observateurDeFermeture)
+      self.observateurDeFermeture = nil
+    }
+    Task { await matrix.utiliserMandataireSOCKS(port: nil) }
+  }
+
+  /// La fermeture de l'app, observée **ici** plutôt que dans le délégué : le
+  /// délégué n'a pas de chemin vers ce magasin (il naît dans un `@State`), et
+  /// faire descendre une référence jusqu'à lui pour un seul `terminate()`
+  /// coûterait plus que ça ne rapporte.
+  private func surveillerLaFermeture() {
+    guard observateurDeFermeture == nil else { return }
+    observateurDeFermeture = NotificationCenter.default.addObserver(
+      forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.fermerTailcat() }
+    }
+  }
+
   func refreshMatrixStatus() async {
     matrixStatusFR = await matrix.statusMessageFR()
     isMatrixConnected = await matrix.isConnected
+    chiffrementFR = await chiffrementLigneFR()
+  }
+
+  /// La ligne du chiffrement dans les réglages. Trois faits, jamais un seul :
+  /// « actif » ne dit rien de l'appareil, et un appareil vérifié sans
+  /// sauvegarde perd quand même l'historique le jour où on le remplace.
+  private func chiffrementLigneFR() async -> String {
+    guard MatrixChiffrement.disponible else {
+      return "chiffrement : absent de ce binaire"
+    }
+    if MatrixChiffrement.eteintParLEnvironnement {
+      return "chiffrement : éteint par CORRESPONDANCE_CHIFFREMENT=0"
+    }
+    guard isMatrixConnected else { return "chiffrement : compilé, pas encore connecté" }
+    let etat = await matrix.etatDuChiffrement()
+    // Le partage de clés reste `TrustRequirement.untrusted` : on déchiffre ce
+    // qui arrive d'un appareil non vérifié plutôt que de rendre l'inbox
+    // aveugle. C'est une décision, pas un oubli, et elle se dit à l'écran.
+    return etat.resumeFR
+      + (etat.appareilVerifie ? "" : " — la vérification n'est pas encore exigée pour lire")
   }
 
   /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.

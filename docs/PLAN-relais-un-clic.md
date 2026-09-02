@@ -36,7 +36,7 @@ alors que le plan lui donnait les cartes et la phrase franche.
 | # | Marche | État |
 |---|---|---|
 | 1 | Créer le Relais | script non publié, jamais éprouvé, prérequis à la charge de l'utilisateur |
-| 2 | Tailscale sur l'iPhone | manuel, irréductible tant que le Relais n'est pas public (décision 6 de `PRODUCT.md`) |
+| 2 | Tailscale sur l'iPhone | manuel, irréductible tant que le Relais n'est pas public (décision 6 de `PRODUCT.md`) — **l'iPhone seulement** : depuis la phase 7b, le Mac joint le Relais par Tailcat, que l'installeur pose et que l'app embarque |
 | 3 | Push | Sygnal exige **notre** clé APNs ; le bootstrap la prend en variable, mode sandbox |
 | 4 | iMessage sur iPhone | non décidé ; exige le Mac allumé quel que soit le plan |
 | 5 | Distribuer l'app | ni DMG notarisé ni TestFlight ; l'app se lance depuis Xcode |
@@ -56,8 +56,8 @@ clic** dans l'app — le plan disait que c'était là le vrai « clé en main »
    conversations personnelles chez un tiers doit poser un Relais déjà chiffré. Nuance
    importante, § 4 : ce que le chiffrement protège ici est moins qu'on ne croit.
 3. **Deux cartes, pas trois** : *sur ce Mac* / *sur une machine à moi*. Chacune dit sa vérité
-   (« ton iPhone ne reçoit rien quand ce Mac dort » ; « il faut Tailscale sur l'iPhone, un
-   NUC chez toi est plus sûr qu'un serveur loué »).
+   (« ton iPhone ne reçoit rien quand ce Mac dort » ; « le Mac s'y connecte tout seul, l'iPhone
+   a encore besoin de Tailscale, un NUC chez toi est plus sûr qu'un serveur loué »).
 4. **Pas de case « veux-tu chiffrer ? »** Là où c'est possible, c'est le défaut. Les vrais
    choix de l'utilisateur sont : où vit le Relais (R), la phrase de sauvegarde des clés et la
    vérification d'appareil (E), quels salons cc peut lire et quel moteur (A).
@@ -143,15 +143,18 @@ Le plan disait « pas avant dix utilisateurs ». Ces dix-là ont une machine à 
 définition ; la carte « sur ce Mac » n'est pas nécessaire pour eux.
 
 1. **Publier l'installeur distant** (2 j). `infra/matrix/install.sh` part dans
-   `correspondance-releases` à côté de celui de cc. Sur Linux il **pose** Docker et Tailscale
-   au lieu de les vérifier. Il finit sur une preuve (« le Relais répond ») et le code
+   `correspondance-releases` à côté de celui de cc. Sur Linux il **pose** ce dont il a besoin
+   au lieu de le vérifier — et depuis la phase 7b, ce n'est plus ni Docker ni Tailscale mais
+   **Tailcat** : pas de compte, pas de tailnet, pas de sudo. Le code d'appairage porte son
+   jeton, et le Mac s'y connecte tout seul. Il finit sur une preuve (« le Relais répond ») et le code
    d'appairage — jamais « installé » sans preuve, leçon de l'installeur de cc. **Éprouvé une
    fois sur un VPS vierge**, ce qui n'a jamais été fait.
 2. **Chiffrement des portails** (1 h + test). `encryption.allow/default: true` dans les quatre
    modèles de ponts ; vérifier que l'app lit encore les salons. Le E2EE complet côté app
    (`CorrespondanceCrypto`, 5–8 j) reste au plan, il ne bloque pas un premier utilisateur.
 3. **L'écran d'accueil** (1 j). Sans Relais, le champ du code d'appairage devient l'écran
-   d'accueil, avec la commande à copier à côté et la phrase sur Tailscale iPhone. La carte
+   d'accueil, avec la commande à copier à côté et la phrase qui dit la vérité qui reste :
+   « le Mac s'y connecte tout seul ; l'iPhone a encore besoin de Tailscale ». La carte
    « sur ce Mac » est présente mais dit « bientôt » — ou demande OrbStack, franchement.
 4. **Un DMG notarisé** (1 j). Sans, personne ne teste.
 
@@ -171,7 +174,10 @@ graphique + mot de passe admin ; Homebrew aussi). La pile Mac doit se passer de 
 - **Homeserver** : Synapse par `uv` (installe son Python sans droits admin) + SQLite, dans
   `~/Library/Application Support/Correspondance/Relais`, en agent launchd pour survivre à la
   fermeture de l'app. Postgres disparaît. Sygnal disparaît si la passerelle est chez nous.
-- **Tailscale** reste manuel (App Store) ; la carte l'explique.
+- **Tailscale** reste manuel (App Store) **sur l'iPhone** ; la carte l'explique. Sur le Mac,
+  il n'est plus nécessaire : Tailcat est embarqué dans l'app depuis la phase 7b, et une app
+  iPhone ne peut pas en faire autant (`Process` n'existe pas, et CFNetwork n'y offre pas de
+  mandataire SOCKS — cf. `docs/spike-un-clic/phase-7a.md` § 3).
 - Téléchargé une fois à l'installation (~250 Mo : Python + Synapse 150, quatre ponts 100),
   **le bundle ne grossit pas**.
 

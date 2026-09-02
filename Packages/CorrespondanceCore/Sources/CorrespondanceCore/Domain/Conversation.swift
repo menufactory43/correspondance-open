@@ -30,8 +30,23 @@ public struct Conversation: Identifiable, Hashable, Sendable {
   /// Photos des membres d'un groupe **sans** photo à lui : de quoi composer une
   /// mosaïque, comme Messages et Instagram. Vide dès qu'il y a mieux à montrer.
   public var memberAvatarIDs: [String] = []
+  /// L'algorithme de `m.room.encryption` du salon Matrix, s'il y en a un.
+  /// Vide pour iMessage, qui a son propre chiffrement et sa propre histoire.
+  public var encryptionAlgorithm: String? = nil
 
   public var hasUnread: Bool { unreadCount > 0 }
+
+  /// Les trois états, et seulement ceux-là : « chiffré » (salon natif portant
+  /// `m.room.encryption`), « chiffré par le pont » (un portail — le pont lit en
+  /// clair pour traduire), « en clair ».
+  ///
+  /// **Un portail ne montre jamais le cadenas du bout en bout**, même quand
+  /// l'installeur a posé `encryption.default: true` sur le pont : ce chiffrement
+  /// protège la base du Relais, pas la conversation.
+  public var privacy: ConversationPrivacy {
+    ConversationPrivacy.of(
+      isBridged: network.isMatrixBridged, encryptionAlgorithm: encryptionAlgorithm)
+  }
 
   public var rowSystemImage: String {
     if isGroup && network != .iMessage { return "person.3.fill" }

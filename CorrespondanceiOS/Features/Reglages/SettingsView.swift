@@ -16,6 +16,10 @@ struct SettingsView: View {
   @Environment(\.dismiss) private var dismiss
 
   @State private var credentials: MatrixCredentials?
+  /// Le modèle des deux écrans du chiffrement — le même qu'au Mac. Il naît
+  /// avec la session et meurt avec elle : un modèle qui survivrait à un
+  /// changement de compte montrerait la phrase de l'autre.
+  @State private var chiffrement: ModeleChiffrement?
   @State private var isSigningOut = false
   @State private var confirmsSignOut = false
 
@@ -26,6 +30,10 @@ struct SettingsView: View {
     NavigationStack {
       List {
         relaySection
+        if let chiffrement {
+          PhraseDeRecuperationSection(modele: chiffrement)
+          AppareilsSection(modele: chiffrement)
+        }
         bridgesSection
         themeSection
         sendingSection
@@ -46,6 +54,13 @@ struct SettingsView: View {
     .task {
       credentials = MatrixCredentialStore.load()
       await push.refreshAuthorization()
+      if let compte = credentials?.userID, chiffrement == nil {
+        chiffrement = ModeleChiffrement(
+          compte: compte,
+          service: ChiffrementParLeRelais(store.matrix),
+          magasin: MagasinDePhraseAuTrousseau()
+        )
+      }
     }
     .confirmationDialog(
       "Se déconnecter du Relais ?",

@@ -1,0 +1,18 @@
+module matrix_sdk_commonFFI {
+    header "matrix_sdk_commonFFI.h"
+    export *
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}
+module matrix_sdk_cryptoFFI {
+    header "matrix_sdk_cryptoFFI.h"
+    export *
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}
+module MatrixSDKCryptoFFI {
+    header "MatrixSDKCryptoFFI.h"
+    export *
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}

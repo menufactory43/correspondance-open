@@ -6,12 +6,45 @@ import Foundation
 /// Client Matrix Client-Server v3 en REST pur (`URLSession`). Pas de SDK, pas d'E2EE :
 /// homeserver privé sur Tailscale, salons de bridge non chiffrés.
 public actor MatrixClient {
-  private var credentials: MatrixCredentials?
-  private let session: URLSession
+  var credentials: MatrixCredentials?
+  private var session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
   private var ledger = MatrixTransactionLedger()
+  /// Le corps JSON du dernier échec HTTP. `MatrixError.http` ne porte que le
+  /// code et le message ; or l'authentification interactive (le `401` de
+  /// `keys/device_signing/upload`) met la `session` du défi dans le corps.
+  var dernierCorpsDErreur: MatrixJSON?
+  /// La machine crypto, si le drapeau du chiffrement est levé et qu'on l'a
+  /// branchée. `nil` par défaut : le client est alors celui d'avant, au bit près.
+  var cryptoEngine: MatrixCryptoEngine?
+  var salonsChiffresConnus: Set<String> = []
+  var salonsClairsConnus: Set<String> = []
+  var journalCrypto = MatrixCryptoJournal()
+  /// La dernière erreur de chiffrement, pour le journal. Une clé pas encore
+  /// reçue n'est pas une panne : on la note et on continue.
+  public internal(set) var journalCryptoErreur: String?
+  /// Les `to_device` que la machine a lus au dernier `/sync`, en clair — c'est
+  /// là qu'on voit passer un `m.room_key`.
+  public internal(set) var journalCryptoToDevice: [String] = []
+  /// Les `to_device` **avant** déchiffrement, tels que le serveur les livre.
+  public internal(set) var journalCryptoToDeviceBruts: [String] = []
 
-  public init(credentials: MatrixCredentials? = nil) {
+  /// Quelle administration ce Relais offre — détecté **une fois par session**
+  /// (cf. `MatrixClient+Admin.swift`), jamais redemandé ensuite.
+  var administration: RelaisAdministration?
+  /// La couche `#admins`, construite au premier besoin.
+  var couchesalonAdmin: MatrixSalonAdmin?
+
+  /// `mandataire` fait passer tout le trafic par un mandataire SOCKS local —
+  /// c'est ce que `tailcat` ouvre pour joindre un Relais qui n'écoute que sur
+  /// son `127.0.0.1`, sans tunnel ssh et sans Tailscale. Il s'applique **à la
+  /// configuration**, donc à toutes les requêtes du client, `/sync` et médias
+  /// compris : un mandataire posé sur une partie du trafic seulement laisserait
+  /// une connexion directe, c'est-à-dire un aveu de qui parle à qui.
+  public init(
+    credentials: MatrixCredentials? = nil,
+    mandataire: [String: Any]? = nil
+  ) {
     self.credentials = credentials
     let config = URLSessionConfiguration.ephemeral
     // Le long-poll /sync tient 30 s côté serveur : la marge évite les faux timeouts.
@@ -19,7 +52,24 @@ public actor MatrixClient {
     config.timeoutIntervalForResource = 120
     #if !canImport(FoundationNetworking)
       config.waitsForConnectivity = false
+      config.connectionProxyDictionary = mandataire
     #endif
+    session = URLSession(configuration: config)
+  }
+
+  /// Change le mandataire **en cours de route**. Sans ça, un code d'appairage
+  /// qui porte un jeton Tailcat n'aurait d'effet qu'au lancement suivant : la
+  /// configuration d'une `URLSession` est figée à sa création, et la modifier
+  /// après coup ne fait rien — silencieusement.
+  public func utiliserMandataire(_ mandataire: [String: Any]?) {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 60
+    config.timeoutIntervalForResource = 120
+    #if !canImport(FoundationNetworking)
+      config.waitsForConnectivity = false
+      config.connectionProxyDictionary = mandataire
+    #endif
+    session.invalidateAndCancel()
     session = URLSession(configuration: config)
   }
 
@@ -123,11 +173,17 @@ public actor MatrixClient {
     if let since { items.append(URLQueryItem(name: "since", value: since)) }
     if let filter { items.append(URLQueryItem(name: "filter", value: filter)) }
     let data = try await rawRequest(method: "GET", path: "/_matrix/client/v3/sync", query: items)
+    let reponse: MatrixSyncResponse
     do {
-      return try JSONDecoder().decode(MatrixSyncResponse.self, from: data)
+      reponse = try JSONDecoder().decode(MatrixSyncResponse.self, from: data)
     } catch {
       throw MatrixError.decoding("sync — \(error.localizedDescription)")
     }
+    // Le chiffrement se règle **ici**, avant que quiconque voie la réponse :
+    // le reste du pipeline ne connaît que des `m.room.message`. Sans moteur
+    // branché, cet appel rend la réponse telle quelle.
+    guard cryptoEngine != nil else { return reponse }
+    return await appliquerChiffrement(reponse)
   }
 
   // MARK: - Salons
@@ -264,9 +320,6 @@ public actor MatrixClient {
     return roomID
   }
 
-  /// Un salon privé dont je suis le seul membre — la note à soi. Aucune
-  /// invitation : personne d'autre n'y entre, et rien n'est chiffré (le
-  /// Relais est privé, cf. ADR 0001).
   /// Un salon privé avec des invités et un état initial — le tête-à-tête avec
   /// un agent, marqué dès la création (`AgentWire.conversationType`), parce
   /// qu'un marqueur posé après coup laisserait un instant où le salon n'est
@@ -289,16 +342,33 @@ public actor MatrixClient {
     return roomID
   }
 
-  public func createSelfRoom(name: String) async throws -> String {
-    let body: MatrixJSON = .object([
+  /// Un salon privé dont je suis le seul membre — la note à soi. Aucune
+  /// invitation : personne d'autre n'y entre, et rien n'est chiffré (le
+  /// Relais est privé, cf. ADR 0001).
+  ///
+  /// `chiffre:` pose un `m.room.encryption` **à la création** — un salon ne se
+  /// chiffre pas après coup sans laisser un morceau d'historique en clair.
+  /// Faux par défaut : c'est le drapeau du chantier E qui le lèvera.
+  public func createSelfRoom(name: String, chiffre: Bool = false) async throws -> String {
+    var champs: [String: MatrixJSON] = [
       "preset": .string("private_chat"),
       "name": .string(name),
       "visibility": .string("private"),
-    ])
-    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: body)
+    ]
+    if chiffre {
+      champs["initial_state"] = .array([
+        .object([
+          "type": .string("m.room.encryption"),
+          "state_key": .string(""),
+          "content": .object(["algorithm": .string("m.megolm.v1.aes-sha2")]),
+        ])
+      ])
+    }
+    let json = try await request(method: "POST", path: "/_matrix/client/v3/createRoom", body: .object(champs))
     guard let roomID = json.string(at: "room_id") else {
       throw MatrixError.decoding("createRoom sans room_id")
     }
+    if chiffre { salonsChiffresConnus.insert(roomID) }
     return roomID
   }
 
@@ -327,6 +397,14 @@ public actor MatrixClient {
       if let replyFallback {
         content["body"] = .string("> <\(replyFallback.sender)> \(replyFallback.text)\n\n\(text)")
       }
+    }
+    // Sans moteur crypto, le chemin d'avant, inchangé. Avec, on passe par
+    // `sendEvent`, qui sait chiffrer.
+    if cryptoEngine != nil {
+      return try await sendEvent(
+        roomID: roomID, type: "m.room.message", content: .object(content),
+        transactionID: transactionID
+      )
     }
     let json = try await request(
       method: "PUT",
@@ -368,10 +446,18 @@ public actor MatrixClient {
   ) async throws -> String? {
     try Self.refuseLesFlottants(in: content, type: type)
     guard !ledger.isUsed(transactionID) else { return nil }
+    // Salon chiffré : le contenu part en `m.room.encrypted`, la clé de salon
+    // ayant d'abord été portée aux appareils des membres.
+    var typeEnvoye = type
+    var corps = content
+    if cryptoEngine != nil, type != "m.room.encrypted", await salonEstChiffre(roomID) {
+      corps = try await chiffrerPourEnvoi(roomID: roomID, type: type, content: content)
+      typeEnvoye = "m.room.encrypted"
+    }
     let json = try await request(
       method: "PUT",
-      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(type))/\(Self.escape(transactionID))",
-      body: content
+      path: "/_matrix/client/v3/rooms/\(Self.escape(roomID))/send/\(Self.escape(typeEnvoye))/\(Self.escape(transactionID))",
+      body: corps
     )
     ledger.markUsed(transactionID)
     return json.string(at: "event_id")
@@ -493,23 +579,49 @@ public actor MatrixClient {
   /// pont, dans un portail). C'est ce qui débloque « inviter » dans un groupe
   /// où le pont ne m'a rien accordé.
   public func makeRoomAdmin(roomID: String, userID: String) async throws {
-    _ = try await request(
-      method: "POST",
-      path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
-      body: .object(["user_id": .string(userID)])
-    )
+    if await administrationDuRelais() == .salonAdmin {
+      throw MatrixError.administrationIndisponible(
+        "donner le pouvoir dans un salon (make_room_admin)")
+    }
+    do {
+      _ = try await request(
+        method: "POST",
+        path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
+        body: .object(["user_id": .string(userID)])
+      )
+    } catch let erreur where Self.estUneRouteInconnue(erreur) {
+      noterSalonAdmin()
+      // Continuwuity n'a **rien** d'équivalent : `!admin users` sait descendre
+      // un pouvoir (`force-demote`), jamais le monter. On le dit franchement
+      // plutôt que d'échouer d'une façon que l'écran ne saurait pas nommer.
+      throw MatrixError.administrationIndisponible(
+        "donner le pouvoir dans un salon (make_room_admin)")
+    }
   }
 
   /// Suis-je administrateur de ce Relais ? L'app le vérifie **avant** de
   /// promettre quoi que ce soit : sans ce pouvoir, « Activer cc » ne peut pas
   /// créer le compte du bot, et il vaut mieux le dire que d'échouer à mi-chemin.
   public func isServerAdmin(userID: String) async -> Bool {
-    let json = try? await request(
-      method: "GET",
-      path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
-      body: nil
-    )
-    return json?.value(at: "admin")?.boolValue == true
+    if await administrationDuRelais() != .salonAdmin {
+      do {
+        let json = try await request(
+          method: "GET",
+          path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
+          body: nil
+        )
+        return json.value(at: "admin")?.boolValue == true
+      } catch let erreur where Self.estUneRouteInconnue(erreur) {
+        noterSalonAdmin()
+      } catch {
+        return false
+      }
+    }
+    // Chez Continuwuity, « je suis administrateur » veut dire « je suis membre
+    // de #admins » : le premier compte enregistré y est mis d'office, et c'est
+    // par ce salon que passe toute l'administration.
+    guard let salon = salonAdmin() else { return false }
+    return await salon.jeSuisAdministrateur()
   }
 
   /// Crée (ou met à jour) le compte d'un bot — c'est ainsi qu'« Activer cc »
@@ -531,11 +643,19 @@ public actor MatrixClient {
       "logout_devices": .bool(false),
     ]
     if let displayName { body["displayname"] = .string(displayName) }
-    _ = try await request(
-      method: "PUT",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
-      body: .object(body)
-    )
+    if await administrationDuRelais() != .salonAdmin {
+      do {
+        _ = try await request(
+          method: "PUT",
+          path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+          body: .object(body)
+        )
+        return
+      } catch let erreur where Self.estUneRouteInconnue(erreur) {
+        noterSalonAdmin()
+      }
+    }
+    try await provisionnerParSalonAdmin(userID: userID, password: password)
   }
 
   /// Renomme la session courante — `PUT /devices/<id>`. L'agent s'en sert quand
@@ -566,11 +686,20 @@ public actor MatrixClient {
   /// lui-même ne peut pas taire : un binaire d'hier qui ne publie aucun status
   /// a quand même une session, vue par le serveur à chaque `/sync`.
   public func userDevices(userID: String) async throws -> [UserDevice] {
-    let json = try await request(
-      method: "GET",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))/devices",
-      body: nil
-    )
+    if await administrationDuRelais() == .salonAdmin {
+      return try await sessionsParSalonAdmin(userID: userID)
+    }
+    let json: MatrixJSON
+    do {
+      json = try await request(
+        method: "GET",
+        path: "/_synapse/admin/v2/users/\(Self.escape(userID))/devices",
+        body: nil
+      )
+    } catch let erreur where Self.estUneRouteInconnue(erreur) {
+      noterSalonAdmin()
+      return try await sessionsParSalonAdmin(userID: userID)
+    }
     return (json.value(at: "devices")?.arrayValue ?? []).compactMap { device in
       guard let id = device.value(at: "device_id")?.stringValue else { return nil }
       let seen = device.value(at: "last_seen_ts")?.doubleValue.map { Date(timeIntervalSince1970: $0 / 1000) }
@@ -580,13 +709,25 @@ public actor MatrixClient {
 
   /// Ce compte existe-t-il déjà sur le Relais ? Pour ne pas réinitialiser le
   /// mot de passe d'un bot qui tourne très bien.
+  /// `GET /_matrix/client/v3/profile/{id}` : de l'API **cliente** standard, donc
+  /// vraie sur les deux Relais. Le chemin `_synapse/admin` d'avant n'apportait
+  /// rien de plus et ne marchait que chez Synapse. 404 = le compte n'existe pas.
   public func userExists(_ userID: String) async -> Bool {
-    let json = try? await request(
-      method: "GET",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
-      body: nil
-    )
-    return json?.value(at: "name")?.stringValue != nil
+    do {
+      _ = try await request(
+        method: "GET",
+        path: "/_matrix/client/v3/profile/\(Self.escape(userID))",
+        body: nil
+      )
+      return true
+    } catch MatrixError.http(let status, _, _) where status == 404 {
+      return false
+    } catch {
+      // Une panne de réseau n'est pas une absence de compte : on ne promet
+      // rien, et l'appelant reposera un mot de passe pour rien plutôt que de
+      // croire à un compte qui n'existe pas.
+      return false
+    }
   }
 
   /// Retire un event — c'est ainsi qu'on retire une réaction.
@@ -1050,7 +1191,7 @@ public actor MatrixClient {
   // MARK: - Transport
 
   @discardableResult
-  private func request(
+  func request(
     method: String,
     path: String,
     query: [URLQueryItem] = [],
@@ -1074,7 +1215,7 @@ public actor MatrixClient {
     }
   }
 
-  private func rawRequest(
+  func rawRequest(
     method: String,
     path: String,
     query: [URLQueryItem] = [],
@@ -1132,6 +1273,7 @@ public actor MatrixClient {
     }
     guard (200..<300).contains(http.statusCode) else {
       let json = try? JSONDecoder().decode(MatrixJSON.self, from: data)
+      dernierCorpsDErreur = json
       throw MatrixError.http(
         status: http.statusCode,
         errcode: json?.string(at: "errcode"),

@@ -100,6 +100,43 @@ targets:
             echo "error: binaire de l'agent introuvable ($BIN)"
             exit 1
           fi
+      # Le mandataire Tailcat, embarqué plutôt que téléchargé.
+      #
+      # Pourquoi embarquer. Un binaire téléchargé à l'exécution arriverait en
+      # quarantaine, non signé, hors du sceau de l'app — c'est-à-dire hors de la
+      # notarisation, et à la merci de qui tient le réseau au moment précis où
+      # l'on ouvre un chemin réseau. Embarqué, il est signé avec l'app, il
+      # marche hors ligne, et « ce que l'app lance » est exactement « ce qui a
+      # été notarisé ».
+      #
+      # Il vient de ~/unclic-publication, construit par
+      # `infra/relais/construire.sh --quoi tailcat` au tag épinglé : cette phase
+      # ne construit rien, elle copie. Absent, elle n'échoue PAS — une build de
+      # développement doit rester possible sans lui — et l'app le dit à l'écran
+      # (« tailcat n'est pas dans ce bundle »).
+      - name: Embed tailcat
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          APP="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}"
+          SRC_BIN="${CORRESPONDANCE_PUBLICATION:-$HOME/unclic-publication}/tailcat-darwin-arm64"
+          if [ ! -f "$SRC_BIN" ]; then
+            echo "warning: tailcat-darwin-arm64 absent — l'app dira « tailcat n'est pas dans ce bundle » (bash infra/relais/construire.sh --quoi tailcat)"
+            rm -f "$APP/Helpers/tailcat"
+            exit 0
+          fi
+          mkdir -p "$APP/Helpers"
+          cp -f "$SRC_BIN" "$APP/Helpers/tailcat"
+          chmod 755 "$APP/Helpers/tailcat"
+          # Un exécutable imbriqué se signe SÉPARÉMENT : la signature de l'app
+          # ne fait que le sceller. Sans ça, une build notarisée porterait un
+          # binaire « not signed at all » et Gatekeeper refuserait l'app
+          # entière — pas seulement le mandataire.
+          IDENTITE="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-${CODE_SIGN_IDENTITY:--}}"
+          codesign --force --options runtime --timestamp=none \
+            --sign "$IDENTITE" "$APP/Helpers/tailcat" 2>/dev/null \
+            || codesign --force --options runtime --sign - "$APP/Helpers/tailcat"
+          echo "Embedded tailcat: $SRC_BIN → $APP/Helpers/tailcat"
     dependencies:
       - package: CorrespondanceCore
         product: CorrespondanceCore
@@ -153,6 +190,16 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
           NSExceptionDomains:
+            # Le nom magique du mandataire Tailcat. Le trafic y est en HTTP
+            # clair, mais il ne quitte jamais la machine en clair : il entre
+            # dans un tunnel WireGuard chiffré de bout en bout avant le premier
+            # octet sur le réseau. Sans cette exception, ATS refuse la requête
+            # avec « requires the use of a secure connection » et l'écran dit
+            # « le homeserver ne répond pas » — il accuse le Relais d'une panne
+            # qui n'est pas la sienne. Écrite ICI et pas dans l'Info.plist :
+            # xcodegen réengendre ce fichier, et la phase 7a l'avait perdue.
+            server.tailcat:
+              NSExceptionAllowsInsecureHTTPLoads: true
             ts.net:
               NSIncludesSubdomains: true
               NSExceptionAllowsInsecureHTTPLoads: true

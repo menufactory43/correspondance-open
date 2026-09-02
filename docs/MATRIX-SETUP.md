@@ -15,6 +15,22 @@ Mac (Correspondance) ──Tailscale──► Synapse ─────┤
 Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
 pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
+### Par où le Mac joint le Relais
+
+Le schéma ci-dessus est celui de **la prod** : le NUC, Synapse, Docker, et Tailscale pour
+traverser. Le Relais « un clic » (`infra/relais/install.sh`, `docs/spike-un-clic/`) prend un
+autre chemin depuis la phase 7b, et c'est celui qui sera livré :
+
+| | Prod (ce document) | Relais un clic |
+|---|---|---|
+| Depuis le Mac | Tailscale (compte, tailnet, extension système) | **Tailcat** — WireGuard sans plan de contrôle : ni compte, ni tailnet, ni démon privilégié, ni sudo |
+| Ce que l'utilisateur pose | Tailscale, à la main, avec sudo | rien : l'installeur pose Tailcat sur le Relais, l'app l'embarque |
+| Ce qui porte l'adresse | une IP `100.x` à recopier | le code d'appairage, qui porte le jeton |
+| Depuis l'iPhone | Tailscale | **Tailscale encore** : `Process` n'existe pas sur iOS et CFNetwork n'y offre pas de mandataire SOCKS (`docs/spike-un-clic/phase-7a.md` § 3) |
+
+Un homeserver n'écoute que sur `127.0.0.1` dans les deux cas — un homeserver ouvert sur
+l'Internet est une porte. Ce qui change, c'est ce qu'il faut monter pour le traverser.
+
 ## Essayer de bout en bout, sans rien risquer
 
 Tout ce qui suit tourne **à côté** de la prod, jamais dedans : un Synapse d'essai sur le
@@ -118,16 +134,18 @@ Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse e
 minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent s'ouvre depuis les
 réglages, ou `tail -f /tmp/correspondance-cc.log`.
 
-**Attention, un dossier n'est pas isolé** : « Activer sur ce Mac » écrit l'amorce de `cc`
-dans `~/.correspondance-agent/`, et `CORRESPONDANCE_HOME` ne le déplace pas — il ne déplace
-que les données de l'**app**. Vérifie qu'il est libre avant :
+**Le dossier d'amorce suit l'essai** (corrigé en phase 4 du spike « un clic » ; avant, il ne
+le suivait pas et il fallait sauter cette étape). « Activer sur ce Mac » écrit l'amorce de
+`cc` dans `~/.correspondance-agent/`, et sous `CORRESPONDANCE_HOME=unclic` dans
+`~/.correspondance-agent-unclic/` — le même suffixe que le dossier de données et que
+l'entrée du Trousseau. L'agent, lancé par l'app, hérite de la variable et recalcule le même
+chemin ; le journal suit aussi (`/tmp/correspondance-cc-unclic.log`). Le cc de production
+n'est donc jamais touché par un essai. Pour le vérifier :
 
 ```bash
-ls ~/.correspondance-agent/config.json 2>/dev/null && echo "OCCUPÉ — ne pas activer cc ici"
+ls ~/.correspondance-agent/config.json 2>/dev/null && echo "un cc de production vit ici"
+ls ~/.correspondance-agent-unclic/config.json 2>/dev/null && echo "et celui de l'essai, là"
 ```
-
-S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans agent
-local.
 
 ### 5. Brancher `correspondance-mcp` dans Claude Desktop
 
@@ -303,8 +321,61 @@ Le jeton d'accès part dans le **Trousseau** (jamais dans UserDefaults, jamais d
 ligne « État » affiche ensuite le MXID connecté et le décompte des fils par réseau
 (« 12 WhatsApp · 3 Instagram »). **Déconnecter Matrix** révoque le jeton côté serveur, vide le Trousseau et le cache disque des conversations.
 
-Pas de chiffrement de bout en bout côté client : le homeserver est privé, sur Tailscale, et les
-salons de bridge sont créés non chiffrés (`encryption.allow: false`).
+### Chiffrement
+
+> Écrit à la phase 5 du spike « un clic » (`docs/spike-un-clic/phase-5.md`). Sur le Relais
+> **historique** (Synapse du NUC), rien de tout ceci n'est allumé : ses salons de bridge sont
+> créés non chiffrés (`encryption.allow: false`). Ce qui suit décrit le Relais que
+> `infra/relais/install.sh` pose, où les portails sont chiffrés par défaut.
+
+**Un seul drapeau, et il est dans le manifeste.** `CORRESPONDANCE_CRYPTO=1` à la construction
+ajoute `matrix-sdk-crypto-ffi` (XCFramework Apple, version épinglée et vérifiée par somme) et
+les cibles qui vont avec. Sans lui, le paquet est celui d'avant : aucune dépendance binaire
+résolue, et `correspondance-agent` se construit sous Linux, où l'XCFramework n'existe pas.
+
+```
+swift build                                   # sans chiffrement
+CORRESPONDANCE_CRYPTO=1 swift build \
+  --scratch-path /tmp/build-crypto            # avec
+```
+
+Le `--scratch-path` séparé n'est pas une coquetterie : les deux configurations qui partagent un
+`.build` laissent un module de la précédente traîner, et le `#if canImport` reste vrai.
+
+**`CORRESPONDANCE_CHIFFREMENT=1` n'est plus requis.** Il l'était pendant que le chantier était
+commencé et pas fini ; le garder livrerait une app dont le chiffrement est éteint chez tout le
+monde. Un binaire construit avec la crypto chiffre. `CORRESPONDANCE_CHIFFREMENT=0` reste lu
+comme **soupape** — revenir au comportement d'avant sans reconstruire — pour l'app comme pour
+`cc`, et l'écran des réglages le dit quand elle est tirée.
+
+**Ce que le chiffrement couvre.**
+
+| | |
+|---|---|
+| Salons natifs (note à soi, console d'agent, ateliers) | chiffrés de bout en bout, Megolm |
+| Portails de ponts | chiffrés **jusqu'au pont**, qui déchiffre pour traduire — jamais du bout en bout, et la fiche de conversation le dit |
+| `correspondance-agent` sur macOS | lit et écrit chiffré ; magasin sous `~/.correspondance-agent[-essai]/crypto/` |
+| `correspondance-agent` sur Linux | **en clair** : la bibliothèque Rust n'est pas encore construite pour Linux (recette dans `phase-5.md`) |
+| Extension de notification iOS | déchiffre, **si** l'App Group `group.com.correspondance` existe ; sinon elle affiche « Message chiffré — ouvre Correspondance » |
+
+**La phrase de récupération.** La sauvegarde des clés (`m.megolm_backup.v1.curve25519-aes-sha2`)
+se crée depuis une phrase ; le sel et le nombre de tours PBKDF partent dans `auth_data`, ce qui
+permet à un appareil neuf de redériver la même clé avec la seule phrase et de lire l'historique
+d'avant sa création. Sans elle, un appareil ajouté ne voit pas le passé — c'est le comportement
+de Megolm, pas un défaut.
+
+Deux pièges d'exploitation, mesurés :
+
+- **Continuwuity ne rend pas la version la plus récente** à `GET /room_keys/version`, alors
+  qu'il n'autorise à écrire que dans la dernière créée. Remplacer une sauvegarde exige donc de
+  retirer **toutes** les versions, pas seulement celle qu'il nomme.
+- **`POST /keys/device_signing/upload` ne passe sans authentification que sur un compte
+  vierge.** Dès qu'il porte des clés de signature, il faut le mot de passe (authentification
+  interactive) : remplacer la clé maîtresse, c'est remplacer l'identité du compte.
+
+**Le magasin de clés** vit sous le dossier de données de l'app (donc déplacé d'un bloc par
+`CORRESPONDANCE_HOME`), et sous le conteneur d'App Group sur iOS quand il existe. Le perdre,
+c'est perdre l'historique chiffré de cet appareil — sauf si la sauvegarde est faite.
 
 ## 2. Connecter WhatsApp — le QR
 

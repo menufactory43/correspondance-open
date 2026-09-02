@@ -14,7 +14,33 @@ struct ContentView: View {
   private var theme: WritingTheme { themes.theme }
   private var isFocus: Bool { store.mode == .focus }
 
+  /// Pas de Relais, et rien qui vienne d'un Relais : c'est le seul cas où
+  /// l'écran d'accueil vaut mieux que l'inbox.
+  ///
+  /// La condition n'est **pas** « l'inbox est vide » : ce Mac a des
+  /// conversations iMessage dès le premier lancement, et l'écran d'accueil ne
+  /// serait alors jamais apparu — c'est ce qui s'est passé au premier essai.
+  /// Elle n'est pas non plus « déconnecté » tout court : une coupure passagère
+  /// ne doit pas escamoter des fils déjà synchronisés, qui se lisent hors
+  /// ligne. Ce qu'on regarde, c'est s'il existe une seule conversation qui
+  /// vienne du Relais — WhatsApp, Signal, Instagram, Messenger, la note à soi.
+  private var manqueUnRelais: Bool {
+    !store.isMatrixConnected && !store.conversations.contains { $0.network.livesOnRelay }
+  }
+
+  @ViewBuilder
   var body: some View {
+    if manqueUnRelais {
+      AccueilRelaisView()
+        .correspondanceWindowBackground(theme.paper)
+        .tint(theme.accent)
+        .correspondanceWindowChrome(theme)
+    } else {
+      inbox
+    }
+  }
+
+  private var inbox: some View {
     NavigationSplitView(columnVisibility: $columnVisibility) {
       sidebar
         .navigationSplitViewColumnWidth(

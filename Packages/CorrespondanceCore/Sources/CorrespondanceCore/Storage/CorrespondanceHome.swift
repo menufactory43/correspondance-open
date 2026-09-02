@@ -33,7 +33,7 @@ public enum CorrespondanceHome {
   /// vraies conversations.
   public static var isTrial: Bool { name != nil }
 
-  static func resolvedName(from environment: [String: String]) -> String? {
+  public static func resolvedName(from environment: [String: String]) -> String? {
     guard let brut = environment["CORRESPONDANCE_HOME"] else { return nil }
     let propre = sanitize(brut)
     return propre.isEmpty ? nil : propre
@@ -95,5 +95,59 @@ public enum CorrespondanceHome {
   /// Un fichier dans le dossier de données.
   public static func file(_ name: String) -> URL {
     directory().appendingPathComponent(name)
+  }
+
+  /// Le dossier **partagé entre l'app et ses extensions**.
+  ///
+  /// L'extension de notification est un autre processus, avec son propre bac à
+  /// sable : le magasin de clés de l'app lui est invisible. Le seul chemin qui
+  /// les réunit est le conteneur d'un App Group. Tant que le groupe n'existe
+  /// pas dans le portail développeur, `containerURL` rend `nil` et **on retombe
+  /// sur le dossier de l'app** : rien ne change, et rien ne casse — l'extension
+  /// affichera simplement son repli devant un message chiffré, ce qu'elle doit
+  /// dire au lieu de le taire.
+  ///
+  /// Le même suffixe d'essai s'applique : un essai ne partage pas le conteneur
+  /// de la production.
+  /// **Piège mesuré** : sur macOS **hors bac à sable**, `containerURL` rend un
+  /// chemin pour *n'importe quel* identifiant de groupe, même inventé. Ce n'est
+  /// donc pas une preuve d'entitlement, et s'y fier déplacerait le magasin de
+  /// clés de l'app Mac dans `~/Library/Group Containers/…` — les clés
+  /// existantes resteraient sur place, orphelines, et l'historique chiffré
+  /// serait perdu sans un mot. Le partage ne vaut donc **que pour iOS**, où
+  /// l'extension existe et où le conteneur exige l'entitlement.
+  public static func sharedDirectory(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    appGroup: String = SharedRelayState.appGroup,
+    groupePossible: Bool = Self.groupePossibleSurCettePlateforme,
+    fileManager: FileManager = .default
+  ) -> URL {
+    guard groupePossible,
+          let conteneur = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
+    else { return directory(environment: environment, fileManager: fileManager) }
+    let directory = conteneur.appendingPathComponent(
+      folderName(environment: environment), isDirectory: true)
+    try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
+  }
+
+  /// Le groupe d'app est-il vraiment là ? L'écran des réglages doit pouvoir le
+  /// dire : sans lui, les notifications d'un salon chiffré restent muettes.
+  public static func partageDisponible(
+    appGroup: String = SharedRelayState.appGroup,
+    groupePossible: Bool = Self.groupePossibleSurCettePlateforme,
+    fileManager: FileManager = .default
+  ) -> Bool {
+    groupePossible && fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup) != nil
+  }
+
+  /// Le partage par conteneur n'a de sens que là où une extension existe et où
+  /// le conteneur est gardé par un entitlement — c'est-à-dire iOS.
+  public static var groupePossibleSurCettePlateforme: Bool {
+    #if os(iOS)
+      return true
+    #else
+      return false
+    #endif
   }
 }

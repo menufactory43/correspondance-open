@@ -1,3 +1,4 @@
+import CorrespondanceAgentKit
 import XCTest
 
 @testable import Correspondance
@@ -17,6 +18,46 @@ final class AgentLocalHostTests: XCTestCase {
 
   func testUnSecondAgentAUnDossierBienASoi() {
     XCTAssertEqual(AgentPaths.directory(agent: "hermes", home: home).path(), "/Users/moi/.correspondance-hermes")
+  }
+
+  /// Le correctif de la phase 4 : `CORRESPONDANCE_HOME` déplace **aussi** le
+  /// dossier d'amorce de l'agent. Avant, un essai écrivait par-dessus l'amorce
+  /// du cc de production ; `docs/MATRIX-SETUP.md` disait de sauter l'étape.
+  func testUnEssaiDeplaceLeDossierDAmorce() {
+    let essai = ["CORRESPONDANCE_HOME": "unclic"]
+    XCTAssertEqual(
+      AgentPaths.directory(agent: "cc", home: home, environment: essai).path(),
+      "/Users/moi/.correspondance-agent-unclic")
+    XCTAssertEqual(
+      AgentPaths.directory(agent: "hermes", home: home, environment: essai).path(),
+      "/Users/moi/.correspondance-hermes-unclic")
+    // Sans la variable, rien ne change — la propriété qui ne se négocie pas.
+    XCTAssertEqual(
+      AgentPaths.directory(agent: "cc", home: home, environment: [:]).path(),
+      "/Users/moi/.correspondance-agent")
+  }
+
+  /// L'app et l'agent calculent ce nom chacun de leur côté : ils doivent tomber
+  /// sur la même chaîne, avec et sans essai, sinon l'agent lit une amorce qui
+  /// n'existe pas et boucle sur une erreur de configuration.
+  func testLApplicationEtLAgentNommentLeMemeDossier() {
+    for environnement in [[:], ["CORRESPONDANCE_HOME": "unclic"], ["CORRESPONDANCE_HOME": "../ailleurs"]]
+    as [[String: String]] {
+      for agent in ["cc", "hermes"] {
+        XCTAssertEqual(
+          AgentPaths.folderName(agent: agent, environment: environnement),
+          AgentHome.folderName(agent: agent, environment: environnement),
+          "\(agent) / \(environnement)")
+      }
+    }
+  }
+
+  func testUnNomDEssaiNeFabriquePasDeChemin() {
+    let dossier = AgentPaths.directory(
+      agent: "cc", home: home, environment: ["CORRESPONDANCE_HOME": "../../etc"]
+    ).path()
+    XCTAssertFalse(dossier.contains(".."), dossier)
+    XCTAssertTrue(dossier.hasPrefix("/Users/moi/.correspondance-agent-"), dossier)
   }
 
   func testUnNomDAgentNeFabriquePasDeChemin() {

@@ -175,10 +175,28 @@ public actor MatrixBridgeService {
 
   /// Une passe de `/sync`. Long-poll : renvoie dès qu'il se passe quelque chose.
   @discardableResult
+  /// L'état du chiffrement, tel que les réglages l'affichent : « chiffrement :
+  /// actif · cet appareil : vérifié ou non · sauvegarde : faite ou non ».
+  ///
+  /// Il passe par le service plutôt que par le client parce que l'écran n'a
+  /// aucune raison de connaître `MatrixClient` — et parce qu'un binaire sans
+  /// crypto doit répondre quelque chose, pas planter.
+  public func etatDuChiffrement() async -> MatrixEtatChiffrement {
+    await client.etatDuChiffrement()
+  }
+
+  /// Les appareils du compte, pour l'écran qui les liste.
+  public func appareilsDuCompte() async -> [MatrixAppareil] {
+    (try? await client.appareilsDuCompte()) ?? []
+  }
+
   public func syncOnce(timeoutMilliseconds: Int = 30_000) async throws -> [Conversation] {
     guard await client.isConfigured else { throw MatrixError.notConfigured }
     hydrateIfNeeded()
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
+    // Le chiffrement, s'il est compilé **et** demandé. Sans les deux, cet appel
+    // ne fait rien et le /sync qui suit est celui d'avant.
+    if let ligne = await MatrixChiffrement.brancher(sur: client) { print("[Correspondance] \(ligne)") }
     let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     // Avant `apply` : c'est l'état d'avant la passe qui dit jusqu'où remonter.
@@ -1480,7 +1498,17 @@ public actor MatrixBridgeService {
     do {
       try await action()
     } catch MatrixError.http(403, _, _) {
-      try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      do {
+        try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      } catch MatrixError.administrationIndisponible {
+        // Continuwuity n'a aucun équivalent de `make_room_admin` (matrice de la
+        // phase 1). On ne plante pas et on ne réessaie pas dans le vide : on dit
+        // ce qui manque et par où passer — le bot du pont, lui, sait donner un
+        // pouvoir dans son propre portail.
+        throw MatrixError.administrationIndisponible(
+          "me donner le pouvoir dans ce salon. Le pont y est seul au pouvoir ; "
+            + "demande-le-lui dans son salon de gestion (« set-pl <mon identifiant> 100 »)")
+      }
       try await action()
     }
   }
