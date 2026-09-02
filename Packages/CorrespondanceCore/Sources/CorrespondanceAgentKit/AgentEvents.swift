@@ -23,6 +23,15 @@ public enum AgentEvents {
   /// quelque chose ».
   public static let journalType = AgentWire.journalType
 
+  /// Un ordre du propriétaire dans la console (`AgentWire.commandType`).
+  public static let commandType = AgentWire.commandType
+
+  /// La commande que porte un event, si c'est un ordre **pour cet agent**.
+  public static func command(in content: MatrixJSON, agent: String) -> String? {
+    guard content[AgentWire.CommandKey.agent]?.stringValue == agent else { return nil }
+    return content[AgentWire.CommandKey.command]?.stringValue
+  }
+
   public static func journal(
     agent: String, roomID: String, sender: String, prompt: String,
     tools: [String], seconds: Double, tokens: Int?

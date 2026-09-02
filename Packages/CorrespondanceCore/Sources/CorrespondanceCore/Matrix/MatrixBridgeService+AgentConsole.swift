@@ -160,6 +160,18 @@ extension MatrixBridgeService {
     )
   }
 
+  /// Demande à l'agent de rescanner ses moteurs et de redire son status. Un
+  /// event de timeline dans sa console : un ordre, pas un état.
+  public func requestAgentRescan(agent: String, in roomID: String) async throws {
+    _ = try await client.sendEvent(
+      roomID: roomID, type: AgentWire.commandType,
+      content: .object([
+        AgentWire.CommandKey.agent: .string(agent),
+        AgentWire.CommandKey.command: .string(AgentWire.Command.rescan),
+      ])
+    )
+  }
+
   /// Ce que la console raconte : la config écrite, le dernier status, les
   /// derniers tours.
   public func readAgentConsole(

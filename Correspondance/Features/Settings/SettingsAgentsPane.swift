@@ -108,13 +108,21 @@ struct SettingsAgentsPane: View {
         }
       }
 
-      if let status = console.status, !status.enginesReady.isEmpty {
+      if let status = console.status {
         SettingsRow(
           label: "Moteurs prêts là-bas",
-          detail: status.enginesReady.joined(separator: ", ")
-            + " — d'après ce que l'agent a scanné sur sa machine.",
+          detail: (status.enginesReady.isEmpty ? "aucun" : status.enginesReady.joined(separator: ", "))
+            + " — d'après ce que l'agent a scanné sur sa machine, à son démarrage ou "
+            + "au dernier « Rescanner ».",
           systemImage: "wrench.and.screwdriver"
-        ) { EmptyView() }
+        ) {
+          if enCours == "rescan:\(agent)" {
+            ProgressView().controlSize(.small)
+          } else {
+            Button("Rescanner") { Task { await rescannerLaBas(console) } }
+              .disabled(enCours != nil)
+          }
+        }
       }
 
       if let status = console.status, !status.enginesToConnect.isEmpty {
@@ -478,6 +486,21 @@ struct SettingsAgentsPane: View {
     // Le scan touche le disque et lance des `--version` : hors de l'acteur
     // principal, sinon l'écran se fige le temps qu'un moteur réponde.
     moteurs = await Task.detached { EngineCatalog.scan() }.value
+  }
+
+  /// L'ordre part dans la console ; l'agent rescanne à son prochain `/sync`
+  /// et republie. On relit l'annuaire quelques secondes plus tard — et si le
+  /// status n'a pas bougé, c'est que l'agent est muet, ce que la carte dit déjà.
+  private func rescannerLaBas(_ console: MatrixBridgeService.AgentConsole) async {
+    enCours = "rescan:\(console.agent)"
+    defer { enCours = nil }
+    erreur = nil
+    guard await store.requestAgentRescan(console) else {
+      erreur = "l'ordre de rescanner n'est pas parti — il est resté sur ce Mac"
+      return
+    }
+    try? await Task.sleep(for: .seconds(4))
+    await recharger()
   }
 
   /// Le scan seul, sans repasser par le Relais : c'est le disque de ce Mac

@@ -219,6 +219,7 @@ public actor Agent {
         absorbMembers(from: response)
         absorbRemoteConfig(from: response)
         absorbSettings(from: response)
+        await absorbCommands(from: response)
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
           for event in room.timeline?.events ?? [] {
@@ -329,6 +330,32 @@ public actor Agent {
           live = updated
           cap = HourlyCap(limit: updated.hourlyCap)
           log("config reçue du Relais (\(roomID)) : déclencheur « \(updated.trigger) », moteur \(updated.backend.rawValue), palier \(AgentConfig.Presets.name(of: updated.claude.allowedTools)), plafond \(updated.hourlyCap)/h")
+        }
+      }
+    }
+  }
+
+  /// Les ordres d'un propriétaire dans la console. `rescan` : on oublie le
+  /// scan en cache et le status, on rescanne, on republie — c'est ce qui
+  /// fait voir dans les réglages un moteur installé ou connecté **depuis** le
+  /// démarrage, sans redémarrer. Un ordre d'avant le démarrage ne se rejoue
+  /// pas (`notBefore`), et personne d'autre qu'un propriétaire n'ordonne.
+  private func absorbCommands(from response: MatrixSyncResponse) async {
+    for (roomID, room) in response.rooms?.join ?? [:] {
+      for event in room.timeline?.events ?? [] where event.type == AgentEvents.commandType {
+        guard event.sentAt >= notBefore,
+              let sender = event.sender, config.owners.contains(sender),
+              let content = event.content,
+              let commande = AgentEvents.command(in: content, agent: config.user)
+        else { continue }
+        switch commande {
+        case AgentWire.Command.rescan:
+          log("[\(roomID)] ordre reçu : rescanner les moteurs")
+          dernierScan = nil
+          statusLine = nil
+          await publishStatus()
+        default:
+          log("[\(roomID)] ordre inconnu ignoré : \(commande)")
         }
       }
     }

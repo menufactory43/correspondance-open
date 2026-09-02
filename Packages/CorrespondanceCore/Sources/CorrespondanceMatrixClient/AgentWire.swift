@@ -27,6 +27,21 @@ public enum AgentWire {
   public static let configType = "fr.correspondance.agent.config"
   /// Un tour journalisé : qui, quoi, quels outils, combien de temps.
   public static let journalType = "fr.correspondance.agent.journal"
+  /// Un ordre d'un propriétaire à l'agent, posté dans sa console — event de
+  /// timeline, pas d'état : un ordre se donne une fois, il ne se rejoue pas.
+  /// Le seul aujourd'hui : `rescan`, « refais ton scan des moteurs et redis
+  /// ton status ». C'est ce qui évite un redémarrage après un login ou une
+  /// installation sur la machine de l'agent.
+  public static let commandType = "fr.correspondance.agent.command"
+
+  public enum CommandKey {
+    public static let agent = "agent"
+    public static let command = "command"
+  }
+
+  public enum Command {
+    public static let rescan = "rescan"
+  }
 
   // MARK: - Champs
 

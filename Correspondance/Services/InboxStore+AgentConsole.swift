@@ -269,6 +269,18 @@ extension InboxStore {
     return voix.contains { $0.agent != apres.agent && $0.mode == .direct }
   }
 
+  /// Demande à un agent de rescanner sa machine. Le retour dit si l'ordre est
+  /// parti ; le résultat, lui, arrive dans son prochain status.
+  func requestAgentRescan(_ console: MatrixBridgeService.AgentConsole) async -> Bool {
+    do {
+      try await matrix.requestAgentRescan(agent: console.agent, in: console.roomID)
+      return true
+    } catch {
+      Self.relayLog.error("rescan non demandé : \(error.localizedDescription, privacy: .public)")
+      return false
+    }
+  }
+
   /// Écrit une configuration corrigée dans la console. Le retour dit si c'est
   /// parti : l'écran ne prétend pas avoir réglé ce qui n'a pas quitté l'app.
   @discardableResult
