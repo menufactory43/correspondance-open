@@ -296,6 +296,11 @@ targets:
     info:
       path: CorrespondanceiOS/Info.plist
       properties:
+        # Versions tirées du projet : sans ces deux lignes xcodegen écrit « 1.0 » et
+        # « 1 » en dur, et App Store Connect refuse chaque envoi après le premier
+        # (« bundle version must be higher »).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Déclaration d'export : le chiffrement de bout en bout de Correspondance
         # repose sur des algorithmes standard (Curve25519, AES-256 via
         # matrix-sdk-crypto), le cas exempté d'Apple. Sans cette clé, TestFlight
