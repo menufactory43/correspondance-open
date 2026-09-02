@@ -1,0 +1,8 @@
+{
+  "cleanUrls": true,
+  "redirects": [
+    { "source": "/mac", "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/mac-latest/Correspondance.dmg", "permanent": false },
+    { "source": "/ios", "destination": "https://testflight.apple.com/join/pv7HR2YT", "permanent": false }
+  ],
+  "headers": [{ "source": "/img/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }]
+}
