@@ -66,6 +66,7 @@
 		660C9A9C36AE32F91EF157CD /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370C3355911FCEFC1AC793B7 /* NotificationService.swift */; };
 		663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6345D23FCD9C83012F0039 /* CorrespondanceApp.swift */; };
 		66CD3CC0DFBB21B5236788CE /* ConversationRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F798C1E52A24C90A294483 /* ConversationRow.swift */; };
+		68B75F4682E2EBEEED26C85E /* MergePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19C80C0D66573B21CDC78357 /* MergePickerSheet.swift */; };
 		6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C72EC2976B9D7432A734100 /* NetworkRailView.swift */; };
 		6C5D74E105C8D000F664DE85 /* InboxStore+Mentions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */; };
 		6E566A2430EFFF7E54B7B929 /* InboxStore+IMessageAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */; };
@@ -224,6 +225,7 @@
 		16D2CE4167125A5E3D61756E /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		16EE06AF0526360BC841BE21 /* InboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxStore.swift; sourceTree = "<group>"; };
 		192CF26CAA43E2A421A52262 /* SettingsChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChrome.swift; sourceTree = "<group>"; };
+		19C80C0D66573B21CDC78357 /* MergePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergePickerSheet.swift; sourceTree = "<group>"; };
 		1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceCommands.swift; sourceTree = "<group>"; };
 		1CDFB226BB26FCAB3CCDBDCA /* RelayStore+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Group.swift"; sourceTree = "<group>"; };
 		1D655FFB4F256FEA2130AE99 /* ReachablePeople.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachablePeople.swift; sourceTree = "<group>"; };
@@ -569,6 +571,7 @@
 				4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */,
 				388F1E975FDFB8AEAFC0F29C /* InboxListPane.swift */,
 				BC0850E1EAEDC823688546AB /* MergeContactSheet.swift */,
+				19C80C0D66573B21CDC78357 /* MergePickerSheet.swift */,
 				55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */,
 				EC9204E0947294308F58D53C /* MessageBubbleView.swift */,
 				7C72EC2976B9D7432A734100 /* NetworkRailView.swift */,
@@ -1207,6 +1210,7 @@
 				E8096E3B2FE11B4EC42F80CE /* LaunchWarmup.swift in Sources */,
 				BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */,
 				9C0BCDAAB919FC4CF2FEE160 /* MergeContactSheet.swift in Sources */,
+				68B75F4682E2EBEEED26C85E /* MergePickerSheet.swift in Sources */,
 				99C0A65DFAF67448BB51DF38 /* MessageAvatarView.swift in Sources */,
 				73C7140D1043122F33FAB814 /* MessageBubbleView.swift in Sources */,
 				6AEFE0D7597832C82A67F31A /* NetworkRailView.swift in Sources */,
@@ -1364,7 +1368,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1468,7 +1472,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;

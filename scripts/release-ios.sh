@@ -39,7 +39,10 @@ etape() { printf '\n▸ %s\n' "$*"; }
 BUILD="$(grep -m1 'CURRENT_PROJECT_VERSION' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
 if [ "$BUMP" = "1" ]; then
   BUILD=$((BUILD + 1))
-  sed -i '' -E "0,/CURRENT_PROJECT_VERSION: \"[0-9]+\"/s//CURRENT_PROJECT_VERSION: \"${BUILD}\"/" project.yml
+  # perl, pas sed : le `0,/re/` de GNU sed n'existe pas sur macOS, et sed s'y
+  # taisait — la build 4 est partie avec un 3 dedans, Apple l'a refusée.
+  perl -0pi -e "s/CURRENT_PROJECT_VERSION: \"\\d+\"/CURRENT_PROJECT_VERSION: \"${BUILD}\"/" project.yml
+  grep -q "CURRENT_PROJECT_VERSION: \"${BUILD}\"" project.yml || { echo "✗ project.yml n'a pas pris le build ${BUILD}"; exit 1; }
 fi
 VERSION="$(grep -m1 'MARKETING_VERSION' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
 
@@ -55,6 +58,8 @@ CORRESPONDANCE_CRYPTO=1 xcodebuild archive \
   -derivedDataPath "$DD" -allowProvisioningUpdates \
   | grep -E 'error:|ARCHIVE (SUCCEEDED|FAILED)' || true
 [ -d "$ARCHIVE" ] || { echo "✗ pas d'archive"; exit 1; }
+EMBARQUE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$ARCHIVE/Products/Applications/Correspondance.app/Info.plist")"
+[ "$EMBARQUE" = "$BUILD" ] || { echo "✗ l'archive porte le build ${EMBARQUE}, pas ${BUILD}"; exit 1; }
 
 etape "Export App Store Connect"
 OPTIONS="$OUT/export-options.plist"
