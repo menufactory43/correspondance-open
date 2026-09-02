@@ -13,11 +13,8 @@ struct SettingsAccountsPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
-        title: "Transports natifs",
-        footnote: """
-          iMessage se lit dans la base de Messages, et s’envoie en pilotant l’app —
-          rien à connecter.
-          """
+        title: "Sur ce Mac",
+        footnote: "iMessage marche tout seul : Correspondance lit Messages et envoie par lui. Rien à connecter."
       ) {
         SettingsRow(
           label: MessageNetwork.iMessage.labelFR,
@@ -27,25 +24,18 @@ struct SettingsAccountsPane: View {
       }
 
       SettingsCard(
-        title: "Réseaux pontés (Matrix)",
-        footnote: """
-          WhatsApp : @whatsappbot renvoie un QR ; s’il est refusé, « login phone +33… » \
-          donne un code d’appairage.
-          Instagram : @instagrambot demande les cookies d’une session instagram.com — \
-          la feuille explique où les prendre.
-          Messenger : @messengerbot fait pareil, sur facebook.com — la connexion se fait \
-          par e-mail et mot de passe dans la fenêtre, 2FA comprise.
-          Signal : @signalbot renvoie un QR à scanner depuis Réglages → Appareils liés. \
-          Le pont ne verra que les messages postérieurs à la liaison.
-          """
+        title: "Par le Relais",
+        footnote: "Chaque réseau se connecte comme sur un nouveau téléphone : un QR code pour WhatsApp "
+          + "et Signal, tes identifiants pour Instagram et Messenger. "
+          + "Signal ne montre que les messages reçus après la liaison."
       ) {
         ForEach(Array(MessageNetwork.matrixBridged.enumerated()), id: \.element.id) { index, network in
           if index > 0 { SettingsDivider() }
           SettingsRow(
             label: network.labelFR,
             detail: store.isMatrixConnected
-              ? "Connexion par le bot mautrix du pont."
-              : "Connecte d’abord le serveur Matrix.",
+              ? "Prêt à connecter."
+              : "Connecte d’abord le Relais.",
             systemImage: network.systemImage
           ) {
             Button("Connecter…") {
@@ -58,7 +48,7 @@ struct SettingsAccountsPane: View {
 
       HStack {
         Spacer()
-        Button("Actualiser les comptes") {
+        Button("Actualiser") {
           Task { await store.refresh() }
         }
       }

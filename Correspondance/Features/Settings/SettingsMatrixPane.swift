@@ -39,8 +39,8 @@ struct SettingsMatrixPane: View {
       if let essai = CorrespondanceHome.name {
         SettingsCard(
           title: "Essai",
-          footnote: "Données et session à part (`CORRESPONDANCE_HOME=\(essai)`). "
-            + "Tes vraies conversations sont intactes ailleurs — relance sans la variable pour les retrouver."
+          footnote: "Tu regardes un jeu de données d’essai, pas tes vraies conversations. "
+            + "Elles sont intactes et reviendront au prochain lancement normal."
         ) {
           SettingsRow(
             label: "Jeu de données",
@@ -52,11 +52,11 @@ struct SettingsMatrixPane: View {
 
       SettingsCard(title: "État") {
         SettingsRow(
-          label: "Homeserver",
+          label: "Connexion",
           detail: store.matrixStatusFR,
           systemImage: store.isMatrixConnected ? "checkmark.seal.fill" : "exclamationmark.triangle"
         ) {
-          Button("Re-sonder") {
+          Button("Vérifier") {
             Task {
               await store.refreshMatrixStatus()
               // La machine crypto ne se branche qu'au premier `/sync` qui suit
@@ -79,7 +79,7 @@ struct SettingsMatrixPane: View {
 
         if store.isMatrixConnected {
           SettingsRow(
-            label: "État de conversation",
+            label: "Archives, épingles, brouillons",
             detail: relayStateDetail,
             systemImage: store.relayQueue.isEmpty ? "arrow.triangle.2.circlepath" : "clock.arrow.circlepath"
           ) {
@@ -97,7 +97,7 @@ struct SettingsMatrixPane: View {
         SettingsCard(title: "Session") {
           SettingsRow(
             label: "Fermer la session",
-            detail: "Les conversations WhatsApp et Instagram quittent l’inbox jusqu’à la prochaine connexion."
+            detail: "WhatsApp, Instagram, Messenger et Signal disparaissent de l’inbox jusqu’à la prochaine connexion."
           ) {
             Button("Déconnecter") {
               Task { await store.disconnectMatrix() }
@@ -106,7 +106,7 @@ struct SettingsMatrixPane: View {
 
           SettingsRow(
             label: "Recharger depuis le Relais",
-            detail: "Vide la base locale et refait une synchronisation complète. À faire si l’inbox ne ressemble plus à ce que raconte le Relais."
+            detail: "Repart de zéro et recharge tout. Utile si l’inbox semble décalée."
           ) {
             Button("Recharger") {
               Task { await store.reloadFromRelay() }
@@ -116,8 +116,8 @@ struct SettingsMatrixPane: View {
       } else {
         SettingsCard(
           title: "Connecter un Relais",
-          footnote: "L'installeur du Relais affiche ce code à la fin. Il contient un mot de passe : "
-            + "il se colle, il ne se poste pas. Il périme en quinze minutes."
+          footnote: "Colle ici le code affiché à la fin de l’installation du Relais. "
+            + "Il contient un mot de passe, ne l’envoie à personne. Il expire au bout de quinze minutes."
         ) {
           VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField("correspondance://relais/…", text: $codeAppairage)
@@ -128,7 +128,7 @@ struct SettingsMatrixPane: View {
               Text("Vérification : \(motsDeVerification.joined(separator: " "))")
                 .font(Typography.meta(themes.typeface))
                 .foregroundStyle(theme.inkSecondary)
-              Text("Ces six mots doivent être ceux que l'installeur a affichés.")
+              Text("Ces six mots doivent être les mêmes que ceux affichés par l’installeur.")
                 .font(Typography.meta(themes.typeface))
                 .foregroundStyle(theme.inkTertiary)
             }
@@ -160,9 +160,9 @@ struct SettingsMatrixPane: View {
           .padding(.bottom, Spacing.xs)
         }
 
-        SettingsCard(title: "Ou à la main") {
+        SettingsCard(title: "Ou avec un identifiant") {
           VStack(alignment: .leading, spacing: Spacing.xs) {
-            TextField("Homeserver", text: $homeserver)
+            TextField("Adresse du Relais", text: $homeserver)
             TextField("Identifiant", text: $matrixUser)
             SecureField("Mot de passe", text: $matrixPassword)
           }
@@ -208,8 +208,8 @@ struct SettingsMatrixPane: View {
   /// Rien à régler ici : juste de quoi voir qu'une écriture attend son tour.
   private var relayStateDetail: String {
     let pending = store.relayQueue.count
-    guard pending > 0 else { return "Synchronisé avec le Relais." }
-    return "Synchronisé avec le Relais · \(pending) en attente"
+    guard pending > 0 else { return "À jour." }
+    return pending == 1 ? "1 modification en attente." : "\(pending) modifications en attente."
   }
 
   /// Lit le code, montre les six mots, puis se connecte. On affiche
@@ -219,13 +219,13 @@ struct SettingsMatrixPane: View {
     guard let code = RelayPairingCode(encoded: codeAppairage) else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "ce code n'est pas lisible — recopie-le en entier, ou scanne-le"
+      erreurCode = "Ce code n’est pas lisible. Recopie-le en entier."
       return
     }
     guard !code.isExpired() else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "ce code a expiré — relance `pair.sh` sur le Relais pour en avoir un autre"
+      erreurCode = "Ce code a expiré. Demande-en un nouveau sur le Relais."
       return
     }
     motsDeVerification = code.fingerprintWords()

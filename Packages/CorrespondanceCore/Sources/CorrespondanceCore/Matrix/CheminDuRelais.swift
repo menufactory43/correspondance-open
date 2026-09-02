@@ -62,15 +62,13 @@ public enum CheminDuRelais: Equatable, Sendable {
   public var detailFR: String {
     switch self {
     case .tailcat:
-      "Ce code porte un jeton Tailcat : ce Mac joint le Relais par WireGuard, "
-        + "sans tunnel ssh et sans Tailscale. L'iPhone, lui, a encore besoin de Tailscale."
+      "Ce Mac rejoint le Relais directement, sans Tailscale. L’iPhone, lui, en a encore besoin."
     case .tailscale:
-      "L'adresse du code est celle d'un tailnet : il faut Tailscale sur cette machine, "
-        + "et sur l'iPhone."
+      "Il faut Tailscale sur ce Mac et sur l’iPhone."
     case .memeMachine:
-      "Le Relais est sur cette machine : rien à traverser."
+      "Le Relais est sur cette machine."
     case .adresse:
-      "Le code ne porte qu'une adresse : elle ne vaut que depuis un réseau qui la joint."
+      "Cette adresse ne marche que depuis le réseau du Relais."
     }
   }
 }

@@ -76,7 +76,7 @@ public enum EtapeDeLaPhrase: Sendable, Equatable {
     case .inconnue: "Phrase de récupération"
     case .indisponible: "Phrase de récupération"
     case .aProposer: "Note ta phrase de récupération"
-    case .aNoter: "Voici ta phrase — note-la maintenant"
+    case .aNoter: "Voici ta phrase, note-la maintenant"
     case .aEntrer: "Entre ta phrase de récupération"
     case .enPlace: "Phrase de récupération"
     }
@@ -89,18 +89,17 @@ public enum EtapeDeLaPhrase: Sendable, Equatable {
     case let .indisponible(raison):
       raison
     case .aProposer:
-      "Douze mots, à recopier une fois sur du papier. Ils sont le seul moyen de relire "
-        + "tes conversations depuis un appareil neuf — ni nous ni le Relais ne les connaissons."
+      "Douze mots à recopier sur un papier. C’est le seul moyen de retrouver tes conversations "
+        + "sur un nouvel appareil. Personne d’autre ne les connaît."
     case .aNoter:
-      "Recopie-les maintenant. Cet écran ne les remontrera pas de lui-même."
+      "Recopie-les maintenant, ils ne seront pas remontrés."
     case .aEntrer:
-      "Une sauvegarde existe pour ce compte. Ces douze mots rendent à cet appareil "
-        + "l'historique d'avant sa naissance, et le marquent vérifié."
+      "Une sauvegarde existe déjà. Entre tes douze mots pour retrouver l’historique sur cet appareil."
     case let .enPlace(version, phraseConnue):
       "Sauvegarde \(version) en place."
         + (phraseConnue
-          ? " La phrase est gardée sur cet appareil : tu peux la revoir."
-          : " La phrase n'est pas gardée ici — tu peux en poser une nouvelle.")
+          ? " La phrase est gardée ici, tu peux la revoir."
+          : " La phrase n’est pas gardée ici. Tu peux en créer une nouvelle.")
     }
   }
 }
@@ -152,8 +151,8 @@ public final class ModeleChiffrement {
     guard etat.actif else {
       etape = .indisponible(
         raison: MatrixChiffrement.disponible
-          ? "Le chiffrement est compilé mais la session n'est pas ouverte."
-          : "Ce binaire est construit sans la machine de chiffrement.")
+          ? "Pas encore connecté."
+          : "Le chiffrement n’est pas disponible dans cette version.")
       appareils = []
       return
     }
@@ -205,7 +204,7 @@ public final class ModeleChiffrement {
   /// (piège de la phase 5), donc remplacer veut dire retirer toutes les autres.
   public func changerLaPhrase() {
     proposerUnePhrase()
-    message = "L'ancienne phrase cessera de servir dès que celle-ci sera notée."
+    message = "L’ancienne phrase ne servira plus une fois celle-ci notée."
   }
 
   /// « Revoir la phrase » : seulement si cet appareil la garde encore.
@@ -255,7 +254,7 @@ public final class ModeleChiffrement {
   @discardableResult
   public func deconnecter(_ deviceID: String, motDePasse: String? = nil) async -> Bool {
     guard deviceID != etat.appareilID else {
-      message = "C'est cet appareil-ci : passe par « Déconnecter » dans l'état de la session."
+      message = "C’est cet appareil. Pour le déconnecter, passe par « Déconnecter » plus bas."
       return true
     }
     occupe = true

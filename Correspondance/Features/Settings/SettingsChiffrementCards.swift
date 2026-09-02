@@ -135,11 +135,9 @@ struct PhraseDeRecuperationCard: View {
   private var pied: String? {
     switch modele.etape {
     case .aNoter:
-      "Ces mots ne partent pas au Relais : il ne reçoit que la clé qu'ils dérivent, "
-        + "et il ne sait pas la remonter. Personne d'autre que toi ne peut les retrouver."
+      "Ces mots restent sur ce Mac. Personne d’autre que toi ne peut les retrouver, pas même le Relais."
     case .enPlace:
-      "La phrase est gardée dans le Trousseau de ce Mac pour que « Revoir » veuille dire "
-        + "quelque chose. Elle n'a jamais quitté cet appareil."
+      "La phrase est gardée dans le trousseau de ce Mac. Elle n’en est jamais sortie."
     default:
       nil
     }
@@ -191,13 +189,13 @@ struct AppareilsDuCompteCard: View {
   var body: some View {
     SettingsCard(
       title: "Appareils",
-      footnote: "« Dernière activité » vient du Relais, qui ne la note qu'une fois par dizaine de "
-        + "minutes : un appareil bien vivant peut y paraître silencieux depuis dix minutes."
+      footnote: "La dernière activité est notée toutes les dix minutes environ. "
+        + "Un appareil actif peut donc sembler silencieux un moment."
     ) {
       if modele.appareils.isEmpty {
         SettingsRow(
           label: "Aucun appareil listé",
-          detail: modele.occupe ? "Lecture…" : "Le Relais n'a rien rendu.",
+          detail: modele.occupe ? "Lecture…" : "Le Relais n’a rien renvoyé.",
           systemImage: "laptopcomputer"
         ) {
           Button("Recharger") { Task { await modele.rafraichirLesAppareils() } }
@@ -258,8 +256,7 @@ private struct FeuilleDeDeconnexion: View {
       Text("Déconnecter « \(appareil.nom ?? appareil.deviceID) » ?")
         .font(.headline)
       Text(
-        "Cet appareil perdra son accès au compte. Les messages qu'il a déjà lus restent "
-          + "lisibles ailleurs : c'est la sauvegarde des clés qui les porte, pas lui."
+        "Cet appareil n’aura plus accès au compte. Tes messages restent lisibles sur les autres."
       )
       .font(.callout)
       .foregroundStyle(.secondary)

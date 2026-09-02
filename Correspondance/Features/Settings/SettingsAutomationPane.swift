@@ -12,8 +12,8 @@ struct SettingsAutomationPane: View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
         title: "Messages en arrière-plan",
-        footnote: "Tapback, réponse citée, modifier, annuler l’envoi et « non lu » sur iMessage. "
-          + "Messages est lancée cachée et n’apparaît jamais au premier plan."
+        footnote: "Pour les réactions, les réponses citées, modifier ou annuler un envoi sur iMessage. "
+          + "Messages tourne caché, tu ne le verras pas."
       ) {
         SettingsRow(
           label: "Piloter Messages",
@@ -30,20 +30,20 @@ struct SettingsAutomationPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "État du sondage",
+          label: "État",
           detail: store.messagesAutomationHealthFR,
           systemImage: "stethoscope"
         ) {
-          Button("Re-sonder") {
+          Button("Vérifier") {
             Task { await store.refreshAutomationHealthOnly() }
           }
         }
       }
 
       SettingsCard(
-        title: "Repli",
-        footnote: "Certaines actions exigent une fenêtre réellement dessinée. "
-          + "Elle est alors poussée au-delà du bord de l’écran plutôt que masquée."
+        title: "Si ça coince",
+        footnote: "Certains gestes ont besoin d’une vraie fenêtre Messages. "
+          + "Elle est alors placée hors de l’écran."
       ) {
         SettingsRow(
           label: "Fenêtre Messages hors écran",
@@ -59,7 +59,7 @@ struct SettingsAutomationPane: View {
 
       HStack {
         Spacer()
-        Button("Ouvrir Confidentialité → Accessibilité") {
+        Button("Ouvrir les réglages d’Accessibilité") {
           store.openAccessibilityPrivacySettings()
         }
       }

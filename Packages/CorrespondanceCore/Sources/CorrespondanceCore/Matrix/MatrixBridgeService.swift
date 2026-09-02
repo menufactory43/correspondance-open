@@ -1657,7 +1657,7 @@ public actor MatrixBridgeService {
       let count = conversations.filter { $0.network == network }.count
       return count > 0 ? "\(count) \(network.labelFR)" : nil
     }
-    return parts.isEmpty ? "aucun fil bridgé" : parts.joined(separator: " · ")
+    return parts.isEmpty ? "aucune conversation" : parts.joined(separator: " · ")
   }
 
   // MARK: - Privé

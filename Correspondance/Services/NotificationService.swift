@@ -21,7 +21,7 @@ final class NotificationService: NSObject {
   /// « Ouvrir en réponse rapide » : le panneau paraît sur ce fil.
   var onOpenQuickReply: ((String) -> Void)?
 
-  private(set) var authorizationStatusFR = "Notifications : état inconnu."
+  private(set) var authorizationStatusFR = "État inconnu."
   private(set) var isAuthorized = false
   /// `false` tant que l'app n'est pas empaquetée (aperçus SwiftUI, tests) : on ne touche
   /// pas à `UNUserNotificationCenter`, qui lève une exception Objective-C hors bundle.
@@ -46,7 +46,7 @@ final class NotificationService: NSObject {
   /// Sans effet (hors mise à jour du libellé) si l'utilisateur a déjà refusé.
   func requestAuthorization() async {
     guard isAvailable else {
-      authorizationStatusFR = "Notifications : indisponibles hors app empaquetée."
+      authorizationStatusFR = "Indisponibles dans cette version."
       return
     }
     let center = UNUserNotificationCenter.current()
@@ -57,17 +57,17 @@ final class NotificationService: NSObject {
       let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
       isAuthorized = granted
       authorizationStatusFR = granted
-        ? "Notifications autorisées."
-        : "Notifications refusées — autorise Correspondance dans Réglages Système → Notifications."
+        ? "Autorisées."
+        : "Refusées. Autorise Correspondance dans Réglages Système, Notifications."
     case .denied:
       isAuthorized = false
-      authorizationStatusFR = "Notifications refusées — autorise Correspondance dans Réglages Système → Notifications."
+      authorizationStatusFR = "Refusées. Autorise Correspondance dans Réglages Système, Notifications."
     case .authorized, .provisional, .ephemeral:
       isAuthorized = true
-      authorizationStatusFR = "Notifications autorisées."
+      authorizationStatusFR = "Autorisées."
     @unknown default:
       isAuthorized = false
-      authorizationStatusFR = "Notifications : état inconnu."
+      authorizationStatusFR = "État inconnu."
     }
   }
 

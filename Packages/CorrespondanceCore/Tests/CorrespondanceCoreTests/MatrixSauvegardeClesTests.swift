@@ -54,13 +54,13 @@ final class MatrixSauvegardeClesTests: XCTestCase {
   /// La ligne des réglages ne doit jamais dire « sauvegarde : faite » quand il
   /// n'y a pas de version.
   func testLaLigneDesReglagesDitLesTroisChoses() {
-    XCTAssertEqual(MatrixEtatChiffrement().resumeFR, "chiffrement : inactif")
+    XCTAssertEqual(MatrixEtatChiffrement().resumeFR, "Inactif.")
     XCTAssertEqual(
       MatrixEtatChiffrement(actif: true).resumeFR,
-      "chiffrement : actif · cet appareil : non vérifié · sauvegarde : aucune")
+      "Actif. Cet appareil est non vérifié, sans sauvegarde.")
     XCTAssertEqual(
       MatrixEtatChiffrement(actif: true, appareilVerifie: true, sauvegardeVersion: "12").resumeFR,
-      "chiffrement : actif · cet appareil : vérifié · sauvegarde : faite")
+      "Actif. Cet appareil est vérifié, sauvegarde faite.")
   }
 
   /// Un appareil qui détient les trois clés privées peut signer les autres.

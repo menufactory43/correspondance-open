@@ -26,8 +26,8 @@ struct SettingsAppearancePane: View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
         title: "Ouverture",
-        footnote: "Focus = une conversation. Inbox = liste + fil. ⌘1 / ⌘2. "
-          + "Une conversation se détache dans sa fenêtre avec ⌘⇧D."
+        footnote: "Focus montre une conversation à la fois, Inbox toute la liste. "
+          + "⌘1 et ⌘2 pour passer de l’un à l’autre, ⌘⇧D pour détacher une conversation."
       ) {
         SettingsRow(label: "Mode au démarrage", systemImage: "rectangle.split.2x1") {
           Picker("", selection: Binding(
@@ -53,8 +53,8 @@ struct SettingsAppearancePane: View {
 
       SettingsCard(
         title: "Réponse rapide",
-        footnote: "Un panneau surgit sous le raccourci, répond, et disparaît. "
-          + "⌘↑ / ⌘↓ passent d’un fil à l’autre, ⌘K ouvre le sélecteur, Échap ferme."
+        footnote: "Un petit panneau pour répondre sans ouvrir l’app. "
+          + "⌘↑ et ⌘↓ changent de conversation, ⌘K en cherche une, Échap ferme."
       ) {
         SettingsRow(label: "Raccourci global", systemImage: "bolt") {
           Toggle("", isOn: $quickReplyEnabled)
@@ -108,7 +108,7 @@ struct SettingsAppearancePane: View {
 
       SettingsCard(
         title: "Police",
-        footnote: "⌘+ et ⌘− changent la taille sans quitter la lecture, ⌘0 revient à 100 %."
+        footnote: "⌘+ et ⌘− changent la taille, ⌘0 revient à la normale."
       ) {
         SettingsRow(label: "Famille", systemImage: "textformat") {
           Picker("", selection: Binding(
@@ -150,7 +150,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        Text("Aperçu — Correspondance lit comme iA Writer.")
+        Text("Un aperçu de la police, à la taille choisie.")
           .font(Typography.body(themes.typeface, size: Typography.Size.body * themes.textScale))
           .lineSpacing(theme.lineSpacing(forBodySize: Typography.Size.body * themes.textScale))
           .foregroundStyle(theme.ink)
@@ -160,8 +160,7 @@ struct SettingsAppearancePane: View {
 
       SettingsCard(
         title: "Fil",
-        footnote: "En Inbox. La page Focus se lit comme une lettre — elle n'a pas de visages. "
-          + "Un aperçu de lien s'affiche sous la bulle quand la page a bien voulu se présenter."
+        footnote: "En mode Inbox seulement. Focus reste sans photos, comme une lettre."
       ) {
         SettingsRow(label: "Photo de l'expéditeur", systemImage: "person.crop.circle") {
           Toggle("", isOn: Binding(
@@ -184,9 +183,9 @@ struct SettingsAppearancePane: View {
 
       SettingsCard(
         title: "Arrivée d'un message",
-        footnote: "En Focus. L'Inbox garde l'encre — la plume est faite pour la prose."
+        footnote: "En mode Focus seulement."
       ) {
-        SettingsRow(label: "Geste", systemImage: "wand.and.sparkles") {
+        SettingsRow(label: "Animation", systemImage: "wand.and.sparkles") {
           Picker("", selection: Binding(
             get: { themes.messageArrival },
             set: { themes.messageArrival = $0 }

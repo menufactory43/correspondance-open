@@ -104,7 +104,7 @@ struct BridgeLoginSheet: View {
           .strokeBorder(theme.edge.opacity(0.4), lineWidth: 0.5)
       )
 
-      DisclosureGroup("Coller des cookies…", isExpanded: $showsManualCookies) {
+      DisclosureGroup("Ça ne marche pas ? Coller la session…", isExpanded: $showsManualCookies) {
         manualCookiesPanel
       }
       .font(Typography.meta(themes.typeface))
@@ -132,7 +132,7 @@ struct BridgeLoginSheet: View {
         )
 
       HStack {
-        Text("Un objet JSON, ou un « Copy as cURL » de l'onglet Réseau.")
+        Text("Les cookies de ta session, copiés depuis ton navigateur.")
           .font(Typography.meta(themes.typeface))
           .foregroundStyle(theme.inkSecondary)
         Spacer()

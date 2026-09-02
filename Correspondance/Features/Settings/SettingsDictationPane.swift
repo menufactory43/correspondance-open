@@ -17,10 +17,10 @@ struct SettingsDictationPane: View {
       SettingsCard(
         title: "Dictus",
         footnote: isInstalled
-          ? "Transcription 100 % locale (Parakeet / Whisper). Le micro du composer démarre et arrête "
-            + "Dictus, qui colle le texte dans le champ. Le raccourci de Dictus reste utilisable"
-            + (DictusBridge.transcribeShortcutFR.map { " (\($0))" } ?? "") + "."
-          : "Dictus n’est pas installé : la dictée passe par la reconnaissance vocale d’Apple."
+          ? "Tout se passe sur ce Mac, rien ne part sur internet. Le micro lance Dictus, "
+            + "qui écrit le texte dans le champ."
+            + (DictusBridge.transcribeShortcutFR.map { " Son raccourci (\($0)) marche aussi." } ?? "")
+          : "Dictus n’est pas installé. La dictée passe par celle d’Apple."
       ) {
         SettingsRow(
           label: "Dicter avec Dictus",
@@ -36,8 +36,8 @@ struct SettingsDictationPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "Dictus est un logiciel libre (MIT)",
-          detail: "Merci à ses auteurs — getdictus.com",
+          label: "Dictus est un logiciel libre",
+          detail: "Merci à ses auteurs. getdictus.com",
           systemImage: "heart"
         ) {
           Button(isInstalled ? "Site" : "Télécharger") { DictusBridge.openWebsite() }
@@ -46,8 +46,7 @@ struct SettingsDictationPane: View {
 
       SettingsCard(
         title: "Sans Dictus",
-        footnote: "Reconnaissance vocale d’Apple, sur l’appareil quand la langue le permet ; "
-          + "à défaut, la dictée système de macOS."
+        footnote: "La dictée d’Apple, directement sur le Mac quand la langue le permet."
       ) {
         SettingsRow(label: "Micro et reconnaissance vocale", systemImage: "mic") {
           Button("Autorisations…") { openPrivacy("Privacy_Microphone") }
@@ -63,7 +62,7 @@ struct SettingsDictationPane: View {
   private var statusFR: String {
     if !isInstalled { return "Non installé" }
     if !useDictus { return "Installé, non utilisé" }
-    return isRunning ? "Actif" : "Installé — lancé au premier appui sur le micro"
+    return isRunning ? "Actif" : "Installé, se lance au premier appui sur le micro"
   }
 
   private func openPrivacy(_ anchor: String) {

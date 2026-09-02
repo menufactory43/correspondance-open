@@ -857,9 +857,9 @@ final class InboxStore {
       // Noms depuis cache Contacts — immédiat, sans permission.
       ContactDirectoryDisk.enrichIMessageTitles(&iMessage)
       list.append(contentsOf: iMessage)
-      iMessageStatusFR = "Cache · \(iMessage.count) iMessage — sync…"
+      iMessageStatusFR = "\(iMessage.count) conversations, mise à jour…"
     } else {
-      iMessageStatusFR = "iMessage : première sync…"
+      iMessageStatusFR = "Premier chargement…"
     }
 
     // La base locale se lit sans passer par l'actor : au lancement, l'inbox
@@ -869,9 +869,9 @@ final class InboxStore {
     let matrixConversations = storedRooms.compactMap { $0.conversation() }
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
-      matrixStatusFR = "Cache · \(MatrixBridgeService.bridgedCountFR(matrixConversations)) — sync…"
+      matrixStatusFR = "\(MatrixBridgeService.bridgedCountFR(matrixConversations)), mise à jour…"
     } else {
-      matrixStatusFR = "Matrix : non connecté."
+      matrixStatusFR = "Non connecté."
     }
 
     guard !list.isEmpty else { return }
@@ -948,7 +948,7 @@ final class InboxStore {
       await self?.refreshIMessageIncrementally()
     }
     if !armed, !usingDemoData {
-      iMessageStatusFR += " (temps réel indisponible — vérifie l’accès disque)"
+      iMessageStatusFR += " (pas de temps réel, vérifie l’accès au disque)"
     }
   }
 
@@ -1262,7 +1262,7 @@ final class InboxStore {
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
   func openSelfNote() async {
     guard isMatrixConnected else {
-      lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
       return
     }
     do {
@@ -1293,7 +1293,7 @@ final class InboxStore {
 
     case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
       guard isMatrixConnected else {
-        lastErrorMessage = "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+        lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
         return
       }
       do {
@@ -1791,11 +1791,11 @@ final class InboxStore {
       matrixStatusFR = MatrixError.invalidHomeserver(trimmed).localizedDescription
       return
     }
-    matrixStatusFR = "Matrix : connexion…"
+    matrixStatusFR = "Connexion…"
     do {
       let creds = try await matrix.connect(homeserver: url, user: user, password: password)
       isMatrixConnected = true
-      matrixStatusFR = "Matrix connecté (\(creds.userID))."
+      matrixStatusFR = "Connecté, \(creds.userID)."
       // Un Relais neuf n'a aucune conversation : l'inbox serait vide, et on
       // n'aurait nulle part où parler à cc. La note à soi est cette porte
       // d'entrée — on la crée une fois, elle est ensuite désignée par
@@ -1826,7 +1826,7 @@ final class InboxStore {
     if let id = selectedConversationID, !conversations.contains(where: { $0.id == id }) {
       await select(activeQueue.first?.id)
     }
-    matrixStatusFR = "Matrix : déconnecté."
+    matrixStatusFR = "Déconnecté."
   }
 
   /// « Recharger depuis le Relais » : on jette la base locale et on repart d'un
@@ -1838,7 +1838,7 @@ final class InboxStore {
     await matrix.reloadFromRelay()
     conversations.removeAll { $0.network.livesOnRelay }
     messages = []
-    matrixStatusFR = "Matrix : rechargement depuis le Relais…"
+    matrixStatusFR = "Rechargement…"
     didSettleInitialMatrixSync = false
     startMatrixSync()
   }
@@ -1935,18 +1935,18 @@ final class InboxStore {
   /// sauvegarde perd quand même l'historique le jour où on le remplace.
   private func chiffrementLigneFR() async -> String {
     guard MatrixChiffrement.disponible else {
-      return "chiffrement : absent de ce binaire"
+      return "Indisponible dans cette version."
     }
     if MatrixChiffrement.eteintParLEnvironnement {
-      return "chiffrement : éteint par CORRESPONDANCE_CHIFFREMENT=0"
+      return "Désactivé."
     }
-    guard isMatrixConnected else { return "chiffrement : compilé, pas encore connecté" }
+    guard isMatrixConnected else { return "En attente de connexion." }
     let etat = await matrix.etatDuChiffrement()
     // Le partage de clés reste `TrustRequirement.untrusted` : on déchiffre ce
     // qui arrive d'un appareil non vérifié plutôt que de rendre l'inbox
     // aveugle. C'est une décision, pas un oubli, et elle se dit à l'écran.
     return etat.resumeFR
-      + (etat.appareilVerifie ? "" : " — la vérification n'est pas encore exigée pour lire")
+      + (etat.appareilVerifie ? "" : " Il peut quand même lire.")
   }
 
   /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.
@@ -1969,10 +1969,10 @@ final class InboxStore {
       } else {
         input = .qrCode
       }
-      bridgeLoginStatusFR = "Demande du QR au bot \(network.labelFR)…"
+      bridgeLoginStatusFR = "Préparation du QR code…"
     case .webSession:
       input = .webSession
-      bridgeLoginStatusFR = "Demande de connexion au bot \(network.labelFR)…"
+      bridgeLoginStatusFR = "Préparation de la connexion…"
     }
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
@@ -2010,10 +2010,10 @@ final class InboxStore {
     let payload = session.jsonPayload
     guard bridgeLoginCommandSent else {
       pendingWebSessionPayload = payload
-      bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
+      bridgeLoginStatusFR = "Connexion en cours…"
       return
     }
-    bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
+    bridgeLoginStatusFR = "Connexion en cours…"
     submitBridgeLoginCookies(payload)
   }
 
@@ -2021,7 +2021,7 @@ final class InboxStore {
   /// puis reprend la lecture de ses réponses.
   func submitBridgeLoginCookies(_ raw: String) {
     guard let network = bridgeLoginNetwork else { return }
-    bridgeLoginStatusFR = "Session récupérée, envoi au pont…"
+    bridgeLoginStatusFR = "Connexion en cours…"
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2060,10 +2060,10 @@ final class InboxStore {
         case .qrCode(let data):
           bridgeLoginQRData = data
           bridgeLoginPairingCode = nil
-          bridgeLoginStatusFR = "Scanne ce QR : \(network.labelFR) → Réglages → Appareils liés."
+          bridgeLoginStatusFR = "Scanne ce code depuis \(network.labelFR), dans Réglages puis Appareils liés."
         case .pairingCode(let code):
           bridgeLoginPairingCode = code
-          bridgeLoginStatusFR = "Saisis ce code dans \(network.labelFR) → Appareils liés."
+          bridgeLoginStatusFR = "Saisis ce code dans \(network.labelFR), dans Appareils liés."
         case .awaitingCookies:
           bridgeLoginStatusFR = "Connecte-toi à \(network.labelFR) dans la fenêtre."
         case .success(let detail):
@@ -2158,12 +2158,12 @@ final class InboxStore {
 
     // Reset TCC local de l’ancienne signature / état coincé (aide au debug).
     let statusBefore = ContactDirectory.shared.authorizationStatus
-    contactsStatusFR = "Demande Contacts en cours… (statut \(statusBefore.rawValue))"
+    contactsStatusFR = "Demande en cours…"
 
     // Si déjà refusé, macOS ne réaffiche plus la boîte — ouvrir Réglages.
     if statusBefore == .denied || statusBefore == .restricted {
       needsContactsPermission = true
-      contactsStatusFR = "Contacts déjà refusés. Coche Correspondance dans Confidentialité → Contacts."
+      contactsStatusFR = "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts."
       openContactsPrivacySettings()
       return
     }
@@ -2173,19 +2173,19 @@ final class InboxStore {
     needsContactsPermission = !granted
 
     if granted {
-      contactsStatusFR = "Contacts autorisés — noms et photos iMessage."
+      contactsStatusFR = "Autorisé. Les noms et les photos viennent de tes contacts."
       Task { await enrichIMessageContactsInBackground() }
       return
     }
 
     switch statusAfter {
     case .denied, .restricted:
-      contactsStatusFR = "Contacts refusés. Coche Correspondance dans Confidentialité → Contacts."
+      contactsStatusFR = "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts."
       openContactsPrivacySettings()
     case .notDetermined:
-      contactsStatusFR = "Pas de boîte système — rebuild avec entitlement Address Book, puis reclique."
+      contactsStatusFR = "Le Mac n’a pas affiché la demande. Réessaie."
     default:
-      contactsStatusFR = "Contacts non autorisés (statut \(statusAfter.rawValue))."
+      contactsStatusFR = "Non autorisé."
     }
   }
 
@@ -2219,7 +2219,7 @@ final class InboxStore {
       guard let self else { return }
       guard await self.matrix.restoreCursorAndCheckSession() else {
         self.isMatrixConnected = false
-        self.matrixStatusFR = "Matrix : non connecté."
+        self.matrixStatusFR = "Non connecté."
         self.didSettleInitialMatrixSync = true
         return
       }
@@ -2264,7 +2264,7 @@ final class InboxStore {
           await self.noteKnownCorrespondents(in: updated)
           self.networkFlaggedRequestIDs = await self.matrix.networkFlaggedRequestIDs()
           self.mergeMatrixConversations(updated)
-          self.matrixStatusFR = "Matrix live · \(MatrixBridgeService.bridgedCountFR(updated))"
+          self.matrixStatusFR = "Connecté · \(MatrixBridgeService.bridgedCountFR(updated))"
           await self.refreshLiveMatrixMessages()
           await self.refreshTypingLabels()
           // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
@@ -2279,7 +2279,7 @@ final class InboxStore {
         } catch is CancellationError {
           return
         } catch {
-          self.matrixStatusFR = "Matrix : \(error.localizedDescription)"
+          self.matrixStatusFR = "Problème : \(error.localizedDescription)"
           // Coupure réseau ou homeserver au tapis : on ralentit au lieu de marteler.
           try? await Task.sleep(for: .seconds(backoffSeconds))
           backoffSeconds = min(backoffSeconds * 2, 60)
@@ -3202,7 +3202,7 @@ final class InboxStore {
   /// l'automatisation Messages (jamais depuis la boucle d'échéance).
   private func sendBlocker(for conversation: Conversation, attachments: [String], interactive: Bool) -> String? {
     if usingDemoData && conversation.network == .iMessage {
-      return "Données démo — accorde l’accès disque pour envoyer via Messages."
+      return "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages."
     }
     if conversation.network == .iMessage, !iMessageSender.automationAuthorized() {
       guard interactive, requestMessagesAutomation() else {
@@ -3211,7 +3211,7 @@ final class InboxStore {
       }
     }
     if conversation.network.livesOnRelay, !isMatrixConnected {
-      return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      return "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
     }
     return nil
   }
@@ -3696,7 +3696,7 @@ final class InboxStore {
       isInitialSync = false
     }
 
-    iMessageStatusFR = "iMessage : actualisation…"
+    iMessageStatusFR = "Actualisation…"
 
     // iMessage est le seul réseau que `load()` va encore chercher : les fils
     // bridgés arrivent par la boucle `/sync`, qui ne s'arrête jamais.
@@ -3726,14 +3726,14 @@ final class InboxStore {
       IMessageConversationCache.save(fresh)
       shouldEnrichIMessage = !fresh.isEmpty
       iMessageStatusFR = fresh.isEmpty
-        ? "Messages accessible — aucune conversation texte récente."
+        ? "Messages est accessible, mais sans conversation récente."
         : "\(fresh.count) conversations iMessage."
     case .denied(let message):
       // Garde le cache si on l’a — mieux que la démo vide.
       let cached = realConversations(on: .iMessage)
       if !cached.isEmpty {
         merged.append(contentsOf: cached)
-        iMessageStatusFR = "Cache iMessage · \(cached.count) (accès disque refusé)"
+        iMessageStatusFR = "\(cached.count) conversations en mémoire, accès au disque refusé."
       } else {
         iMessageStatusFR = message
         merged.append(contentsOf: Self.demoConversations())
@@ -3743,7 +3743,7 @@ final class InboxStore {
       let cached = conversations.filter { $0.network == .iMessage }
       if !cached.isEmpty {
         merged.append(contentsOf: cached)
-        iMessageStatusFR = "Cache iMessage · \(cached.count) (\(message))"
+        iMessageStatusFR = "\(cached.count) conversations en mémoire. \(message)"
       } else {
         iMessageStatusFR = message
         merged.append(contentsOf: Self.demoConversations())
@@ -3805,7 +3805,7 @@ final class InboxStore {
       IMessageConversationCache.save(realConversations(on: .iMessage))
     }
     let named = list.filter { !$0.hasPlaceholderTitle }.count
-    iMessageStatusFR = "\(list.count) conversations iMessage · \(named) noms Contacts."
+    iMessageStatusFR = "\(list.count) conversations, \(named) avec un nom de contact."
   }
 
   private enum IMessageLoad: Sendable {
@@ -3829,7 +3829,7 @@ final class InboxStore {
         }
         return .failure(error.localizedDescription)
       } catch is CancellationError {
-        return .failure("Lecture Messages trop longue — vérifie l’accès disque.")
+        return .failure("La lecture de Messages prend trop de temps. Vérifie l’accès au disque.")
       } catch {
         return .failure(error.localizedDescription)
       }
@@ -3844,7 +3844,7 @@ final class InboxStore {
     case .success(let value):
       return value
     case .failure:
-      return .failure("Lecture Messages trop longue — vérifie l’accès disque.")
+      return .failure("La lecture de Messages prend trop de temps. Vérifie l’accès au disque.")
     }
   }
 
@@ -3939,7 +3939,7 @@ final class InboxStore {
             network: conversation.network,
             text: hasSession
               ? "Pas encore de messages ici. Écris ci-dessous."
-              : "Matrix n’est pas connecté — ouvre Réglages → Matrix.",
+              : "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.",
             sentAt: Date(),
             isFromMe: false
           )

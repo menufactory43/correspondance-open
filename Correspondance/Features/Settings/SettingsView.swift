@@ -144,7 +144,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   var labelFR: String {
     switch self {
     case .comptes: "Comptes"
-    case .matrix: "Serveur Matrix"
+    case .matrix: "Relais"
     case .envoi: "Envoi"
     case .automatisation: "Automatisation"
     case .agent: "Agents"
@@ -156,14 +156,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
   var subtitleFR: String {
     switch self {
-    case .comptes: "Les réseaux branchés sur Correspondance et l’état de chaque lien."
-    case .matrix: "Le homeserver qui porte les ponts WhatsApp et Instagram."
-    case .envoi: "Le temps qu’un message reste rattrapable avant de partir, et le mode incognito."
-    case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
-    case .agent: "Les agents du Relais, et les moteurs de ce Mac."
-    case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."
-    case .apparence: "Le mode d’ouverture, la police et l’ambiance d’écriture."
-    case .dictee: "Le moteur qui transforme la voix en texte dans le composer."
+    case .comptes: "Tes réseaux, et si chacun est bien connecté."
+    case .matrix: "Ton serveur, celui qui porte WhatsApp, Instagram, Messenger et Signal."
+    case .envoi: "Le délai pour rattraper un message, et la lecture discrète."
+    case .automatisation: "Ce que Correspondance peut faire à ta place dans Messages."
+    case .agent: "Tes agents, et où ils tournent."
+    case .autorisations: "Ce que le Mac autorise, et comment le changer."
+    case .apparence: "Mode d’ouverture, police, thème."
+    case .dictee: "Comment le micro transforme ta voix en texte."
     }
   }
 

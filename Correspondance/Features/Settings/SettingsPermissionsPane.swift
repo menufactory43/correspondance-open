@@ -10,7 +10,7 @@ struct SettingsPermissionsPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
-      SettingsCard(title: "Autorisations demandées par l’app") {
+      SettingsCard(title: "Autorisations") {
         SettingsRow(
           label: "Contacts",
           detail: store.contactsStatusFR,
@@ -42,7 +42,7 @@ struct SettingsPermissionsPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "Messages (Automatisation)",
+          label: "Piloter Messages",
           detail: store.messagesAutomationStatusFR,
           systemImage: "gearshape.arrow.triangle.2.circlepath"
         ) {
@@ -55,7 +55,7 @@ struct SettingsPermissionsPane: View {
 
       SettingsCard(
         title: "Réglages système",
-        footnote: "L’accès disque est ce qui donne l’historique iMessage : sans lui, la sync reste vide."
+        footnote: "Sans l’accès complet au disque, Correspondance ne peut pas lire tes iMessage."
       ) {
         SettingsRow(label: "Accès complet au disque", systemImage: "externaldrive") {
           Button("Ouvrir") { openPrivacy("Privacy_AllFiles") }

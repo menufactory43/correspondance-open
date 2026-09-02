@@ -11,15 +11,14 @@ struct SettingsSendingPane: View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
         title: "Annuler l’envoi",
-        footnote: "La bulle paraît tout de suite, mais le message n’est envoyé qu’au bout de ce délai : "
-          + "d’ici là, « Annuler » sous la bulle rend le texte au composer et personne n’aura rien vu. "
-          + "Désactivé, « Entrée » veut dire « parti »."
+        footnote: "La bulle s’affiche tout de suite, mais le message part seulement après ce délai. "
+          + "D’ici là, « Annuler » le ramène dans le champ de saisie."
       ) {
         SettingsRow(
           label: "Délai avant envoi",
           detail: store.undoSendDelay.isOn
             ? "Rattrapable pendant \(store.undoSendDelay.labelFR.lowercased())."
-            : "Le message part dès qu’on appuie sur Entrée.",
+            : "Le message part tout de suite.",
           systemImage: "arrow.uturn.backward"
         ) {
           Picker("", selection: Binding(
@@ -38,15 +37,14 @@ struct SettingsSendingPane: View {
 
       SettingsCard(
         title: "Mode incognito",
-        footnote: "Ouvrir un fil n’envoie aucun accusé de lecture — ni au Relais, ni à Messages — "
-          + "et le compteur de non-lus reste là, comme un pense-bête. "
-          + "Répondre, ou « Marquer comme lu », dit alors au réseau qu’on a lu. ⌘⇧I dans le menu Inbox."
+        footnote: "Ouvrir une conversation n’envoie pas d’accusé de lecture, et le compteur de non-lus reste. "
+          + "Répondre ou « Marquer comme lu » le remet à zéro. Raccourci : ⌘⇧I."
       ) {
         SettingsRow(
           label: "Lire sans le dire",
           detail: store.isIncognito
-            ? "Personne ne voit que vous lisez."
-            : "Ouvrir un fil l’accuse lu, comme d’habitude.",
+            ? "Personne ne voit que tu lis."
+            : "Ouvrir une conversation la marque lue.",
           systemImage: "eye.slash"
         ) {
           Toggle("", isOn: Binding(

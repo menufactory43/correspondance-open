@@ -86,9 +86,8 @@ struct PhraseDeRecuperationSection: View {
       Text("Phrase de récupération")
     } footer: {
       Text(
-        "Douze mots qui ne quittent jamais cet appareil : le Relais ne reçoit que la clé qu'ils "
-          + "dérivent, et il ne sait pas la remonter. Sans eux, un appareil neuf ne relit rien "
-          + "d'avant sa naissance."
+        "Douze mots qui ne quittent jamais cet appareil. "
+          + "Sans eux, un nouvel appareil ne peut pas relire les anciens messages."
       )
       .font(Typography.meta(typeface))
     }
@@ -177,8 +176,8 @@ struct AppareilsListeView: View {
         }
       } footer: {
         Text(
-          "« Dernière activité » vient du Relais, qui ne la note qu'une fois par dizaine de "
-            + "minutes : un appareil bien vivant peut y paraître silencieux depuis dix minutes."
+          "La dernière activité est notée toutes les dix minutes environ. "
+            + "Un appareil actif peut donc sembler silencieux un moment."
         )
         .font(Typography.meta(typeface))
       }
@@ -207,8 +206,7 @@ struct AppareilsListeView: View {
     } message: {
       Text(
         modele.message
-          ?? "Cet appareil perdra son accès au compte. Les messages qu'il a déjà lus restent "
-            + "lisibles ailleurs : c'est la sauvegarde des clés qui les porte, pas lui."
+          ?? "Cet appareil n’aura plus accès au compte. Tes messages restent lisibles sur les autres."
       )
     }
   }

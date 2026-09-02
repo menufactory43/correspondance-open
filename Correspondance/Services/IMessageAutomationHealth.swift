@@ -116,26 +116,24 @@ enum IMessageAutomationHealth: Equatable, Sendable {
   func labelFR(osVersion: String = IMessageAutomationHealth.currentOSVersion) -> String {
     switch self {
     case .unknown:
-      "Automatisation Messages : jamais sondée."
+      "Pas encore vérifié."
     case .disabled:
-      "Automatisation Messages : désactivée."
+      "Désactivé."
     case .accessibilityDenied:
-      "Accessibilité manquante — coche Correspondance dans Réglages Système → "
-        + "Confidentialité et sécurité → Accessibilité."
+      "Il manque l’autorisation d’Accessibilité. Coche Correspondance dans Réglages Système, "
+        + "Confidentialité et sécurité, Accessibilité."
     case .messagesNotRunning:
-      "Messages n’est pas lancée — elle sera ouverte en arrière-plan à la première action."
+      "Messages n’est pas ouvert. Il s’ouvrira en arrière-plan au premier geste."
     case .axServerUnavailable:
-      "L’autorisation est en place (les menus de Messages se lisent) mais macOS ne rend "
-        + "plus les fenêtres à aucune app : ferme ta session puis rouvre-la (ou redémarre), "
-        + "et relance la sonde."
+      "L’autorisation est là, mais le Mac ne répond plus. "
+        + "Ferme ta session et rouvre-la, puis vérifie à nouveau."
     case .treeUnreadable:
-      "Fenêtre de Messages introuvable malgré l’autorisation. Ouvre une fenêtre dans "
-        + "Messages (⌘N) et relance la sonde ; si ça persiste, retire puis rajoute "
-        + "Correspondance dans Accessibilité (macOS \(osVersion))."
+      "La fenêtre de Messages reste introuvable. Ouvre-en une (⌘N) et vérifie à nouveau. "
+        + "Si ça continue, retire puis remets Correspondance dans Accessibilité."
     case .experimental:
-      "Expérimental : arbre AX lisible mais macOS \(osVersion) n’a pas été validée."
+      "Ça marche, mais macOS \(osVersion) n’a pas encore été testée."
     case .ok:
-      "Automatisation Messages : OK (macOS \(osVersion) validée)."
+      "Tout est en place (macOS \(osVersion))."
     }
   }
 }
@@ -156,15 +154,15 @@ enum IMessageAutomationError: LocalizedError, Sendable, Equatable {
   var errorDescription: String? {
     switch self {
     case .disabled:
-      "Automatisation Messages désactivée — active-la dans Réglages."
+      "Le pilotage de Messages est désactivé. Active-le dans Réglages."
     case .unhealthy(let health):
       health.labelFR()
     case .messagesUnavailable:
       "Messages.app est introuvable ou refuse de se lancer en arrière-plan."
     case .chatNotFound(let title):
-      "Le fil « \(title) » n’existe pas dans Messages — rien n’a été tenté."
+      "La conversation « \(title) » n’existe pas dans Messages."
     case .messageNotFound:
-      "Ce message n’existe plus dans Messages — rien n’a été tenté."
+      "Ce message n’existe plus dans Messages."
     case .elementNotFound(let what):
       "Introuvable dans la fenêtre de Messages : \(what)."
     case .actionFailed(let what):

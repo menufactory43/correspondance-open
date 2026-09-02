@@ -251,11 +251,8 @@ enum AgentLocalHost {
   /// on ne devine pas : l'ancien message conseillait de vérifier un fichier qui
   /// existait bel et bien, ce qui envoyait chercher au mauvais endroit.
   static let aideIntrouvable = """
-    Cette build n'embarque pas l'agent : \
-    Correspondance.app/Contents/MacOS/correspondance-agent est absent. \
-    Reconstruis avec `xcodegen generate` puis un build Xcode — la phase \
-    « Embed correspondance-agent » le pose. En attendant, cc peut tourner sur \
-    une autre machine (« Sur une autre machine », ci-dessous).
+    Cette version de Correspondance n’embarque pas l’agent. \
+    En attendant, il peut tourner sur une autre machine (« Une autre machine », ci-dessous).
     """
 
   /// Ouvre le panneau où l'approbation se donne — parce que « va dans les

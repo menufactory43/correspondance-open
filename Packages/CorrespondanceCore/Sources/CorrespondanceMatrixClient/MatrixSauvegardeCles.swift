@@ -219,9 +219,9 @@ public struct MatrixEtatChiffrement: Sendable, Equatable {
   }
 
   public var resumeFR: String {
-    guard actif else { return "chiffrement : inactif" }
-    return "chiffrement : actif · cet appareil : \(appareilVerifie ? "vérifié" : "non vérifié")"
-      + " · sauvegarde : \(sauvegardeVersion == nil ? "aucune" : "faite")"
+    guard actif else { return "Inactif." }
+    return "Actif. Cet appareil est \(appareilVerifie ? "vérifié" : "non vérifié"), "
+      + "\(sauvegardeVersion == nil ? "sans sauvegarde" : "sauvegarde faite")."
   }
 }
 

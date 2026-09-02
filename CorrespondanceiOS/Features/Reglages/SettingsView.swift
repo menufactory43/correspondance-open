@@ -71,7 +71,7 @@ struct SettingsView: View {
       Button("Se déconnecter", role: .destructive) { signOut() }
       Button("Annuler", role: .cancel) {}
     } message: {
-      Text("Les conversations restent sur le Relais. Cet iPhone oublie sa session et cesse d'être réveillé.")
+      Text("Tes conversations restent sur le Relais. Cet iPhone ne recevra plus de notifications.")
     }
   }
 
@@ -84,14 +84,14 @@ struct SettingsView: View {
       row("Session", sessionLabel)
       // La même phrase que sur le Mac, au mot près : c'est le même état, il n'a
       // pas à se raconter de deux façons.
-      row("État de conversation", relayStateLabel)
+      row("Archives, épingles, brouillons", relayStateLabel)
     } header: {
       Text("Relais")
     } footer: {
       if let error = store.syncError {
         Text(error).font(Typography.meta(typeface)).foregroundStyle(theme.accent)
       } else {
-        Text("Le Relais se joint par Tailscale. Son adresse est une configuration, jamais une valeur en dur.")
+        Text("Ton serveur, celui qui porte tes conversations. Il faut être sur son réseau pour l’atteindre.")
           .font(Typography.meta(typeface))
       }
     }
@@ -99,7 +99,7 @@ struct SettingsView: View {
 
   private var sessionLabel: String {
     switch store.session {
-    case .connected: store.syncError == nil ? "Connectée" : "Connectée, sync en échec"
+    case .connected: store.syncError == nil ? "Connectée" : "Connectée, mise à jour en échec"
     case .connecting: "Connexion…"
     case .disconnected: "Déconnectée"
     case .unknown: "Inconnue"
@@ -108,8 +108,8 @@ struct SettingsView: View {
 
   private var relayStateLabel: String {
     let pending = store.relayQueue.count
-    guard pending > 0 else { return "Synchronisé" }
-    return "Synchronisé · \(pending) en attente"
+    guard pending > 0 else { return "À jour" }
+    return pending == 1 ? "1 modification en attente" : "\(pending) modifications en attente"
   }
 
   // MARK: - Ponts
@@ -117,7 +117,7 @@ struct SettingsView: View {
   private var bridgesSection: some View {
     Section {
       if store.networksInUse.isEmpty {
-        Text("Aucun pont ne parle encore.")
+        Text("Aucun compte lié pour l’instant.")
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkTertiary)
       } else {
@@ -135,7 +135,7 @@ struct SettingsView: View {
     } header: {
       Text("Comptes liés")
     } footer: {
-      Text("Les comptes liés se connectent depuis le Mac — un QR à scanner, un bot à écouter. L'iPhone lit ce que le Relais raconte.")
+      Text("Les comptes se lient depuis le Mac. L’iPhone les retrouve tout seul.")
         .font(Typography.meta(typeface))
     }
   }
@@ -163,7 +163,7 @@ struct SettingsView: View {
     } header: {
       Text("Écriture")
     } footer: {
-      Text("Les six thèmes du Mac, et les mêmes fontes : les deux appareils écrivent de la même main.")
+      Text("Les mêmes thèmes et polices que sur le Mac.")
         .font(Typography.meta(typeface))
     }
   }
@@ -185,7 +185,7 @@ struct SettingsView: View {
     } header: {
       Text("Envoi")
     } footer: {
-      Text("La bulle paraît tout de suite, mais le message ne part qu'au bout de ce délai : d'ici là, « Annuler » sous la bulle rend le texte au composer.")
+      Text("La bulle s’affiche tout de suite, mais le message part seulement après ce délai. D’ici là, « Annuler » le ramène dans le champ de saisie.")
         .font(Typography.meta(typeface))
     }
   }
@@ -202,7 +202,7 @@ struct SettingsView: View {
     } header: {
       Text("Lecture")
     } footer: {
-      Text("Ouvrir un fil n'envoie aucun accusé de lecture, et le compteur de non-lus reste là, comme un pense-bête. Répondre, ou « Marquer comme lu », dit alors au réseau qu'on a lu.")
+      Text("Ouvrir une conversation n’envoie pas d’accusé de lecture, et le compteur de non-lus reste. Répondre ou « Marquer comme lu » le remet à zéro.")
         .font(Typography.meta(typeface))
     }
   }
@@ -227,7 +227,7 @@ struct SettingsView: View {
     } header: {
       Text("Agent")
     } footer: {
-      Text("En tête-à-tête avec toi, cc répond toujours à voix haute. Le réglage part sur le Relais ; cc le relit à sa prochaine synchronisation.")
+      Text("En tête-à-tête avec toi, cc répond toujours directement. Le réglage est pris en compte à sa prochaine synchronisation.")
         .font(Typography.meta(typeface))
     }
   }
@@ -237,7 +237,7 @@ struct SettingsView: View {
   private var notificationsSection: some View {
     Section {
       row("Autorisation", push.authorizationLabelFR)
-      row("Inscription au Relais", push.isRegistered ? "Faite" : "Pas encore")
+      row("Enregistré sur le Relais", push.isRegistered ? "Oui" : "Pas encore")
       // La passerelle est publique et partagée : la montrer, c'est dire où part
       // le réveil. Et l'app_id avec, parce que c'est lui qui choisit
       // l'environnement APNs — le seul réglage dont l'erreur est silencieuse.
@@ -248,14 +248,14 @@ struct SettingsView: View {
           Task { await push.requestAuthorizationIfNeeded() }
         }
       } else {
-        Button("Ouvrir les Réglages du système") {
+        Button("Ouvrir les Réglages") {
           guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
           UIApplication.shared.open(url)
         }
       }
       // Le jeton tourne, et la passerelle peut avoir été installée après coup :
       // redéclarer est le seul geste que l'iPhone puisse tenter tout seul.
-      Button("Redéclarer cet appareil au Relais") {
+      Button("Réenregistrer cet iPhone") {
         Task { await push.declareToRelay() }
       }
       .disabled(!push.isAuthorizedForPush)
@@ -265,10 +265,7 @@ struct SettingsView: View {
       if let error = push.lastError {
         Text(error).font(Typography.meta(typeface)).foregroundStyle(theme.accent)
       } else {
-        Text("""
-          Une conversation en muet ne notifie pas : le Relais ne l'envoie même pas.
-          Le réveil d'un iPhone endormi passe par le Relais et sa passerelle (Sygnal) :           sans elle, cet iPhone n'est notifié que pendant que l'app tourne.
-          """)
+        Text("Une conversation en muet ne notifie pas. Si les notifications n’arrivent plus quand l’app est fermée, réenregistre cet iPhone.")
           .font(Typography.meta(typeface))
       }
     }
@@ -283,7 +280,7 @@ struct SettingsView: View {
       } label: {
         VStack(alignment: .leading, spacing: 2) {
           Text("Recharger depuis le Relais")
-          Text("Vide la base locale et refait une synchronisation complète.")
+          Text("Repart de zéro et recharge tout.")
             .font(.caption)
             .foregroundStyle(.secondary)
         }

@@ -61,8 +61,8 @@ struct RelayLoginView: View {
         submit
 
         Text(
-          "Le Relais est ton serveur — celui qui porte tes conversations WhatsApp, "
-            + "Instagram, Messenger et Signal. Il faut être sur son réseau (Tailscale) pour l'atteindre."
+          "Le Relais est ton serveur, celui qui porte tes conversations WhatsApp, "
+            + "Instagram, Messenger et Signal. Il faut être sur son réseau pour l’atteindre."
         )
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)

@@ -75,7 +75,7 @@ struct SettingsAgentsPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       if let erreur {
-        SettingsCard(title: "Ce qui n'est pas passé") {
+        SettingsCard(title: "Un problème") {
           SettingsRow(label: erreur, systemImage: "exclamationmark.triangle") {
             Button("Fermer") { self.erreur = nil }
           }
@@ -85,8 +85,7 @@ struct SettingsAgentsPane: View {
       if consoles.isEmpty && !isLoading {
         SettingsCard(
           title: "Agents",
-          footnote: "Un agent est un compte sur le Relais, une console et un moteur. "
-            + "L'annuaire se lit sur le Relais : tant qu'aucune console n'existe, il est vide."
+          footnote: "Un agent est un assistant qui vit sur le Relais et répond dans tes conversations."
         ) {
           SettingsRow(
             label: "Aucun agent",
@@ -106,7 +105,7 @@ struct SettingsAgentsPane: View {
 
       ajouterCard
 
-      Text("Un réglage part sur le Relais ; l'agent le relit à sa prochaine synchronisation.")
+      Text("Les réglages sont pris en compte à la prochaine synchronisation de l’agent.")
         .font(Typography.meta(themes.typeface))
         .foregroundStyle(themes.theme.inkTertiary)
     }
@@ -202,18 +201,18 @@ struct SettingsAgentsPane: View {
   private func ouEtQuoi(_ console: MatrixBridgeService.AgentConsole) -> String {
     guard let status = console.status else {
       return AgentLocalHost.hasBootstrap(agent: console.agent)
-        ? "amorcé sur ce Mac ; il n'a encore rien publié dans sa console"
-        : "console ouverte ; il n'a encore rien publié — on ne sait pas où il tourne"
+        ? "lancé sur ce Mac, pas encore de nouvelles"
+        : "créé, pas encore de nouvelles"
     }
     let ou = status.host.map { hote in
       hote == EngineCatalog.nomDeCeMac ? "sur ce Mac" : "sur \(Self.nomEtAdresse(hote, status.address))"
-    } ?? "quelque part — son status ne dit pas où"
+    } ?? "quelque part, il ne dit pas où"
     let moteur = status.backend.map { " · moteur \($0)" } ?? ""
     let age = status.publishedAt
       .formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
     return status.isFresh()
-      ? "\(ou)\(moteur) — vu \(age)"
-      : "\(ou)\(moteur) — muet depuis \(age) : plus rien depuis plus d'une heure"
+      ? "\(ou)\(moteur), vu \(age)"
+      : "\(ou)\(moteur), silencieux depuis \(age)"
   }
 
   /// « umbrel (100.64.0.12) » — l'adresse à côté du nom, parce qu'un nom seul
@@ -228,15 +227,14 @@ struct SettingsAgentsPane: View {
     if !status.enginesToConnect.isEmpty {
       parts.append("à connecter : " + status.enginesToConnect.joined(separator: ", "))
     }
-    return parts.joined(separator: " · ") + " — d'après son scan, au démarrage ou au dernier « Rescanner »."
+    return parts.joined(separator: " · ") + "."
   }
 
   private func footnoteFor(_ console: MatrixBridgeService.AgentConsole, local: Bool) -> String {
     local
-      ? "Son amorce est sur ce Mac : il tourne tant que Correspondance est ouverte. "
-        + "Pour qu'il réponde jour et nuit, installe-le sur une autre machine."
-      : "Son amorce n'est pas sur ce Mac. Ce que dit cette carte vient de ce que l'agent publie "
-        + "lui-même dans sa console."
+      ? "Il tourne sur ce Mac, tant que Correspondance est ouverte. "
+        + "Pour qu’il réponde jour et nuit, installe-le sur une machine qui reste allumée."
+      : "Il tourne sur une autre machine. Ce qui est affiché ici vient de ce qu’il en dit lui-même."
   }
 
   /// Chaque état a une sortie : un écran qui affiche un fait sans offrir
@@ -296,7 +294,7 @@ struct SettingsAgentsPane: View {
     SettingsRow(
       label: "Voix par défaut",
       detail: (config.defaultMode ?? .draft).subtitleFR
-        + " — une conversation peut dire autrement, sous son « + ».",
+        + " Chaque conversation peut choisir autrement, sous son « + ».",
       systemImage: "person.2.wave.2"
     ) {
       Picker("", selection: Binding(
@@ -388,21 +386,20 @@ struct SettingsAgentsPane: View {
   private var footnoteAjout: String {
     switch hoteChoisi {
     case .ceMac:
-      "Un moteur prêt donne un agent en un clic : compte sur le Relais, console avec son moteur, "
-        + "processus enfant, et invitation dans ta note à soi. Il tourne tant que Correspondance est ouverte."
+      "Un clic, et l’agent est prêt. Il répond tant que Correspondance est ouverte sur ce Mac."
     case .connu:
-      "Ce qu'on sait de cette machine vient des agents qui y tournent. La commande contient un mot de "
-        + "passe : elle se colle dans un terminal là-bas, jamais dans une conversation, et périme en dix minutes."
+      "La commande contient un mot de passe. Colle-la dans un terminal sur cette machine, "
+        + "jamais dans une conversation. Elle expire au bout de dix minutes."
     case .autre:
-      "Une machine qui reste allumée : l'agent répond même Mac fermé. La commande installe l'agent avec "
-        + "son moteur ; le moteur lui-même, et sa connexion, se font là-bas."
+      "Sur une machine qui reste allumée, l’agent répond même quand ce Mac est fermé. "
+        + "La commande installe l’agent. Le moteur, lui, se connecte là-bas."
     }
   }
 
   private var detailHote: String {
     switch hoteChoisi {
     case .ceMac:
-      return "Ce que ce Mac sait lancer, scanné à l'ouverture et à chaque retour dans l'app."
+      return "Les moteurs installés sur ce Mac."
     case .connu(let nom):
       if let hote = hotesConnus.first(where: { $0.nom == nom }), let status = hote.console.status {
         let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
@@ -410,7 +407,7 @@ struct SettingsAgentsPane: View {
       }
       return "On ne sait plus rien de cette machine."
     case .autre:
-      return "Un NUC, un serveur, un Raspberry : tout ce qui a un terminal et joint le Relais."
+      return "Un petit serveur, un Raspberry Pi, n’importe quelle machine avec un terminal qui atteint le Relais."
     }
   }
 
@@ -443,7 +440,7 @@ struct SettingsAgentsPane: View {
           }
         }
       } else if case .nonConnecte(let geste) = trouve.state {
-        Button("Copier le geste") { copier(geste) }
+        Button("Copier") { copier(geste) }
       } else if enCours == trouve.entry.id {
         ProgressView().controlSize(.small)
       } else {
@@ -488,15 +485,15 @@ struct SettingsAgentsPane: View {
     var texte = trouve.state.labelFR
     if let path = trouve.path { texte += " · \(path)" }
     if case .nonConnecte(let geste) = trouve.state {
-      texte += "\nLe binaire est là, la connexion pas encore : \(geste)"
+      texte += "\nInstallé mais pas connecté : \(geste)"
     } else if !trouve.state.estPret {
       texte += "\n\(trouve.entry.indiceInstallation)"
     }
     if trouve.state.estPret, nomDejaPris(trouve) {
-      texte += "\nUn agent porte déjà ce nom : donne-lui-en un autre."
+      texte += "\nCe nom est déjà pris."
     }
     if !peutProvisionner, trouve.state.estPret {
-      texte += "\nIl faut être administrateur du Relais pour créer un compte d'agent."
+      texte += "\nSeul l’administrateur du Relais peut créer un agent."
     }
     return texte
   }
@@ -515,8 +512,8 @@ struct SettingsAgentsPane: View {
     SettingsRow(
       label: Self.nomEtAdresse(hote.nom, hote.adresse),
       detail: hote.adresse == nil
-        ? "Adresse inconnue : son agent est d'avant cette version. Redéploie-le, et elle apparaîtra."
-        : "Là où coller la commande, en SSH.",
+        ? "Adresse inconnue. L’agent date d’une ancienne version, réinstalle-le."
+        : "Où coller la commande.",
       systemImage: "server.rack"
     ) {
       if enCours == "rescan:\(hote.console.agent)" {
@@ -563,7 +560,7 @@ struct SettingsAgentsPane: View {
         detail: "installé là-bas, mais pas connecté : \(geste)",
         systemImage: "person.crop.circle.badge.exclamationmark"
       ) {
-        Button("Copier le geste") { copier(geste) }
+        Button("Copier") { copier(geste) }
       }
     }
 
@@ -571,7 +568,7 @@ struct SettingsAgentsPane: View {
       SettingsRow(
         label: "Rien à ajouter",
         detail: hote.prets.isEmpty
-          ? "Aucun moteur prêt là-bas. Installe-en un dans un terminal, connecte-le, puis « Rescanner »."
+          ? "Aucun moteur prêt sur cette machine. Installe-en un, connecte-le, puis « Rescanner »."
           : "Chaque moteur prêt là-bas porte déjà un agent.",
         systemImage: "checkmark.circle"
       )
@@ -584,7 +581,7 @@ struct SettingsAgentsPane: View {
   private var lignesAutreMachine: some View {
     SettingsRow(
       label: "Moteur",
-      detail: "Celui que l'agent lancera là-bas. Il doit y être installé et connecté ; l'agent le dira sinon.",
+      detail: "Le moteur que l’agent utilisera. Il doit être installé et connecté sur cette machine.",
       systemImage: "engine.combustion"
     ) {
       Picker("", selection: $moteurAutre) {
@@ -596,7 +593,7 @@ struct SettingsAgentsPane: View {
 
     SettingsRow(
       label: "Nom",
-      detail: "Son compte sur le Relais, et ce qu'on tape pour l'appeler : « @\(nomAutreEffectif) ».",
+      detail: "Pour l’appeler dans une conversation : « @\(nomAutreEffectif) ».",
       systemImage: "at"
     ) {
       TextField("nom", text: $nomAutre, prompt: Text(nomLibre(base: entreeAutre?.nomAgentPropose ?? moteurAutre)))
@@ -643,13 +640,13 @@ struct SettingsAgentsPane: View {
   private func commandeDetail(cle: String) -> String {
     guard let commande = commandes[cle] else {
       return peutProvisionner
-        ? "une commande à coller en SSH, et l'agent répond même Mac fermé"
-        : "il faut être administrateur du Relais pour créer un agent"
+        ? "une commande à coller sur l’autre machine"
+        : "seul l’administrateur du Relais peut créer un agent"
     }
-    guard commande.expire > Date() else { return "la commande a expiré — reprends-en une" }
+    guard commande.expire > Date() else { return "la commande a expiré, prépare-en une autre" }
     let heure = commande.expire.formatted(date: .omitted, time: .shortened)
-    return "commande prête, copie-la et colle-la dans un terminal là-bas — elle contient un mot de passe "
-      + "et périme à \(heure)"
+    return "commande prête. Colle-la dans un terminal sur l’autre machine. "
+      + "Elle contient un mot de passe et expire à \(heure)"
   }
 
   /// Un nom qui n'est pris par aucune console. Deux agents du même nom, ce
@@ -686,7 +683,7 @@ struct SettingsAgentsPane: View {
     defer { enCours = nil }
     erreur = nil
     guard await store.requestAgentRescan(console) else {
-      erreur = "l'ordre de rescanner n'est pas parti — il est resté sur ce Mac"
+      erreur = "La demande n’est pas partie. Réessaie."
       return
     }
     try? await Task.sleep(for: .seconds(4))
@@ -707,7 +704,7 @@ struct SettingsAgentsPane: View {
     let nom = (nomsProposes[trouve.entry.id] ?? trouve.entry.nomAgentPropose)
       .trimmingCharacters(in: .whitespaces)
     guard !nom.isEmpty else {
-      erreur = "un agent a besoin d'un nom — c'est son compte sur le Relais"
+      erreur = "Donne un nom à l’agent."
       return
     }
     enCours = trouve.entry.id
@@ -759,7 +756,7 @@ struct SettingsAgentsPane: View {
     guard var config = console.config else { return }
     mutation(&config)
     if await !store.writeAgentConsoleConfig(config, in: console.roomID) {
-      erreur = "le réglage n'est pas parti — il est resté sur ce Mac"
+      erreur = "Le réglage n’est pas parti. Réessaie."
     }
     await recharger()
   }

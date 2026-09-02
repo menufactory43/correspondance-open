@@ -26,12 +26,12 @@ public enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendab
 
   public var subtitleFR: String {
     switch self {
-    case .quattro: "La préférée — proportionnelle, lecture longue"
-    case .duo: "Duospaced — rythme machine à écrire"
-    case .mono: "Monospace — code / notes sèches"
-    case .plexSerif: "Serif contemporain IBM"
-    case .plexSans: "Sans lisible, UI claire"
-    case .systemSerif: "Serif système Apple"
+    case .quattro: "Pour lire longtemps"
+    case .duo: "Un air de machine à écrire"
+    case .mono: "Chaque lettre a la même largeur"
+    case .plexSerif: "À empattements, moderne"
+    case .plexSans: "Sans empattements, nette"
+    case .systemSerif: "Celle d’Apple, à empattements"
     }
   }
 
