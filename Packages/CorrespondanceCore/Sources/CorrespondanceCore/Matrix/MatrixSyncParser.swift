@@ -243,6 +243,13 @@ public struct MatrixSyncParser: Sendable {
         model.bridgePhoneNumber = phone
       }
 
+    case "m.room.encryption":
+      // Un salon ne se déchiffre jamais : `m.room.encryption` ne s'enlève pas.
+      // On ne remet donc jamais ce champ à nil.
+      if let algorithme = content.string(at: "algorithm"), !algorithme.isEmpty {
+        model.encryptionAlgorithm = algorithme
+      }
+
     case let type where Self.bridgeStateTypes.contains(type):
       applyBridge(content, to: &model)
 

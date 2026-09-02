@@ -93,6 +93,9 @@ final class InboxStore {
   var lastErrorMessage: String?
   var iMessageStatusFR: String = "…"
   var matrixStatusFR: String = "…"
+  /// « chiffrement : actif · cet appareil : vérifié · sauvegarde : faite »,
+  /// ou la raison pour laquelle une de ces trois choses manque.
+  var chiffrementFR: String = "…"
   var contactsStatusFR: String = "…"
   /// Affiche une bannière si Contacts n’est pas encore autorisé.
   var needsContactsPermission = false
@@ -1756,6 +1759,26 @@ final class InboxStore {
   func refreshMatrixStatus() async {
     matrixStatusFR = await matrix.statusMessageFR()
     isMatrixConnected = await matrix.isConnected
+    chiffrementFR = await chiffrementLigneFR()
+  }
+
+  /// La ligne du chiffrement dans les réglages. Trois faits, jamais un seul :
+  /// « actif » ne dit rien de l'appareil, et un appareil vérifié sans
+  /// sauvegarde perd quand même l'historique le jour où on le remplace.
+  private func chiffrementLigneFR() async -> String {
+    guard MatrixChiffrement.disponible else {
+      return "chiffrement : absent de ce binaire"
+    }
+    if MatrixChiffrement.eteintParLEnvironnement {
+      return "chiffrement : éteint par CORRESPONDANCE_CHIFFREMENT=0"
+    }
+    guard isMatrixConnected else { return "chiffrement : compilé, pas encore connecté" }
+    let etat = await matrix.etatDuChiffrement()
+    // Le partage de clés reste `TrustRequirement.untrusted` : on déchiffre ce
+    // qui arrive d'un appareil non vérifié plutôt que de rendre l'inbox
+    // aveugle. C'est une décision, pas un oubli, et elle se dit à l'écran.
+    return etat.resumeFR
+      + (etat.appareilVerifie ? "" : " — la vérification n'est pas encore exigée pour lire")
   }
 
   /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.

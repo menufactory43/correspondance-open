@@ -14,14 +14,21 @@ import CorrespondanceMatrixClient
 ///    téléchargé, et `#if canImport` ci-dessous efface tout ce fichier. La cible
 ///    Mac de production et `cc` (qui vit sous Linux, où l'XCFramework n'existe
 ///    pas) se construisent exactement comme avant.
-/// 2. La variable d'exécution `CORRESPONDANCE_CHIFFREMENT=1` : même construite
-///    avec le drapeau, l'app ne branche la machine crypto que si on le lui
-///    demande. Un binaire, deux comportements, et le comportement d'avant reste
-///    celui par défaut.
+/// 2. ~~La variable d'exécution `CORRESPONDANCE_CHIFFREMENT=1`~~ — **levé en
+///    phase 5.** Elle existait parce que le chantier E était commencé et pas
+///    fini : on voulait un binaire capable de chiffrer qui se comporte quand
+///    même comme avant. Maintenant que la sauvegarde des clés, la vérification
+///    d'appareil et `cc` sont là, demander en plus une variable d'environnement
+///    reviendrait à livrer une app dont le chiffrement est éteint chez tout le
+///    monde. **Un binaire construit avec la crypto chiffre.**
 ///
-/// Tant que le chantier E n'est pas fini (sauvegarde des clés avec phrase,
-/// vérification d'appareil, partage avec `cc` et l'extension iOS), c'est le
-/// contrat : le chiffrement s'éprouve, il ne s'impose pas.
+///    `CORRESPONDANCE_CHIFFREMENT=0` reste lu : c'est la soupape pour revenir
+///    au comportement d'avant sans reconstruire, pas un interrupteur
+///    d'allumage. Même règle que pour `cc` (`AgentCrypto`).
+///
+/// Le drapeau de manifeste, lui, **reste** : `matrix-sdk-crypto-ffi` n'est
+/// publié qu'en XCFramework Apple, et `cc` se construit aussi pour Linux, où
+/// la bibliothèque n'existe pas encore (cf. `docs/spike-un-clic/phase-5.md`).
 public enum MatrixChiffrement {
 
   /// La variable d'exécution qui lève le second verrou.
@@ -36,9 +43,15 @@ public enum MatrixChiffrement {
     #endif
   }
 
-  /// Est-il demandé pour cette exécution ?
+  /// Est-il actif pour cette exécution ? Oui dès qu'il est compilé — sauf
+  /// soupape explicite.
   public static var demande: Bool {
-    ProcessInfo.processInfo.environment[variable] == "1"
+    disponible && ProcessInfo.processInfo.environment[variable] != "0"
+  }
+
+  /// La soupape, pour le dire à l'écran plutôt que de laisser deviner.
+  public static var eteintParLEnvironnement: Bool {
+    disponible && ProcessInfo.processInfo.environment[variable] == "0"
   }
 
   /// Où le magasin de clés vit : **dans le dossier de données de l'app**, donc

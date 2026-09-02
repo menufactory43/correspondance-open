@@ -102,6 +102,22 @@ struct ConversationInfoCard: View {
         }
       }
 
+      // Le chiffrement se dit **avant** l'adresse et la date : c'est ce qui
+      // décide de ce qu'on écrit ici, pas un détail de fiche technique.
+      // Un portail ne porte jamais le cadenas plein, même chiffré (cf.
+      // `ConfidentialiteAffichee`).
+      Divider()
+      LabeledContent("Confidentialité") {
+        VStack(alignment: .trailing, spacing: 2) {
+          Label(conversation.confidentialite.libelleFR, systemImage: conversation.confidentialite.symbole)
+          Text(conversation.confidentialite.phraseFR)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+      .font(.system(size: 11))
+
       if !members.isEmpty {
         Divider()
         Text("Chats réunis")

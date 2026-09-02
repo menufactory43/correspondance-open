@@ -29,6 +29,7 @@ public struct StoredRoom: Sendable, Equatable {
     public var bridgePhoneNumber: String?
     public var bridgeRoomType: String?
     public var bridgeChannelID: String?
+    public var encryptionAlgorithm: String?
     public var isNetworkFlaggedRequest: Bool = false
     public var members: [String: MatrixRoomModel.Member] = [:]
     public var heroes: [String] = []
@@ -80,6 +81,7 @@ public extension StoredRoom {
     state.bridgePhoneNumber = model.bridgePhoneNumber
     state.bridgeRoomType = model.bridgeRoomType
     state.bridgeChannelID = model.bridgeChannelID
+    state.encryptionAlgorithm = model.encryptionAlgorithm
     state.isNetworkFlaggedRequest = model.isNetworkFlaggedRequest
     state.members = model.members
     state.heroes = model.heroes
@@ -139,6 +141,7 @@ public extension StoredRoom {
     model.bridgePhoneNumber = state.bridgePhoneNumber
     model.bridgeRoomType = state.bridgeRoomType
     model.bridgeChannelID = state.bridgeChannelID
+    model.encryptionAlgorithm = state.encryptionAlgorithm
     model.avatarMXC = avatarMXC
     model.isNetworkFlaggedRequest = state.isNetworkFlaggedRequest
     model.members = state.members

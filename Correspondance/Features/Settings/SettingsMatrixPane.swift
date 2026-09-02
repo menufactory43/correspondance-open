@@ -49,6 +49,14 @@ struct SettingsMatrixPane: View {
           }
         }
 
+        SettingsRow(
+          label: "Chiffrement",
+          detail: store.chiffrementFR,
+          systemImage: "lock"
+        ) {
+          EmptyView()
+        }
+
         if store.isMatrixConnected {
           SettingsRow(
             label: "État de conversation",

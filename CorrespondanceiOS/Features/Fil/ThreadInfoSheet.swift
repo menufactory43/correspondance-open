@@ -45,6 +45,7 @@ struct ThreadInfoSheet: View {
         if let conversation {
           VStack(spacing: Spacing.lg) {
             header(conversation)
+            confidentialite(conversation)
             actionRow(conversation)
             mediaSection
             membersSection(conversation)
@@ -135,6 +136,33 @@ struct ThreadInfoSheet: View {
     }
     .frame(maxWidth: .infinity)
     .padding(.top, Spacing.sm)
+    .accessibilityElement(children: .combine)
+  }
+
+  // MARK: - Le chiffrement, dit en une ligne et une phrase
+
+  /// Trois états, jamais quatre, et **jamais le cadenas plein sur un portail** :
+  /// le pont déchiffre pour traduire, c'est sa fonction. Le texte vient de
+  /// `ConfidentialiteAffichee`, dans le noyau, pour que le Mac et l'iPhone
+  /// disent le même mot.
+  private func confidentialite(_ conversation: Conversation) -> some View {
+    let etat = conversation.confidentialite
+    return HStack(alignment: .top, spacing: Spacing.xs) {
+      Image(systemName: etat.symbole)
+        .foregroundStyle(theme.inkSecondary)
+        .frame(width: 20)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(etat.libelleFR)
+          .font(Typography.body(typeface, size: 14))
+          .foregroundStyle(theme.ink)
+        Text(etat.phraseFR)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkTertiary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 4)
     .accessibilityElement(children: .combine)
   }
 
