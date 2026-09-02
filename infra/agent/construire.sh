@@ -19,11 +19,21 @@
 # bascule que la conclusion du spike demandait. Le binaire qui en sort est
 # statique — aucune version de glibc à respecter chez celui qui l'installe.
 #
-# Ce qu'il ne fait pas : la machine crypto (`CORRESPONDANCE_CRYPTO`). Le binaire
-# publié aujourd'hui ne la porte pas non plus — un agent installé depuis la
-# release ne lit donc pas un salon chiffré. Le jour où ce sera le défaut, il
-# faudra la `.a` Rust pour musl (`infra/relais/crypto-linux.sh`, ~2 min) et
-# `CORRESPONDANCE_CRYPTO_LINUX` ; c'est une décision, pas un détail de build.
+# La machine crypto est **dedans** (`CORRESPONDANCE_CRYPTO=1`), et c'est un
+# choix d'ordre : l'app sait déjà lire et écrire du chiffré (`release-mac.sh`
+# lève le même drapeau), mais rien ne crée encore de salon chiffré — le défaut
+# de `createSelfRoom(chiffre:)` est faux, et seul le binaire de preuve du spike
+# l'a levé. Le jour où le chantier E l'allumera côté app, un agent construit
+# sans crypto se retrouverait dans une console qu'il ne sait plus lire : il le
+# dirait (« pas de machine crypto dans ce binaire ») mais ne lirait plus sa
+# configuration. On rend donc l'agent capable avant que le salon le devienne.
+#
+# Sous Linux il ne suffit pas du drapeau : `matrix-sdk-crypto-ffi` n'est publié
+# qu'en XCFramework de tranches Apple, donc la bibliothèque doit être construite
+# (`infra/relais/crypto-linux.sh`, ~2 min, cargo + zig cc, musl comme le SDK
+# Swift) et désignée par `CORRESPONDANCE_CRYPTO_LINUX`. Sans elle, ce script
+# s'arrête en disant quoi lancer — il ne produit pas en silence un binaire
+# moins capable que celui d'hier.
 set -euo pipefail
 
 SORTIE="${CORRESPONDANCE_PUBLICATION:-$HOME/unclic-publication}"
@@ -31,6 +41,7 @@ ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PAQUET="$ICI/Packages/CorrespondanceCore"
 TOOLCHAIN="${CORRESPONDANCE_TOOLCHAIN:-$HOME/Library/Developer/Toolchains/swift-6.3.3-RELEASE.xctoolchain}"
 SDK_LINUX="${CORRESPONDANCE_SDK_LINUX:-x86_64-swift-linux-musl}"
+CRYPTO_LINUX="${CORRESPONDANCE_CRYPTO_LINUX:-$HOME/.correspondance-unclic/crypto-linux/x86_64}"
 QUOI=tout
 
 while [ $# -gt 0 ]; do
@@ -60,7 +71,8 @@ depouiller_elf() {
 }
 
 macos() {
-  dire "— macOS arm64 (natif)"
+  dire "— macOS arm64 (natif, avec la crypto)"
+  CORRESPONDANCE_CRYPTO=1 \
   swift build --package-path "$PAQUET" --product correspondance-agent -c release \
     --scratch-path /tmp/build-agent-macos >/dev/null
   local bin=/tmp/build-agent-macos/release/correspondance-agent
@@ -71,12 +83,18 @@ macos() {
 }
 
 linux() {
-  dire "— Linux x86_64 (croisé, $SDK_LINUX)"
+  dire "— Linux x86_64 (croisé, $SDK_LINUX, avec la crypto)"
   [ -x "$TOOLCHAIN/usr/bin/swift" ] || {
     echo "!! toolchain absente : $TOOLCHAIN" >&2
     echo "   (elle porte le SDK statique Linux ; --help dit comment la remplacer)" >&2
     exit 1
   }
+  [ -f "$CRYPTO_LINUX/libmatrix_sdk_crypto_ffi.a" ] || {
+    echo "!! la machine crypto Linux manque : $CRYPTO_LINUX" >&2
+    echo "   La construire (~2 min) : bash infra/relais/crypto-linux.sh" >&2
+    exit 1
+  }
+  CORRESPONDANCE_CRYPTO=1 CORRESPONDANCE_CRYPTO_LINUX="$CRYPTO_LINUX" \
   "$TOOLCHAIN/usr/bin/swift" build --package-path "$PAQUET" \
     --product correspondance-agent -c release --swift-sdk "$SDK_LINUX" \
     --scratch-path /tmp/build-agent-linux >/dev/null
