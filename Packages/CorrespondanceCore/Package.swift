@@ -52,7 +52,15 @@ let package = Package(
         // La logique (déclencheur, plafond, lecture de la sortie) vit dans le kit,
         // testable sans réseau ; l'exécutable ne fait que brancher.
         .target(name: "CorrespondanceAgentKit", dependencies: ["CorrespondanceMatrixClient"]),
-        .executableTarget(name: "correspondance-agent", dependencies: ["CorrespondanceAgentKit"]),
+        // `cc` gagne la même machine crypto que l'app **quand le drapeau est
+        // levé** : il partage déjà `MatrixClient`, il ne lui manquait que le
+        // moteur. Sous Linux, où l'XCFramework n'existe pas, le drapeau reste
+        // baissé et l'agent se construit exactement comme avant.
+        .executableTarget(
+            name: "correspondance-agent",
+            dependencies: ["CorrespondanceAgentKit", "CorrespondanceMatrixClient"]
+                + (chiffrement ? ["CorrespondanceMatrixCrypto"] : [])
+        ),
         .executableTarget(name: "correspondance-mcp", dependencies: ["CorrespondanceAgentKit", "CorrespondanceCore"]),
         .testTarget(
             name: "CorrespondanceCoreTests",

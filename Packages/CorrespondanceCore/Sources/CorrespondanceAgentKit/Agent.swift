@@ -19,6 +19,14 @@ public actor Agent {
   private var state: AgentState
   private var cap: HourlyCap
   private let log: @Sendable (String) -> Void
+  /// De quoi brancher une machine crypto après la connexion. `nil` — le défaut,
+  /// et le seul cas possible sous Linux tant que la bibliothèque Rust n'y est
+  /// pas construite — laisse l'agent exactement comme avant.
+  private let chiffrement: AgentBranchementChiffrement?
+  /// Les salons où un message est resté illisible, et depuis combien de
+  /// messages. Un agent qui se tait est indiscernable d'un agent occupé : ce
+  /// compteur existe pour que le journal le dise.
+  private var illisibles: [String: Int] = [:]
 
   /// Les membres connus de chaque room — pour savoir si on est en tête-à-tête
   /// avec les propriétaires (réponse directe) ou devant des humains (brouillon).
@@ -66,6 +74,7 @@ public actor Agent {
     backend: any AgentBackend,
     stateURL: URL,
     client: MatrixClient? = nil,
+    chiffrement: AgentBranchementChiffrement? = nil,
     log: @escaping @Sendable (String) -> Void = { print($0) }
   ) {
     self.config = config
@@ -75,6 +84,7 @@ public actor Agent {
     self.state = AgentState.load(from: stateURL)
     self.client = client ?? MatrixClient(credentials: nil)
     self.cap = HourlyCap(limit: config.hourlyCap)
+    self.chiffrement = chiffrement
     self.log = log
     self.notBefore = Date().addingTimeInterval(-600)
   }
@@ -185,6 +195,11 @@ public actor Agent {
 
   public func run() async throws {
     let credentials = try await ensureLoggedIn()
+    // Le chiffrement se branche **avant** le premier `/sync` : c'est ce sync-là
+    // qui publie les clés d'appareil (`keys/upload`). Branché après, l'agent
+    // resterait invisible pour les autres appareils jusqu'au tour suivant, et
+    // personne ne lui porterait la clé du salon.
+    if let chiffrement, let ligne = await chiffrement(credentials, client) { log(ligne) }
     try await verifyOnlyInstance()
     await discoverConsole()
     var backoff: TimeInterval = 2
@@ -216,6 +231,7 @@ public actor Agent {
         absorbSettings(from: response)
         await acceptInvites(in: response)
         for (roomID, room) in response.rooms?.join ?? [:] {
+          signalerLesIllisibles(roomID: roomID, room: room, moi: credentials.userID)
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
@@ -235,6 +251,26 @@ public actor Agent {
         try? await Task.sleep(for: .seconds(backoff))
         backoff = min(backoff * 2, 60)
       }
+    }
+  }
+
+  /// Un `m.room.encrypted` qui traverse le `/sync` sans avoir été déchiffré,
+  /// c'est un ordre qu'on n'entendra jamais. **Un agent qui se tait est
+  /// indiscernable d'un agent occupé** : mesuré en phase 4, où cc n'a pas
+  /// journalisé une ligne devant une note à soi chiffrée. On le dit donc, une
+  /// fois par salon et par vague — pas à chaque tour, sinon le journal se
+  /// remplit de la même phrase toutes les trente secondes.
+  func signalerLesIllisibles(roomID: String, room: MatrixSyncResponse.JoinedRoom, moi: String) {
+    let restes = (room.timeline?.events ?? []).filter {
+      $0.type == "m.room.encrypted" && $0.sender != moi
+    }
+    guard !restes.isEmpty else { illisibles[roomID] = 0; return }
+    let deja = illisibles[roomID] ?? 0
+    illisibles[roomID] = deja + restes.count
+    if deja == 0 {
+      log(
+        "⚠ \(roomID) : \(restes.count) message(s) chiffré(s) que je ne sais pas lire"
+          + " — clé de salon pas encore reçue, ou pas de machine crypto dans ce binaire")
     }
   }
 

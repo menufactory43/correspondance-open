@@ -158,7 +158,17 @@ do {
         dire("  ✓ \(e.sender ?? "?") : « \(e.content?.string(at: "body") ?? "") »   (event \(e.eventID ?? "?"))")
       case "m.room.encrypted":
         dire("  ✗ resté chiffré : \(e.eventID ?? "?")")
-      default: break
+      default:
+        // Les events **qui ne sont pas des messages** comptent aussi : le
+        // journal des tours de `cc` (`fr.correspondance.agent.journal`) part
+        // chiffré comme le reste, et il faut prouver qu'il se relit.
+        if e.type.hasPrefix("fr.correspondance.") {
+          lus += 1
+          let brut = (try? JSONEncoder().encode(e.content ?? .object([:]))).flatMap {
+            String(data: $0, encoding: .utf8)
+          } ?? "{}"
+          dire("  ✓ \(e.sender ?? "?") : [\(e.type)] \(brut)")
+        }
       }
     }
     dire(lus > 0 ? "→ \(lus) message(s) lu(s) en clair." : "→ aucun message lisible.")
@@ -177,6 +187,35 @@ do {
     let etat = try await c.roomState(roomID: args[2], type: "m.room.encryption")
     dire("→ \(args[2]) : m.room.encryption = \(etat.string(at: "algorithm") ?? "(absent)")")
     dire("→ membres : \((try await c.membresRejoints(roomID: args[2])).joined(separator: ", "))")
+
+  // Inviter quelqu'un dans un salon — `cc`, en l'occurrence. Un agent qui
+  // n'est pas membre ne reçoit pas la clé de salon : le partage vise les
+  // **membres rejoints**, pas les invités.
+  case "inviter":
+    guard args.count >= 4 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "inviter <profil> <salon> <userID>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await c.invite(roomID: args[2], userID: args[3])
+    dire("→ \(args[3]) invité dans \(args[2])")
+
+  // La room console de `cc`, **chiffrée**, avec l'event d'état que l'app y
+  // écrit. C'est ce que « Activer cc » fait dans l'app ; le refaire ici rend la
+  // preuve rejouable sans piloter une fenêtre.
+  case "console":
+    guard args.count >= 4 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "console <profil> <agent> <userID de l'agent>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    let console = try await c.createSelfRoom(name: "Console \(args[2]) (chiffrée)", chiffre: true)
+    dire("→ console créée, chiffrée à la création : \(console)")
+    _ = try await c.sendStateEvent(
+      roomID: console, type: AgentWire.configType,
+      content: .object([
+        AgentWire.ConfigKey.version: .number(Double(AgentWire.configVersion)),
+        AgentWire.ConfigKey.agent: .string(args[2]),
+      ])
+    )
+    try await c.invite(roomID: console, userID: args[3])
+    dire("→ \(AgentWire.configType) posé, \(args[3]) invité")
+    dire("CONSOLE=\(console)")
 
   case "salons":
     let (c, _, _) = try await client(args[1])
