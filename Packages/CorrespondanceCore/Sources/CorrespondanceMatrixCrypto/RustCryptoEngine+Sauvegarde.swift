@@ -1,6 +1,15 @@
 import CorrespondanceMatrixClient
-import CryptoKit
 import Foundation
+
+// AES-GCM et HKDF, pour le coffre qui porte les clés de signature. CryptoKit
+// sur Apple ; swift-crypto sous Linux, où CryptoKit n'existe pas — c'est la
+// **même** implémentation BoringSSL derrière la même API, donc un coffre
+// scellé sur le Mac s'ouvre sur le Linux, ce qui est tout l'enjeu.
+#if canImport(CryptoKit)
+  import CryptoKit
+#else
+  import Crypto
+#endif
 import MatrixSDKCrypto
 
 /// La sauvegarde des clés et la vérification d'appareil, côté machine Rust.
