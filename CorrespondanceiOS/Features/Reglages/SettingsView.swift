@@ -220,7 +220,11 @@ struct SettingsView: View {
     Section {
       row("Autorisation", push.authorizationLabelFR)
       row("Inscription au Relais", push.isRegistered ? "Faite" : "Pas encore")
+      // La passerelle est publique et partagée : la montrer, c'est dire où part
+      // le réveil. Et l'app_id avec, parce que c'est lui qui choisit
+      // l'environnement APNs — le seul réglage dont l'erreur est silencieuse.
       row("Passerelle", PushRegistration.sygnalURL.absoluteString)
+      row("Environnement", PushRegistration.pusherAppID)
       if push.authorization == .notDetermined {
         Button("Autoriser les notifications") {
           Task { await push.requestAuthorizationIfNeeded() }

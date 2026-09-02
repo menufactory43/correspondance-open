@@ -611,6 +611,27 @@ trusted_servers = []
 # default_room_version = "10" empêche le démarrage sur une base neuve
 # (« m.room.create event incorrectly omits creator field ») : on laisse le défaut.
 
+# Rien à autoriser pour la passerelle push. Vérifié dans le code de
+# Continuwuity 26.8.1 (src/service/pusher/mod.rs), parce que la question se
+# posait vraiment :
+#   — il n'existe AUCUNE liste d'autorisation d'URL de passerelle. `set_pusher`
+#     ne valide que la forme : URL analysable, schéma http ou https ;
+#   — `allow_federation = false` ne coupe PAS le push. Le garde de la fédération
+#     est dans src/service/federation/execute.rs, en aval ; le push part par un
+#     client reqwest distinct (services.client.pusher) et les workers du service
+#     `sending` démarrent inconditionnellement. C'était l'inquiétude légitime :
+#     dans Conduit, fédération et push partagent la même file d'attente. Ils la
+#     partagent toujours, mais pas le garde ;
+#   — le seul vrai garde est `ip_range_denylist`, dont le défaut contient
+#     100.64.0.0/10 — la plage CGNAT de Tailscale. Une passerelle push sur une
+#     adresse 100.x ou en LAN serait refusée, à l'enregistrement si l'URL porte
+#     l'IP, et à l'envoi dans tous les cas (le test est refait sur l'IP
+#     réellement connectée). C'est précisément pourquoi la passerelle est un nom
+#     public en HTTPS et non l'adresse Tailscale du NUC.
+# Piège annexe, non documenté : send_request retire `notification_push_path` de
+# l'URL déclarée avant que ruma ne le rajoute. L'URL du pusher DOIT donc finir
+# par /_matrix/push/v1/notify — ce que fait PushRegistration.defaultGateway.
+
 log = "info"
 log_colors = false
 TOML

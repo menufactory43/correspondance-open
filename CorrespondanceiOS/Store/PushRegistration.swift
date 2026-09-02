@@ -23,10 +23,32 @@ import UserNotifications
 final class PushRegistration {
   static let log = Logger(subsystem: "com.correspondance.ios", category: "push")
 
-  /// L'URL de Sygnal **vue de Synapse** : un nom de service Docker, sur le
-  /// réseau `matrix` du NUC. L'iPhone ne la résout pas et n'a pas à le faire —
-  /// c'est le Relais qui appelle Sygnal, jamais nous.
-  static let sygnalURL = URL(string: "http://sygnal:5000/_matrix/push/v1/notify")!
+  /// L'URL de la passerelle push, **vue du Relais**. Ce n'est pas l'iPhone qui
+  /// l'appelle : il la déclare, et c'est le Relais qui s'en sert.
+  ///
+  /// Elle est publique depuis le 2 sept. 2026 (décision du propriétaire). Avant,
+  /// c'était `http://sygnal:5000/…` — un nom de service Docker qui ne résout que
+  /// sur le réseau du NUC, donc une passerelle réservée au Relais du
+  /// propriétaire. Un Relais Continuwuity posé chez quelqu'un d'autre par
+  /// `infra/relais/install.sh` n'avait aucun moyen de la joindre, et son
+  /// utilisateur n'avait pas de push. Une seule passerelle chez nous, pour tous
+  /// les Relais : elle ne voit qu'un identifiant de salon et un compteur
+  /// (`format: event_id_only`), jamais le texte d'un message.
+  ///
+  /// Le nom est une **valeur de configuration**, pas une constante du produit :
+  /// `push.fauconnier.app` est un domaine que le propriétaire possède déjà, en
+  /// attendant celui de Correspondance. `CORRESPONDANCE_PUSH_GATEWAY` le
+  /// remplace sans recompiler — c'est ce qui permet d'essayer une passerelle à
+  /// soi, et c'est ce que la ligne « Passerelle » des Réglages affiche.
+  static let defaultGateway = "https://push.fauconnier.app/_matrix/push/v1/notify"
+
+  static let sygnalURL: URL = {
+    if let brut = ProcessInfo.processInfo.environment["CORRESPONDANCE_PUSH_GATEWAY"],
+       !brut.isEmpty, let url = URL(string: brut), url.scheme != nil {
+      return url
+    }
+    return URL(string: defaultGateway)!
+  }()
 
   /// L'`app_id` du pusher — la clé qui choisit l'entrée d'`apps:` dans
   /// `sygnal.yaml`, donc **l'environnement APNs**. Il y en a deux, parce
