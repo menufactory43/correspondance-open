@@ -183,5 +183,9 @@ avant un DMG : les deux cartes, la notarisation, la publication, le push.
 
 ### Phase 5 — Chantier E complet (sauvegarde des clés avec phrase, vérification d'appareil,
 trois états affichés, cc et l'extension iOS sur le même client).
-### Phase 6 — Binaires macOS publiés, les deux cartes dans l'app, installeur en mode `--json`.
+### Phase 6 — Binaires publiés, les deux cartes dans l'app, installeur en mode `--json`.
+- Décision (2 sept.) : **libolm disparaît**. libolm est abandonnée amont (2024, faiblesses
+  cryptographiques) ; les binaires mautrix officiels la chargent encore. On compile nos propres
+  ponts avec `-tags goolm` (Olm en Go pur, sans dépendance C), pour macOS arm64 et Linux,
+  depuis les mêmes sources épinglées. À publier : Continuwuity macOS arm64 + les ponts goolm.
 ### Phase 7 — DMG notarisé, TestFlight, passerelle push.
