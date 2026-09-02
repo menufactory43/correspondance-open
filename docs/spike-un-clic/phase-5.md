@@ -690,3 +690,20 @@ bash infra/relais/uninstall.sh --prefix ~/.correspondance-unclic
 pkill -f "http.server 8020"
 rm -rf ~/.correspondance-agent-unclic /tmp/p5app /tmp/correspondance-cc.unclic.log
 ```
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué après `rm -rf .build` : 798 tests sans drapeau, 803 avec, 0 échec. Relais du spike
+reposé par l'installeur, puis `preuve-cc-chiffre.sh` : la note à soi et la console sont
+chiffrées, `@cc ping` part chiffré, le journal du tour de cc (prompt `ping`, 5,4 s) est relu en
+clair par le client et stocké en `m.room.encrypted` sur le Relais, vu par HTTP. Ma relecture
+filtrée n'a pas isolé la ligne « pong » que le rapport § 6 montre ; le journal du tour prouve
+que cc a lu le message chiffré et répondu. `preuve-sauvegarde.sh` : clés de signature
+déposées dans le coffre scellé par la phrase, appareil neuf qui les reprend et devient vérifié ;
+le contrôle négatif (même événement illisible sans la phrase, 10 clés sur 10 réimportées avec)
+est au § 6–7 du rapport. Tout retiré, aucun orphelin, `~/.correspondance-agent/config.json`
+au même sha256. L'app Correspondance qui tourne pendant la vérification est celle de la prod
+(DerivedData par défaut), pas touchée. Phase acceptée, avec les trois restes nommés par le
+rapport : bibliothèque Rust pour cc-Linux, App Group iOS, écrans de la phrase et des appareils.
