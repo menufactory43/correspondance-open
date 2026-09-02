@@ -15,6 +15,22 @@ Mac (Correspondance) ──Tailscale──► Synapse ─────┤
 Un seul `/sync` côté app pour les quatre ponts (même homeserver), mais **un salon de gestion par
 pont** : `@whatsappbot`, `@instagrambot`, `@messengerbot` et `@signalbot` ne se parlent pas.
 
+### Par où le Mac joint le Relais
+
+Le schéma ci-dessus est celui de **la prod** : le NUC, Synapse, Docker, et Tailscale pour
+traverser. Le Relais « un clic » (`infra/relais/install.sh`, `docs/spike-un-clic/`) prend un
+autre chemin depuis la phase 7b, et c'est celui qui sera livré :
+
+| | Prod (ce document) | Relais un clic |
+|---|---|---|
+| Depuis le Mac | Tailscale (compte, tailnet, extension système) | **Tailcat** — WireGuard sans plan de contrôle : ni compte, ni tailnet, ni démon privilégié, ni sudo |
+| Ce que l'utilisateur pose | Tailscale, à la main, avec sudo | rien : l'installeur pose Tailcat sur le Relais, l'app l'embarque |
+| Ce qui porte l'adresse | une IP `100.x` à recopier | le code d'appairage, qui porte le jeton |
+| Depuis l'iPhone | Tailscale | **Tailscale encore** : `Process` n'existe pas sur iOS et CFNetwork n'y offre pas de mandataire SOCKS (`docs/spike-un-clic/phase-7a.md` § 3) |
+
+Un homeserver n'écoute que sur `127.0.0.1` dans les deux cas — un homeserver ouvert sur
+l'Internet est une porte. Ce qui change, c'est ce qu'il faut monter pour le traverser.
+
 ## Essayer de bout en bout, sans rien risquer
 
 Tout ce qui suit tourne **à côté** de la prod, jamais dedans : un Synapse d'essai sur le

@@ -2,8 +2,9 @@
 
 Trois phases de spike, puis la phase 4 qui en tire les conséquences dans le code, la phase 5
 qui referme le chantier du chiffrement, la phase 6 qui construit les binaires, pose les deux
-cartes dans l'app et prépare la publication, et la phase 7a qui referme les trois finitions du
-chiffrement et essaie Tailcat (`phase-1.md` à `phase-7a.md`). Rien ici n'est une lecture : tout
+cartes dans l'app et prépare la publication, la phase 7a qui referme les trois finitions du
+chiffrement et essaie Tailcat, et la phase 7b qui en fait le chemin par défaut
+(`phase-1.md` à `phase-7b.md`). Rien ici n'est une lecture : tout
 a tourné sur ce Mac et sur le NUC, sous des dossiers à part, sans toucher la prod.
 
 ## La pile retenue : Continuwuity + ponts mautrix en binaires, SQLite/RocksDB, sans conteneur
@@ -118,9 +119,12 @@ curl -fsSLO https://github.com/…/correspondance-releases/releases/latest/downl
 bash relais-install.sh
 ```
 
-Elle finit sur « le Relais répond, connecté comme @… » puis sur le code d'appairage. Si
-Tailscale manque, elle le dit et donne les deux commandes sudo ; elle ne les fait pas.
-Sur ce Mac : le bouton « Installer ici » de la carte, qui fait tout et ne demande rien.
+Elle finit sur « le Relais répond, connecté comme @… » puis sur le code d'appairage — qui
+porte, depuis la phase 7b, le **jeton Tailcat** que l'installeur a fait publier au Relais : le
+Mac s'y connecte tout seul, sans tunnel ssh, sans Tailscale et sans un sudo. L'iPhone, lui, a
+encore besoin de Tailscale, et la commande le dit.
+Sur ce Mac : le bouton « Installer ici » de la carte, qui fait tout et ne demande rien — et pas
+de Tailcat, puisque le Relais et l'app sont sur la même machine.
 
 ## `cc` chiffré sous Linux — **fait** (phase 7a)
 
@@ -176,7 +180,7 @@ n'est pas « non vérifié ».
 bout — le Relais réclame le mot de passe, l'appareil disparaît, et son jeton répond depuis
 `M_UNKNOWN_TOKEN`.
 
-## Tailcat : joindre le Relais sans Tailscale ni tunnel ssh — **essayé** (phase 7a)
+## Tailcat : joindre le Relais sans Tailscale ni tunnel ssh — **essayé** (7a), **par défaut** (7b)
 
 Un Relais posé sur une machine à soi n'écoute que sur `127.0.0.1`, et c'est ce qu'il faut. Le
 joindre demandait Tailscale (un compte, un tailnet, une extension système) ou `ssh -N -L` (un
@@ -194,6 +198,20 @@ sur iOS (une app n'y lance pas de processus enfant — il faudrait embarquer tai
 `gomobile bind`, avec le runtime Go dans le bundle, 10 à 15 Mio par tranche) et
 `kCFNetworkProxiesSOCKS*` y est marqué indisponible. D'où `#if os(macOS)` plutôt qu'un code qui
 compilerait et ne ferait rien.
+
+**Décidé le 2 septembre 2026 : Tailcat par défaut** (phase 7b). L'installeur Linux le pose —
+archive amont v0.4.0 épinglée et vérifiée avant d'être dépliée, clé persistante dans le dossier
+du Relais, service `correspondance-tailcat` devant le port du homeserver — et met son jeton dans
+le code d'appairage. L'app l'embarque (`Contents/Helpers/tailcat`, construit par
+`construire.sh --quoi tailcat` au même tag, signé séparément avec l'app), le lance quand le code
+porte un jeton, le relance s'il tombe, et l'arrête avec la session comme à la fermeture. **Le
+message « Tailscale absent, il faudrait sudo » disparaît** : ce n'est plus vrai pour le Mac.
+Tailscale devient un repli — et reste le seul chemin de l'iPhone.
+
+Ce qu'il faut continuer de dire : **qui détient le jeton joint le Relais.** C'est le même régime
+que le mot de passe que le code d'appairage porte déjà, donc pas une régression ; mais un code
+d'appairage est désormais une clé de réseau en plus d'être une clé de compte, et il périme
+toujours en quinze minutes. Un « tout retirer » emporte la clé, donc les jetons déjà émis.
 
 ## Ce qui reste avant un DMG
 
@@ -224,14 +242,12 @@ compilerait et ne ferait rien.
    durcissement de macOS ferait tout tomber d'un coup, en silence. Piège à trancher : un binaire
    nu ne peut pas être agrafé (`stapler` n'agrafe que des paquets), donc le ticket reste en ligne.
 6. **Le push** : une passerelle Sygnal chez nous, quand un utilisateur externe a un iPhone.
-7. **Décider de Tailcat.** Il marche, il coûte une dizaine de millisecondes, et il remplace la
-   seule chose que l'installeur ne sait pas poser sans sudo (Tailscale). Ce qu'il faut avant de
-   s'engager : un binaire macOS que **nous** construisons et signons (aucun n'est publié), la
-   tranche iPhone (`gomobile`, chiffrée), et une réponse à « qui détient l'addrblob joint le
-   Relais » — même régime que le mot de passe du code d'appairage, mais à dire.
+7. ~~Décider de Tailcat~~ — **décidé et fait en phase 7b** : par défaut sur Linux, embarqué et
+   signé dans l'app. Reste la tranche iPhone (`gomobile bind`, et une façon de composer sans
+   SOCKS), dont le coût est à chiffrer avant de s'engager.
 
 Non testé : la branche « Tailscale présent » de l'installeur Linux (le NUC ne l'a pas en
-natif) ; aucun compte Meta, WhatsApp ou Signal n'a jamais été lié — la règle du spike
+natif — la branche « Tailcat seul », elle, est éprouvée) ; aucun compte Meta, WhatsApp ou Signal n'a jamais été lié — la règle du spike
 l'interdit, et la feuille qui s'ouvre et demande la session est toute la preuve possible ;
 l'extension de notification en conditions réelles (ni App Group, ni push au simulateur) ; les
 captures d'écran de la phase 5 — l'écran de la machine était verrouillé, et une capture noire ne
