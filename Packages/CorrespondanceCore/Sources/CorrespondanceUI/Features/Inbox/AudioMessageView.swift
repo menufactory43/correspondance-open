@@ -15,7 +15,7 @@ public struct AudioMessageView: View {
   public var typeface: WritingTypeface = .quattro
   public var isFromMe: Bool = false
 
-  @State private var player: AVAudioPlayer?
+  @State private var player: AVPlayer?
   @State private var isPlaying = false
   @State private var elapsed: Double = 0
   @State private var duration: Double = 0
@@ -26,6 +26,8 @@ public struct AudioMessageView: View {
   @State private var transcriptError: String?
   /// Le glissement en cours sur l'onde : le ticker lui laisse la main.
   @State private var isScrubbing = false
+  /// La transcription dépliée : un vocal de trois minutes fait une page.
+  @State private var isTranscriptExpanded = false
   /// L'allure choisie vaut pour les vocaux suivants : on ne la repose pas à
   /// chaque bulle — c'est une préférence d'écoute, pas un réglage de message.
   @AppStorage("vocalPlaybackRate") private var storedRate: Double = 1
@@ -107,9 +109,13 @@ public struct AudioMessageView: View {
       DragGesture(minimumDistance: 0)
         .onChanged { value in
           isScrubbing = true
-          seek(toFraction: value.location.x / Self.waveformWidth)
+          preview(fraction: value.location.x / Self.waveformWidth)
         }
-        .onEnded { _ in isScrubbing = false }
+        .onEnded { value in
+          preview(fraction: value.location.x / Self.waveformWidth)
+          isScrubbing = false
+          commitSeek(to: elapsed)
+        }
     )
     // Sans souris ni doigt : deux gestes de VoiceOver, cinq secondes chacun.
     .accessibilityElement()
@@ -173,26 +179,39 @@ public struct AudioMessageView: View {
     .accessibilityLabel("Vitesse d'écoute : \(speed.label). Toucher pour changer.")
   }
 
-  /// Viser un instant : le lecteur se monte si besoin, et l'affichage suit
-  /// pendant qu'on glisse — sans attendre le prochain battement du ticker.
-  private func seek(toFraction target: Double) {
+  /// Viser un instant : le curseur suit le doigt sans toucher au lecteur.
+  /// Rien ne bouge dans le son tant qu'on glisse — on ne fait que viser.
+  private func preview(fraction target: Double) {
+    guard duration > 0 else { return }
+    elapsed = min(max(target, 0), 1) * duration
+  }
+
+  /// Poser la tête de lecture.
+  ///
+  /// `AVAudioPlayer.currentTime` ne se pose pas sur tout : sur les vocaux
+  /// Signal, l'écrire ne déplaçait rien, et une pause suivie d'une reprise
+  /// repartait du début. `AVPlayer.seek` cherche dans le flux décodé, tolérance
+  /// nulle — la seule façon de tomber vraiment à l'instant visé, quel que soit
+  /// le conteneur.
+  private func commitSeek(to time: Double) {
     prepare()
-    guard let player, player.duration > 0 else { return }
-    let time = min(max(target, 0), 1) * player.duration
-    player.currentTime = time
-    elapsed = time
+    guard let player, duration > 0 else { return }
+    let cible = min(max(time, 0), max(duration - 0.05, 0))
+    elapsed = cible
+    player.seek(
+      to: CMTime(seconds: cible, preferredTimescale: 600),
+      toleranceBefore: .zero,
+      toleranceAfter: .zero
+    )
+    if isPlaying { applyRate() }
   }
 
   private func seek(by seconds: Double) {
-    prepare()
-    guard let player, player.duration > 0 else { return }
-    seek(toFraction: (player.currentTime + seconds) / player.duration)
+    commitSeek(to: elapsed + seconds)
   }
 
   private func applyRate() {
-    guard let player else { return }
-    player.enableRate = true
-    player.rate = Float(speed.rawValue)
+    player?.rate = Float(speed.rawValue)
   }
 
   /// « Lire » : la transcription, sur l'appareil quand il sait le faire.
@@ -220,13 +239,28 @@ public struct AudioMessageView: View {
   @ViewBuilder
   private var transcriptLine: some View {
     if let text = transcript ?? transcriptError {
-      Text(text)
-        .font(Typography.meta(typeface))
-        .foregroundStyle(isFromMe ? theme.bubbleOutInk.opacity(0.85) : theme.inkSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: 210, alignment: .leading)
-        .textSelection(.enabled)
-        .transition(.opacity)
+      // Un vocal de trois minutes fait une page. On en montre le début — huit
+      // lignes, jamais coupées au milieu d'une — et le reste se déplie sur
+      // demande, dans le fil, sans fenêtre dans la fenêtre.
+      VStack(alignment: .leading, spacing: 4) {
+        Text(text)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(isFromMe ? theme.bubbleOutInk.opacity(0.85) : theme.inkSecondary)
+          .lineLimit(isTranscriptExpanded ? nil : 8)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .textSelection(.enabled)
+        if text.count > 300 {
+          Button(isTranscriptExpanded ? "Replier" : "Tout lire") {
+            isTranscriptExpanded.toggle()
+          }
+          .buttonStyle(.plain)
+          .font(Typography.meta(typeface))
+          .foregroundStyle(isFromMe ? theme.bubbleOutInk : theme.accent)
+        }
+      }
+      .frame(maxWidth: 320, alignment: .leading)
+      .transition(.opacity)
     }
   }
 
@@ -283,48 +317,52 @@ public struct AudioMessageView: View {
 
   private func prepare() {
     guard player == nil, !failed else { return }
-    guard let url = attachment.resolvedFileURL,
-          let loaded = try? AVAudioPlayer(contentsOf: url)
-    else {
+    guard let url = attachment.resolvedFileURL else {
       failed = true
       return
     }
-    loaded.enableRate = true
-    loaded.prepareToPlay()
+    let item = AVPlayerItem(url: url)
+    let loaded = AVPlayer(playerItem: item)
+    // Sans ça, une recherche à la fin d'un fichier fait tousser la lecture :
+    // le lecteur attend un tampon plein avant de repartir.
+    loaded.automaticallyWaitsToMinimizeStalling = false
     player = loaded
-    duration = loaded.duration
   }
 
   private func toggle() {
     prepare()
     guard let player else { return }
-    if player.isPlaying {
+    if isPlaying {
       player.pause()
       isPlaying = false
       ticker?.cancel()
       return
     }
     // Relire depuis le début quand la lecture précédente est allée au bout.
-    if player.currentTime >= player.duration - 0.05 { player.currentTime = 0 }
-    applyRate()
-    player.play()
+    if duration > 0, elapsed >= duration - 0.1 { commitSeek(to: 0) }
     isPlaying = true
+    player.play()
+    applyRate()
     startTicker()
   }
 
   /// Une boucle `Task` plutôt qu'un `Timer` : elle reste sur l'acteur principal
-  /// et s'annule proprement quand la bulle quitte l'écran.
+  /// et s'annule proprement quand la bulle quitte l'écran. C'est elle aussi qui
+  /// voit la fin du fichier — `AVPlayer` ne s'arrête pas, il reste posé dessus.
   private func startTicker() {
     ticker?.cancel()
     ticker = Task { @MainActor in
-      while !Task.isCancelled, let player, player.isPlaying {
-        if !isScrubbing { elapsed = player.currentTime }
+      while !Task.isCancelled, isPlaying, let player {
+        let now = player.currentTime().seconds
+        if !isScrubbing, now.isFinite { elapsed = now }
+        if duration > 0, elapsed >= duration - 0.08 {
+          player.pause()
+          isPlaying = false
+          elapsed = 0
+          player.seek(to: .zero) { _ in }
+          return
+        }
         try? await Task.sleep(for: .milliseconds(120))
-      }
-      guard !Task.isCancelled else { return }
-      if player?.isPlaying != true {
-        isPlaying = false
-        elapsed = 0
       }
     }
   }
@@ -332,7 +370,7 @@ public struct AudioMessageView: View {
   private func stop() {
     ticker?.cancel()
     ticker = nil
-    player?.stop()
+    player?.pause()
     isPlaying = false
   }
 
