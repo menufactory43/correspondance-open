@@ -80,7 +80,7 @@ Référence ADR 0001. Pour les conversations Matrix uniquement ; iMessage garde 
 Ordre des écrans, chacun livrable seul :
 
 1. **Connexion au Relais** (URL + identifiants, Keychain) — réutilise `MatrixCredentials`.
-2. **Inbox liste** : `ConversationRowView` partagée, filtres (Tous / Non lus / Brouillons / Sans réponse / Groupes), menu du titre (Inbox / Archive / réseaux), barre flottante du bas.
+2. **Inbox liste** : `ConversationRowView` partagée, filtres en jetons sous le titre (Tous / Non lus / Sans réponse / Brouillons / Groupes), barre d'onglets du système (Inbox / Archive / Focus + recherche), menu « … » (réseaux, Demandes, Rappels, Programmés, Réglages).
 3. **Fil** : `MessageBubbleView` partagée, en-tête flottant, réactions, citations, « Vu par », `ComposerBar` avec **+** (Photos / Caméra / Fichier / Plus tard) et micro.
 4. **Adaptatif** : `NavigationSplitView` — compact = pile, regular = liste + fil ; état conservé au changement de size class (test : simulateur iPad Pro 13 + rotation ; Fold quand le simulateur existera).
 5. **Focus** : un écran = une conversation, gestes archiver / suivante, atteint depuis la barre du bas.

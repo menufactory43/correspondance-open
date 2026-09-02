@@ -4,11 +4,19 @@ import SwiftUI
 
 /// L'écran par défaut de l'iPhone (décision 9).
 ///
-/// Le titre à gauche porte le menu de portée : Inbox, Archive, puis un réseau.
-/// La barre flottante du bas porte le filtre, la pilule de mode et la
-/// recherche. Entre les deux, la file, épinglées en tête.
+/// Le titre nomme la portée — Inbox, Archive, ou le réseau choisi — et ne
+/// s'ouvre pas : la portée se change dans la barre d'onglets. Sous le titre, le
+/// filtre en jetons (Tous / Non lus / Sans réponse / Brouillons / Groupes),
+/// comme les catégories de Mail. En haut à droite, un seul menu « … » pour ce
+/// qui n'est ni un onglet ni un filtre : le réseau, les listes de
+/// vérification (Demandes, Rappels, Programmés), la note à soi, le balayage,
+/// les Réglages. Entre les deux, la file, épinglées en tête.
 struct InboxListView: View {
-  @Binding var mode: PhoneMode
+  /// La portée de cette liste — fixée par l'onglet qui la porte, ou par la
+  /// feuille qui la pousse (Demandes, Rappels).
+  let scope: InboxScope
+  /// Ouverte en feuille depuis le menu : taper une ligne la referme.
+  var dismissesOnOpen = false
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -18,19 +26,21 @@ struct InboxListView: View {
   @State private var isShowingScheduled = false
   @State private var isShowingSettings = false
   @State private var isSearching = false
+  /// Une liste de vérification poussée en feuille : Demandes ou Rappels.
+  @State private var checklist: InboxScope?
   /// Le balayage de fin de journée se demande une fois, avec son compte.
   @State private var confirmsArchiveAllRead = false
+  @Environment(\.dismiss) private var dismiss
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
 
   var body: some View {
     @Bindable var store = store
-    let list = store.visibleConversations
+    let list = store.conversations(in: scope)
     let sections = InboxOrdering.sections(list, state: store.viewState)
 
-    return ZStack(alignment: .bottom) {
-      Group {
+    return Group {
         if list.isEmpty {
           emptyState
         } else {
@@ -45,13 +55,8 @@ struct InboxListView: View {
             Section {
               ForEach(sections.others) { row($0) }
             } header: {
-              if !sections.pinned.isEmpty { sectionHeader(store.scope.labelFR) }
+              if !sections.pinned.isEmpty { sectionHeader(scope.labelFR) }
             }
-            // De quoi respirer sous la barre flottante.
-            Color.clear
-              .frame(height: 76)
-              .listRowSeparator(.hidden)
-              .listRowBackground(Color.clear)
           }
           .listStyle(.plain)
           .scrollContentBackground(.hidden)
@@ -59,19 +64,42 @@ struct InboxListView: View {
         }
       }
       .background(theme.paper.ignoresSafeArea())
-
-      InboxFloatingBar(mode: $mode, isSearching: $isSearching)
-        .padding(.horizontal, Spacing.md)
-        .padding(.bottom, Spacing.xs)
-    }
     .navigationTitle("")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
-      ToolbarItem(placement: .topBarLeading) { scopeMenu }
-      ToolbarItem(placement: .topBarTrailing) { newConversationButton }
+      ToolbarItem(placement: .topBarLeading) { titleLabel }
+        .plainToolbarItem()
+      if dismissesOnOpen {
+        ToolbarItem(placement: .topBarTrailing) { Button("Fermer") { dismiss() } }
+      } else {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+          moreMenu
+          newConversationButton
+        }
+      }
     }
     .toolbarBackground(theme.paper, for: .navigationBar)
-    .safeAreaInset(edge: .top, spacing: 0) { syncBanner }
+    .safeAreaInset(edge: .top, spacing: 0) {
+      VStack(spacing: 0) {
+        syncBanner
+        if scope == .inbox || scope == .archive { filterChips }
+      }
+      .background(theme.paper)
+    }
+    .sheet(isPresented: $isSearching) {
+      SearchSheet()
+        .environment(store)
+        .environment(themes)
+    }
+    .sheet(item: $checklist) { scope in
+      NavigationStack {
+        InboxListView(scope: scope, dismissesOnOpen: true)
+      }
+      .environment(store)
+      .environment(themes)
+      .environment(push)
+      .tint(theme.accent)
+    }
     .sheet(isPresented: $isComposingNew) {
       NewConversationSheet()
         .environment(store)
@@ -221,6 +249,24 @@ struct InboxListView: View {
   private func open(_ id: String) {
     store.selectedConversationID = id
     Task { await store.open(conversationID: id) }
+    if dismissesOnOpen { dismiss() }
+  }
+
+  /// Le titre est un titre : il nomme la portée et ne s'ouvre pas.
+  private var titleLabel: some View {
+    Text(title)
+      .font(Typography.letterHeading(typeface, 24))
+      .foregroundStyle(theme.ink)
+      .fixedSize()
+      .accessibilityAddTraits(.isHeader)
+  }
+
+  /// Le titre nomme la portée, ou le réseau quand un seul est choisi.
+  private var title: String {
+    if scope == .inbox || scope == .archive, let network = store.networkFilter {
+      return network.labelFR
+    }
+    return scope.labelFR
   }
 
   private func sectionHeader(_ title: String) -> some View {
@@ -237,17 +283,53 @@ struct InboxListView: View {
 
   // MARK: - Chrome
 
-  private var scopeMenu: some View {
-    Menu {
-      Picker("Portée", selection: Binding(
-        get: { store.scope },
-        set: { store.scope = $0 }
-      )) {
-        ForEach(InboxScope.allCases) { scope in
-          Label(scope.labelFR, systemImage: scope.systemImage).tag(scope)
+  /// Le filtre, en jetons sous le titre : visible, un tap. Le jeton actif
+  /// porte son compte quand il en a un.
+  private var filterChips: some View {
+    ScrollView(.horizontal, showsIndicators: false) {
+      HStack(spacing: 6) {
+        ForEach(ConversationFilter.allCases.filter { $0 != .scheduled }) { candidate in
+          let selected = store.filter == candidate
+          Button {
+            withAnimation(.easeOut(duration: 0.16)) { store.filter = candidate }
+          } label: {
+            HStack(spacing: 5) {
+              Text(candidate.labelFR)
+              if candidate == .unread, unreadInScope > 0 {
+                Text("\(unreadInScope)")
+                  .monospacedDigit()
+                  .opacity(0.85)
+              }
+            }
+            .font(Typography.meta(typeface))
+            .fontWeight(selected ? .semibold : .regular)
+            .foregroundStyle(selected ? theme.accentInk : theme.inkSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+              Capsule().fill(selected ? theme.accentFill : theme.paperSecondary.opacity(0.7))
+            )
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : theme.edge.opacity(0.6)))
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Filtre \(candidate.labelFR)")
+          .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
         }
       }
-      Divider()
+      .padding(.horizontal, Spacing.md)
+      .padding(.top, 2)
+      .padding(.bottom, Spacing.xs)
+    }
+  }
+
+  private var unreadInScope: Int {
+    store.conversations(in: scope).filter(\.hasUnread).count
+  }
+
+  /// Le menu « … » : un seul endroit pour ce qui n'est ni un onglet ni un
+  /// filtre. Comme Mail et Notes.
+  private var moreMenu: some View {
+    Menu {
       Picker("Réseau", selection: Binding(
         get: { store.networkFilter },
         set: { store.networkFilter = $0 }
@@ -259,8 +341,8 @@ struct InboxListView: View {
         }
       }
       Divider()
-      // Le menu du titre porte ce qui n'est pas une portée : ce qui attend son
-      // heure, et l'engrenage. Comme Beeper — un endroit, pas dix.
+      checklistButton(.requests, count: store.conversations(in: .requests).count)
+      checklistButton(.reminders, count: store.conversations(in: .reminders).count)
       Button {
         isShowingScheduled = true
       } label: {
@@ -269,6 +351,7 @@ struct InboxListView: View {
           systemImage: "clock"
         )
       }
+      Divider()
       Button {
         Task { await store.openSelfNote() }
       } label: {
@@ -280,22 +363,28 @@ struct InboxListView: View {
         Label("Archiver tout ce qui est lu…", systemImage: "archivebox")
       }
       .disabled(store.readArchivableConversations.isEmpty)
+      Divider()
       Button {
         isShowingSettings = true
       } label: {
         Label("Réglages", systemImage: "gearshape")
       }
     } label: {
-      HStack(spacing: 4) {
-        Text(store.networkFilter?.labelFR ?? store.scope.labelFR)
-          .font(Typography.letterHeading(typeface, 22))
-          .foregroundStyle(theme.ink)
-        Image(systemName: "chevron.down")
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(theme.inkTertiary)
-      }
+      Image(systemName: "ellipsis.circle")
+        .font(.system(size: 17, weight: .medium))
     }
-    .accessibilityLabel("Portée : \(store.networkFilter?.labelFR ?? store.scope.labelFR). Changer.")
+    .accessibilityLabel("Plus")
+  }
+
+  private func checklistButton(_ scope: InboxScope, count: Int) -> some View {
+    Button {
+      checklist = scope
+    } label: {
+      Label(
+        count == 0 ? scope.labelFR : "\(scope.labelFR) (\(count))",
+        systemImage: scope.systemImage
+      )
+    }
   }
 
   private var newConversationButton: some View {
@@ -349,12 +438,30 @@ struct InboxListView: View {
 
   private var emptyIcon: String {
     if store.filter != .all { return store.filter.systemImage }
-    return store.scope == .archive ? "archivebox" : "tray"
+    return scope == .inbox ? "tray" : scope.systemImage
   }
 
   private var emptyTitle: String {
     if store.filter != .all { return "Rien en « \(store.filter.labelFR) »" }
     if let network = store.networkFilter { return "Aucune conversation \(network.labelFR)" }
-    return store.scope == .archive ? "L'archive est vide" : "Vous êtes à jour"
+    switch scope {
+    case .inbox: return "Vous êtes à jour"
+    case .archive: return "L'archive est vide"
+    case .reminders: return "Rien de mis de côté"
+    case .requests: return "Aucune demande"
+    }
+  }
+}
+
+extension ToolbarItem where ID == Void, Content: View {
+  /// Un titre n'est pas un bouton : pas de capsule de verre derrière lui.
+  /// iOS 26 en pose une par défaut sous chaque élément de la barre.
+  @ToolbarContentBuilder
+  func plainToolbarItem() -> some ToolbarContent {
+    if #available(iOS 26.0, *) {
+      sharedBackgroundVisibility(.hidden)
+    } else {
+      self
+    }
   }
 }

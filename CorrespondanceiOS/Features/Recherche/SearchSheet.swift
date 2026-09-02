@@ -17,6 +17,10 @@ struct SearchSheet: View {
   /// Un fil, et rien que lui : la recherche ouverte depuis sa fiche. Sans
   /// onglet, on y cherche alors des messages, pas des conversations.
   var scope: String?
+  /// En onglet plutôt qu'en feuille : pas de « Fermer », et ouvrir un
+  /// résultat revient à l'onglet Inbox par `onOpen`.
+  var embedded = false
+  var onOpen: ((String) -> Void)?
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -43,7 +47,9 @@ struct SearchSheet: View {
       .navigationTitle("Rechercher")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .topBarLeading) { Button("Fermer") { dismiss() } }
+        if !embedded {
+          ToolbarItem(placement: .topBarLeading) { Button("Fermer") { dismiss() } }
+        }
       }
       .toolbarBackground(theme.paper, for: .navigationBar)
     }
@@ -306,6 +312,6 @@ struct SearchSheet: View {
     store.pendingJumpMessageID = messageID
     store.selectedConversationID = conversationID
     Task { await store.open(conversationID: conversationID) }
-    dismiss()
+    if embedded { onOpen?(conversationID) } else { dismiss() }
   }
 }

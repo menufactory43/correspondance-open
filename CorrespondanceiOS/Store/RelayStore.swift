@@ -356,9 +356,31 @@ final class RelayStore {
     )
   }
 
+  /// La même liste, pour une portée donnée : l'iPhone tient Inbox et Archive
+  /// dans deux onglets vivants en même temps, chacun avec la sienne.
+  func conversations(in scope: InboxScope) -> [Conversation] {
+    InboxOrdering.list(
+      conversations,
+      scope: scope,
+      network: networkFilter,
+      filter: filter,
+      state: viewState,
+      scheduled: Set(scheduled.map(\.conversationID))
+    )
+  }
+
   var focusQueue: [Conversation] {
     InboxOrdering.focusQueue(conversations, state: viewState)
   }
+
+  /// Ce que Focus doit savoir d'un envoi : lequel, et dans quel fil. La ligne
+  /// s'en sert pour faire sortir la page dont on vient de répondre.
+  struct SentMark: Equatable {
+    let conversationID: String
+    let localID: String
+    let serial: Int
+  }
+  private(set) var lastSent: SentMark?
 
   /// L'état tel que l'écran doit le montrer : celui du Relais, corrigé par les
   /// brouillons qu'on est en train de taper.
@@ -512,9 +534,15 @@ final class RelayStore {
   }
 
   func groups(_ conversationID: String) -> [MessageGroup] {
+    groups(conversationID, messages: visibleMessages(conversationID))
+  }
+
+  /// Le regroupement d'une partie du fil seulement — ce que Focus montre quand
+  /// il replie l'historique à ce qui attend une réponse.
+  func groups(_ conversationID: String, messages: [ChatMessage]) -> [MessageGroup] {
     let conversation = conversation(conversationID)
     return MessageGrouping.groups(
-      for: visibleMessages(conversationID),
+      for: messages,
       showsSenderNames: conversation?.isGroup ?? false,
       showsNetworkOrigin: MergedContact.isMergedID(conversationID)
     )
@@ -731,6 +759,7 @@ final class RelayStore {
 
     let localID = UUID().uuidString
     showOptimistically(text: text, paths: paths, in: target, localID: localID)
+    lastSent = SentMark(conversationID: conversationID, localID: localID, serial: (lastSent?.serial ?? 0) + 1)
 
     guard !isDemo else { return }
 
@@ -987,6 +1016,7 @@ final class RelayStore {
 
     let localID = UUID().uuidString
     showOptimistically(text: text, paths: paths, in: target, localID: localID)
+    lastSent = SentMark(conversationID: conversationID, localID: localID, serial: (lastSent?.serial ?? 0) + 1)
     do {
       try await matrix.send(
         conversationID: target, text: text, attachmentPaths: paths,

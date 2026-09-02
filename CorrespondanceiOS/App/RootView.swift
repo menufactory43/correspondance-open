@@ -2,12 +2,14 @@ import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
 
-/// Le mode d'affichage de l'iPhone. Inbox par défaut (décision 9), Focus à un
-/// geste de là, dans la pilule de la barre du bas.
+/// Les onglets de l'iPhone. Inbox par défaut (décision 9), Focus à un tap,
+/// dans la barre d'onglets du système ; la recherche est l'onglet de rôle
+/// `search`, celui qu'iOS pose seul dans sa bulle à droite.
 enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
   case inbox
   case archive
   case focus
+  case search
 
   var id: String { rawValue }
 
@@ -16,6 +18,7 @@ enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
     case .inbox: "Inbox"
     case .archive: "Archive"
     case .focus: "Focus"
+    case .search: "Rechercher"
     }
   }
 
@@ -24,6 +27,7 @@ enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
     case .inbox: "tray.full"
     case .archive: "archivebox"
     case .focus: "rectangle.portrait.and.arrow.right"
+    case .search: "magnifyingglass"
     }
   }
 
@@ -31,7 +35,7 @@ enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
     switch self {
     case .inbox: .inbox
     case .archive: .archive
-    case .focus: nil
+    case .focus, .search: nil
     }
   }
 }
@@ -86,26 +90,60 @@ struct RootView: View {
   @ViewBuilder
   private var connected: some View {
     @Bindable var store = store
-    if mode == .focus {
-      FocusView(mode: $mode)
-    } else {
-      NavigationSplitView(columnVisibility: $columns) {
-        InboxListView(mode: $mode)
-          .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 460)
-      } detail: {
-        // Pas de `NavigationStack` ici : la colonne de détail en a déjà un, et
-        // en compact c'est lui qui reçoit la poussée quand la sélection change.
-        // En imbriquer un second faisait taper dans le vide — la conversation
-        // se sélectionnait, mais rien ne s'ouvrait.
-        if let id = store.selectedConversationID, store.conversation(id) != nil {
-          ThreadView(conversationID: id)
-        } else {
-          noSelection
+    TabView(selection: $mode) {
+      Tab(PhoneMode.inbox.labelFR, systemImage: PhoneMode.inbox.systemImage, value: .inbox) {
+        split(scope: .inbox)
+      }
+      .badge(unreadCount)
+
+      Tab(PhoneMode.archive.labelFR, systemImage: PhoneMode.archive.systemImage, value: .archive) {
+        split(scope: .archive)
+      }
+
+      Tab(PhoneMode.focus.labelFR, systemImage: PhoneMode.focus.systemImage, value: .focus) {
+        FocusView()
+      }
+
+      Tab(value: .search, role: .search) {
+        SearchSheet(embedded: true) { conversationID in
+          store.selectedConversationID = conversationID
+          mode = .inbox
         }
       }
-      .navigationSplitViewStyle(.balanced)
-      .tint(theme.accent)
     }
+    .tabBarMinimizedOnScroll()
+    .tint(theme.accent)
+    .onChange(of: mode, initial: true) { _, new in
+      // La portée du store suit l'onglet : c'est elle que la recherche et
+      // les feuilles lisent.
+      if let scope = new.scope { store.scope = scope }
+    }
+  }
+
+  /// Le badge de l'onglet Inbox : ce qui n'est pas lu dans la file.
+  private var unreadCount: Int {
+    store.conversations(in: .inbox).reduce(0) { $0 + $1.unreadCount }
+  }
+
+  /// Liste puis fil en compact, côte à côte en regular — un split view par
+  /// portée, chacun dans son onglet.
+  private func split(scope: InboxScope) -> some View {
+    @Bindable var store = store
+    return NavigationSplitView(columnVisibility: $columns) {
+      InboxListView(scope: scope)
+        .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 460)
+    } detail: {
+      // Pas de `NavigationStack` ici : la colonne de détail en a déjà un, et
+      // en compact c'est lui qui reçoit la poussée quand la sélection change.
+      // En imbriquer un second faisait taper dans le vide — la conversation
+      // se sélectionnait, mais rien ne s'ouvrait.
+      if let id = store.selectedConversationID, store.conversation(id) != nil {
+        ThreadView(conversationID: id)
+      } else {
+        noSelection
+      }
+    }
+    .navigationSplitViewStyle(.balanced)
   }
 
   /// En démonstration, l'écran demandé s'ouvre seul — les captures n'ont pas
@@ -178,5 +216,18 @@ struct RootView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(theme.paper.ignoresSafeArea())
+  }
+}
+
+extension View {
+  /// La barre d'onglets se replie sur l'onglet courant en défilant — le
+  /// comportement d'iOS 26. Avant, la barre reste : rien à replier.
+  @ViewBuilder
+  func tabBarMinimizedOnScroll() -> some View {
+    if #available(iOS 26.0, *) {
+      tabBarMinimizeBehavior(.onScrollDown)
+    } else {
+      self
+    }
   }
 }

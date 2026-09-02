@@ -14,6 +14,17 @@ struct ThreadView: View {
   let conversationID: String
   /// En Focus, le fil se passe de son en-tête : la barre de Focus le porte déjà.
   var showsHeader = true
+  /// Focus « Trier » lit sans répondre : pas de composer.
+  var showsComposer = true
+  /// Replié à ce qui attend une réponse : les messages reçus depuis mon dernier
+  /// mot. L'historique reste à un tap, en tête. C'est ce que Focus enlève sur
+  /// iPhone, là où le Mac enlève la barre latérale.
+  var foldsToPending = false
+  /// Ce que Focus pose entre le fil et le composer : sa rangée de décisions.
+  var accessory: AnyView?
+
+  /// L'historique déplié — le tap sur « … messages plus tôt ».
+  @State private var isUnfolded = false
 
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -46,6 +57,7 @@ struct ThreadView: View {
   @State private var members: [RelayStore.ThreadMember] = []
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.horizontalSizeClass) private var sizeClass
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -66,7 +78,12 @@ struct ThreadView: View {
     thread
       .background(theme.paper.ignoresSafeArea())
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        ThreadComposer(conversationID: conversationID, members: members)
+        VStack(spacing: 0) {
+          if let accessory { accessory }
+          if showsComposer {
+            ThreadComposer(conversationID: conversationID, members: members)
+          }
+        }
       }
       .overlay {
         if let focused {
@@ -87,6 +104,10 @@ struct ThreadView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar { toolbar }
       .toolbar(focused == nil ? .visible : .hidden, for: .navigationBar)
+      // Un fil ouvert en compact prend tout l'écran : la barre d'onglets
+      // s'efface, sinon elle recouvre le composer. En regular, elle vit en
+      // haut, à côté de la liste — elle reste.
+      .toolbar(showsHeader && sizeClass == .compact ? .hidden : .automatic, for: .tabBar)
       .toolbarBackground(.hidden, for: .navigationBar)
       .sheet(item: $selectingText) { selected in
         SelectTextSheet(text: selected.text)
@@ -178,6 +199,24 @@ struct ThreadView: View {
             .padding(.vertical, 6)
         }
         Color.clear.frame(height: 4)
+
+        if let hidden = foldedAwayCount, hidden > 0 {
+          Button {
+            withAnimation(.easeOut(duration: 0.2)) { isUnfolded = true }
+          } label: {
+            Label("\(hidden) messages plus tôt", systemImage: "chevron.down")
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkSecondary)
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 7)
+              .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                  .fill(theme.paperSecondary.opacity(0.7))
+              )
+          }
+          .buttonStyle(.plain)
+          .accessibilityHint("Déplie l'historique de la conversation")
+        }
 
         ForEach(groups) { group in
           if let separator = group.timeSeparator {
@@ -331,7 +370,7 @@ struct ThreadView: View {
       }
       // Remonter jusqu'en haut, c'est demander la suite : le Relais complète
       // au-dessus et la lecture ne bouge pas d'un pouce.
-      if new.isScrollable, new.distanceToTop <= 400 { Task { await loadOlder() } }
+      if new.isScrollable, new.distanceToTop <= 400, !isFolded { Task { await loadOlder() } }
     }
     // Le chevron au-dessus du bouton d'envoi : il n'apparaît que lorsqu'on
     // a quitté le bas du fil, et un appui y ramène.
@@ -489,8 +528,23 @@ struct ThreadView: View {
     var isScrollable: Bool { contentHeight > visibleHeight - insetTop - insetBottom }
   }
 
-  private var messages: [ChatMessage] { store.visibleMessages(conversationID) }
-  private var groups: [MessageGroup] { store.groups(conversationID) }
+  private var allMessages: [ChatMessage] { store.visibleMessages(conversationID) }
+  private var isFolded: Bool { foldsToPending && !isUnfolded }
+
+  /// Le fil tel qu'on le montre : entier, ou replié à ce qui suit mon dernier
+  /// message. Sans mot de moi, tout le fil attend — on le garde entier.
+  private var messages: [ChatMessage] {
+    guard isFolded, let cut = allMessages.lastIndex(where: \.isFromMe) else { return allMessages }
+    return Array(allMessages[cut...])
+  }
+
+  /// Ce que le pli cache. `nil` quand rien n'est plié.
+  private var foldedAwayCount: Int? {
+    guard isFolded else { return nil }
+    return allMessages.count - messages.count
+  }
+
+  private var groups: [MessageGroup] { store.groups(conversationID, messages: messages) }
 
   /// « Vu » sous le dernier message sortant — quand le réseau l'expose.
   /// Signal et WhatsApp ne le donnent pas : on n'affiche alors rien plutôt
@@ -545,6 +599,16 @@ struct ThreadPillHeader: View {
         .foregroundStyle(theme.ink)
         .lineLimit(1)
         .frame(maxWidth: 180)
+      // Ce que la conversation est vraiment, sans avoir à ouvrir la fiche.
+      // iMessage est laissé de côté : il n'a pas de salon Matrix, et sa
+      // confidentialité est celle d'Apple — nous n'en savons rien.
+      if conversation.network != .iMessage {
+        ConfidentialiteBadge(
+          conversation.confidentialite,
+          teinte: conversation.privacy.showsClosedLock ? theme.accent : theme.inkTertiary,
+          taille: 10
+        )
+      }
     }
     .padding(.leading, 5)
     .padding(.trailing, 12)
@@ -552,6 +616,7 @@ struct ThreadPillHeader: View {
     .glassSurface(cornerRadius: 18, fallbackFill: theme.sidebar, border: theme.edge, isInteractive: true)
     .contentShape(Capsule())
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(conversation.title), \(conversation.network.labelFR)")
+    .accessibilityLabel(
+      "\(conversation.title), \(conversation.network.labelFR), \(conversation.confidentialite.libelleFR)")
   }
 }
