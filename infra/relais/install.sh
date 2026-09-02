@@ -19,6 +19,9 @@
 #   --hote CIBLE          force l'hôte (macos-arm64 | linux-x86_64 | linux-arm64),
 #                         pour éprouver le plan des trois cibles depuis une seule
 #   --sans-ponts          ne pose que le homeserver
+#   --json                une ligne JSON par étape, et le code d'appairage en
+#                         dernier objet — le mode que l'app lit quand c'est
+#                         elle qui lance l'installeur (carte « Sur ce Mac »)
 #
 # Ce qu'il ne fait pas : il n'installe jamais Tailscale (ça demande sudo). Il
 # l'utilise s'il est là, et dit ce qu'il faudrait faire s'il manque.
@@ -33,6 +36,7 @@ BIND=127.0.0.1
 DRY=0
 HOTE=""
 PONTS=1
+JSON=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,6 +48,7 @@ while [ $# -gt 0 ]; do
     --bind) BIND="$2"; shift ;;
     --hote) HOTE="$2"; shift ;;
     --sans-ponts) PONTS=0 ;;
+    --json) JSON=1 ;;
     -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
     *) echo "!! option inconnue : $1" >&2; exit 2 ;;
   esac
@@ -141,7 +146,21 @@ MXID="@$USER_NAME:$SERVER_NAME"
 case "$HOTE" in macos-*) SYSTEME=launchd ;; *) SYSTEME=systemd ;; esac
 
 dire() { printf '→ %s\n' "$*"; }
-mourir() { printf '✗ %s\n' "$*" >&2; exit 1; }
+
+# Le mode machine : une ligne JSON par étape, rien d'autre sur cette ligne.
+# Les phrases pour l'humain continuent de sortir telles quelles — un flux JSON
+# qui se mélange à du texte se lit très bien ligne par ligne, alors qu'un
+# installeur muet en mode humain serait une seconde chose à éprouver.
+# `etape NOM ETAT [DETAIL]` ; ETAT vaut debut, ok ou erreur.
+etape() {
+  [ "$JSON" = 1 ] || return 0
+  python3 -c 'import json,sys; print(json.dumps({"etape":sys.argv[1],"etat":sys.argv[2],"detail":sys.argv[3]}, ensure_ascii=False), flush=True)' \
+    "$1" "$2" "${3:-}"
+}
+
+# Un échec doit sortir DANS le flux, pas seulement sur stderr : sans ça l'app
+# voit le processus mourir sans savoir sur quoi, et n'a que « code 1 » à dire.
+mourir() { etape "${ETAPE_COURANTE:-installation}" erreur "$*"; printf '✗ %s\n' "$*" >&2; exit 1; }
 somme() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}';
           else shasum -a 256 "$1" | awk '{print $1}'; fi; }
 
@@ -235,17 +254,22 @@ if [ "$DRY" = 1 ]; then
 fi
 
 # ============================================================ 1. les prérequis
+ETAPE_COURANTE=prerequis
+etape prerequis debut "curl, python3, sha256 — aucun sudo, aucun Docker"
 command -v curl >/dev/null || mourir "curl est nécessaire"
 command -v python3 >/dev/null || mourir "python3 est nécessaire (il lit le jeton et parle à #admins)"
 command -v sha256sum >/dev/null 2>&1 || command -v shasum >/dev/null 2>&1 \
   || mourir "ni sha256sum ni shasum : impossible de vérifier les binaires"
 
+etape prerequis ok "$HOTE — tout vit sous $PREFIX"
 dire "hôte $HOTE — tout vit sous $PREFIX"
 mkdir -p "$BIN" "$RELAIS_DIR/db" "$LOGS" "$OUTILS"
 chmod 700 "$PREFIX"
 : > "$PREFIX/.correspondance-relais"   # la marque que uninstall.sh exige avant d'effacer
 
 # ============================================================== 2. les binaires
+ETAPE_COURANTE=binaires
+etape binaires debut "continuwuity $CONTINUWUITY_TAG et les ponts mautrix $MAUTRIX_TAG, sha256 vérifié"
 poser() {
   local nom="$1" url="$2" attendu="$3" cible="$BIN/$1"
   if [ -f "$cible" ] && [ "$(somme "$cible")" = "$attendu" ]; then
@@ -271,8 +295,11 @@ if [ $PONTS = 1 ]; then
   poser mautrix-instagram "$IG_URL" "$IG_SHA"
   poser mautrix-messenger "$MS_URL" "$MS_SHA"
 fi
+etape binaires ok "posés dans $BIN, toutes les sommes conformes"
 
 # =============================================================== 3. les secrets
+ETAPE_COURANTE=secrets
+etape secrets debut "tirés une fois, jamais réécrits"
 SECRETS="$PREFIX/secrets.env"
 if [ ! -f "$SECRETS" ]; then
   dire "secrets tirés dans $SECRETS (0600, hors dépôt)"
@@ -284,6 +311,7 @@ if [ ! -f "$SECRETS" ]; then
   chmod 600 "$SECRETS"
 fi
 set -a; . "$SECRETS"; set +a
+etape secrets ok "$SECRETS (0600)"
 
 # ============================================================ 4. les outils py
 # Trois petits programmes que l'installeur pose à côté de la pile : ils sont la
@@ -386,7 +414,7 @@ cat > "$OUTILS/appairage.py" <<'PYPAIR'
 #!/usr/bin/env python3
 """Le code d'appairage que l'app lit, et ses six mots de vérification.
 
-    appairage.py <url publique> <serveur> <utilisateur> <mot de passe>
+    appairage.py <url publique> <serveur> <utilisateur> <mot de passe> [json]
 
 Format de RelayPairingCode (Packages/CorrespondanceCore/…/RelayPairingCode.swift)
 et de infra/matrix/pair.sh : un JSON compact trié, en base64 URL-safe sans
@@ -414,16 +442,25 @@ def mots(materiau):
 
 
 url, serveur, utilisateur, mot_de_passe = sys.argv[1:5]
+en_json = len(sys.argv) > 5 and sys.argv[5] == "1"
 charge = {"v": 1, "homeserver": url, "server": serveur, "user": utilisateur,
           "password": mot_de_passe, "exp": time.time() + DUREE}
 brut = json.dumps(charge, separators=(",", ":"), sort_keys=True).encode()
 jeton = base64.b64encode(brut).decode().replace("+", "-").replace("/", "_").rstrip("=")
+code = f"correspondance://relais/{jeton}"
+six = mots(f"{url}|{serveur}|@{utilisateur}:{serveur}")
+if en_json:
+    # Le DERNIER objet du flux, et le seul qui porte « code » : c'est à ce
+    # champ que l'app reconnaît la fin, pas au nom de l'étape — une étape
+    # nommée « appairage » sans code la ferait se croire prête.
+    print(json.dumps({"etape": "appairage", "etat": "ok", "code": code, "mots": six},
+                     ensure_ascii=False), flush=True)
 print()
 print("  Relais prêt. Dans Correspondance : « Connecter un Relais », puis colle ce code.")
 print()
-print(f"  correspondance://relais/{jeton}")
+print(f"  {code}")
 print()
-print(f"  Vérification (six mots) : {' '.join(mots(f'{url}|{serveur}|@{utilisateur}:{serveur}'))}")
+print(f"  Vérification (six mots) : {' '.join(six)}")
 print("  Il périme dans 15 minutes. Il contient un mot de passe : ne le poste nulle part.")
 PYPAIR
 
@@ -431,6 +468,8 @@ PYPAIR
 # Écrit une seule fois : le .toml porte le jeton d'enregistrement, et la base
 # RocksDB a été créée avec ce server_name. Relancer l'installeur ne le réécrit
 # pas — c'est ce qui rend l'opération rejouable sans casser l'existant.
+ETAPE_COURANTE=configuration
+etape configuration debut "$SERVER_NAME, écoute $BIND:$PORT"
 if [ ! -f "$RELAIS_DIR/continuwuity.toml" ]; then
   ( umask 077; cat > "$RELAIS_DIR/continuwuity.toml" <<TOML
 # Écrit par infra/relais/install.sh — contient un jeton, ne pas versionner.
@@ -467,6 +506,7 @@ TOML
 else
   dire "$RELAIS_DIR/continuwuity.toml déjà là, conservé"
 fi
+etape configuration ok "$RELAIS_DIR/continuwuity.toml"
 
 # ============================================================= 6. les services
 service_launchd() {
@@ -539,9 +579,14 @@ if [ "$SYSTEME" = systemd ]; then
   fi
 fi
 
+ETAPE_COURANTE=services
+etape services debut "$SYSTEME"
 service relais "$BIN/continuwuity" -c "$RELAIS_DIR/continuwuity.toml"
+etape services ok "le Relais est un service $SYSTEME : il revient au démarrage de la session"
 
 # ================================================== 7. attendre, puis le compte
+ETAPE_COURANTE=attente
+etape attente debut "$RELAIS"
 dire "attente du Relais sur $RELAIS"
 pret=""
 for _ in $(seq 1 60); do
@@ -549,8 +594,12 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ -n "$pret" ] || { tail -20 "$LOGS/relais.log" 2>/dev/null >&2; mourir "le Relais ne répond pas sur $RELAIS"; }
-dire "✓ le Relais répond ($(curl -fsS "$RELAIS/_continuwuity/server_version"))"
+VERSION_VUE="$(curl -fsS "$RELAIS/_continuwuity/server_version")"
+etape attente ok "$VERSION_VUE"
+dire "✓ le Relais répond ($VERSION_VUE)"
 
+ETAPE_COURANTE=compte
+etape compte debut "$MXID"
 SESSION="$PREFIX/proprietaire.json"
 jeton_session() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["access_token"])' "$SESSION"; }
 
@@ -596,10 +645,13 @@ PY
   chmod 600 "$SESSION"
   dire "✓ $MXID enregistré"
 fi
+etape compte ok "$MXID"
 JETON_PROPRIO="$(jeton_session)"
 
 # ================================================================= 8. les ponts
 if [ $PONTS = 1 ]; then
+  ETAPE_COURANTE=ponts
+  etape ponts debut "WhatsApp, Signal, Instagram, Messenger — portails chiffrés"
   pont() {
     local nom="$1" port="$2" prefixe="$3" bot="$4"
     local dir="$PREFIX/mautrix-$nom"
@@ -692,12 +744,15 @@ CFG
   # les gabarits de infra/matrix/templates/.
   pont instagram "$IG_PORT" '!ig' instagrambot
   pont messenger "$MS_PORT" '!fb' messengerbot
+  etape ponts ok "quatre ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT)"
 fi
 
 # ================================================== 9. la preuve, pas la promesse
 # Un mot de passe neuf, reposé par #admins. Sans --logout, les sessions ouvertes
 # survivent : c'est l'équivalent du logout_devices:false de Synapse, ce qui évite
 # de tuer un agent qui tourne ailleurs.
+ETAPE_COURANTE=preuve
+etape preuve debut "/login puis /account/whoami"
 NOUVEAU="$(python3 -c 'import secrets,string; a=string.ascii_letters+string.digits; print("".join(secrets.choice(a) for _ in range(24)))')"
 python3 "$OUTILS/salon-admin.py" "$RELAIS" "$JETON_PROPRIO" "$SERVER_NAME" \
   "!admin users reset-password $USER_NAME $NOUVEAU" >/dev/null \
@@ -720,6 +775,7 @@ QUI="$(curl -fsS -H "Authorization: Bearer $JETON_PREUVE" "$RELAIS/_matrix/clien
 # On referme la session de preuve : elle a servi, elle ne doit pas traîner.
 curl -fsS -X POST -H "Authorization: Bearer $JETON_PREUVE" "$RELAIS/_matrix/client/v3/logout" >/dev/null 2>&1 || true
 
+etape preuve ok "connecté comme $QUI"
 echo
 echo "✓ le Relais répond, connecté comme $QUI (/login puis /account/whoami)."
 if [ $PONTS = 1 ]; then
@@ -727,7 +783,8 @@ if [ $PONTS = 1 ]; then
 fi
 echo "  $TS_MOT"
 
-python3 "$OUTILS/appairage.py" "$PUBLIC" "$SERVER_NAME" "$USER_NAME" "$NOUVEAU"
+ETAPE_COURANTE=appairage
+python3 "$OUTILS/appairage.py" "$PUBLIC" "$SERVER_NAME" "$USER_NAME" "$NOUVEAU" "$JSON"
 echo
 if [ "$SYSTEME" = launchd ]; then
   echo "  Le Relais revient tout seul : launchctl kickstart -k gui/$(id -u)/app.correspondance.relais"

@@ -139,6 +139,34 @@ DESINSTALL_SRC="$(cat "$DESINSTALL")"
 verifier "le désinstalleur retire aussi Instagram" "mautrix-instagram" "$DESINSTALL_SRC"
 verifier "le désinstalleur retire aussi Messenger" "mautrix-messenger" "$DESINSTALL_SRC"
 
+echo "Le mode machine (--json)"
+# Ce que la carte « Sur ce Mac » lit. On ne pose rien : on éprouve que le mode
+# existe, qu'il nomme chaque étape, et surtout que la FIN est reconnaissable —
+# c'est le seul point où l'app peut se tromper sans le voir.
+verifier "l'option existe" "--json                une ligne JSON par étape" "$SRC"
+verifier "une étape est un objet à trois champs" '"etape":sys.argv[1],"etat":sys.argv[2],"detail":sys.argv[3]' "$SRC"
+verifier "un échec sort DANS le flux, pas seulement sur stderr" 'mourir() { etape "${ETAPE_COURANTE:-installation}" erreur' "$SRC"
+for nom in prerequis binaires secrets configuration services attente compte ponts preuve; do
+  verifier "l'étape « $nom » est annoncée" "etape $nom debut" "$SRC"
+  verifier "l'étape « $nom » est conclue" "etape $nom ok" "$SRC"
+done
+verifier "l'appairage est le dernier objet, et il porte le code" '"etape": "appairage", "etat": "ok", "code": code, "mots": six' "$SRC"
+verifier "le mode humain garde ses phrases" 'print(f"  Vérification (six mots)' "$SRC"
+verifier_absent "le mode humain n'imprime pas de JSON" 'if not en_json' "$SRC"
+
+# L'analyse du flux, pour de vrai : on extrait la fonction `etape` de
+# l'installeur et on la fait parler, sans rien poser sur la machine.
+BOUT="$(mktemp)"
+{ echo "JSON=1"
+  sed -n '/^etape() {/,/^}/p' "$INSTALL"
+  echo 'etape binaires debut "une somme"'
+  echo 'etape binaires ok ""'
+} > "$BOUT"
+LIGNES="$(bash "$BOUT" 2>&1)"
+rm -f "$BOUT"
+verifier "une étape émise est bien du JSON" '{"etape": "binaires", "etat": "debut", "detail": "une somme"}' "$LIGNES"
+verifier "un détail vide reste un champ" '"detail": ""' "$LIGNES"
+
 echo
 if [ "$echecs" -eq 0 ]; then
   echo "Plan d'installation du Relais : tout est conforme."
