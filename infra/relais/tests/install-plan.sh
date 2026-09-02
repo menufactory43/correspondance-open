@@ -45,7 +45,11 @@ verifier "prend Instagram en darwin-arm64" "mautrix-instagram-darwin-arm64" "$MA
 # celui d'Instagram poserait deux fois le même réseau sous deux noms.
 verifier "prend Messenger en darwin-arm64" "mautrix-meta-darwin-arm64" "$MAC"
 verifier "pose un agent launchd utilisateur" "Library/LaunchAgents" "$MAC"
-verifier "dit qu'il ne pose pas Tailscale sur Mac" "Tailscale n'est ni posé ni requis" "$MAC"
+# Sur macOS, le Relais et l'app sont sur la MÊME machine : y poser Tailcat
+# serait un tunnel de 127.0.0.1 vers 127.0.0.1.
+verifier "dit qu'il ne pose ni Tailcat ni Tailscale sur Mac" "ni Tailcat ni Tailscale ne sont posés" "$MAC"
+verifier_absent "ne pose pas Tailcat sur Mac" "tailcat_0.4.0" "$MAC"
+verifier_absent "aucun service tailcat sur Mac" "correspondance-tailcat" "$MAC"
 verifier "finit sur la preuve" "/account/whoami" "$MAC"
 verifier "finit sur le code d'appairage" "correspondance://relais/" "$MAC"
 verifier "n'exécute rien" "rien n'a été exécuté" "$MAC"
@@ -66,6 +70,24 @@ verifier "respecte --prefix" "$HOME/unclic" "$LX"
 verifier_absent "aucun launchd sur Linux" "LaunchAgents" "$LX"
 verifier_absent "ne pose pas libolm sur Linux" "libolm" "$LX"
 
+echo "Tailcat, par défaut, sur Linux"
+# Le renversement de la phase 7b : Tailcat est le chemin par défaut, Tailscale
+# le repli. Ce qu'on éprouve ici, c'est que le plan le dit et que l'installeur
+# épingle l'archive amont comme tout le reste.
+verifier "épingle l'archive amont v0.4.0 en amd64" "tailcat_0.4.0_linux_amd64.tar.gz" "$LX"
+verifier "en vérifie le sha256" "sha256 8b819c43dfdf806b5663e23535aba557bb106075b0b5839df289af9bba70bec2" "$LX"
+verifier "tire une clé persistante dans le dossier du Relais" "tailcat/relais.private.json" "$LX"
+verifier "pose un service correspondance-tailcat devant le port du Relais" "service correspondance-tailcat devant le port 8010" "$LX"
+verifier "relit le jeton dans le fichier d'adresse, pas dans genkey" "TAILCAT_ADDR_FILE" "$LX"
+verifier "met le jeton dans le code d'appairage" "ET jeton Tailcat" "$LX"
+verifier "dit que le Mac se connectera seul" "le Mac s'y connectera tout seul" "$LX"
+verifier "dit que l'iPhone a encore besoin de Tailscale" "L'iPhone, lui, a encore besoin de Tailscale" "$LX"
+# Le message que la phase 7b fait disparaître : sans Tailscale, on ne dit plus
+# « il faudrait sudo », parce que ce n'est plus vrai pour le Mac.
+verifier_absent "ne réclame plus Tailscale pour le Mac" "Cet installeur ne le pose PAS" "$LX"
+verifier_absent "ne propose plus le tunnel ssh quand Tailcat est là" "ssh -N -L 8010" "$LX"
+
+
 echo "Hôte « linux-arm64 »"
 LA="$(bash "$INSTALL" --dry-run --hote linux-arm64 2>&1)"
 verifier "prend la release amont, statique, arm64" "conduwuit-linux-static-arm64" "$LA"
@@ -74,10 +96,17 @@ verifier "prend Instagram en arm64" "mautrix-instagram-arm64" "$LA"
 verifier "prend Messenger en arm64" "mautrix-meta-arm64" "$LA"
 verifier_absent "ne prend pas le Messenger d'un autre hôte" "mautrix-meta-amd64" "$LA"
 verifier_absent "ne confond pas avec l'amd64" "conduwuit-linux-static-amd64" "$LA"
+verifier "prend l'archive tailcat arm64" "tailcat_0.4.0_linux_arm64.tar.gz" "$LA"
+verifier_absent "ne confond pas les deux archives tailcat" "tailcat_0.4.0_linux_amd64" "$LA"
 
-echo "Tailscale, quand il manque"
-verifier "dit ce qu'il ferait, et que ça demande sudo" "tailscale.com/install.sh" "$LX"
-verifier "propose le tunnel ssh en attendant" "ssh -N -L 8010:127.0.0.1:8010" "$LX"
+echo "Le repli, quand on écarte Tailcat (--sans-tailcat)"
+# Le chemin d'avant la phase 7b doit rester praticable : c'est lui qui sert si
+# Tailcat est refusé, et c'est le seul que l'iPhone sache prendre.
+SANS="$(bash "$INSTALL" --dry-run --hote linux-x86_64 --sans-tailcat 2>&1)"
+verifier_absent "ne télécharge plus tailcat" "tailcat_0.4.0" "$SANS"
+verifier_absent "ne pose plus de service tailcat" "correspondance-tailcat" "$SANS"
+verifier "dit ce qu'il ferait pour Tailscale, et que ça demande sudo" "tailscale.com/install.sh" "$SANS"
+verifier "propose le tunnel ssh en attendant" "ssh -N -L 8010:127.0.0.1:8010" "$SANS"
 
 echo "Les options"
 PORT="$(bash "$INSTALL" --dry-run --hote macos-arm64 --port 8030 --server-name essai.local --user pierre 2>&1)"
@@ -124,6 +153,10 @@ verifier "ne réécrit pas la config d'un pont existante" 'configuration déjà 
 verifier "ne retire pas de nouveaux jetons de pont" 'registration déjà là, jetons inchangés' "$SRC"
 verifier "ne retire pas de nouveaux secrets" 'if [ ! -f "$SECRETS" ]' "$SRC"
 verifier "ne recrée pas le compte si la session vaut encore" 'déjà là, session valide' "$SRC"
+verifier "ne retire pas une nouvelle clé tailcat" 'clé déjà là, conservée' "$SRC"
+# `enable --now` ne redémarre pas une unité active : sans le restart, une seconde
+# exécution attendrait une adresse que personne ne réécrit.
+verifier "redémarre tailcat pour qu'il réécrive son adresse" 'systemctl --user restart correspondance-tailcat' "$SRC"
 verifier "refuse d'installer si un sha256 diffère" "on n'installe rien" "$SRC"
 
 echo "Les quatre ponts, même traitement"
@@ -138,6 +171,7 @@ verifier "les ponts écrivent leur journal" "writers:" "$SRC"
 DESINSTALL_SRC="$(cat "$DESINSTALL")"
 verifier "le désinstalleur retire aussi Instagram" "mautrix-instagram" "$DESINSTALL_SRC"
 verifier "le désinstalleur retire aussi Messenger" "mautrix-messenger" "$DESINSTALL_SRC"
+verifier "le désinstalleur retire aussi le service tailcat" "for nom in relais tailcat" "$DESINSTALL_SRC"
 
 echo "Le mode machine (--json)"
 # Ce que la carte « Sur ce Mac » lit. On ne pose rien : on éprouve que le mode
@@ -146,10 +180,12 @@ echo "Le mode machine (--json)"
 verifier "l'option existe" "--json                une ligne JSON par étape" "$SRC"
 verifier "une étape est un objet à trois champs" '"etape":sys.argv[1],"etat":sys.argv[2],"detail":sys.argv[3]' "$SRC"
 verifier "un échec sort DANS le flux, pas seulement sur stderr" 'mourir() { etape "${ETAPE_COURANTE:-installation}" erreur' "$SRC"
-for nom in prerequis binaires secrets configuration services attente compte ponts preuve; do
+for nom in prerequis binaires secrets configuration services attente tailcat compte ponts preuve; do
   verifier "l'étape « $nom » est annoncée" "etape $nom debut" "$SRC"
   verifier "l'étape « $nom » est conclue" "etape $nom ok" "$SRC"
 done
+verifier "l'échec de tailcat se dit « erreur », et n'arrête pas l'installation" \
+  "etape tailcat erreur \"tailcat n'a pas publié d'adresse" "$SRC"
 verifier "l'appairage est le dernier objet, et il porte le code" '"etape": "appairage", "etat": "ok", "code": code, "mots": six' "$SRC"
 verifier "le mode humain garde ses phrases" 'print(f"  Vérification (six mots)' "$SRC"
 verifier_absent "le mode humain n'imprime pas de JSON" 'if not en_json' "$SRC"

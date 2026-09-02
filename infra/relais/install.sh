@@ -19,12 +19,23 @@
 #   --hote CIBLE          force l'hôte (macos-arm64 | linux-x86_64 | linux-arm64),
 #                         pour éprouver le plan des trois cibles depuis une seule
 #   --sans-ponts          ne pose que le homeserver
+#   --sans-tailcat        ne pose pas Tailcat sur Linux (l'adresse du code sera
+#                         alors celle de Tailscale, ou 127.0.0.1 et un tunnel ssh)
 #   --json                une ligne JSON par étape, et le code d'appairage en
 #                         dernier objet — le mode que l'app lit quand c'est
 #                         elle qui lance l'installeur (carte « Sur ce Mac »)
 #
-# Ce qu'il ne fait pas : il n'installe jamais Tailscale (ça demande sudo). Il
-# l'utilise s'il est là, et dit ce qu'il faudrait faire s'il manque.
+# Comment on joint ce Relais depuis un autre poste. Un homeserver ouvert sur
+# l'Internet est une porte : celui-ci n'écoute que sur 127.0.0.1. Sur Linux,
+# l'installeur pose donc **Tailcat** à côté de lui — le plan de données de
+# Tailscale (WireGuard, traversée de NAT, DERP en repli) sans son plan de
+# contrôle : ni compte, ni tailnet, ni démon privilégié, ni sudo. Le jeton qu'il
+# publie entre dans le code d'appairage, et le Mac s'y connecte tout seul.
+#
+# Tailscale devient un **repli** : s'il est là, le code porte aussi son adresse ;
+# l'installeur ne l'installe toujours pas (ça demande sudo). C'est l'iPhone qui
+# en a encore besoin — Tailcat y demande un tailcat embarqué, que nous n'avons
+# pas (docs/spike-un-clic/phase-7a.md § 3).
 set -euo pipefail
 
 # ------------------------------------------------------------------ les options
@@ -36,6 +47,7 @@ BIND=127.0.0.1
 DRY=0
 HOTE=""
 PONTS=1
+TAILCAT=1
 JSON=0
 
 while [ $# -gt 0 ]; do
@@ -48,8 +60,9 @@ while [ $# -gt 0 ]; do
     --bind) BIND="$2"; shift ;;
     --hote) HOTE="$2"; shift ;;
     --sans-ponts) PONTS=0 ;;
+    --sans-tailcat) TAILCAT=0 ;;
     --json) JSON=1 ;;
-    -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
     *) echo "!! option inconnue : $1" >&2; exit 2 ;;
   esac
   shift
@@ -84,6 +97,13 @@ MAUTRIX_TAG=v0.2608.0
 # « mautrix-facebook »). Deux processus, deux bases, deux salons de gestion —
 # rien ne se partage, pas même la session Meta (cf. infra/matrix/docker-compose.yml).
 META_AMONT="https://github.com/mautrix/meta/releases/download/$MAUTRIX_TAG"
+# Tailcat : l'amont publie Linux (amd64/arm64/armv7) et Windows, **pas macOS** —
+# là-bas il passe par un tap Homebrew, que le spike s'interdit dans la pile
+# livrée. Le binaire macOS est donc le NÔTRE, construit au même tag par
+# infra/relais/construire.sh ; mais sur macOS le Relais n'a de toute façon pas
+# besoin de Tailcat — l'app est sur la même machine que lui.
+TAILCAT_TAG=v0.4.0
+TAILCAT_AMONT="https://github.com/tailscale/tailcat/releases/download/$TAILCAT_TAG"
 
 case "$HOTE" in
   macos-arm64)
@@ -102,6 +122,7 @@ case "$HOTE" in
     IG_SHA=763f1cab3fcddee73e8c96eb408d73afc2e2461a4db4d1c790b4ceab01254b31
     MS_URL="$RELEASES/mautrix-meta-darwin-arm64"
     MS_SHA=bad1ef2d9e73d4e4a27f7def37070d2531aeddb95c57f3a9971c9baa6d3af5f1
+    TAILCAT_URL=""; TAILCAT_SHA=""; TAILCAT_ARCHIVE=""
     OLM_URL=""; OLM_SHA=""
     ;;
   linux-x86_64)
@@ -115,6 +136,9 @@ case "$HOTE" in
     IG_SHA=229586e3e629e928a7f3ec9dbc490c48125b23135c93e0bf04a7d53f2b0b4de9
     MS_URL="$META_AMONT/mautrix-meta-amd64"
     MS_SHA=e861777b51f0e15959e66f0efc0c68b88e1bd1093b09737358b4af7dafd7e6cc
+    TAILCAT_ARCHIVE="tailcat_0.4.0_linux_amd64.tar.gz"
+    TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
+    TAILCAT_SHA=8b819c43dfdf806b5663e23535aba557bb106075b0b5839df289af9bba70bec2
     OLM_URL=""; OLM_SHA=""
     ;;
   linux-arm64)
@@ -128,6 +152,9 @@ case "$HOTE" in
     IG_SHA=8d130e30b5da0f2eeef21b92327ebee283d84b7d36b3ecc6960f3a331b0f4cad
     MS_URL="$META_AMONT/mautrix-meta-arm64"
     MS_SHA=5b76822b9ae445fb6fd644a09a12f619e4abc1216a887415d6500e65f61b64fe
+    TAILCAT_ARCHIVE="tailcat_0.4.0_linux_arm64.tar.gz"
+    TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
+    TAILCAT_SHA=3b77322350f64d229d5b2119b159b863b4bcffa0a62a0294682423a19956dc76
     OLM_URL=""; OLM_SHA=""
     ;;
   *) echo "!! hôte inconnu : $HOTE" >&2; exit 2 ;;
@@ -165,23 +192,52 @@ somme() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{p
           else shasum -a 256 "$1" | awk '{print $1}'; fi; }
 
 # ----------------------------------------------------- l'adresse que l'app verra
-# Tailscale n'est jamais installé par cet installeur : ça demande sudo. On le
-# détecte, et sinon on dit ce qu'il faudrait faire.
+#
+# Trois chemins possibles vers un Relais qui n'écoute que sur 127.0.0.1, et
+# l'ordre entre eux est une décision, pas un hasard :
+#
+#   1. **Tailcat**, posé par cet installeur, sans compte et sans sudo. C'est le
+#      chemin par défaut sur Linux depuis la phase 7b : le code d'appairage
+#      porte son jeton, et le Mac s'y connecte tout seul.
+#   2. **Tailscale**, s'il est déjà là. Repli, et le seul chemin que l'iPhone
+#      sache prendre aujourd'hui. Cet installeur ne le pose pas : ça demande sudo.
+#   3. `ssh -N -L`, quand il n'y a ni l'un ni l'autre. Un terminal, une clé, une
+#      commande que personne ne retape — d'où les deux premiers.
+#
+# Le code porte les deux quand les deux existent : `homeserver` est l'adresse
+# ordinaire (Tailscale, ou 127.0.0.1) et `tailcat` le jeton. Une app qui ne
+# connaît pas le champ `tailcat` retombe donc sur l'adresse, et une app qui le
+# connaît n'a besoin de rien d'autre.
+TAILCAT_ACTIF=0
+if [ "$TAILCAT" = 1 ] && [ -n "$TAILCAT_URL" ]; then TAILCAT_ACTIF=1; fi
+
 TS_IP=""
 TS_MOT=""
 if [ "$SYSTEME" = systemd ]; then
   if command -v tailscale >/dev/null 2>&1; then
     TS_IP="$(tailscale ip -4 2>/dev/null | head -1 || true)"
   fi
-  if [ -n "$TS_IP" ]; then
-    TS_MOT="Tailscale est là : le code portera http://$TS_IP:$PORT, et le Relais écoutera aussi sur cette adresse."
+  if [ "$TAILCAT_ACTIF" = 1 ] && [ -n "$TS_IP" ]; then
+    TS_MOT="Tailcat est posé : le code portera son jeton, et le Mac s'y connectera tout seul. Tailscale est là aussi — le code portera http://$TS_IP:$PORT en repli, et c'est cette adresse-là dont l'iPhone a encore besoin."
+  elif [ "$TAILCAT_ACTIF" = 1 ]; then
+    TS_MOT="Tailcat est posé : le code portera son jeton, et le Mac s'y connectera tout seul, sans tunnel ssh et sans Tailscale. L'iPhone, lui, a encore besoin de Tailscale (curl -fsSL https://tailscale.com/install.sh | sh, puis sudo tailscale up) : il n'embarque pas Tailcat."
+  elif [ -n "$TS_IP" ]; then
+    TS_MOT="Tailcat écarté (--sans-tailcat). Tailscale est là : le code portera http://$TS_IP:$PORT, et le Relais écoutera aussi sur cette adresse."
   else
-    TS_MOT="Tailscale absent. Cet installeur ne le pose PAS (ça demande sudo : curl -fsSL https://tailscale.com/install.sh | sh, puis sudo tailscale up). Le code portera http://127.0.0.1:$PORT — joignable depuis un autre poste par : ssh -N -L $PORT:127.0.0.1:$PORT <cette machine>."
+    TS_MOT="Tailcat écarté (--sans-tailcat) et Tailscale absent — cet installeur ne pose pas Tailscale (ça demande sudo : curl -fsSL https://tailscale.com/install.sh | sh, puis sudo tailscale up). Le code portera http://127.0.0.1:$PORT — joignable depuis un autre poste par : ssh -N -L $PORT:127.0.0.1:$PORT <cette machine>."
   fi
 else
-  TS_MOT="macOS : Tailscale n'est ni posé ni requis. Le Relais et l'app sont sur la même machine, le code portera http://127.0.0.1:$PORT."
+  TS_MOT="macOS : ni Tailcat ni Tailscale ne sont posés, et aucun n'est requis. Le Relais et l'app sont sur la même machine, le code portera http://127.0.0.1:$PORT."
 fi
 if [ -n "$TS_IP" ]; then PUBLIC="http://$TS_IP:$PORT"; BINDS="\"$BIND\", \"$TS_IP\""; else PUBLIC="$RELAIS"; BINDS="\"$BIND\""; fi
+
+# Le dossier de Tailcat : sa clé (persistante — un jeton qui changerait à chaque
+# redémarrage périmerait tous les codes déjà émis), et le fichier où le serveur
+# écrit son adresse à chaque démarrage.
+TAILCAT_DIR="$PREFIX/tailcat"
+TAILCAT_CLE="$TAILCAT_DIR/relais.private.json"
+TAILCAT_ADRESSE="$TAILCAT_DIR/adresse"
+TAILCAT_JETON=""
 
 # ------------------------------------------------------------------ le plan
 plan() {
@@ -191,13 +247,22 @@ plan() {
   echo "  serveur Matrix    $SERVER_NAME, propriétaire $MXID"
   echo "  écoute            $BIND:$PORT ; ponts sur $WA_PORT (WhatsApp), $SG_PORT (Signal),"
   echo "                    $IG_PORT (Instagram) et $MS_PORT (Messenger)"
-  echo "  adresse du code   $PUBLIC"
+  if [ "$TAILCAT_ACTIF" = 1 ]; then
+    echo "  adresse du code   $PUBLIC, plus le jeton Tailcat (le chemin par défaut)"
+  else
+    echo "  adresse du code   $PUBLIC"
+  fi
   echo
   echo "  1. Prérequis : curl, python3, un calcul de sha256. Aucun sudo, aucun Docker, aucun Homebrew."
   echo "  2. Binaires, épinglés et vérifiés par sha256 (rien n'est installé si une somme diffère) :"
   echo "       continuwuity $CONTINUWUITY_TAG"
   echo "         $RELAIS_URL_BIN"
   echo "         sha256 $RELAIS_SHA"
+  if [ "$TAILCAT_ACTIF" = 1 ]; then
+    echo "       tailcat $TAILCAT_TAG (archive, le binaire en est extrait)"
+    echo "         $TAILCAT_URL"
+    echo "         sha256 $TAILCAT_SHA"
+  fi
   if [ $PONTS = 1 ]; then
     echo "       mautrix-whatsapp $MAUTRIX_TAG"
     echo "         $WA_URL"
@@ -229,6 +294,13 @@ plan() {
     echo "       loginctl enable-linger \$(id -un) — sans sudo si la session en a le droit ; sinon l'installeur"
     echo "       le dit et continue (sans linger, tout meurt à la déconnexion SSH)"
   fi
+  if [ "$TAILCAT_ACTIF" = 1 ]; then
+    echo "  5 bis. Tailcat : clé persistante dans $TAILCAT_CLE (0600, tirée une seule fois),"
+    echo "       service correspondance-tailcat devant le port $PORT du Relais, et le jeton relu"
+    echo "       dans $TAILCAT_ADRESSE — le serveur l'y écrit à chaque démarrage (TAILCAT_ADDR_FILE),"
+    echo "       ce qui est la seule source juste : la région DERP se choisit au démarrage, donc"
+    echo "       le jeton de genkey n'est pas celui que le serveur publie."
+  fi
   echo "  6. Attente que $RELAIS/_matrix/client/versions réponde."
   echo "  7. Compte propriétaire $MXID par /register — avec le jeton d'AMORÇAGE que Continuwuity"
   echo "     n'écrit que dans son journal (celui du .toml ne marche pas sur une base neuve)."
@@ -241,9 +313,14 @@ plan() {
     echo "  9. Services des ponts, démarrés APRÈS l'enregistrement de l'appservice."
   fi
   echo " 10. Preuve : /login avec le mot de passe du code, puis /account/whoami — « connecté comme $MXID »."
-  echo " 11. Code d'appairage correspondance://relais/… + ses six mots de vérification."
+  if [ "$TAILCAT_ACTIF" = 1 ]; then
+    echo " 11. Code d'appairage correspondance://relais/… — adresse $PUBLIC ET jeton Tailcat —"
+    echo "     + ses six mots de vérification, qui ne changent pas (ils nomment le Relais, pas le jeton)."
+  else
+    echo " 11. Code d'appairage correspondance://relais/… + ses six mots de vérification."
+  fi
   echo
-  echo "  Tailscale : $TS_MOT"
+  echo "  Le chemin depuis un autre poste : $TS_MOT"
 }
 
 if [ "$DRY" = 1 ]; then
@@ -287,7 +364,30 @@ poser() {
   dire "$nom : sha256 $vu ✓"
 }
 
+# Tailcat est publié en archive, pas en binaire nu : on vérifie la somme de
+# l'archive AVANT de la déplier, jamais après — déplier une archive qu'on n'a pas
+# vérifiée, c'est écrire sur le disque ce qu'on voulait refuser.
+poser_tailcat() {
+  if [ -f "$BIN/tailcat" ] && "$BIN/tailcat" version 2>/dev/null | grep -q "${TAILCAT_TAG#v}"; then
+    dire "tailcat déjà posé ($("$BIN/tailcat" version 2>/dev/null | head -1))"
+    return
+  fi
+  local tmp; tmp="$(mktemp -d)"
+  dire "tailcat ← $TAILCAT_URL"
+  curl -fsSL -o "$tmp/$TAILCAT_ARCHIVE" "$TAILCAT_URL" \
+    || { rm -rf "$tmp"; mourir "tailcat : téléchargement impossible ($TAILCAT_URL)"; }
+  local vu; vu="$(somme "$tmp/$TAILCAT_ARCHIVE")"
+  [ "$vu" = "$TAILCAT_SHA" ] || { rm -rf "$tmp"; mourir "tailcat : sha256 $vu ≠ $TAILCAT_SHA — on n'installe rien"; }
+  tar xzf "$tmp/$TAILCAT_ARCHIVE" -C "$tmp" || { rm -rf "$tmp"; mourir "tailcat : archive illisible"; }
+  [ -f "$tmp/tailcat" ] || { rm -rf "$tmp"; mourir "tailcat : l'archive ne porte pas de binaire « tailcat »"; }
+  mv "$tmp/tailcat" "$BIN/tailcat"
+  chmod 755 "$BIN/tailcat"
+  rm -rf "$tmp"
+  dire "tailcat : sha256 $vu ✓ ($("$BIN/tailcat" version 2>/dev/null | head -1))"
+}
+
 poser continuwuity "$RELAIS_URL_BIN" "$RELAIS_SHA"
+[ "$TAILCAT_ACTIF" = 1 ] && poser_tailcat
 if [ $PONTS = 1 ]; then
   [ -n "$OLM_URL" ] && poser libolm.3.dylib "$OLM_URL" "$OLM_SHA"
   poser mautrix-whatsapp "$WA_URL" "$WA_SHA"
@@ -414,11 +514,16 @@ cat > "$OUTILS/appairage.py" <<'PYPAIR'
 #!/usr/bin/env python3
 """Le code d'appairage que l'app lit, et ses six mots de vérification.
 
-    appairage.py <url publique> <serveur> <utilisateur> <mot de passe> [json]
+    appairage.py <url publique> <serveur> <utilisateur> <mot de passe> [json] [jeton tailcat]
 
 Format de RelayPairingCode (Packages/CorrespondanceCore/…/RelayPairingCode.swift)
 et de infra/matrix/pair.sh : un JSON compact trié, en base64 URL-safe sans
 remplissage, derrière `correspondance://relais/`.
+
+Le champ `tailcat` est **facultatif**, et absent quand il n'y a pas de jeton :
+un code d'hier se relit tel quel, et un code d'aujourd'hui reste lisible par une
+app d'hier, qui ignorera ce champ et prendra l'adresse. Les six mots de
+vérification ne le voient pas — ils nomment le Relais, pas le chemin.
 """
 import base64, json, sys, time
 
@@ -443,8 +548,11 @@ def mots(materiau):
 
 url, serveur, utilisateur, mot_de_passe = sys.argv[1:5]
 en_json = len(sys.argv) > 5 and sys.argv[5] == "1"
+tailcat = sys.argv[6] if len(sys.argv) > 6 else ""
 charge = {"v": 1, "homeserver": url, "server": serveur, "user": utilisateur,
           "password": mot_de_passe, "exp": time.time() + DUREE}
+if tailcat:
+    charge["tailcat"] = tailcat
 brut = json.dumps(charge, separators=(",", ":"), sort_keys=True).encode()
 jeton = base64.b64encode(brut).decode().replace("+", "-").replace("/", "_").rstrip("=")
 code = f"correspondance://relais/{jeton}"
@@ -453,7 +561,8 @@ if en_json:
     # Le DERNIER objet du flux, et le seul qui porte « code » : c'est à ce
     # champ que l'app reconnaît la fin, pas au nom de l'étape — une étape
     # nommée « appairage » sans code la ferait se croire prête.
-    print(json.dumps({"etape": "appairage", "etat": "ok", "code": code, "mots": six},
+    print(json.dumps({"etape": "appairage", "etat": "ok", "code": code, "mots": six,
+                      "tailcat": bool(tailcat)},
                      ensure_ascii=False), flush=True)
 print()
 print("  Relais prêt. Dans Correspondance : « Connecter un Relais », puis colle ce code.")
@@ -461,7 +570,12 @@ print()
 print(f"  {code}")
 print()
 print(f"  Vérification (six mots) : {' '.join(six)}")
-print("  Il périme dans 15 minutes. Il contient un mot de passe : ne le poste nulle part.")
+if tailcat:
+    print("  Ce code porte un jeton Tailcat : le Mac joindra ce Relais sans tunnel ssh")
+    print("  et sans Tailscale. Il porte aussi un mot de passe : ne le poste nulle part.")
+    print("  Il périme dans 15 minutes.")
+else:
+    print("  Il périme dans 15 minutes. Il contient un mot de passe : ne le poste nulle part.")
 PYPAIR
 
 # ========================================================= 5. le homeserver
@@ -582,6 +696,43 @@ fi
 ETAPE_COURANTE=services
 etape services debut "$SYSTEME"
 service relais "$BIN/continuwuity" -c "$RELAIS_DIR/continuwuity.toml"
+
+# ------------------------------------------------------------------- Tailcat
+# Il se met devant le port du Relais, et rien d'autre : `serve $PORT` n'ouvre
+# que celui-là. Pas de nœud de sortie, pas de SSH, pas de service de fichiers.
+if [ "$TAILCAT_ACTIF" = 1 ]; then
+  mkdir -p "$TAILCAT_DIR"
+  chmod 700 "$TAILCAT_DIR"
+  if [ -f "$TAILCAT_CLE" ]; then
+    dire "tailcat : clé déjà là, conservée (le jeton des codes déjà émis reste valable)"
+  else
+    # `--key` avec une barre oblique est un CHEMIN : la clé vit sous le dossier
+    # du Relais, pas dans ~/.config/tailcat/keys/ — un désinstalleur qui efface
+    # le dossier doit tout emporter.
+    ( umask 077; "$BIN/tailcat" genkey --key="$TAILCAT_CLE" >/dev/null 2>>"$LOGS/tailcat.log" ) \
+      || mourir "tailcat : genkey a échoué (voir $LOGS/tailcat.log)"
+    chmod 600 "$TAILCAT_CLE"
+    dire "tailcat : clé tirée dans $TAILCAT_CLE (0600)"
+  fi
+  # Une enveloppe plutôt qu'un `Environment=` dans l'unité : elle dit à quoi sert
+  # la variable, et elle est la même quel que soit le gestionnaire de services.
+  cat > "$TAILCAT_DIR/servir.sh" <<TCSH
+#!/usr/bin/env bash
+# Écrit par infra/relais/install.sh. TAILCAT_ADDR_FILE fait écrire au serveur
+# l'adresse qu'il publie, à chaque démarrage : c'est la seule source juste du
+# jeton, parce que la région DERP se choisit au démarrage et non à la génération
+# de la clé.
+export TAILCAT_ADDR_FILE="$TAILCAT_ADRESSE"
+exec "$BIN/tailcat" serve --key="$TAILCAT_CLE" $PORT
+TCSH
+  chmod 700 "$TAILCAT_DIR/servir.sh"
+  rm -f "$TAILCAT_ADRESSE"
+  service tailcat "$TAILCAT_DIR/servir.sh"
+  # `enable --now` ne redémarre PAS une unité déjà active : sans ce restart, une
+  # seconde exécution attendrait quarante secondes une adresse que personne ne
+  # réécrit, et conclurait à tort que Tailcat n'a rien publié.
+  systemctl --user restart correspondance-tailcat.service >/dev/null 2>&1 || true
+fi
 etape services ok "le Relais est un service $SYSTEME : il revient au démarrage de la session"
 
 # ================================================== 7. attendre, puis le compte
@@ -597,6 +748,31 @@ done
 VERSION_VUE="$(curl -fsS "$RELAIS/_continuwuity/server_version")"
 etape attente ok "$VERSION_VUE"
 dire "✓ le Relais répond ($VERSION_VUE)"
+
+if [ "$TAILCAT_ACTIF" = 1 ]; then
+  ETAPE_COURANTE=tailcat
+  etape tailcat debut "le jeton que le code d'appairage portera"
+  # Le serveur sonde les régions DERP avant de publier son adresse : quelques
+  # secondes, parfois. On attend le fichier plutôt que de lire une fois et de
+  # se tromper — le même défaut que le jeton d'amorçage du journal, plus haut.
+  for _ in $(seq 1 40); do
+    [ -s "$TAILCAT_ADRESSE" ] && break
+    sleep 1
+  done
+  if [ -s "$TAILCAT_ADRESSE" ]; then
+    TAILCAT_JETON="$(tr -d " \t\r\n" < "$TAILCAT_ADRESSE")"
+    etape tailcat ok "jeton de ${#TAILCAT_JETON} caractères — le Mac se connectera sans tunnel ssh et sans Tailscale"
+    dire "✓ tailcat publie ${TAILCAT_JETON:0:12}… ($(wc -c < "$TAILCAT_ADRESSE" | tr -d " ") octets)"
+  else
+    # Pas un échec : le Relais est joignable autrement. On le dit, on continue.
+    # `erreur` et non `ok` : l'étape a échoué, et le dire faux serait pire que
+    # de le dire. L'installation continue — le Relais reste joignable par son
+    # adresse — et le code d'appairage qui suit le prouve.
+    etape tailcat erreur "tailcat n'a pas publié d'adresse — le code portera $PUBLIC seul"
+    dire "tailcat n'a pas publié d'adresse en 40 s ; le code portera $PUBLIC seul (voir $LOGS/tailcat.log)"
+    TS_MOT="Tailcat n'a pas publié d'adresse — le code porte $PUBLIC. Journal : $LOGS/tailcat.log"
+  fi
+fi
 
 ETAPE_COURANTE=compte
 etape compte debut "$MXID"
@@ -784,11 +960,14 @@ fi
 echo "  $TS_MOT"
 
 ETAPE_COURANTE=appairage
-python3 "$OUTILS/appairage.py" "$PUBLIC" "$SERVER_NAME" "$USER_NAME" "$NOUVEAU" "$JSON"
+python3 "$OUTILS/appairage.py" "$PUBLIC" "$SERVER_NAME" "$USER_NAME" "$NOUVEAU" "$JSON" "$TAILCAT_JETON"
 echo
 if [ "$SYSTEME" = launchd ]; then
   echo "  Le Relais revient tout seul : launchctl kickstart -k gui/$(id -u)/app.correspondance.relais"
 else
   echo "  Le Relais revient tout seul : systemctl --user restart correspondance-relais"
+  if [ "$TAILCAT_ACTIF" = 1 ]; then
+    echo "  Le chemin aussi : systemctl --user restart correspondance-tailcat"
+  fi
 fi
 echo "  Tout retirer : bash uninstall.sh --prefix $PREFIX"

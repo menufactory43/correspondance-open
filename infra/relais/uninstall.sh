@@ -7,6 +7,10 @@
 # Il refuse d'effacer un dossier qui ne porte pas la marque écrite par
 # l'installeur : on ne veut pas d'un `rm -rf` sur un chemin mal tapé, et encore
 # moins sur ~/.correspondance-agent/ ou sur le dossier de l'app.
+#
+# La clé Tailcat vit dans ce dossier (et pas dans ~/.config/tailcat/keys/) :
+# l'effacer ici suffit, et le jeton des codes déjà émis meurt avec elle — ce qui
+# est ce qu'on veut d'un « tout retirer ».
 set -euo pipefail
 
 PREFIX="${CORRESPONDANCE_RELAIS_PREFIX:-$HOME/.correspondance-unclic}"
@@ -25,7 +29,7 @@ dire() { printf '→ %s\n' "$*"; }
 
 case "$(uname -s)" in
   Darwin)
-    for nom in relais mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
+    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
       label="app.correspondance.$nom"
       plist="$HOME/Library/LaunchAgents/$label.plist"
       if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
@@ -36,7 +40,7 @@ case "$(uname -s)" in
     done
     ;;
   Linux)
-    for nom in relais mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
+    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
       unite="$HOME/.config/systemd/user/correspondance-$nom.service"
       if systemctl --user cat "correspondance-$nom.service" >/dev/null 2>&1; then
         systemctl --user disable --now "correspondance-$nom.service" >/dev/null 2>&1 || true
