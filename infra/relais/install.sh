@@ -289,6 +289,9 @@ plan() {
   if [ "$SYSTEME" = launchd ]; then
     echo "       ~/Library/LaunchAgents/app.correspondance.relais.plist, chargé par launchctl bootstrap gui/\$(id -u)"
     echo "       (aucun launchd système, aucun sudo : c'est un agent utilisateur)"
+    echo "       UN SEUL agent pour toute la pile : il lance un superviseur ($PREFIX/superviseur.sh)"
+    echo "       qui tient le Relais et les ponts. macOS ne notifie donc qu'un élément d'arrière-plan,"
+    echo "       et n'en met qu'un dans Réglages > Général > Ouverture et extensions."
   else
     echo "       ~/.config/systemd/user/correspondance-relais.service, systemctl --user enable --now"
     echo "       loginctl enable-linger \$(id -un) — sans sudo si la session en a le droit ; sinon l'installeur"
@@ -644,37 +647,202 @@ fi
 etape configuration ok "$RELAIS_DIR/continuwuity.toml"
 
 # ============================================================= 6. les services
-service_launchd() {
-  local nom="$1"; shift
-  local label="app.correspondance.$nom"
-  local plist="$HOME/Library/LaunchAgents/$label.plist"
+# macOS compte les agents launchd comme des « éléments d'arrière-plan » : un
+# agent posé = une notification « Un élément d'arrière-plan a été ajouté », et
+# une ligne de plus dans Réglages > Général > Ouverture et extensions. La pile
+# a cinq processus sur Mac (le Relais et les quatre ponts) : cinq agents, donc
+# cinq notifications, et cinq interrupteurs qu'un utilisateur peut couper un par
+# un sans savoir lequel casse quoi.
+#
+# On n'enregistre donc qu'UN agent : un superviseur qui tient les cinq
+# processus. Il lit un dossier de lanceurs ($PREFIX/services/*.sh) et démarre ce
+# qui n'est pas vivant, sans toucher à ce qui tourne. Deux conséquences qui
+# comptent : les ponts, posés à l'étape 8 alors que le Relais tourne déjà depuis
+# l'étape 6, arrivent sans redémarrer le Relais ; et ils n'ajoutent aucun
+# élément d'arrière-plan, puisque l'agent est déjà enregistré.
+SUPERVISEUR_LABEL="app.correspondance.relais"
+SERVICES_DIR="$PREFIX/services"
+SUPERVISEUR="$PREFIX/superviseur.sh"
+SUPERVISEUR_POSE=0
+
+# Les installations d'avant le superviseur ont un agent par service. Les laisser
+# là ferait tourner chaque pont deux fois. On les retire — retirer un élément
+# d'arrière-plan ne notifie rien.
+superviseur_purger_anciens() {
+  local nom label plist
+  for nom in tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
+    label="app.correspondance.$nom"
+    plist="$HOME/Library/LaunchAgents/$label.plist"
+    [ -f "$plist" ] || continue
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$plist"
+    dire "ancien agent $label retiré (le superviseur s'en charge désormais)"
+  done
+}
+
+superviseur_ecrire() {
+  mkdir -p "$SERVICES_DIR/run" "$LOGS"
+  { printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' '# Écrit par infra/relais/install.sh. Le seul agent launchd de la pile : il tient'
+    printf '%s\n' '# les processus décrits par les lanceurs de SERVICES, les relance quand ils'
+    printf '%s\n' '# tombent, et les emporte avec lui quand launchd le sort (bootout, session close).'
+    printf '%s\n' 'set -u'
+    printf 'SERVICES=%q\n' "$SERVICES_DIR"
+    printf 'LOGS=%q\n' "$LOGS"
+    cat <<'SUP'
+RUN="$SERVICES/run"
+mkdir -p "$RUN"
+
+journal() { printf '%s superviseur : %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
+
+pids_courants() {
+  local f
+  for f in "$RUN"/*.pid; do [ -f "$f" ] && cat "$f"; done 2>/dev/null
+}
+
+# launchctl bootout n'envoie SIGTERM qu'au superviseur : sans ce trap, les cinq
+# processus survivraient à leur propre agent.
+arreter() {
+  local p vivant
+  for p in $(pids_courants); do kill "$p" 2>/dev/null || true; done
+  for _ in $(seq 1 50); do
+    vivant=0
+    for p in $(pids_courants); do kill -0 "$p" 2>/dev/null && vivant=1; done
+    [ "$vivant" = 0 ] && break
+    sleep 0.2
+  done
+  for p in $(pids_courants); do kill -9 "$p" 2>/dev/null || true; done
+  rm -f "$RUN"/*.pid
+  journal "arrêté, tous les services avec lui"
+  exit 0
+}
+trap arreter TERM INT
+
+# Un enfant mort mais pas encore attendu reste un zombie, et `kill -0` répond
+# « vivant » : sans le test d'état, un service tombé ne serait jamais relancé.
+mort() {
+  kill -0 "$1" 2>/dev/null || return 0
+  case "$(ps -o state= -p "$1" 2>/dev/null)" in
+    Z*) wait "$1" 2>/dev/null || true; return 0 ;;
+  esac
+  return 1
+}
+
+journal "démarré (lanceurs dans $SERVICES)"
+while :; do
+  for lanceur in "$SERVICES"/*.sh; do
+    [ -f "$lanceur" ] || continue
+    nom="$(basename "$lanceur" .sh)"
+    pidf="$RUN/$nom.pid"
+    if [ -f "$pidf" ]; then
+      pid="$(cat "$pidf" 2>/dev/null || true)"
+      if [ -n "$pid" ] && ! mort "$pid"; then continue; fi
+      rm -f "$pidf"
+      journal "$nom s'est arrêté — relance dans 5 s"
+      # Le même délai que RestartSec=5 côté systemd : un service qui échoue au
+      # démarrage ne doit pas tourner en boucle serrée sur le disque.
+      date -u +%s | awk '{print $1 + 5}' > "$RUN/$nom.retard"
+    fi
+    if [ -f "$RUN/$nom.retard" ]; then
+      [ "$(date -u +%s)" -lt "$(cat "$RUN/$nom.retard")" ] && continue
+      rm -f "$RUN/$nom.retard"
+    fi
+    "$lanceur" >>"$LOGS/$nom.log" 2>&1 &
+    echo $! > "$pidf"
+    journal "$nom démarré (pid $!, journal $LOGS/$nom.log)"
+  done
+  sleep 2
+done
+SUP
+  } > "$SUPERVISEUR.neuf"
+  chmod 700 "$SUPERVISEUR.neuf"
+}
+
+# Un seul plist, un seul élément d'arrière-plan. On ne le recharge que si son
+# contenu a bougé : relancer l'installeur sur une pile qui tourne ne doit pas
+# couper le Relais.
+superviseur_charger() {
+  [ "$SUPERVISEUR_POSE" = 1 ] && return 0
+  local plist="$HOME/Library/LaunchAgents/$SUPERVISEUR_LABEL.plist"
+  local recharger=0
   mkdir -p "$HOME/Library/LaunchAgents"
-  {
-    echo '<?xml version="1.0" encoding="UTF-8"?>'
+  superviseur_purger_anciens
+  superviseur_ecrire
+  if [ -f "$SUPERVISEUR" ] && cmp -s "$SUPERVISEUR" "$SUPERVISEUR.neuf"; then
+    rm -f "$SUPERVISEUR.neuf"
+  else
+    mv "$SUPERVISEUR.neuf" "$SUPERVISEUR"
+    recharger=1
+  fi
+  { echo '<?xml version="1.0" encoding="UTF-8"?>'
     echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
     echo '<plist version="1.0"><dict>'
-    echo "  <key>Label</key><string>$label</string>"
+    echo "  <key>Label</key><string>$SUPERVISEUR_LABEL</string>"
     echo '  <key>ProgramArguments</key><array>'
-    for a in "$@"; do echo "    <string>$a</string>"; done
+    echo '    <string>/bin/bash</string>'
+    echo "    <string>$SUPERVISEUR</string>"
     echo '  </array>'
     echo '  <key>RunAtLoad</key><true/>'
     echo '  <key>KeepAlive</key><true/>'
-    echo "  <key>StandardOutPath</key><string>$LOGS/$nom.log</string>"
-    echo "  <key>StandardErrorPath</key><string>$LOGS/$nom.log</string>"
+    echo "  <key>StandardOutPath</key><string>$LOGS/superviseur.log</string>"
+    echo "  <key>StandardErrorPath</key><string>$LOGS/superviseur.log</string>"
     echo '</dict></plist>'
-  } > "$plist"
-  # `bootout` rend la main AVANT que le service ait disparu : enchaîner
-  # `bootstrap` tout de suite donne « Bootstrap failed: 5: Input/output error »,
-  # et une seconde exécution de l'installeur échouait là. On attend la sortie.
-  if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
-    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
-    for _ in $(seq 1 100); do
-      launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 || break
-      sleep 0.2
-    done
+  } > "$plist.neuf"
+  if [ -f "$plist" ] && cmp -s "$plist" "$plist.neuf"; then
+    rm -f "$plist.neuf"
+  else
+    mv "$plist.neuf" "$plist"
+    recharger=1
   fi
-  launchctl bootstrap "gui/$(id -u)" "$plist"
-  dire "service $label chargé (journal $LOGS/$nom.log)"
+  if ! launchctl print "gui/$(id -u)/$SUPERVISEUR_LABEL" >/dev/null 2>&1; then
+    recharger=1
+  fi
+  if [ "$recharger" = 1 ]; then
+    # `bootout` rend la main AVANT que le service ait disparu : enchaîner
+    # `bootstrap` tout de suite donne « Bootstrap failed: 5: Input/output error »,
+    # et une seconde exécution de l'installeur échouait là. On attend la sortie.
+    if launchctl print "gui/$(id -u)/$SUPERVISEUR_LABEL" >/dev/null 2>&1; then
+      launchctl bootout "gui/$(id -u)/$SUPERVISEUR_LABEL" 2>/dev/null || true
+      for _ in $(seq 1 100); do
+        launchctl print "gui/$(id -u)/$SUPERVISEUR_LABEL" >/dev/null 2>&1 || break
+        sleep 0.2
+      done
+    fi
+    rm -f "$SERVICES_DIR/run"/*.pid "$SERVICES_DIR/run"/*.retard 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+    dire "superviseur $SUPERVISEUR_LABEL chargé — le SEUL agent launchd de la pile (journal $LOGS/superviseur.log)"
+  else
+    dire "superviseur $SUPERVISEUR_LABEL déjà chargé, laissé en place"
+  fi
+  SUPERVISEUR_POSE=1
+}
+
+service_launchd() {
+  local nom="$1"; shift
+  local lanceur="$SERVICES_DIR/$nom.sh"
+  mkdir -p "$SERVICES_DIR/run"
+  { echo '#!/usr/bin/env bash'
+    echo "# Écrit par infra/relais/install.sh — lancé et surveillé par $SUPERVISEUR_LABEL."
+    printf 'exec'; for a in "$@"; do printf ' %q' "$a"; done; echo
+  } > "$lanceur.neuf"
+  chmod 700 "$lanceur.neuf"
+  # Un lanceur qui change (chemin de configuration, binaire) doit emporter le
+  # processus qui tourne encore sur l'ancienne ligne de commande : sinon une
+  # seconde exécution de l'installeur écrirait la nouvelle et ne l'appliquerait
+  # jamais. Le superviseur le relance deux secondes plus tard.
+  if [ -f "$lanceur" ] && cmp -s "$lanceur" "$lanceur.neuf"; then
+    rm -f "$lanceur.neuf"
+  else
+    mv "$lanceur.neuf" "$lanceur"
+    if [ -f "$SERVICES_DIR/run/$nom.pid" ]; then
+      kill "$(cat "$SERVICES_DIR/run/$nom.pid")" 2>/dev/null || true
+      dire "service $nom : ligne de commande changée, le superviseur le relancera"
+    fi
+  fi
+  superviseur_charger
+  # Le superviseur relit son dossier toutes les deux secondes : un lanceur écrit
+  # après son démarrage est pris sans rien recharger, et sans toucher au reste.
+  dire "service $nom confié au superviseur (journal $LOGS/$nom.log)"
 }
 
 service_systemd() {

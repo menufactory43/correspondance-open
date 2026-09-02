@@ -45,6 +45,11 @@ verifier "prend Instagram en darwin-arm64" "mautrix-instagram-darwin-arm64" "$MA
 # celui d'Instagram poserait deux fois le même réseau sous deux noms.
 verifier "prend Messenger en darwin-arm64" "mautrix-meta-darwin-arm64" "$MAC"
 verifier "pose un agent launchd utilisateur" "Library/LaunchAgents" "$MAC"
+# Cinq processus sur Mac (le Relais et les quatre ponts), mais UN SEUL élément
+# d'arrière-plan : macOS notifie et fait approuver chaque agent launchd, et cinq
+# notifications à l'installation ne sont pas un « un clic ».
+verifier "n'annonce qu'un seul agent pour toute la pile" "UN SEUL agent pour toute la pile" "$MAC"
+verifier "dit que le superviseur tient le Relais et les ponts" "superviseur.sh" "$MAC"
 # Sur macOS, le Relais et l'app sont sur la MÊME machine : y poser Tailcat
 # serait un tunnel de 127.0.0.1 vers 127.0.0.1.
 verifier "dit qu'il ne pose ni Tailcat ni Tailscale sur Mac" "ni Tailcat ni Tailscale ne sont posés" "$MAC"

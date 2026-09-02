@@ -29,6 +29,9 @@ dire() { printf '→ %s\n' "$*"; }
 
 case "$(uname -s)" in
   Darwin)
+    # `relais` est le superviseur : le sortir emporte le Relais et les ponts (il
+    # tue ses enfants sur SIGTERM). Les autres labels sont ceux d'avant le
+    # superviseur — un agent par service ; on les retire s'ils traînent encore.
     for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
       label="app.correspondance.$nom"
       plist="$HOME/Library/LaunchAgents/$label.plist"
