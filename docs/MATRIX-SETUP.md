@@ -706,21 +706,81 @@ de `mautrix-meta`. Côté Instagram, penser aussi au préfixe : `ig-v26.08`, jam
 l'inverse pour Messenger, `v26.08` nu, jamais `ig-`. Les deux tags se ressemblent assez pour qu'une
 inversion passe inaperçue jusqu'au premier `login`.
 
-## 3 bis. Push iOS — Sygnal
+## 3 bis. Notifications — la passerelle push
 
 L'iPhone ne peut pas tenir un `/sync` en permanence : c'est APNs qui le réveille. Entre le Relais et
 APNs il faut un passe-plat qui parle les deux langues — **Sygnal**, le pousseur de matrix.org.
 
 Le chemin complet, dans l'ordre : l'app iOS déclare son pusher au Relais
-(`POST /_matrix/client/v3/pushers/set`, `app_id: com.correspondance.ios`, `pushkey` = jeton APNs **en base64**, Sygnal le décode ainsi) →
-Synapse, quand une push rule dit « notifie », appelle `http://sygnal:5000/_matrix/push/v1/notify` →
-Sygnal signe un push APNs avec la clé `.p8` → l'iPhone se réveille → l'extension de service va lire
-l'événement et écrit « Alice · WhatsApp : On se voit demain ? ».
+(`POST /_matrix/client/v3/pushers/set`, un `app_id`, `pushkey` = jeton APNs **en base64**, Sygnal le
+décode ainsi) → le Relais, quand une push rule dit « notifie », appelle
+`https://push.fauconnier.app/_matrix/push/v1/notify` → Sygnal signe un push APNs avec la clé `.p8` →
+l'iPhone se réveille → l'extension de service va lire l'événement et écrit
+« Alice · WhatsApp : On se voit demain ? ».
 
-La charge utile ne porte **que** `room_id` et `event_id` (`format: event_id_only`) : jamais le texte.
-C'est voulu — le push réveille, l'appareil lit (décision 7 de `PRODUCT.md`, celle qui survivra à
-l'E2EE). Et le muet reste appliqué côté Relais : un salon muet a une push rule `actions: []`, donc
-Synapse n'appelle même pas Sygnal.
+### Une passerelle, publique, pour tous les Relais
+
+Décision du propriétaire, 2 sept. 2026. Jusque-là l'URL du pusher était `http://sygnal:5000/…` — un
+nom de service Docker qui ne résout que sur le réseau `matrix` du NUC. Conséquence : la passerelle
+n'était joignable que par le Relais du propriétaire, et **un Relais Continuwuity posé chez quelqu'un
+d'autre** par `infra/relais/install.sh` n'avait aucun push. Embarquer la clé APNs dans l'installeur
+est exclu — elle deviendrait publique, et n'importe qui pourrait pousser vers n'importe quel
+Correspondance.
+
+Il n'y a donc qu'une passerelle, chez nous, et tous les Relais l'appellent. **Ce n'est pas héberger
+un Relais** : elle ne voit qu'un identifiant de salon, un identifiant d'événement et un compteur de
+non-lus — jamais l'expéditeur, jamais le texte, jamais rien du contenu (`format: event_id_only`,
+décision 7 de `PRODUCT.md`, celle qui survivra à l'E2EE). Le muet reste appliqué côté Relais : un
+salon muet a une push rule `actions: []`, donc le Relais n'appelle même pas la passerelle.
+
+**À écrire dans la politique de confidentialité**, avant toute mise à disposition publique, et dans
+ces termes :
+
+> Pour vous réveiller quand un message arrive, votre Relais envoie à notre passerelle de
+> notification (`push.fauconnier.app`, hébergée par l'éditeur de Correspondance) l'identifiant
+> technique du salon concerné, l'identifiant de l'événement, votre nombre de messages non lus et le
+> jeton de notification de votre appareil. Ni le texte du message, ni le nom de son expéditeur, ni
+> aucune pièce jointe ne transitent par cette passerelle : votre appareil va lire le message
+> lui-même, directement auprès de votre Relais. Ces données ne sont pas conservées — elles sont
+> relayées à Apple (APNs) puis effacées. Les salons que vous mettez en sourdine ne produisent aucun
+> appel à la passerelle.
+
+Le nom `push.fauconnier.app` est une **valeur de configuration**, pas une constante du produit : il
+apparaît dans `PushRegistration.defaultGateway` (surchargeable par `CORRESPONDANCE_PUSH_GATEWAY`),
+dans `PUSH_GATEWAY_HOST` du bootstrap, et dans la route DNS du tunnel. C'est un domaine que le
+propriétaire possède déjà, en attendant celui de Correspondance ; le jour venu, ces trois endroits
+changent et rien d'autre.
+
+### Les deux environnements APNs
+
+APNs a deux mondes séparés, et **un jeton obtenu dans l'un ne vaut rien dans l'autre** — l'erreur est
+silencieuse (`BadDeviceToken`). Tant que la passerelle était privée on pouvait basculer un réglage
+global entre une build Xcode et l'App Store ; une passerelle publique doit servir les deux à la fois.
+`sygnal.yaml` déclare donc **deux apps**, même clé `.p8`, même `topic` (qui n'est pas l'`app_id` mais
+l'identifiant de bundle) :
+
+| `app_id` | `platform` | qui l'utilise |
+|----------|-----------|---------------|
+| `com.correspondance.ios` | `production` | App Store, TestFlight (toute build Release) |
+| `com.correspondance.ios.dev` | `sandbox` | builds lancées depuis Xcode (`Debug`) |
+
+C'est **l'app** qui choisit, par son `app_id`, dans `PushRegistration.pusherAppID` — un `#if DEBUG`
+et non un réglage de build à part. Raison : `DEBUG` est posé par la configuration Debug, exactement
+celle qu'Xcode installe sur un appareil, avec un profil de développement, donc
+`aps-environment: development`, donc un jeton de sandbox. Release est signée à l'export
+`app-store-connect`, où Xcode réécrit `aps-environment` en `production`. Les deux bascules sont
+tirées par le même levier ; un réglage séparé pourrait dériver de la signature, `DEBUG` ne le peut
+pas. Vérification sur l'IPA, sans le reconstruire :
+
+```sh
+unzip -q build/release/ios/export/Correspondance.ipa -d /tmp/ipa
+codesign -d --entitlements :- /tmp/ipa/Payload/Correspondance.app | grep -A1 aps-environment
+# → <key>aps-environment</key><string>production</string>
+```
+
+Le fichier `CorrespondanceiOS/CorrespondanceiOS.entitlements` reste à `development` : c'est la valeur
+des builds de développement, et Xcode la remplace à l'export. Ne pas la forcer à `production` — une
+build Debug ne s'installerait plus.
 
 ### Ce qu'il faut faire chez Apple, une fois
 
@@ -730,18 +790,11 @@ Synapse n'appelle même pas Sygnal.
 3. **Download** : le fichier `AuthKey_XXXXXXXXXX.p8`. Apple ne le redonne **jamais** — s'il est
    perdu, il faut révoquer la clé et en refaire une.
 4. Noter le **Key ID** (les dix caractères de `AuthKey_XXXXXXXXXX.p8`) et le **Team ID**
-   (en haut à droite du portail, ou dans Membership).
+   (en haut à droite du portail, ou dans Membership). **Le Key ID doit être celui de CE fichier** :
+   renommer la clé en `apns.p8` fait perdre le seul endroit où les deux étaient liés, et un Key ID
+   qui ne correspond pas au `.p8` donne un `403 InvalidProviderToken` d'APNs — clé valide, team
+   valide, et rien qui parte.
 5. Sur l'identifiant d'app `com.correspondance.ios` : cocher la capacité **Push Notifications**.
-
-Une même clé APNs vaut pour sandbox et production. Ce qui change, c'est le **serveur** qu'on
-interroge — et un jeton d'appareil obtenu sur l'un ne vaut rien sur l'autre :
-
-| build | `platform` dans `sygnal.yaml` |
-|-------|------------------------------|
-| Xcode (`Debug`), TestFlight **interne** | `sandbox` |
-| App Store, TestFlight **externe** | `production` |
-
-Se tromper de ligne donne un `BadDeviceToken` côté Sygnal, et rien du tout côté iPhone.
 
 ### Ce qu'il faut faire sur le NUC, une fois
 
@@ -751,42 +804,99 @@ ssh nuc 'mkdir -p ~/correspondance-matrix/secrets/apns && chmod 700 ~/correspond
 scp AuthKey_XXXXXXXXXX.p8 nuc:~/correspondance-matrix/secrets/apns/apns.p8
 ssh nuc 'chmod 600 ~/correspondance-matrix/secrets/apns/apns.p8'
 
-# 2) Rejouer le bootstrap en lui donnant les deux identifiants. Ils atterrissent
-#    dans le .env du NUC : les passes suivantes n'ont plus besoin de les repasser.
-APNS_KEY_ID=XXXXXXXXXX APNS_TEAM_ID=AKMNXGVVGX APNS_PLATFORM=sandbox \
+# 2) Rejouer le bootstrap en lui donnant les identifiants. Ils atterrissent dans
+#    le .env du NUC : les passes suivantes n'ont plus besoin de les repasser.
+#    Il n'y a plus de APNS_PLATFORM — les deux environnements sont servis.
+APNS_KEY_ID=XXXXXXXXXX APNS_TEAM_ID=AKMNXGVVGX \
+  PUSH_TUNNEL_TOKEN='<jeton du tunnel>' \
   ./infra/matrix/bootstrap.sh
 ```
 
-Le bootstrap écrit `data/sygnal/sygnal.yaml` depuis `templates/sygnal.yaml.tmpl`, démarre le service
-et dit ce qu'il en pense (`✓ Push iOS : Sygnal armé…`). Sans clé, il démarre quand même et le
-signale : un service qui redémarre en boucle est un aveu plus honnête qu'un push absent en silence.
+### Le tunnel qui rend la passerelle publique
+
+Le NUC n'a ni 80 ni 443 libres (Umbrel les tient) et il est derrière une box. Un tunnel Cloudflare
+sort en HTTPS et n'ouvre rien : `cloudflared` établit la connexion **depuis** le NUC.
+
+```sh
+# Sur le Mac, une fois. Le tunnel est « géré à distance » : son ingress est
+# stocké chez Cloudflare, pas dans un fichier du NUC.
+cloudflared tunnel create correspondance-push
+cloudflared tunnel route dns correspondance-push push.fauconnier.app
+cloudflared tunnel token correspondance-push     # → le jeton, à passer au bootstrap
+```
+
+L'ingress restreint la passerelle à **deux chemins**, et rend 404 sur tout le reste — la surface
+publique se limite à ce qui doit exister :
+
+| chemin | service |
+|--------|---------|
+| `^/_matrix/push/v1/notify$` | `http://sygnal:5000` |
+| `^/health$` | `http://sygnal:5000` |
+| tout le reste | `http_status:404` |
+
+Le conteneur `cloudflared-push` du `docker-compose.yml` est sous le profil `push` : `docker-compose
+up -d` ne le démarre pas tout seul (sans jeton il tournerait en boucle d'échec), le bootstrap le
+lance avec `--profile push` quand `PUSH_TUNNEL_TOKEN` existe. Il est sur le réseau `matrix` et rien
+d'autre : il ne peut joindre que Sygnal, jamais Synapse ni Postgres. Le jeton vaut un accès — il vit
+dans le `.env` du NUC (chmod 600), jamais dans le dépôt.
+
+### Ce qu'il faut du côté d'un Relais Continuwuity
+
+**Rien.** Vérifié dans le code de Continuwuity 26.8.1 (`src/service/pusher/mod.rs`), parce que la
+question se posait : il n'existe aucune liste d'autorisation d'URL de passerelle, `set_pusher` ne
+valide que la forme (URL analysable, schéma `http` ou `https`), et `allow_federation = false` ne
+coupe pas le push — le garde de la fédération est en aval, dans `federation/execute.rs`, et le push
+part par un client HTTP distinct (`services.client.pusher`).
+
+Le seul vrai garde est `ip_range_denylist`, dont le défaut contient `100.64.0.0/10` — la plage CGNAT
+de Tailscale. Une passerelle sur une adresse `100.x` ou en LAN serait **refusée**, à l'enregistrement
+si l'URL porte l'IP et à l'envoi dans tous les cas (le test est refait sur l'IP réellement
+connectée). C'est précisément pourquoi la passerelle est un nom public en HTTPS et non l'adresse
+Tailscale du NUC. Le tout est écrit en commentaire dans `infra/relais/install.sh`, à côté du `.toml`.
+
+Piège annexe, non documenté chez eux : `send_request` retire `notification_push_path` de l'URL
+déclarée avant que ruma ne le rajoute. L'URL du pusher **doit** finir par `/_matrix/push/v1/notify`.
 
 ### Vérifier
 
 ```sh
-# Sygnal est-il debout, vu de Synapse ? (il n'est publié sur AUCUN port du tailnet)
-ssh nuc 'cd correspondance-matrix && docker-compose exec -T synapse curl -sS http://sygnal:5000/health'
-# → une réponse vide avec un code 200. Rien d'autre à attendre : /health ne dit que « je réponds ».
+# La passerelle est-elle publique, et est-ce bien Sygnal qui répond ?
+curl -s -w '\nHTTP %{http_code}\n' https://push.fauconnier.app/health
+# → corps vide, HTTP 200
+
+curl -s -w '\nHTTP %{http_code}\n' -X POST -d '{}' https://push.fauconnier.app/_matrix/push/v1/notify
+# → « Invalid notification: expecting object in 'notification' key », HTTP 400.
+#   C'est du Sygnal, pas une page Cloudflare : la chaîne entière est debout.
+
+# Le reste de la surface est fermé.
+curl -s -o /dev/null -w '%{http_code}\n' https://push.fauconnier.app/
+# → 404
+
+# Une notification fabriquée à la main, avec un pushkey bidon.
+curl -s -X POST -H 'Content-Type: application/json' https://push.fauconnier.app/_matrix/push/v1/notify \
+  -d '{"notification":{"event_id":"$bidon","room_id":"!bidon:correspondance.local","counts":{"unread":1},
+       "devices":[{"app_id":"com.correspondance.ios","pushkey":"0000","data":{"format":"event_id_only"}}]}}'
+# → un app_id inconnu rend {"rejected": [...]} et HTTP 200 ; un app_id connu va
+#   VRAIMENT chez Apple, et son verdict remonte dans le journal de Sygnal.
+
+# Que raconte Sygnal ?
+ssh nuc 'cd correspondance-matrix && docker-compose logs -f --tail=40 sygnal'
 
 # Le pusher est-il déclaré côté Relais ? (jeton d'accès de l'app, cf. CREDENTIALS.txt)
 curl -sS -H "Authorization: Bearer $TOKEN" http://100.64.0.7:8008/_matrix/client/v3/pushers | python3 -m json.tool
-# → un pusher app_id=com.correspondance.ios, kind=http, data.url=http://sygnal:5000/_matrix/push/v1/notify
-
-# Que raconte Sygnal quand un message arrive ?
-ssh nuc 'cd correspondance-matrix && docker-compose logs -f --tail=40 sygnal'
+# → data.url = https://push.fauconnier.app/_matrix/push/v1/notify
 ```
-
-L'URL `data.url` est celle que **Synapse** voit, pas l'iPhone : `sygnal` est un nom de service Docker,
-il ne résout que sur le réseau `matrix`. C'est exactement ce qu'on veut — Sygnal n'est joignable de
-nulle part ailleurs.
 
 ### Dépannage
 
 | Symptôme | Cause probable |
 |----------|----------------|
-| `no app configured` dans les logs Sygnal | l'`app_id` du pusher ne correspond pas à la clé sous `apps:` dans `sygnal.yaml` |
-| `BadDeviceToken` | mauvais `platform` (sandbox ↔ production), ou jeton d'un autre bundle |
+| `403 InvalidProviderToken` dans les logs Sygnal, et une 502 rendue à l'appelant | le `key_id` du `.env` ne correspond pas au `.p8` déposé, ou la clé a été révoquée, ou elle n'a pas la capacité APNs. La clé et le `team_id` peuvent être parfaitement valides par ailleurs |
+| `no app configured` | l'`app_id` du pusher ne correspond à aucune clé sous `apps:` dans `sygnal.yaml` |
+| `BadDeviceToken` | environnement croisé : jeton de sandbox envoyé à l'app_id de production (ou l'inverse), ou jeton d'un autre bundle |
 | `TopicDisallowed` | `topic:` n'est pas exactement l'identifiant de bundle de l'app |
+| Une page Cloudflare au lieu d'une réponse Sygnal | le conteneur `cloudflared-push` est arrêté, ou l'ingress ne pointe plus sur `http://sygnal:5000` |
+| 404 sur un chemin légitime | l'ingress ne connaît que `/_matrix/push/v1/notify` et `/health` ; en ajouter un est un changement côté Cloudflare |
 | Sygnal redémarre en boucle | `secrets/apns/apns.p8` absent, illisible, ou `key_id`/`team_id` encore en placeholder |
 | Rien n'arrive, et Sygnal n'est jamais appelé | le salon est **muet** (push rule `actions: []`) — c'est le comportement voulu |
 | Le simulateur ne reçoit rien | normal : un simulateur n'a pas de jeton APNs. `xcrun simctl push <UDID> com.correspondance.ios payload.apns` sert à exercer l'extension, pas le chemin réseau |

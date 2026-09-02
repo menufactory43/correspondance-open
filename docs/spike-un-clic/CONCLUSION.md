@@ -241,7 +241,24 @@ toujours en quinze minutes. Un « tout retirer » emporte la clé, donc les jeto
    dispense pas de signer : `spctl -a -t exec` rejette déjà ces binaires, et un bac à sable ou un
    durcissement de macOS ferait tout tomber d'un coup, en silence. Piège à trancher : un binaire
    nu ne peut pas être agrafé (`stapler` n'agrafe que des paquets), donc le ticket reste en ligne.
-6. **Le push** : une passerelle Sygnal chez nous, quand un utilisateur externe a un iPhone.
+6. ~~Le push : une passerelle Sygnal chez nous~~ — **faite le 2 sept. 2026**, et publique. Sygnal
+   sert désormais les **deux** environnements APNs (`com.correspondance.ios` en production,
+   `com.correspondance.ios.dev` en sandbox, même clé `.p8`) parce qu'une passerelle partagée ne peut
+   plus basculer un réglage global entre une build Xcode et l'App Store ; l'app choisit par son
+   `app_id`, sur `#if DEBUG`. Elle est joignable en HTTPS par n'importe quel Relais —
+   `https://push.fauconnier.app/_matrix/push/v1/notify`, un tunnel Cloudflare `correspondance-push`
+   vers `http://sygnal:5000`, ingress restreint à cette route et à `/health`, 404 sur tout le reste.
+   Rien à autoriser côté Continuwuity : vérifié dans son code, il n'y a pas de liste blanche d'URL et
+   `allow_federation = false` ne coupe pas le push — mais `ip_range_denylist` bannit par défaut
+   `100.64.0.0/10`, la plage de Tailscale, ce qui condamnait d'avance une passerelle nommée par son
+   adresse de tailnet. Le nom de domaine est une valeur de configuration
+   (`CORRESPONDANCE_PUSH_GATEWAY`, `PUSH_GATEWAY_HOST`), pas une constante : `fauconnier.app` est le
+   domaine que le propriétaire possède déjà, en attendant celui de Correspondance.
+   **Reste un blocage, chez Apple et pas chez nous** : APNs répond `403 InvalidProviderToken` à
+   Sygnal. Le `.p8` est une clé P-256 valide et le `team_id` est bien celui qui signe l'IPA — c'est
+   donc le `key_id` qui ne correspond pas à ce fichier (la clé a été renommée en `apns.p8`, ce qui a
+   perdu le lien), ou la clé a été révoquée. À reprendre dans le portail développeur ; la chaîne
+   Relais → tunnel → Sygnal → Apple, elle, est éprouvée de bout en bout.
 7. ~~Décider de Tailcat~~ — **décidé et fait en phase 7b** : par défaut sur Linux, embarqué et
    signé dans l'app. Reste la tranche iPhone (`gomobile bind`, et une façon de composer sans
    SOCKS), dont le coût est à chiffrer avant de s'engager.
