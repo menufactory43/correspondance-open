@@ -3181,16 +3181,43 @@ final class InboxStore {
       if !text.isEmpty {
         try await iMessageSender.send(text: text, toAddress: conversation.address)
       }
-      // Une pièce jointe part en `send POSIX file` : vers le fil pour un groupe
-      // (seule cible que Messages sait viser), vers le correspondant sinon.
+      // Une pièce jointe passe par l'accessibilité : le fichier est collé dans
+      // le champ de Messages, puis Entrée. `send POSIX file` d'AppleScript ne
+      // marche plus — Messages n'arrive pas à lire le fichier, où qu'il soit, et
+      // la ligne reste « Non distribué » sans lever la moindre erreur chez nous.
+      // Il ne sert donc que de repli quand l'automatisation est éteinte.
       for path in attachments {
         let url = URL(fileURLWithPath: path)
-        if conversation.isGroup,
-           let guid = IMessageDatabase.guid(fromConversationID: conversation.id)
-        {
-          try await iMessageSender.send(fileURL: url, toChat: guid)
+        let guid = IMessageDatabase.guid(fromConversationID: conversation.id)
+        if canAutomateMessages, let guid {
+          try await IMessageAutomation.shared.sendAttachment(
+            url, chatGUID: guid, chatIdentifier: conversation.address
+          )
         } else {
-          try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
+          // Repli AppleScript, et surtout : on va VOIR dans chat.db s'il a
+          // abouti. Sans ce contrôle, l'échec ne se disait nulle part — la
+          // bulle se posait, Messages écrivait « Non distribué », et l'app
+          // croyait le message parti.
+          let verifier = IMessageAutomationVerifier()
+          let since = (try? verifier.latestMessageRowID()) ?? 0
+          if conversation.isGroup, let guid {
+            // Un groupe ne se vise que par son fil.
+            try await iMessageSender.send(fileURL: url, toChat: guid)
+          } else {
+            try await iMessageSender.send(fileURL: url, toAddress: conversation.address)
+          }
+          if let guid {
+            let landed = await verifier.waitUntil(timeout: .seconds(6)) {
+              try verifier.hasSentAttachment(inChatGUID: guid, sinceRowID: since)
+            }
+            guard landed else {
+              throw IMessageSendError.appleScript(
+                "Messages n’a pas pu lire « \(url.lastPathComponent) ». "
+                + "Active « Automatisation Messages » dans Réglages : les pièces "
+                + "jointes passent par là."
+              )
+            }
+          }
         }
       }
     case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:

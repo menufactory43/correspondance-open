@@ -200,6 +200,48 @@ actor IMessageAutomation {
     }
   }
 
+  /// Envoie un fichier : le fil est sélectionné, le fichier collé dans le champ
+  /// de saisie, Entrée.
+  ///
+  /// `send POSIX file` d'AppleScript ne marche plus : quel que soit l'endroit du
+  /// fichier — le Bureau, notre propre dossier de caches — Messages n'arrive pas
+  /// à le lire et la ligne reste en `error = 25`, `transfer_state = 6`, « Non
+  /// distribué » dans le fil. Beeper ne s'y fie pas non plus : son binaire
+  /// `IMessage.node` colle le fichier dans le champ par l'accessibilité, exactement
+  /// ce qu'on fait ici. Vérifié par `chat.db` : une ligne de moi, avec pièce
+  /// jointe, dont le transfert n'a pas échoué.
+  func sendAttachment(_ fileURL: URL, chatGUID: String, chatIdentifier: String) async throws {
+    guard FileManager.default.isReadableFile(atPath: fileURL.path) else {
+      throw IMessageAutomationError.actionFailed("fichier illisible : \(fileURL.lastPathComponent)")
+    }
+    try await run(describing: "envoi de pièce jointe") { deadline in
+      let since = try self.verifier.latestMessageRowID()
+      try await self.selectThread(
+        chatGUID: chatGUID, chatIdentifier: chatIdentifier, deadline: deadline
+      )
+      let pid = try await self.ensureRunningPID()
+      let field = try await self.waitForElement(deadline: deadline, describing: "le champ de saisie") {
+        let app = AXUIElementCreateApplication(pid)
+        guard let window = Self.mainWindow(of: app) else { return nil }
+        return AX.firstDescendant(window, identifier: AXID.composer)
+          ?? AX.firstDescendant(window, role: kAXTextAreaRole as String)
+      }
+      AX.setFocused(field)
+      try await self.paste(fileURL: fileURL, intoPID: pid)
+      Keyboard.press(.return, modifiers: [], pid: pid)
+
+      let guid = chatGUID
+      let confirmed = await self.verifier.waitUntil(timeout: Self.confirmDeadline) { [verifier = self.verifier] in
+        try verifier.hasSentAttachment(inChatGUID: guid, sinceRowID: since)
+      }
+      guard confirmed else {
+        throw IMessageAutomationError.notConfirmed(
+          "aucune pièce jointe envoyée n'apparaît dans chat.db"
+        )
+      }
+    }
+  }
+
   /// Modifie un message envoyé (≤ 15 min) : menu contextuel → « Modifier »,
   /// tout sélectionner, coller, valider. Vérifié par `date_edited`.
   func edit(_ target: IMessageTarget, newText: String) async throws {
@@ -487,6 +529,16 @@ actor IMessageAutomation {
 
   // MARK: - Presse-papiers
 
+  /// Colle un fichier dans Messages. Le champ met un instant à fabriquer la
+  /// vignette : rendre le presse-papiers trop tôt lui coupe l'herbe sous le pied.
+  private func paste(fileURL: URL, intoPID pid: pid_t) async throws {
+    let saved = await Pasteboard.snapshot()
+    await Pasteboard.set(fileURL: fileURL)
+    Keyboard.press(.v, modifiers: .maskCommand, pid: pid)
+    try? await Task.sleep(for: .milliseconds(700))
+    await Pasteboard.restore(saved)
+  }
+
   /// Colle un texte dans Messages, puis **restaure** le presse-papiers de l'utilisateur.
   private func paste(_ text: String, intoPID pid: pid_t) async throws {
     let saved = await Pasteboard.snapshot()
@@ -713,6 +765,14 @@ enum Pasteboard {
   static func set(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
+  }
+
+  /// Un fichier dans le presse-papiers, comme s'il venait du Finder : c'est ce
+  /// que Messages sait recevoir dans son champ de saisie.
+  @MainActor
+  static func set(fileURL: URL) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.writeObjects([fileURL as NSURL])
   }
 
   @MainActor

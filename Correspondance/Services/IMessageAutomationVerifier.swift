@@ -28,6 +28,29 @@ struct IMessageAutomationVerifier: Sendable {
     }
   }
 
+  /// Une pièce jointe de moi est-elle partie dans ce fil depuis ce ROWID ?
+  ///
+  /// `transfer_state` dit tout : `6` est l'échec — Messages n'a pas pu lire le
+  /// fichier — et c'est exactement ce qu'on voyait avec `send POSIX file`. Une
+  /// ligne d'échec ne compte donc pas pour un envoi.
+  func hasSentAttachment(inChatGUID chatGUID: String, sinceRowID: Int64) throws -> Bool {
+    try withDatabase { db in
+      let count = Self.firstInt(
+        db,
+        """
+        SELECT COUNT(*) FROM message m
+        JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+        JOIN chat c ON c.ROWID = cmj.chat_id
+        JOIN message_attachment_join maj ON maj.message_id = m.ROWID
+        JOIN attachment a ON a.ROWID = maj.attachment_id
+        WHERE c.guid = ? AND m.ROWID > ? AND m.is_from_me = 1 AND a.transfer_state <> 6;
+        """,
+        [chatGUID, sinceRowID]
+      )
+      return (count ?? 0) > 0
+    }
+  }
+
   /// Le fil existe-t-il, et si oui quel est son `chat_identifier` ?
   func chatIdentifier(forChatGUID guid: String) throws -> String? {
     try withDatabase { db in
