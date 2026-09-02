@@ -342,6 +342,15 @@ CORRESPONDANCE_CRYPTO=1 swift build \
 Le `--scratch-path` séparé n'est pas une coquetterie : les deux configurations qui partagent un
 `.build` laissent un module de la précédente traîner, et le `#if canImport` reste vrai.
 
+**Le drapeau se garde partout, y compris sur `xcodebuild`.** Un `DerivedData` résolu une fois
+avec `CORRESPONDANCE_CRYPTO=1` ne se reconstruit plus sans lui : la résolution du paquet y a
+inscrit les cibles binaires, et le build suivant s'arrête sur `unable to resolve module
+dependency: 'MatrixSDKCryptoFFI'` — trois fois, plus une par cible. Ce n'est pas une régression
+du code, c'est un `DerivedData` qui se souvient. Deux issues : reposer le drapeau sur **toutes**
+les commandes de ce dossier (`build`, `test`, `build-for-testing`, `scripts/test.sh`,
+`scripts/test-ios.sh`), ou donner à chaque configuration son propre `-derivedDataPath`, comme
+`--scratch-path` le fait pour SwiftPM. Mesuré à la phase 7b, revu à la fusion.
+
 **`CORRESPONDANCE_CHIFFREMENT=1` n'est plus requis.** Il l'était pendant que le chantier était
 commencé et pas fini ; le garder livrerait une app dont le chiffrement est éteint chez tout le
 monde. Un binaire construit avec la crypto chiffre. `CORRESPONDANCE_CHIFFREMENT=0` reste lu
