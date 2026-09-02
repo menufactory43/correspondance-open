@@ -38,6 +38,18 @@ APNS_TEAM_ID="${APNS_TEAM_ID:-}"
 # partagée par tous les Relais, elle sert les deux environnements APNs en même
 # temps — `com.correspondance.ios` en production et `com.correspondance.ios.dev`
 # en sandbox. C'est l'app qui choisit, par son app_id (cf. sygnal.yaml.tmpl).
+#
+# La passerelle publique. `PUSH_GATEWAY_HOST` est une valeur de configuration,
+# pas une constante : c'est le nom sous lequel les Relais du monde entier
+# appellent Sygnal. Aujourd'hui un sous-domaine d'un domaine que le
+# propriétaire possède déjà ; le jour où Correspondance a le sien, on change
+# cette ligne, la route DNS du tunnel, et rien d'autre.
+PUSH_GATEWAY_HOST="${PUSH_GATEWAY_HOST:-push.fauconnier.app}"
+# Le jeton du tunnel Cloudflare `correspondance-push`. Il vaut un accès : il
+# n'est jamais dans le dépôt, il se passe une fois en variable d'environnement
+# et il reste dans le .env du NUC. Vide = pas de tunnel, pas de passerelle
+# publique, et la pile marche quand même (le propriétaire est sur le tailnet).
+PUSH_TUNNEL_TOKEN="${PUSH_TUNNEL_TOKEN:-}"
 
 # ---------------------------------------------------------------- phase locale
 if [[ "${1:-}" != "--remote" ]]; then
@@ -53,7 +65,7 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' PUSH_GATEWAY_HOST='${PUSH_GATEWAY_HOST}' PUSH_TUNNEL_TOKEN='${PUSH_TUNNEL_TOKEN}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
@@ -115,6 +127,8 @@ remember_env_value() {
 }
 remember_env_value APNS_KEY_ID "${APNS_KEY_ID}"
 remember_env_value APNS_TEAM_ID "${APNS_TEAM_ID}"
+remember_env_value PUSH_GATEWAY_HOST "${PUSH_GATEWAY_HOST}"
+remember_env_value PUSH_TUNNEL_TOKEN "${PUSH_TUNNEL_TOKEN}"
 set -a; . "./$ENVFILE"; set +a
 
 # 2) Clé de signature + log config Synapse (via `generate`, une seule fois).
@@ -261,6 +275,14 @@ APNS_READY=1
 echo "→ docker-compose up -d"
 docker-compose up -d
 
+# 7 bis) Le tunnel de la passerelle, seulement s'il y a un jeton. Il est hors du
+#        `up -d` ci-dessus (profil « push ») pour qu'une pile sans jeton ne
+#        traîne pas un conteneur en boucle d'échec.
+if [[ -n "${PUSH_TUNNEL_TOKEN:-}" ]]; then
+  echo "→ docker-compose --profile push up -d cloudflared-push"
+  docker-compose --profile push up -d cloudflared-push
+fi
+
 # 8) Attente de Synapse.
 echo "→ Attente du homeserver"
 OK=0
@@ -343,6 +365,11 @@ echo
 echo "✓ Pile Matrix prête (WhatsApp + Instagram + Messenger + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
 if [[ "$APNS_READY" == 1 ]]; then
   echo "✓ Push iOS : Sygnal armé pour com.correspondance.ios (production) et com.correspondance.ios.dev (sandbox)."
+  if [[ -n "${PUSH_TUNNEL_TOKEN:-}" ]]; then
+    echo "✓ Passerelle publique : https://${PUSH_GATEWAY_HOST}/_matrix/push/v1/notify"
+  else
+    echo "⚠ Pas de PUSH_TUNNEL_TOKEN : la passerelle n'est joignable que depuis le réseau Docker."
+  fi
 else
   echo "⚠ Push iOS : Sygnal démarré sans clé APNs utilisable — voir docs/MATRIX-SETUP.md § « Notifications »."
 fi

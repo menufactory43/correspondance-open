@@ -1,6 +1,9 @@
 # Correspondance — pile Matrix sur le NUC (Debian 12, docker-compose 1.29 → schéma v3.x).
 # Bind sur l'IP Tailscale uniquement : 80/443 sont pris par Umbrel et le NUC est sur le LAN maison.
-version: "3.8"
+# Schéma 3.9 et non 3.8 pour `profiles`, seule façon de déclarer un service que
+# `docker-compose up -d` ne démarre PAS de lui-même (le tunnel de la passerelle,
+# qui n'a de sens que si un jeton existe). Vérifié sur le NUC : 1.29.2 l'accepte.
+version: "3.9"
 
 services:
   postgres:
@@ -135,6 +138,40 @@ services:
       # régénère pas, elle se retélécharge chez Apple (une fois, jamais deux).
       - ./secrets/apns:/secrets:ro
     networks:
+      - matrix
+
+  cloudflared-push:
+    # Le tunnel qui rend la passerelle publique.
+    #
+    # Pourquoi un tunnel et pas un port ouvert : le NUC n'a ni 80 ni 443 libres
+    # (Umbrel les tient), il est derrière une box, et une passerelle push doit
+    # être joignable en HTTPS par des Relais qui ne sont pas sur le tailnet —
+    # un Continuwuity posé par infra/relais/install.sh chez quelqu'un d'autre.
+    # cloudflared sort en HTTPS vers Cloudflare : rien à ouvrir, rien à router.
+    #
+    # Le jeton porte à lui seul le compte, l'identifiant du tunnel et son secret.
+    # Il vaut un accès : il vit dans le .env du NUC (chmod 600), jamais ici.
+    # La configuration d'ingress (quel nom, quel chemin, quel service) est
+    # stockée CHEZ Cloudflare, pas dans ce fichier — c'est ce qui permet de
+    # restreindre la route à `^/_matrix/push/v1/notify$` et `^/health$` et de
+    # rendre 404 sur tout le reste, sans redéployer quoi que ce soit ici.
+    #
+    # `profiles` : ce service ne démarre que sur demande explicite
+    # (`docker-compose --profile push up -d cloudflared-push`). Sans jeton, il
+    # tournerait en boucle d'échec, et une passerelle n'est pas requise pour que
+    # la pile Matrix serve son propriétaire.
+    profiles: ["push"]
+    image: cloudflare/cloudflared:latest
+    container_name: correspondance-cloudflared-push
+    restart: unless-stopped
+    depends_on:
+      - sygnal
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${PUSH_TUNNEL_TOKEN:-}
+    networks:
+      # Le même réseau que Sygnal, et rien d'autre : le tunnel ne peut joindre
+      # que `http://sygnal:5000`, pas Synapse ni Postgres.
       - matrix
 
 networks:
