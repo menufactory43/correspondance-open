@@ -56,7 +56,7 @@ echo "Les fichiers, et leurs sommes"
 FICHIERS=()
 while IFS= read -r f; do
   nom="$(basename "$f")"
-  case "$nom" in SHA256SUMS|*.log) continue ;; esac
+  case "$nom" in SHA256SUMS|NOTES.md|*.log) continue ;; esac
   FICHIERS+=("$nom")
   printf '  %-34s %12s o  %s\n' "$nom" "$(wc -c < "$f" | tr -d ' ')" "$(somme "$f")"
 done < <(find "$DOSSIER" -maxdepth 1 -type f | sort)

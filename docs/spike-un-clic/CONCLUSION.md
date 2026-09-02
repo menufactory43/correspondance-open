@@ -269,3 +269,15 @@ le coffre qui porte les clés de signature à un appareil neuf est **le nôtre**
 secret de la spécification (4S) — Element ne le lira pas, et le rendre interopérable coûte une
 demi-journée ; les deux binaires du bundle embarquent chacun leur copie statique de la
 bibliothèque Rust, là où un `.dylib` partagé économiserait ~15 Mio.
+
+## Publication (2 sept. 2026, 16 h 30)
+
+Publié : `relais-2026.09.02` sur `menufactory43/correspondance-releases`, 15 fichiers. Les six
+binaires macOS sont signés Developer ID (runtime durci, horodatés), **non notarisés** : le
+profil `notarytool` n'existe pas dans le Trousseau, il faut un mot de passe d'application Apple
+pour le créer. **Règle apprise en publiant** : `releases/latest` ne sert que la release la plus
+récente, et l'installeur de cc y lit `install.sh` et `SHA256SUMS` — publier le Relais seul a
+rendu 404 à cc pendant vingt minutes. Une release porte donc désormais **tout le produit** : les
+fichiers de cc sont repris dans la release du Relais, avec des sommes fusionnées (et la somme
+de `install.sh` corrigée : celle de `v0.1.0` était déjà fausse). `publier.sh` doit reprendre
+les fichiers de l'agent à chaque publication ; c'est à faire dans le script.
