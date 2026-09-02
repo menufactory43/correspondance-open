@@ -7,7 +7,7 @@ import Foundation
 /// homeserver privé sur Tailscale, salons de bridge non chiffrés.
 public actor MatrixClient {
   var credentials: MatrixCredentials?
-  private let session: URLSession
+  private var session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
   private var ledger = MatrixTransactionLedger()
   /// Le corps JSON du dernier échec HTTP. `MatrixError.http` ne porte que le
@@ -35,7 +35,16 @@ public actor MatrixClient {
   /// La couche `#admins`, construite au premier besoin.
   var couchesalonAdmin: MatrixSalonAdmin?
 
-  public init(credentials: MatrixCredentials? = nil) {
+  /// `mandataire` fait passer tout le trafic par un mandataire SOCKS local —
+  /// c'est ce que `tailcat` ouvre pour joindre un Relais qui n'écoute que sur
+  /// son `127.0.0.1`, sans tunnel ssh et sans Tailscale. Il s'applique **à la
+  /// configuration**, donc à toutes les requêtes du client, `/sync` et médias
+  /// compris : un mandataire posé sur une partie du trafic seulement laisserait
+  /// une connexion directe, c'est-à-dire un aveu de qui parle à qui.
+  public init(
+    credentials: MatrixCredentials? = nil,
+    mandataire: [String: Any]? = nil
+  ) {
     self.credentials = credentials
     let config = URLSessionConfiguration.ephemeral
     // Le long-poll /sync tient 30 s côté serveur : la marge évite les faux timeouts.
@@ -43,7 +52,24 @@ public actor MatrixClient {
     config.timeoutIntervalForResource = 120
     #if !canImport(FoundationNetworking)
       config.waitsForConnectivity = false
+      config.connectionProxyDictionary = mandataire
     #endif
+    session = URLSession(configuration: config)
+  }
+
+  /// Change le mandataire **en cours de route**. Sans ça, un code d'appairage
+  /// qui porte un jeton Tailcat n'aurait d'effet qu'au lancement suivant : la
+  /// configuration d'une `URLSession` est figée à sa création, et la modifier
+  /// après coup ne fait rien — silencieusement.
+  public func utiliserMandataire(_ mandataire: [String: Any]?) {
+    let config = URLSessionConfiguration.ephemeral
+    config.timeoutIntervalForRequest = 60
+    config.timeoutIntervalForResource = 120
+    #if !canImport(FoundationNetworking)
+      config.waitsForConnectivity = false
+      config.connectionProxyDictionary = mandataire
+    #endif
+    session.invalidateAndCancel()
     session = URLSession(configuration: config)
   }
 

@@ -67,3 +67,22 @@ extension MatrixBridgeService {
     await client.currentCredentials?.deviceID
   }
 }
+
+/// Le mandataire Tailcat, vu par le service.
+extension MatrixBridgeService {
+  /// Fait passer tout le trafic Matrix par le mandataire SOCKS local, ou le
+  /// retire (`nil`).
+  ///
+  /// On passe **le port**, pas le dictionnaire : `[String: Any]` n'est pas
+  /// `Sendable`, et le faire traverser deux acteurs vaut « sending
+  /// 'mandataire' risks causing data races ». Le dictionnaire se rebâtit de
+  /// l'autre côté, à partir du seul fait qui voyage.
+  public func utiliserMandataireSOCKS(port: Int?) async {
+    #if os(macOS)
+      await client.utiliserMandataire(port.map(MandataireSOCKS.dictionnaire(port:)))
+    #else
+      // iOS n'a pas de mandataire SOCKS dans CFNetwork (cf. TailcatProxy.swift).
+      _ = port
+    #endif
+  }
+}

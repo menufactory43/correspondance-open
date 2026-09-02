@@ -179,6 +179,9 @@ final class InboxStore {
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
   let matrix = MatrixBridgeService()
+  /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
+  /// aussi longtemps que l'app : le tuer couperait le `/sync`.
+  @ObservationIgnored private var tailcat: TailcatProxy?
   @ObservationIgnored private var loadTask: Task<Void, Never>?
   /// Boucle `/sync` : un long-poll qui ne s'arrête jamais, sans intervalle à régler.
   @ObservationIgnored private var matrixSyncTask: Task<Void, Never>?
@@ -1754,6 +1757,21 @@ final class InboxStore {
     matrixStatusFR = "Matrix : rechargement depuis le Relais…"
     didSettleInitialMatrixSync = false
     startMatrixSync()
+  }
+
+  /// Ouvre le chemin Tailcat vers le Relais et branche tout le trafic Matrix
+  /// dessus. Rend le port local du mandataire.
+  ///
+  /// Le mandataire est posé **avant** la connexion : posé après, le `/login`
+  /// serait déjà parti en direct, ce qui est précisément ce qu'on voulait
+  /// éviter — et un mot de passe serait passé par le chemin qu'on ne veut plus.
+  @discardableResult
+  func ouvrirTailcat(jeton: String) async throws -> Int {
+    let mandataire = tailcat ?? TailcatProxy()
+    tailcat = mandataire
+    let port = try await mandataire.demarrer(jeton: jeton)
+    await matrix.utiliserMandataireSOCKS(port: port)
+    return port
   }
 
   func refreshMatrixStatus() async {

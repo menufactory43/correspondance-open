@@ -27,10 +27,21 @@ public struct RelayPairingCode: Sendable, Equatable {
   public var user: String
   public var password: String
   public var expiresAt: Date
+  /// L'« addrblob » Tailcat du Relais, quand il en a un : de quoi le joindre
+  /// **sans tunnel ssh et sans Tailscale**, par WireGuard, à travers n'importe
+  /// quel NAT.
+  ///
+  /// Le champ est facultatif, et c'est la seule façon de rester
+  /// rétro-compatible : un code d'hier ne le porte pas, et se lit exactement
+  /// comme avant. Un code qui le porte reste lisible par une app d'hier, qui
+  /// l'ignorera et tombera sur l'adresse ordinaire — c'est pour ça qu'il
+  /// s'ajoute au JSON au lieu de le remplacer.
+  public var tailcat: String?
 
   public init(
     homeserver: URL, serverName: String, user: String, password: String,
     expiresAt: Date = Date().addingTimeInterval(RelayPairingCode.lifetime),
+    tailcat: String? = nil,
     version: Int = RelayPairingCode.currentVersion
   ) {
     self.homeserver = homeserver
@@ -38,6 +49,7 @@ public struct RelayPairingCode: Sendable, Equatable {
     self.user = user
     self.password = password
     self.expiresAt = expiresAt
+    self.tailcat = tailcat
     self.version = version
   }
 
@@ -48,14 +60,18 @@ public struct RelayPairingCode: Sendable, Equatable {
   // MARK: - Le jeton
 
   public func encoded() -> String {
-    let json: MatrixJSON = .object([
+    var champs: [String: MatrixJSON] = [
       "v": .number(Double(version)),
       "homeserver": .string(homeserver.absoluteString),
       "server": .string(serverName),
       "user": .string(user),
       "password": .string(password),
       "exp": .number(expiresAt.timeIntervalSince1970),
-    ])
+    ]
+    // Absent quand il n'y en a pas : un champ `null` allongerait tous les
+    // codes et changerait leur forme pour rien.
+    if let tailcat { champs["tailcat"] = .string(tailcat) }
+    let json: MatrixJSON = .object(champs)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
     guard let data = try? encoder.encode(json) else { return "" }
@@ -87,6 +103,7 @@ public struct RelayPairingCode: Sendable, Equatable {
     self.user = user
     self.password = password
     self.expiresAt = Date(timeIntervalSince1970: exp)
+    self.tailcat = json["tailcat"]?.stringValue
   }
 
   // MARK: - L'empreinte

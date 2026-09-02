@@ -217,8 +217,23 @@ struct SettingsMatrixPane: View {
     motsDeVerification = code.fingerprintWords()
     isConnecting = true
     Task {
+      // Un code qui porte un jeton Tailcat se joint **sans tunnel ssh et sans
+      // Tailscale** : on ouvre le mandataire d'abord, et on remplace l'adresse
+      // du code par le nom magique que ce mandataire sait joindre. Si tailcat
+      // manque ou refuse, on tombe sur l'adresse ordinaire du code plutôt que
+      // d'échouer — un Relais joignable autrement doit rester joignable.
+      var adresse = code.homeserver.absoluteString
+      if let jeton = code.tailcat {
+        do {
+          let port = try await store.ouvrirTailcat(jeton: jeton)
+          adresse = "http://server.tailcat:\(code.homeserver.port ?? 8010)"
+          erreurCode = "Relais joint par Tailcat (mandataire local \(port))."
+        } catch {
+          erreurCode = "Tailcat n'a pas pu ouvrir de chemin : \(error.localizedDescription)"
+        }
+      }
       await store.connectMatrix(
-        homeserver: code.homeserver.absoluteString,
+        homeserver: adresse,
         user: code.userID,
         password: code.password
       )
