@@ -134,8 +134,9 @@ public enum AgentWire {
     while let entree = courant {
       defer { courant = entree.pointee.ifa_next }
       guard let sockaddr = entree.pointee.ifa_addr, sockaddr.pointee.sa_family == UInt8(AF_INET) else { continue }
-      let flags = Int32(entree.pointee.ifa_flags)
-      guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 else { continue }
+      // `IFF_UP` est un `Int32` sur Darwin et un `Int` sur Linux : on ramène tout en `Int`.
+      let flags = Int(entree.pointee.ifa_flags)
+      guard flags & Int(IFF_UP) != 0, flags & Int(IFF_LOOPBACK) == 0 else { continue }
       var tampon = [CChar](repeating: 0, count: Int(NI_MAXHOST))
       #if os(Linux)
       let longueur = socklen_t(MemoryLayout<sockaddr_in>.size)
