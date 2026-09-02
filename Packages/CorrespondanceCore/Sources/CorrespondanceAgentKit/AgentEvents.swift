@@ -92,14 +92,17 @@ public enum AgentEvents {
   /// (cf. `SingleInstance`).
   public static func status(
     body: String, agent: String,
-    host: String = AgentWire.hostName, pid: Int32 = ProcessInfo.processInfo.processIdentifier
+    host: String = AgentWire.hostName, pid: Int32 = ProcessInfo.processInfo.processIdentifier,
+    address: String? = AgentWire.hostAddress
   ) -> MatrixJSON {
-    .object([
+    var fields: [String: MatrixJSON] = [
       "body": .string(body),
       "agent": .string(agent),
       AgentWire.StatusKey.host: .string(host),
       AgentWire.StatusKey.pid: .integer(Int(pid)),
-    ])
+    ]
+    if let address { fields[AgentWire.StatusKey.address] = .string(address) }
+    return .object(fields)
   }
 
   /// Ce qu'un status raconte de l'agent qui l'a posté. `nil` pour un status

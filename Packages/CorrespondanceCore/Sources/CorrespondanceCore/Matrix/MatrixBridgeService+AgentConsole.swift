@@ -191,7 +191,10 @@ extension MatrixBridgeService {
     for event in messages.chunk where event.sender == agentID {
       if event.type == AgentWire.statusType, console.status == nil,
          let body = event.content?.string(at: "body") {
-        console.status = AgentStatus(engines: body, publishedAt: event.sentAt)
+        console.status = AgentStatus(
+          engines: body, publishedAt: event.sentAt,
+          address: event.content?.string(at: AgentWire.StatusKey.address)
+        )
       }
       if event.type == AgentWire.journalType, console.journal.count < journalLimit,
          let content = event.content, let id = event.eventID {

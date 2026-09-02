@@ -1,9 +1,12 @@
 import AppKit
 import CorrespondanceCore
+import CorrespondanceMatrixClient
 import CorrespondanceUI
 import SwiftUI
 
-/// **Réglages › Agents** : tous les agents du Relais, et les moteurs de ce Mac.
+/// **Réglages › Agents** : tous les agents du Relais, puis « Ajouter un agent »
+/// avec le choix de l'hôte — ce Mac, une machine où un agent tourne déjà, ou
+/// une autre.
 ///
 /// Trois règles tiennent cet écran, et elles viennent toutes d'incidents réels
 /// racontés dans `docs/AGENT.md` :
@@ -17,7 +20,7 @@ import SwiftUI
 ///    n'existait ; on ne recommence pas.
 /// 3. **Les moteurs vivent là où l'agent tourne.** Le catalogue local ne parle
 ///    que de ce Mac ; ceux d'un hôte distant se lisent dans le status de
-///    l'agent qui y tourne.
+///    l'agent qui y tourne — nom, adresse, moteurs prêts, moteurs à connecter.
 struct SettingsAgentsPane: View {
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
@@ -34,9 +37,40 @@ struct SettingsAgentsPane: View {
   /// Les noms proposés pour les activations, modifiables : le nom du moteur
   /// est une proposition, pas une contrainte.
   @State private var nomsProposes: [String: String] = [:]
-  /// Les commandes d'installation préparées, par clé (« agent » ou
-  /// « moteur@machine ») — vivantes dix minutes.
+  /// Les commandes d'installation préparées, par clé (« agent »,
+  /// « moteur@machine » ou « autre ») — vivantes dix minutes.
   @State private var commandes: [String: (texte: String, expire: Date)] = [:]
+  /// Où ajouter le prochain agent.
+  @State private var hoteChoisi: HoteChoix = .ceMac
+  /// Pour « une autre machine » : le moteur et le nom du futur agent.
+  @State private var moteurAutre: String = "claude"
+  @State private var nomAutre: String = ""
+
+  /// Un hôte où l'on peut ajouter un agent.
+  enum HoteChoix: Hashable {
+    case ceMac
+    /// Une machine où un agent tourne déjà et a publié ce qu'il y a vu.
+    case connu(String)
+    /// Une machine dont on ne sait rien encore : la commande d'installation.
+    case autre
+  }
+
+  /// Ce qu'on sait d'une machine distante — **uniquement** ce que les agents
+  /// qui y tournent ont publié. Fusionné par nom d'hôte quand plusieurs y sont.
+  struct HoteConnu: Identifiable {
+    var nom: String
+    var adresse: String?
+    /// La console la plus fraîche de cette machine : c'est à elle qu'on
+    /// demande de rescanner, et c'est sa date qu'on affiche.
+    var console: MatrixBridgeService.AgentConsole
+    var prets: [String]
+    var aConnecter: [String]
+    /// Les moteurs qu'un agent de cette machine porte déjà.
+    var portes: Set<String>
+
+    var id: String { nom }
+    var disponibles: [String] { prets.filter { !portes.contains($0) } }
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
@@ -51,12 +85,12 @@ struct SettingsAgentsPane: View {
       if consoles.isEmpty && !isLoading {
         SettingsCard(
           title: "Agents",
-          footnote: "Un agent est un compte Matrix, une console et un moteur. "
+          footnote: "Un agent est un compte sur le Relais, une console et un moteur. "
             + "L'annuaire se lit sur le Relais : tant qu'aucune console n'existe, il est vide."
         ) {
           SettingsRow(
             label: "Aucun agent",
-            detail: "Active un moteur de ce Mac ci-dessous, ou prépare une commande pour une autre machine.",
+            detail: "Ajoute-en un ci-dessous : sur ce Mac, ou sur une machine qui reste allumée.",
             systemImage: "person.crop.circle.badge.questionmark"
           ) {
             if isLoading { ProgressView().controlSize(.small) } else {
@@ -70,8 +104,7 @@ struct SettingsAgentsPane: View {
         agentCard(console)
       }
 
-      moteursCard
-      hotesDistantsCard
+      ajouterCard
 
       Text("Un réglage part sur le Relais ; l'agent le relit à sa prochaine synchronisation.")
         .font(Typography.meta(themes.typeface))
@@ -88,7 +121,7 @@ struct SettingsAgentsPane: View {
   // MARK: - Un agent
 
   /// Ce qu'on affiche d'un agent, et **d'où ça vient** :
-  /// - l'hôte et les moteurs prêts : de son status, qu'il a lui-même publié ;
+  /// - l'hôte, son adresse et les moteurs : de son status, qu'il a lui-même publié ;
   /// - « local » : de son amorce, constatée sur le disque de ce Mac ;
   /// - vivant ou muet : de la date de ce status.
   @ViewBuilder
@@ -110,10 +143,8 @@ struct SettingsAgentsPane: View {
 
       if let status = console.status {
         SettingsRow(
-          label: "Moteurs prêts là-bas",
-          detail: (status.enginesReady.isEmpty ? "aucun" : status.enginesReady.joined(separator: ", "))
-            + " — d'après ce que l'agent a scanné sur sa machine, à son démarrage ou "
-            + "au dernier « Rescanner ».",
+          label: "Moteurs sur sa machine",
+          detail: moteursLaBas(status),
           systemImage: "wrench.and.screwdriver"
         ) {
           if enCours == "rescan:\(agent)" {
@@ -123,16 +154,6 @@ struct SettingsAgentsPane: View {
               .disabled(enCours != nil)
           }
         }
-      }
-
-      if let status = console.status, !status.enginesToConnect.isEmpty {
-        SettingsRow(
-          label: "À connecter là-bas",
-          detail: status.enginesToConnect.joined(separator: ", ")
-            + " — installé sur sa machine, mais sans session : le login se fait là-bas, "
-            + "dans un terminal, et l'agent le verra à son prochain démarrage.",
-          systemImage: "person.crop.circle.badge.exclamationmark"
-        ) { EmptyView() }
       }
 
       if local, let journal = AgentLocalHost.logURL(agent: agent) {
@@ -146,7 +167,7 @@ struct SettingsAgentsPane: View {
       }
 
       SettingsRow(
-        label: "Sur une autre machine",
+        label: "Déplacer sur une autre machine",
         detail: commandeDetail(cle: agent),
         systemImage: "server.rack"
       ) {
@@ -184,14 +205,30 @@ struct SettingsAgentsPane: View {
         ? "amorcé sur ce Mac ; il n'a encore rien publié dans sa console"
         : "console ouverte ; il n'a encore rien publié — on ne sait pas où il tourne"
     }
-    let ou = status.host.map { $0 == EngineCatalog.nomDeCeMac ? "sur ce Mac" : "sur \($0)" }
-      ?? "quelque part — son status ne dit pas où"
+    let ou = status.host.map { hote in
+      hote == EngineCatalog.nomDeCeMac ? "sur ce Mac" : "sur \(Self.nomEtAdresse(hote, status.address))"
+    } ?? "quelque part — son status ne dit pas où"
     let moteur = status.backend.map { " · moteur \($0)" } ?? ""
     let age = status.publishedAt
       .formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
     return status.isFresh()
       ? "\(ou)\(moteur) — vu \(age)"
       : "\(ou)\(moteur) — muet depuis \(age) : plus rien depuis plus d'une heure"
+  }
+
+  /// « umbrel (100.64.0.12) » — l'adresse à côté du nom, parce qu'un nom seul
+  /// ne dit pas où coller une commande SSH.
+  static func nomEtAdresse(_ nom: String, _ adresse: String?) -> String {
+    adresse.map { "\(nom) (\($0))" } ?? nom
+  }
+
+  private func moteursLaBas(_ status: MatrixBridgeService.AgentStatus) -> String {
+    var parts: [String] = []
+    parts.append("prêts : " + (status.enginesReady.isEmpty ? "aucun" : status.enginesReady.joined(separator: ", ")))
+    if !status.enginesToConnect.isEmpty {
+      parts.append("à connecter : " + status.enginesToConnect.joined(separator: ", "))
+    }
+    return parts.joined(separator: " · ") + " — d'après son scan, au démarrage ou au dernier « Rescanner »."
   }
 
   private func footnoteFor(_ console: MatrixBridgeService.AgentConsole, local: Bool) -> String {
@@ -289,68 +326,146 @@ struct SettingsAgentsPane: View {
     }
   }
 
-  // MARK: - Ajouter un agent : les moteurs de ce Mac
+  // MARK: - Ajouter un agent
 
-  private var moteursCard: some View {
-    SettingsCard(
-      title: "Ajouter un agent sur ce Mac",
-      footnote: "Un moteur prêt donne un agent en un clic : compte sur le Relais, amorce sur le "
-        + "disque, console avec son moteur, processus enfant, et invitation dans ta note à soi. "
-        + "Un moteur absent affiche ce qu'il faut taper — pas un bouton qui mentirait."
-    ) {
-      SettingsRow(
-        label: "Ce que ce Mac sait lancer",
-        detail: "Scanné à l'ouverture de cet écran et à chaque retour dans l'app. "
-          + "Tu viens d'installer un moteur dans un terminal ? Rafraîchis.",
-        systemImage: "magnifyingglass"
-      ) {
-        if isLoading { ProgressView().controlSize(.small) } else {
-          Button("Rafraîchir") { Task { await rescannerLesMoteurs() } }
+  /// Les machines distantes dont on sait quelque chose, fusionnées par nom.
+  private var hotesConnus: [HoteConnu] {
+    var parNom: [String: HoteConnu] = [:]
+    for console in consoles {
+      guard let status = console.status, let nom = status.host, nom != EngineCatalog.nomDeCeMac
+      else { continue }
+      if var hote = parNom[nom] {
+        hote.prets = Array(Set(hote.prets).union(status.enginesReady)).sorted()
+        hote.aConnecter = Array(Set(hote.aConnecter).union(status.enginesToConnect)).sorted()
+        if hote.adresse == nil { hote.adresse = status.address }
+        if status.publishedAt > (hote.console.status?.publishedAt ?? .distantPast) { hote.console = console }
+        if let backend = status.backend { hote.portes.insert(backend) }
+        parNom[nom] = hote
+      } else {
+        parNom[nom] = HoteConnu(
+          nom: nom, adresse: status.address, console: console,
+          prets: status.enginesReady, aConnecter: status.enginesToConnect,
+          portes: Set(status.backend.map { [$0] } ?? [])
+        )
+      }
+    }
+    return parNom.values.sorted { $0.nom < $1.nom }
+  }
+
+  private var ajouterCard: some View {
+    SettingsCard(title: "Ajouter un agent", footnote: footnoteAjout) {
+      SettingsRow(label: "Où", detail: detailHote, systemImage: "location") {
+        Picker("", selection: $hoteChoisi) {
+          Text("Ce Mac").tag(HoteChoix.ceMac)
+          ForEach(hotesConnus) { hote in
+            Text(Self.nomEtAdresse(hote.nom, hote.adresse)).tag(HoteChoix.connu(hote.nom))
+          }
+          Text("Une autre machine").tag(HoteChoix.autre)
         }
+        .pickerStyle(.menu)
+        .frame(width: 220)
       }
 
-      ForEach(moteurs) { trouve in
-        SettingsRow(
-          label: trouve.entry.labelFR,
-          detail: detailMoteur(trouve),
-          systemImage: trouve.state.estPret ? "checkmark.seal" : "questionmark.circle"
-        ) {
-          if trouve.state.estPret {
-            HStack(spacing: Spacing.xs) {
-              TextField(
-                "nom",
-                text: Binding(
-                  get: { nomsProposes[trouve.entry.id] ?? trouve.entry.nomAgentPropose },
-                  set: { nomsProposes[trouve.entry.id] = $0 }
-                )
-              )
-              .textFieldStyle(.roundedBorder)
-              .frame(width: 90)
+      switch hoteChoisi {
+      case .ceMac:
+        ForEach(moteurs) { trouve in ligneMoteurLocal(trouve) }
+      case .connu(let nom):
+        if let hote = hotesConnus.first(where: { $0.nom == nom }) {
+          lignesHoteConnu(hote)
+        } else {
+          SettingsRow(
+            label: "Cette machine n'a plus publié",
+            detail: "Aucun agent n'y a parlé récemment : choisis un autre hôte.",
+            systemImage: "questionmark.circle"
+          )
+        }
+      case .autre:
+        lignesAutreMachine
+      }
+    }
+  }
 
-              if enCours == trouve.entry.id {
-                ProgressView().controlSize(.small)
-              } else {
-                Button("Activer") { Task { await activerMoteur(trouve) } }
-                  .disabled(!peutProvisionner || nomDejaPris(trouve) || enCours != nil)
-              }
-            }
-          } else if case .nonConnecte(let geste) = trouve.state {
-            Button("Copier le geste") { copier(geste) }
-          } else if enCours == trouve.entry.id {
+  private var footnoteAjout: String {
+    switch hoteChoisi {
+    case .ceMac:
+      "Un moteur prêt donne un agent en un clic : compte sur le Relais, console avec son moteur, "
+        + "processus enfant, et invitation dans ta note à soi. Il tourne tant que Correspondance est ouverte."
+    case .connu:
+      "Ce qu'on sait de cette machine vient des agents qui y tournent. La commande contient un mot de "
+        + "passe : elle se colle dans un terminal là-bas, jamais dans une conversation, et périme en dix minutes."
+    case .autre:
+      "Une machine qui reste allumée : l'agent répond même Mac fermé. La commande installe l'agent avec "
+        + "son moteur ; le moteur lui-même, et sa connexion, se font là-bas."
+    }
+  }
+
+  private var detailHote: String {
+    switch hoteChoisi {
+    case .ceMac:
+      return "Ce que ce Mac sait lancer, scanné à l'ouverture et à chaque retour dans l'app."
+    case .connu(let nom):
+      if let hote = hotesConnus.first(where: { $0.nom == nom }), let status = hote.console.status {
+        let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
+        return "D'après \(hote.console.agent), vu \(age)."
+      }
+      return "On ne sait plus rien de cette machine."
+    case .autre:
+      return "Un NUC, un serveur, un Raspberry : tout ce qui a un terminal et joint le Relais."
+    }
+  }
+
+  // MARK: Ce Mac
+
+  @ViewBuilder
+  private func ligneMoteurLocal(_ trouve: EngineCatalog.Finding) -> some View {
+    SettingsRow(
+      label: trouve.entry.labelFR,
+      detail: detailMoteur(trouve),
+      systemImage: iconeMoteur(trouve.state)
+    ) {
+      if trouve.state.estPret {
+        HStack(spacing: Spacing.xs) {
+          TextField(
+            "nom",
+            text: Binding(
+              get: { nomsProposes[trouve.entry.id] ?? trouve.entry.nomAgentPropose },
+              set: { nomsProposes[trouve.entry.id] = $0 }
+            )
+          )
+          .textFieldStyle(.roundedBorder)
+          .frame(width: 90)
+
+          if enCours == trouve.entry.id {
             ProgressView().controlSize(.small)
           } else {
-            HStack(spacing: Spacing.xs) {
-              if let commande = trouve.entry.commandeInstallation,
-                 trouve.state == .nonInstalle, EngineInstaller.estLancable(commande)
-              {
-                Button("Installer") { Task { await installerMoteur(trouve, commande: commande) } }
-                  .disabled(enCours != nil)
-              }
-              Button("Copier la commande") { copier(trouve.entry.indiceInstallation) }
-            }
+            Button("Activer") { Task { await activerMoteur(trouve) } }
+              .disabled(!peutProvisionner || nomDejaPris(trouve) || enCours != nil)
           }
         }
+      } else if case .nonConnecte(let geste) = trouve.state {
+        Button("Copier le geste") { copier(geste) }
+      } else if enCours == trouve.entry.id {
+        ProgressView().controlSize(.small)
+      } else {
+        HStack(spacing: Spacing.xs) {
+          if let commande = trouve.entry.commandeInstallation,
+             trouve.state == .nonInstalle, EngineInstaller.estLancable(commande)
+          {
+            Button("Installer") { Task { await installerMoteur(trouve, commande: commande) } }
+              .disabled(enCours != nil)
+          }
+          Button("Copier la commande") { copier(trouve.entry.indiceInstallation) }
+        }
       }
+    }
+  }
+
+  private func iconeMoteur(_ state: EngineCatalog.State) -> String {
+    switch state {
+    case .pret: "checkmark.seal"
+    case .nonConnecte: "person.crop.circle.badge.exclamationmark"
+    case .adaptateurPerime: "exclamationmark.triangle"
+    case .nonInstalle: "arrow.down.circle"
     }
   }
 
@@ -391,70 +506,134 @@ struct SettingsAgentsPane: View {
     return consoles.contains { $0.agent == nom }
   }
 
-  // MARK: - Ajouter un agent sur une machine connue
+  // MARK: Une machine connue
 
-  /// Les hôtes distants dont on sait quelque chose : un agent y tourne et a
-  /// publié ce qu'il y a trouvé. On ne propose que des moteurs **constatés
-  /// là-bas** — proposer un moteur qu'on n'a vu nulle part serait une promesse.
-  private var hotesDistants: [(hote: String, moteurs: [String])] {
-    var parHote: [String: Set<String>] = [:]
-    for console in consoles {
-      guard let status = console.status, let hote = status.host,
-            hote != EngineCatalog.nomDeCeMac
-      else { continue }
-      parHote[hote, default: []].formUnion(status.enginesReady)
-    }
-    // Un moteur déjà porté par un agent de cette machine n'est plus à ajouter.
-    for console in consoles {
-      guard let status = console.status, let hote = status.host, let backend = status.backend
-      else { continue }
-      parHote[hote]?.remove(backend)
-    }
-    return parHote
-      .map { (hote: $0.key, moteurs: $0.value.sorted()) }
-      .filter { !$0.moteurs.isEmpty }
-      .sorted { $0.hote < $1.hote }
-  }
-
+  /// On ne propose que des moteurs **constatés là-bas** — proposer un moteur
+  /// qu'on n'a vu nulle part serait une promesse.
   @ViewBuilder
-  private var hotesDistantsCard: some View {
-    if !hotesDistants.isEmpty {
-      SettingsCard(
-        title: "Ajouter un agent ailleurs",
-        footnote: "Ces moteurs sont ceux qu'un agent a scannés sur sa machine — c'est la seule "
-          + "chose qu'on sache d'un hôte distant. La commande contient un mot de passe : elle se "
-          + "colle dans un terminal, jamais dans une conversation, et périme en dix minutes."
+  private func lignesHoteConnu(_ hote: HoteConnu) -> some View {
+    SettingsRow(
+      label: Self.nomEtAdresse(hote.nom, hote.adresse),
+      detail: hote.adresse == nil
+        ? "Adresse inconnue : son agent est d'avant cette version. Redéploie-le, et elle apparaîtra."
+        : "Là où coller la commande, en SSH.",
+      systemImage: "server.rack"
+    ) {
+      if enCours == "rescan:\(hote.console.agent)" {
+        ProgressView().controlSize(.small)
+      } else {
+        Button("Rescanner") { Task { await rescannerLaBas(hote.console) } }
+          .disabled(enCours != nil)
+      }
+    }
+
+    ForEach(hote.disponibles, id: \.self) { moteur in
+      let cle = "\(moteur)@\(hote.nom)"
+      SettingsRow(
+        label: EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }?.labelFR ?? moteur,
+        detail: "prêt là-bas · " + commandeDetail(cle: cle),
+        systemImage: "checkmark.seal"
       ) {
-        ForEach(hotesDistants, id: \.hote) { hote in
-          ForEach(hote.moteurs, id: \.self) { moteur in
-            let cle = "\(moteur)@\(hote.hote)"
-            SettingsRow(
-              label: "\(moteur) sur \(hote.hote)",
-              detail: commandeDetail(cle: cle),
-              systemImage: "server.rack"
-            ) {
-              if let commande = commandes[cle]?.texte {
-                Button("Copier") { copier(commande) }
-              } else {
-                Button("Préparer la commande") {
-                  Task {
-                    let entree = EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }
-                    await preparerCommande(
-                      agent: nomLibre(base: entree?.nomAgentPropose ?? moteur),
-                      cle: cle,
-                      backend: entree?.backend.rawValue,
-                      acpCommand: entree?.acpCommand,
-                      acpArguments: entree?.acpArguments
-                    )
-                  }
-                }
-                .disabled(!peutProvisionner || enCours != nil)
-              }
+        if let commande = commandes[cle]?.texte {
+          Button("Copier") { copier(commande) }
+        } else if enCours == cle {
+          ProgressView().controlSize(.small)
+        } else {
+          Button("Préparer la commande") {
+            Task {
+              let entree = EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }
+              await preparerCommande(
+                agent: nomLibre(base: entree?.nomAgentPropose ?? moteur),
+                cle: cle,
+                backend: entree?.backend.rawValue,
+                acpCommand: entree?.acpCommand,
+                acpArguments: entree?.acpArguments
+              )
             }
           }
+          .disabled(!peutProvisionner || enCours != nil)
         }
       }
     }
+
+    ForEach(hote.aConnecter, id: \.self) { moteur in
+      let geste = EngineLogin.gesture(for: moteur) ?? "connecte-le dans un terminal là-bas."
+      SettingsRow(
+        label: EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }?.labelFR ?? moteur,
+        detail: "installé là-bas, mais pas connecté : \(geste)",
+        systemImage: "person.crop.circle.badge.exclamationmark"
+      ) {
+        Button("Copier le geste") { copier(geste) }
+      }
+    }
+
+    if hote.disponibles.isEmpty, hote.aConnecter.isEmpty {
+      SettingsRow(
+        label: "Rien à ajouter",
+        detail: hote.prets.isEmpty
+          ? "Aucun moteur prêt là-bas. Installe-en un dans un terminal, connecte-le, puis « Rescanner »."
+          : "Chaque moteur prêt là-bas porte déjà un agent.",
+        systemImage: "checkmark.circle"
+      )
+    }
+  }
+
+  // MARK: Une autre machine
+
+  @ViewBuilder
+  private var lignesAutreMachine: some View {
+    SettingsRow(
+      label: "Moteur",
+      detail: "Celui que l'agent lancera là-bas. Il doit y être installé et connecté ; l'agent le dira sinon.",
+      systemImage: "engine.combustion"
+    ) {
+      Picker("", selection: $moteurAutre) {
+        ForEach(EngineCatalog.entries) { entree in Text(entree.labelFR).tag(entree.id) }
+      }
+      .pickerStyle(.menu)
+      .frame(width: 190)
+    }
+
+    SettingsRow(
+      label: "Nom",
+      detail: "Son compte sur le Relais, et ce qu'on tape pour l'appeler : « @\(nomAutreEffectif) ».",
+      systemImage: "at"
+    ) {
+      TextField("nom", text: $nomAutre, prompt: Text(nomLibre(base: entreeAutre?.nomAgentPropose ?? moteurAutre)))
+        .textFieldStyle(.roundedBorder)
+        .frame(width: 120)
+    }
+
+    SettingsRow(
+      label: "La commande",
+      detail: commandeDetail(cle: "autre"),
+      systemImage: "terminal"
+    ) {
+      if let commande = commandes["autre"]?.texte {
+        Button("Copier") { copier(commande) }
+      } else if enCours == "autre" {
+        ProgressView().controlSize(.small)
+      } else {
+        Button("Préparer la commande") {
+          Task {
+            await preparerCommande(
+              agent: nomAutreEffectif, cle: "autre",
+              backend: entreeAutre?.backend.rawValue,
+              acpCommand: entreeAutre?.acpCommand,
+              acpArguments: entreeAutre?.acpArguments
+            )
+          }
+        }
+        .disabled(!peutProvisionner || enCours != nil || consoles.contains { $0.agent == nomAutreEffectif })
+      }
+    }
+  }
+
+  private var entreeAutre: EngineCatalog.Entry? { EngineCatalog.entries.first { $0.id == moteurAutre } }
+
+  private var nomAutreEffectif: String {
+    let saisi = nomAutre.trimmingCharacters(in: .whitespaces)
+    return saisi.isEmpty ? nomLibre(base: entreeAutre?.nomAgentPropose ?? moteurAutre) : saisi
   }
 
   private func commandeDetail(cle: String) -> String {

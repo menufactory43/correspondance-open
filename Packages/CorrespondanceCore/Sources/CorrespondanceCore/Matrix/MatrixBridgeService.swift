@@ -371,10 +371,15 @@ public actor MatrixBridgeService {
     /// Le démarrage qui l'a publiée — un status vieux d'un mois parle d'un
     /// agent qui ne redémarre plus.
     public var publishedAt: Date
+    /// L'adresse de sa machine, telle qu'il l'a lue sur ses interfaces
+    /// (`AgentWire.StatusKey.address`). `nil` pour un agent d'avant cette
+    /// version.
+    public var address: String?
 
-    public init(engines: String, publishedAt: Date) {
+    public init(engines: String, publishedAt: Date, address: String? = nil) {
       self.engines = engines
       self.publishedAt = publishedAt
+      self.address = address
     }
 
     /// La machine où l'agent tourne, lue dans « cc tourne sur umbrel depuis

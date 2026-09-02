@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Glibc)
+import Glibc
+#endif
 
 /// Le format de fil entre l'app et l'agent : les types d'events et le nom de
 /// leurs champs.
@@ -80,12 +83,58 @@ public enum AgentWire {
   public enum StatusKey {
     public static let host = "host"
     public static let pid = "pid"
+    /// L'adresse par laquelle on joint cette machine — celle du tailnet quand
+    /// il y en a une (`100.x.y.z`), sinon la première adresse IPv4 qui n'est
+    /// pas la boucle locale. C'est ce que les réglages montrent à côté du nom
+    /// d'un hôte distant : un nom seul ne dit pas où coller une commande SSH.
+    public static let address = "address"
   }
 
   /// Le nom court de cette machine : `umbrel`, pas `umbrel.local`.
   public static var hostName: String {
     let nom = ProcessInfo.processInfo.hostName
     return nom.split(separator: ".").first.map(String.init) ?? nom
+  }
+
+  /// L'adresse de cette machine, lue sur ses interfaces : Tailscale d'abord
+  /// (plage `100.64.0.0/10`), sinon la première IPv4 hors boucle locale.
+  /// `nil` quand la machine n'a aucune adresse — et on ne l'invente pas.
+  public static var hostAddress: String? {
+    let adresses = ipv4Addresses()
+    return adresses.first(where: { estTailscale($0) }) ?? adresses.first
+  }
+
+  /// `100.64.0.0/10` : de `100.64.0.0` à `100.127.255.255`.
+  public static func estTailscale(_ adresse: String) -> Bool {
+    let parts = adresse.split(separator: ".").compactMap { Int($0) }
+    guard parts.count == 4, parts[0] == 100 else { return false }
+    return (64...127).contains(parts[1])
+  }
+
+  static func ipv4Addresses() -> [String] {
+    var resultat: [String] = []
+    var liste: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&liste) == 0, let debut = liste else { return [] }
+    defer { freeifaddrs(liste) }
+    var courant: UnsafeMutablePointer<ifaddrs>? = debut
+    while let entree = courant {
+      defer { courant = entree.pointee.ifa_next }
+      guard let sockaddr = entree.pointee.ifa_addr, sockaddr.pointee.sa_family == UInt8(AF_INET) else { continue }
+      let flags = Int32(entree.pointee.ifa_flags)
+      guard flags & IFF_UP != 0, flags & IFF_LOOPBACK == 0 else { continue }
+      var tampon = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+      #if os(Linux)
+      let longueur = socklen_t(MemoryLayout<sockaddr_in>.size)
+      #else
+      let longueur = socklen_t(sockaddr.pointee.sa_len)
+      #endif
+      guard getnameinfo(sockaddr, longueur, &tampon, socklen_t(tampon.count),
+                        nil, 0, NI_NUMERICHOST) == 0
+      else { continue }
+      let adresse = String(cString: tampon)
+      if !adresse.isEmpty { resultat.append(adresse) }
+    }
+    return resultat
   }
 
   /// Les clés de `fr.correspondance.agent.journal`.

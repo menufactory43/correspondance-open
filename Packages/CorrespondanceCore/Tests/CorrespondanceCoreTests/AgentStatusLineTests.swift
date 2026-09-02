@@ -21,6 +21,14 @@ final class AgentStatusLineTests: XCTestCase {
 
   /// L'agent sépare les prêts de ceux à connecter ; la liste des prêts
   /// s'arrête au « · », sinon « à connecter : grok » se lirait comme un prêt.
+  func testLAdresseVientDuStatusEtNeSInventePas() {
+    let sans = MatrixBridgeService.AgentStatus(engines: "cc tourne sur umbrel · moteur acp · prêts : claude", publishedAt: Date())
+    XCTAssertNil(sans.address)
+    let avec = MatrixBridgeService.AgentStatus(engines: sans.engines, publishedAt: Date(), address: "100.64.0.12")
+    XCTAssertEqual(avec.address, "100.64.0.12")
+    XCTAssertEqual(avec.host, "umbrel")
+  }
+
   func testLesMoteursAConnecterNeSontPasDesPrets() {
     let ligne = status("cc tourne sur umbrel depuis 14 h 02 · moteur acp · prêts : claude · à connecter : grok, codex")
     XCTAssertEqual(ligne.enginesReady, ["claude"])
