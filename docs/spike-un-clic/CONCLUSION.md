@@ -273,9 +273,9 @@ bibliothèque Rust, là où un `.dylib` partagé économiserait ~15 Mio.
 ## Publication (2 sept. 2026, 16 h 30)
 
 Publié : `relais-2026.09.02` sur `menufactory43/correspondance-releases`, 15 fichiers. Les six
-binaires macOS sont signés Developer ID (runtime durci, horodatés), **non notarisés** : le
-profil `notarytool` n'existe pas dans le Trousseau, il faut un mot de passe d'application Apple
-pour le créer. **Règle apprise en publiant** : `releases/latest` ne sert que la release la plus
+binaires macOS sont signés Developer ID (runtime durci, horodatés), **notarisés** (soumission e19dc248, acceptée, ticket en ligne) — le
+profil `notarytool` s'appelle `notarisation` dans le Trousseau (équipe AKMNXGVVGX), le même que mes autres apps ;
+il sert tel quel. **Règle apprise en publiant** : `releases/latest` ne sert que la release la plus
 récente, et l'installeur de cc y lit `install.sh` et `SHA256SUMS` — publier le Relais seul a
 rendu 404 à cc pendant vingt minutes. Une release porte donc désormais **tout le produit** : les
 fichiers de cc sont repris dans la release du Relais, avec des sommes fusionnées (et la somme
