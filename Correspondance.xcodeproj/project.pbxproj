@@ -154,6 +154,7 @@
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
 		F3BAFA4B3445328D8221B7D5 /* InboxStore+AgentConsole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */; };
+		F455BBE89CF24BE1A8DB40D1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D7EE88352A330EB051B836D4 /* Assets.xcassets */; };
 		F51B9C935EA8E8A60DC87B31 /* SendLaterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */; };
 		F94D9B8149050AF1F9903096 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE8B38B0A2FFD77B5B638F0F /* MessageBubble.swift */; };
 		FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBED963D2D0FDDC25F5A0072 /* FocusView.swift */; };
@@ -339,6 +340,7 @@
 		D68BFE4D8EC6C03DA5A3BFFD /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D795885D36B118B751ABF6B2 /* NewGroupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewGroupSheet.swift; sourceTree = "<group>"; };
 		D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectory.swift; sourceTree = "<group>"; };
+		D7EE88352A330EB051B836D4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DE05DF5AB0829B0A55A79DD4 /* IMessageSummaryInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSummaryInfo.swift; sourceTree = "<group>"; };
 		E637F86CB35FBFE62AD7A64C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalHost.swift; sourceTree = "<group>"; };
@@ -404,6 +406,7 @@
 				D46C056F6B42F908D48CF911 /* Design */,
 				834091FB511A21E88D27F81C /* Features */,
 				A16BFFB516C474AB4D00BB6A /* Store */,
+				D7EE88352A330EB051B836D4 /* Assets.xcassets */,
 				4399BA71FE841C551BCA82A8 /* CorrespondanceiOS.entitlements */,
 				E637F86CB35FBFE62AD7A64C /* Info.plist */,
 			);
@@ -987,6 +990,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F455BBE89CF24BE1A8DB40D1 /* Assets.xcassets in Resources */,
 				48B99E0231E1D4B751E16E2D /* Fonts in Resources */,
 				07B6C02B1DE1EC005EB56849 /* matrix-sync-instagram.json in Resources */,
 				06A497228CF2E7907D9DA088 /* matrix-sync-signal.json in Resources */,
@@ -1356,7 +1360,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1460,7 +1464,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1513,7 +1517,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				AD_HOC_CODE_SIGNING_ALLOWED = YES;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;
@@ -1593,7 +1597,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				AD_HOC_CODE_SIGNING_ALLOWED = YES;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGNING_REQUIRED = YES;
 				CODE_SIGN_ENTITLEMENTS = CorrespondanceiOS/CorrespondanceiOS.entitlements;

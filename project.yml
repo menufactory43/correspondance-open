@@ -12,7 +12,7 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Correspondance
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
@@ -265,7 +265,10 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # L'icône iOS : la même image que le Mac, en 1024 sans alpha, dans
+        # CorrespondanceiOS/Assets.xcassets. Sans elle, App Store Connect refuse
+        # le build (90713, CFBundleIconName manquant).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: NO
         # Signature ad-hoc, et non « pas de signature » : sans elle le simulateur
         # n'applique AUCUN entitlement — donc ni groupe d'app, ni Trousseau
