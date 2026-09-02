@@ -601,3 +601,18 @@ bash infra/relais/uninstall.sh
   trois agents `correspondance-cc`, `-hermes` et `-claude` sont restés `active`
   du début à la fin, et le dossier `crypto/` posé par erreur dans
   `~/.correspondance-agent/` a été retiré.
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : 823 tests sans crypto, 828 avec, 0 échec. Prod contrôlée après l'incident signalé
+par l'agent : `~/.correspondance-agent/config.json` au même sha256 qu'avant toutes les
+phases (`2540d388`), aucun dossier `crypto/` résiduel sur le Mac ni sur le NUC, les trois
+unités `correspondance-cc`, `-claude`, `-hermes` actives, aucune unité `unclic-*`, `~/unclic`
+absent, aucun orphelin sur le Mac. Les mesures Tailcat (44 ms contre 32 ms par ssh, débit
+équivalent, une seule connexion TCP de l'app vers son mandataire local) et les huit captures
+sont dans le rapport ; je n'ai pas reposé la chaîne tailcat moi-même. Phase acceptée. Deux
+choses à retenir : l'unité systemd d'un agent de spike ne doit jamais recevoir `--agent` sans
+`CORRESPONDANCE_AGENT_HOME` cohérent, et un agent ne pilote pas l'écran pendant que le
+propriétaire travaille dessus.
