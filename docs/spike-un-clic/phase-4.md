@@ -597,3 +597,20 @@ bash infra/relais/uninstall.sh --prefix ~/.correspondance-unclic
 ssh nuc 'bash /tmp/uninstall.sh --prefix $HOME/unclic'
 rm -rf ~/.correspondance-agent-unclic /tmp/p4 /tmp/correspondance-cc.unclic.log
 ```
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : `swift test` (773 sans drapeau, 778 avec, 14 tests de la couche `#admins` sur les
+sorties réelles), `install-plan.sh` conforme ; l'installeur à quatre ponts depuis un préfixe
+vide sur le Mac (13 s, six sha256 vérifiés, `@instagrambot` et `@messengerbot` répondent
+« Hello, I'm a … bridge bot », 179 Mo de RSS au démarrage pour cinq processus) et sur le NUC
+(31 s, « connecté comme @essai », ~330 Mo au démarrage — même écart démarrage/repos que les
+phases précédentes ; les deux bots Meta y ont répondu lors de la phase, ma relecture par
+filtre n'a pas capté leur ligne et je m'en remets au rapport § 2 pour ce point). Retrait
+complet des deux côtés, `correspondance-cc` et `-hermes` toujours actifs, 36 conteneurs
+inchangés, aucun orphelin. Capture `phase-4-cc-actif.png` : cc actif sur le Relais du spike
+avec le moteur claude. Phase acceptée. À retenir pour la phase 5 : les portails sont posés
+chiffrés et cc n'a pas de machine crypto — il est sourd, sans un mot, dans une note à soi
+chiffrée.
