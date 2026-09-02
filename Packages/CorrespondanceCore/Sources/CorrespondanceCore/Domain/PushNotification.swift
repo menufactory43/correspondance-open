@@ -39,6 +39,10 @@ public enum PushNotification {
   /// Tailscale coupé, trente secondes écoulées. On ne ment pas, on ne devine pas.
   public static let fallbackTitle = "Correspondance"
   public static let fallbackBody = "Nouveau message"
+  /// Le Relais a répondu, mais la clé manque à cet appareil. Ce n'est pas la
+  /// même panne qu'un Relais injoignable, et le dire évite de chercher au
+  /// mauvais endroit.
+  public static let messageChiffreNonLu = "Message chiffré — ouvre Correspondance pour le lire"
 
   /// Ce qu'on montre : « Alice · WhatsApp » en titre, le message en dessous.
   ///
@@ -104,11 +108,33 @@ public enum PushNotification {
     _ reference: EventReference,
     using client: MatrixClient
   ) async -> Presentation {
-    guard let event = try? await client.roomEvent(
+    guard let brut = try? await client.roomEvent(
       roomID: reference.roomID,
       eventID: reference.eventID
     ) else {
       return presentation(senderName: nil, conversationTitle: nil, network: nil, text: nil)
+    }
+
+    // Le push ne porte qu'un identifiant ; ce que le Relais rend peut être un
+    // `m.room.encrypted`. On le déchiffre ici, avec le magasin de clés partagé
+    // par le conteneur d'App Group — c'est le seul endroit où l'extension et
+    // l'app se rejoignent.
+    let event: MatrixJSON
+    if brut.string(at: "type") == "m.room.encrypted" {
+      guard let clair = await client.dechiffrerEvenement(brut, salon: reference.roomID) else {
+        // **On le dit.** Un « Nouveau message » générique laisserait croire à
+        // un Relais injoignable ; ici le Relais a répondu, c'est la clé qui
+        // manque, et la seule chose à faire est d'ouvrir l'app.
+        let nom = await senderName(brut.string(at: "sender"), roomID: reference.roomID, client: client)
+        let titre = await roomName(reference.roomID, client: client)
+        let reseau = await network(ofRoom: reference.roomID, client: client)
+        return presentation(
+          senderName: nom, conversationTitle: titre, network: reseau,
+          text: messageChiffreNonLu)
+      }
+      event = clair
+    } else {
+      event = brut
     }
 
     var text = event.string(at: "content.body") ?? ""

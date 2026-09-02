@@ -95,6 +95,19 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     for reference: PushNotification.EventReference,
     credentials: MatrixCredentials
   ) async -> PushNotification.Presentation {
-    await PushNotification.resolve(reference, using: MatrixClient(credentials: credentials))
+    let client = MatrixClient(credentials: credentials)
+    // **La machine crypto, sur le magasin partagé.** L'extension est un autre
+    // processus : elle n'a ni `/sync` ni modèle, et le magasin de clés de l'app
+    // ne lui est visible que par le conteneur d'App Group
+    // (`CorrespondanceHome.sharedDirectory`). Sans le groupe, ce branchement
+    // échoue proprement et le déchiffrement rendra le repli « message
+    // chiffré » — ce qui est la vérité, pas un silence.
+    //
+    // Le magasin est un SQLite ouvert par deux processus. Le WAL de SQLite le
+    // supporte (verrous de fichier), mais deux écritures concurrentes se
+    // bloquent : l'extension ne fait que **lire** des clés, jamais d'envoi,
+    // c'est ce qui rend la cohabitation tenable.
+    await MatrixChiffrement.brancher(sur: client)
+    return await PushNotification.resolve(reference, using: client)
   }
 }

@@ -185,6 +185,30 @@ extension MatrixClient {
     }
   }
 
+  /// Déchiffre un `m.room.encrypted` isolé — celui qu'un push nomme, par
+  /// exemple. Rend le clair, ou `nil` si la clé manque (ce qui doit se dire,
+  /// pas se taire).
+  ///
+  /// Séparé du tour de `/sync` parce que l'extension de notification n'a pas de
+  /// `/sync` : elle vit trente secondes, va chercher **un** événement et doit
+  /// le lire.
+  public func dechiffrerEvenement(_ evenement: MatrixJSON, salon: String) async -> MatrixJSON? {
+    guard let moteur = cryptoEngine else { return nil }
+    guard evenement.string(at: "type") == "m.room.encrypted" else { return evenement }
+    guard let brut = try? JSONEncoder().encode(evenement),
+          let texte = String(data: brut, encoding: .utf8),
+          let clair = try? await moteur.dechiffrer(evenementJSON: texte, salon: salon),
+          let json = try? JSONDecoder().decode(MatrixJSON.self, from: Data(clair.utf8))
+    else { return nil }
+    // Le clair de la machine n'a ni expéditeur ni horodatage : ils font foi
+    // côté serveur, et c'est l'enveloppe qui les portait.
+    var champs = json.objectValue ?? [:]
+    for cle in ["sender", "event_id", "origin_server_ts", "room_id"] {
+      if champs[cle] == nil, let valeur = evenement[cle] { champs[cle] = valeur }
+    }
+    return .object(champs)
+  }
+
   // MARK: Le tour de chiffrement d'un /sync
 
   /// Absorbe la part chiffrement d'une réponse `/sync`, puis rend la réponse

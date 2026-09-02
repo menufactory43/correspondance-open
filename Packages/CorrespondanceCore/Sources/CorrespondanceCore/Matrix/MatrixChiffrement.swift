@@ -54,16 +54,22 @@ public enum MatrixChiffrement {
     disponible && ProcessInfo.processInfo.environment[variable] == "0"
   }
 
-  /// Où le magasin de clés vit : **dans le dossier de données de l'app**, donc
-  /// déplacé d'un bloc par `CORRESPONDANCE_HOME` — un essai ne mélange jamais
-  /// ses clés avec celles des vraies conversations.
+  /// Où le magasin de clés vit : **dans le conteneur partagé** quand l'App
+  /// Group existe, dans le dossier de l'app sinon. C'est ce qui permettra à
+  /// l'extension de notification de déchiffrer le message qu'un push annonce —
+  /// elle ne reçoit que l'identifiant de l'événement, et le magasin de l'app
+  /// lui est invisible depuis son propre bac à sable.
+  ///
+  /// Déplacé d'un bloc par `CORRESPONDANCE_HOME` dans les deux cas : un essai
+  /// ne mélange jamais ses clés avec celles des vraies conversations.
   public static func dossier(userID: String, deviceID: String) -> URL {
     #if canImport(CorrespondanceMatrixCrypto)
       return RustCryptoEngine.dossierParDefaut(
-        base: CorrespondanceHome.directory(), userID: userID, deviceID: deviceID
+        base: CorrespondanceHome.sharedDirectory(), userID: userID, deviceID: deviceID
       )
     #else
-      return CorrespondanceHome.directory().appendingPathComponent("crypto", isDirectory: true)
+      return CorrespondanceHome.sharedDirectory().appendingPathComponent(
+        "crypto", isDirectory: true)
     #endif
   }
 
