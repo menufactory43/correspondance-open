@@ -581,3 +581,18 @@ ssh -N -L 8010:127.0.0.1:8010 nuc &                         # puis coller le cod
 ssh nuc 'systemctl --user restart correspondance-relais'
 ssh nuc 'bash /tmp/uninstall.sh --prefix $HOME/unclic'
 ```
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : `tests/install-plan.sh` (conforme), puis l'installation depuis un préfixe vide sur le
+Mac (9 s, Continuwuity et libolm servis par `~/unclic-publication`, ponts depuis GitHub),
+`launchctl kickstart -k` → 200 en deux secondes, 116 Mo de RSS au démarrage ; puis sur le NUC
+depuis `~/unclic` vide (23 s, trois sha256 vérifiés, Tailscale absent dit franchement),
+`systemctl --user restart` → 200, ~230 Mo de RSS au démarrage (130 Mo au repos dans le
+rapport : même écart démarrage/repos qu'en phase 1). Retrait complet des deux côtés ; les
+unités `correspondance-cc` et `-hermes` et les 36 conteneurs du NUC n'ont pas bougé. Les six
+mots sont dérivés de l'adresse, du serveur et du compte, comme dans `infra/matrix/pair.sh` :
+identiques d'une installation à l'autre sous le même nom, c'est le dessin existant, pas un
+défaut du spike. Phase acceptée.
