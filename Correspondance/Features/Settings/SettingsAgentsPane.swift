@@ -78,6 +78,11 @@ struct SettingsAgentsPane: View {
         .foregroundStyle(themes.theme.inkTertiary)
     }
     .task { await recharger() }
+    // On installe un moteur dans un terminal, on revient : la carte doit le
+    // voir sans qu'on ferme et rouvre les réglages.
+    .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+      Task { await rescannerLesMoteurs() }
+    }
   }
 
   // MARK: - Un agent
@@ -275,6 +280,17 @@ struct SettingsAgentsPane: View {
         + "disque, console avec son moteur, processus enfant, et invitation dans ta note à soi. "
         + "Un moteur absent affiche ce qu'il faut taper — pas un bouton qui mentirait."
     ) {
+      SettingsRow(
+        label: "Ce que ce Mac sait lancer",
+        detail: "Scanné à l'ouverture de cet écran et à chaque retour dans l'app. "
+          + "Tu viens d'installer un moteur dans un terminal ? Rafraîchis.",
+        systemImage: "magnifyingglass"
+      ) {
+        if isLoading { ProgressView().controlSize(.small) } else {
+          Button("Rafraîchir") { Task { await rescannerLesMoteurs() } }
+        }
+      }
+
       ForEach(moteurs) { trouve in
         SettingsRow(
           label: trouve.entry.labelFR,
@@ -419,6 +435,12 @@ struct SettingsAgentsPane: View {
     peutProvisionner = await store.canProvisionAgents()
     // Le scan touche le disque et lance des `--version` : hors de l'acteur
     // principal, sinon l'écran se fige le temps qu'un moteur réponde.
+    moteurs = await Task.detached { EngineCatalog.scan() }.value
+  }
+
+  /// Le scan seul, sans repasser par le Relais : c'est le disque de ce Mac
+  /// qui a changé, pas l'annuaire.
+  private func rescannerLesMoteurs() async {
     moteurs = await Task.detached { EngineCatalog.scan() }.value
   }
 

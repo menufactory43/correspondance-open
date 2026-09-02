@@ -200,7 +200,7 @@ enum EngineCatalog {
   static func scan(
     entries liste: [Entry] = entries,
     which: (String) -> String? = Self.trouver,
-    version: (String) -> String? = { Self.versionDe($0) }
+    version: (String) -> String? = { Self.versionDepuisPackageJSON($0) ?? Self.versionDe($0) }
   ) -> [Finding] {
     liste.map { entry in
       let path = which(entry.acpCommand ?? entry.id)
@@ -220,6 +220,40 @@ enum EngineCatalog {
       if manager.isExecutableFile(atPath: candidate) { return candidate }
     }
     return nil
+  }
+
+  /// La version d'un paquet npm, lue dans son `package.json` : `npm install -g`
+  /// pose un lien `/opt/homebrew/bin/claude-code-acp` vers
+  /// `…/node_modules/@zed-industries/claude-code-acp/dist/index.js`, et le
+  /// `package.json` est un ou deux dossiers au-dessus.
+  ///
+  /// Pourquoi ne pas se contenter de `--version` : un adaptateur ACP est un
+  /// serveur JSON-RPC sur stdin — `claude-code-acp --version` ne répond rien
+  /// et attend. On le tuait après cinq secondes et on concluait « version
+  /// inconnue », donc « pas prêt » — avec le bon paquet installé à la bonne
+  /// version. Le fichier sur le disque est une meilleure preuve qu'un
+  /// processus muet.
+  static func versionDepuisPackageJSON(_ path: String, maxNiveaux: Int = 4) -> String? {
+    let resolu = URL(fileURLWithPath: path).resolvingSymlinksInPath()
+    var dossier = resolu.deletingLastPathComponent()
+    for _ in 0..<maxNiveaux {
+      let candidat = dossier.appendingPathComponent("package.json")
+      if let data = try? Data(contentsOf: candidat), let version = versionDansPackageJSON(data) {
+        return version
+      }
+      let parent = dossier.deletingLastPathComponent()
+      if parent.path == dossier.path { break }
+      dossier = parent
+    }
+    return nil
+  }
+
+  /// Le champ `version` d'un `package.json`. Pure, donc éprouvée.
+  static func versionDansPackageJSON(_ data: Data) -> String? {
+    guard let objet = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let version = objet["version"] as? String, !version.isEmpty
+    else { return nil }
+    return version
   }
 
   /// `<binaire> --version`, borné : un moteur qui ne répond pas ne doit pas

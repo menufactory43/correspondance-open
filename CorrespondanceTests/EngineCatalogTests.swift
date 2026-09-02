@@ -68,6 +68,45 @@ final class EngineCatalogTests: XCTestCase {
     XCTAssertFalse(etat.estPret)
   }
 
+  /// Le cas vu en vrai : `npm install -g @zed-industries/claude-code-acp@0.16.2`
+  /// pose un lien dans `bin/` vers `dist/index.js`, et l'adaptateur ne répond
+  /// rien à `--version`. La version se lit dans le `package.json` du paquet.
+  func testLaVersionDUnPaquetNpmSeLitDansSonPackageJSON() throws {
+    let racine = FileManager.default.temporaryDirectory
+      .appendingPathComponent("catalogue-\(UUID().uuidString)")
+    let paquet = racine.appendingPathComponent("lib/node_modules/@zed-industries/claude-code-acp")
+    let dist = paquet.appendingPathComponent("dist")
+    try FileManager.default.createDirectory(at: dist, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: racine.appendingPathComponent("bin"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: racine) }
+
+    try Data("#!/usr/bin/env node\n".utf8).write(to: dist.appendingPathComponent("index.js"))
+    try Data(#"{"name":"@zed-industries/claude-code-acp","version":"0.16.2"}"#.utf8)
+      .write(to: paquet.appendingPathComponent("package.json"))
+    let lien = racine.appendingPathComponent("bin/claude-code-acp")
+    try FileManager.default.createSymbolicLink(
+      atPath: lien.path, withDestinationPath: "../lib/node_modules/@zed-industries/claude-code-acp/dist/index.js"
+    )
+
+    XCTAssertEqual(EngineCatalog.versionDepuisPackageJSON(lien.path), "0.16.2")
+
+    let acp = try entree("claude-code-acp")
+    let etat = EngineCatalog.decide(
+      entry: acp, path: lien.path, version: EngineCatalog.versionDepuisPackageJSON(lien.path)
+    )
+    XCTAssertTrue(etat.estPret, etat.labelFR)
+  }
+
+  func testUnBinaireNatifSansPackageJSONNeDitRien() {
+    XCTAssertNil(EngineCatalog.versionDepuisPackageJSON("/bin/ls"))
+  }
+
+  func testLaVersionDansUnPackageJSON() {
+    XCTAssertEqual(EngineCatalog.versionDansPackageJSON(Data(#"{"version":"1.2.3"}"#.utf8)), "1.2.3")
+    XCTAssertNil(EngineCatalog.versionDansPackageJSON(Data(#"{"name":"x"}"#.utf8)))
+    XCTAssertNil(EngineCatalog.versionDansPackageJSON(Data("pas du json".utf8)))
+  }
+
   func testLeNumeroDeVersionSeLitDansUneLigneQuelconque() {
     XCTAssertEqual(EngineCatalog.numeroDeVersion("claude-code-acp 0.16.2"), "0.16.2")
     XCTAssertEqual(EngineCatalog.numeroDeVersion("goose 1.9.0 (build 42)"), "1.9.0")
