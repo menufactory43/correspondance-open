@@ -129,6 +129,21 @@ public struct AgentConfig: Codable, Sendable, Equatable {
 
     public init() {}
 
+    /// Les arguments qui font d'une CLI un serveur ACP. Un adaptateur dédié
+    /// (`claude-code-acp`, `codex-acp`) n'en a pas ; une CLI complète en a un
+    /// (`goose acp`, `gemini --acp`, `grok agent stdio`), et sans lui elle
+    /// ouvre son interface interactive et attend un clavier. Éprouvé le
+    /// 2 septembre 2026 (`docs/SPIKE-acp.md`).
+    public static func defaultArguments(for command: String) -> [String] {
+      switch command {
+      case "goose": ["acp"]
+      case "gemini": ["--acp"]
+      case "grok": ["agent", "stdio"]
+      case "opencode": ["acp"]
+      default: []
+      }
+    }
+
     /// Le mode à poser, parmi ceux que ce moteur annonce.
     public func resolvedMode(available: [String]) -> String? {
       guard !available.isEmpty else { return permissionModes.first }

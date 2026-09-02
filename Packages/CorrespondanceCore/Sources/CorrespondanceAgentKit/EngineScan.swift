@@ -129,8 +129,9 @@ public struct EngineScan: Sendable, Equatable {
     "claude": "npm install -g @anthropic-ai/claude-code, puis `claude` une fois pour ouvrir la session.",
     "hermes": "l'installeur d'Hermes pose son binaire dans ~/.local/bin.",
     "claude-code-acp": "npm install -g @zed-industries/claude-code-acp",
-    "codex-acp": "npm install -g @zed-industries/codex-acp",
+    "codex-acp": "npm install -g @agentclientprotocol/codex-acp, puis `codex login` une fois (compte ChatGPT).",
     "goose": "brew install block-goose-cli",
+    "grok": "curl -fsSL https://x.ai/cli/install.sh | bash, puis `grok login` une fois (SuperGrok ou X Premium).",
   ]
 
   public func isPresent(_ backend: AgentConfig.Backend) -> Bool {

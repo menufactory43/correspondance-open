@@ -107,6 +107,15 @@ final class EngineCatalogTests: XCTestCase {
     XCTAssertNil(EngineCatalog.versionDansPackageJSON(Data("pas du json".utf8)))
   }
 
+  /// Une CLI complète ne parle ACP qu'avec ses arguments : sans eux, elle
+  /// ouvre son interface et l'agent attendrait un JSON qui ne vient jamais.
+  func testLesCLICompletesPortentLeursArgumentsACP() throws {
+    XCTAssertEqual(try entree("grok").acpArguments, ["agent", "stdio"])
+    XCTAssertEqual(try entree("goose").acpArguments, ["acp"])
+    XCTAssertEqual(try entree("codex-acp").acpArguments, [])
+    XCTAssertEqual(try entree("claude-code-acp").acpArguments, [])
+  }
+
   func testLeNumeroDeVersionSeLitDansUneLigneQuelconque() {
     XCTAssertEqual(EngineCatalog.numeroDeVersion("claude-code-acp 0.16.2"), "0.16.2")
     XCTAssertEqual(EngineCatalog.numeroDeVersion("goose 1.9.0 (build 42)"), "1.9.0")

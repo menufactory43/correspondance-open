@@ -112,5 +112,38 @@ final class AgentRemoteConfigTests: XCTestCase {
     let apres = fichier.applying(remote)
     XCTAssertEqual(apres.backend, .acp)
     XCTAssertEqual(apres.acp.command, "goose")
+    // `goose` seul ouvre son interface : l'agent sait qu'il faut `goose acp`.
+    XCTAssertEqual(apres.acp.arguments, ["acp"])
+  }
+
+  /// Vu en vrai : `grok` seul attend un clavier, `grok agent stdio` parle ACP.
+  /// Ce que l'app dit gagne ; sinon ce que l'agent sait de la commande.
+  func testLesArgumentsDeLAdaptateurSuiventLaCommande() {
+    var remote = AgentRemoteConfig(agent: "grok")
+    remote.backend = .acp
+    remote.acpCommand = "grok"
+    XCTAssertEqual(fichier.applying(remote).acp.arguments, ["agent", "stdio"])
+
+    remote.acpArguments = ["agent", "stdio", "--verbose"]
+    XCTAssertEqual(fichier.applying(remote).acp.arguments, ["agent", "stdio", "--verbose"])
+
+    // Un adaptateur dédié n'a pas d'arguments, et un ancien `goose acp` du
+    // fichier ne doit pas coller à la nouvelle commande.
+    var config = fichier
+    config.acp.arguments = ["acp"]
+    remote.acpCommand = "codex-acp"
+    remote.acpArguments = nil
+    XCTAssertEqual(config.applying(remote).acp.arguments, [])
+  }
+
+  func testLesArgumentsFontLAllerRetourParLEvent() {
+    var config = fichier
+    config.backend = .acp
+    config.acp.command = "grok"
+    config.acp.arguments = ["agent", "stdio"]
+    let remote = config.remoteConfig()
+    XCTAssertEqual(remote.acpArguments, ["agent", "stdio"])
+    let relu = AgentRemoteConfig(content: remote.content())
+    XCTAssertEqual(relu?.acpArguments, ["agent", "stdio"])
   }
 }

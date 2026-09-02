@@ -101,6 +101,42 @@ Deux lectures, et la seconde compte plus que la première :
 
 Reproduire : `node tools/acp-spike/mesure.mjs` et `mesure2.mjs`.
 
+## Les autres moteurs, sur l'abonnement — éprouvé le 2 septembre 2026
+
+Même harnais (`tools/acp-spike/drive.mjs`), même question (« réponds PONG »), ce Mac, les
+CLI déjà connectées par leur propre `login`, aucune clé d'API dans l'environnement.
+
+| Moteur | Commande | Parle ACP ? | S'authentifie par… | Le tour |
+|---|---|---|---|---|
+| Codex | `codex-acp` (`@agentclientprotocol/codex-acp` 1.8.0) | ✅ `initialize`, `session/new` (modèles GPT-5.6) | le compte ChatGPT de `codex login`, sans clé | ✗ « You've hit your usage limit. Upgrade to Plus » — c'est le compte, pas le protocole |
+| Grok Build | `grok agent stdio` (`grok` 1.0.13) | ✅ `session/new` (grok-4.6) | le compte de `grok login` (SuperGrok / X Premium), sans clé | ✗ `402 Grok Build usage balance exhausted` — le compte, pas le protocole |
+| Gemini CLI | `gemini --acp` (0.55.1) | ✅ `initialize` | Google (`oauth-personal`) | ✗ `session/new` : « This client is no longer supported for Gemini Code Assist for individuals. Please migrate to Antigravity » |
+| OpenCode | `opencode acp` (1.18.23) | ✅ | son propre compte | ✅ PONG — mais sur `opencode/big-pickle`, son modèle gratuit, pas un abonnement |
+
+Ce que ça décide :
+
+- **Codex et Grok entrent au catalogue.** Le protocole marche et l'authentification est bien
+  celle de l'abonnement. Que les deux tours aient échoué sur un quota épuisé est une preuve
+  de plus : c'est le compte de la CLI qui paie, pas une clé.
+- **Gemini n'entre pas.** Google a fermé Gemini CLI aux comptes personnels au profit
+  d'Antigravity ; sans abonnement qui passe, pas d'entrée. À re-tester si Antigravity expose
+  un ACP.
+- **OpenCode n'entre pas non plus, pour l'instant.** Il répond, mais sur son modèle maison :
+  ce n'est pas « ton abonnement », c'est le sien.
+- **Une CLI complète a besoin de ses arguments.** `goose`, `gemini`, `grok` seuls ouvrent
+  une interface et attendent un clavier ; c'est `goose acp`, `gemini --acp`,
+  `grok agent stdio` qui parlent ACP. La console transporte désormais `acpArguments`, et
+  l'agent connaît ceux des commandes du catalogue quand l'app ne dit rien
+  (`ACPSettings.defaultArguments`).
+- **`@zed-industries/claude-code-acp` est renommé** `@agentclientprotocol/claude-agent-acp`
+  (avertissement npm à l'installation). L'épingle 0.16.2 reste : le paquet renommé démarre
+  en mode `auto` (voir le piège 1), et rien ne presse tant que l'ancien s'installe.
+
+Non éprouvé : le régime de permission de `codex-acp` et de `grok` (leurs modes, ce qu'ils
+font au défaut). Avec la décision « pleine permission » du plan ça pèse moins, mais un
+premier tour réel se lit dans la console avant d'inviter l'un ou l'autre ailleurs que dans
+une note à soi.
+
 ## Ce qui reste à éprouver
 
 - **Sur Linux, en service** : `npx` suppose Node sur l'hôte. Il faudra épingler une version

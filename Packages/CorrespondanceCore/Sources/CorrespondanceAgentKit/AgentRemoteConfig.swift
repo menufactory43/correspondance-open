@@ -37,6 +37,9 @@ public struct AgentRemoteConfig: Sendable, Equatable {
   public var rooms: [String: AgentConfig.RoomBinding]?
   /// La commande de l'adaptateur ACP, quand le moteur est `acp`.
   public var acpCommand: String?
+  /// Ses arguments. `nil` : l'app n'a rien dit, et l'agent prend ceux qu'il
+  /// connaît pour cette commande (`ACPSettings.defaultArguments`).
+  public var acpArguments: [String]?
   /// Les autres agents du Relais (MXID). Renseigné par l'app quand plusieurs
   /// agents partagent un salon : c'est ce qui arme la mention obligatoire et la
   /// non-relance mutuelle (`Atelier`).
@@ -67,6 +70,7 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     model = content[AgentWire.ConfigKey.model]?.stringValue
     systemPrompt = content[AgentWire.ConfigKey.systemPrompt]?.stringValue
     acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
+    acpArguments = content[AgentWire.ConfigKey.acpArguments]?.arrayValue?.compactMap(\.stringValue)
     peers = content[AgentWire.ConfigKey.peers]?.arrayValue?.compactMap(\.stringValue)
     if let object = content[AgentWire.ConfigKey.rooms]?.objectValue {
       rooms = object.reduce(into: [String: AgentConfig.RoomBinding]()) { result, entry in
@@ -93,6 +97,7 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     if let model { fields[AgentWire.ConfigKey.model] = .string(model) }
     if let systemPrompt { fields[AgentWire.ConfigKey.systemPrompt] = .string(systemPrompt) }
     if let acpCommand { fields[AgentWire.ConfigKey.acpCommand] = .string(acpCommand) }
+    if let acpArguments { fields[AgentWire.ConfigKey.acpArguments] = .array(acpArguments.map(MatrixJSON.string)) }
     if let peers { fields[AgentWire.ConfigKey.peers] = .array(peers.map(MatrixJSON.string)) }
     if let rooms {
       fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
@@ -135,6 +140,10 @@ extension AgentConfig {
     if let peers = remote.peers { config.peers = peers }
     if let command = remote.acpCommand, !command.isEmpty {
       config.acp.command = command
+      // Les arguments suivent la commande : sans eux, `goose` ouvre son
+      // interface et `grok` la sienne, et aucun des deux ne parle ACP. Ce que
+      // l'app a dit gagne ; sinon ce que l'agent sait de cette commande.
+      config.acp.arguments = remote.acpArguments ?? AgentConfig.ACPSettings.defaultArguments(for: command)
     }
     return config
   }
@@ -150,7 +159,10 @@ extension AgentConfig {
     remote.backend = backend
     remote.toolPreset = Presets.name(of: claude.allowedTools)
     remote.rooms = rooms
-    if backend == .acp { remote.acpCommand = acp.command }
+    if backend == .acp {
+      remote.acpCommand = acp.command
+      remote.acpArguments = acp.arguments
+    }
     return remote
   }
 }

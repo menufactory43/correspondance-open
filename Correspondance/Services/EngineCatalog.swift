@@ -54,6 +54,9 @@ enum EngineCatalog {
     var backend: Backend
     /// Pour un backend `acp`, la commande de l'adaptateur (`acpCommand`).
     var acpCommand: String?
+    /// Ses arguments : `grok agent stdio`, `goose acp`. Un adaptateur dédié
+    /// n'en a pas ; une CLI complète, sans eux, ouvre son interface et attend.
+    var acpArguments: [String] = []
     /// Le nom d'agent proposé quand on l'active. Modifiable dans l'écran :
     /// c'est une proposition, pas une contrainte.
     var nomAgentPropose: String
@@ -135,13 +138,29 @@ enum EngineCatalog {
       indiceInstallation: "npm install -g @zed-industries/claude-code-acp@\(acpVersionEpinglee)",
       versionEpinglee: acpVersionEpinglee
     ),
+    // Éprouvé le 2 septembre 2026 : `codex-acp` 1.8.0 parle ACP sur le compte
+    // ChatGPT de `codex login`, sans clé (cf. `docs/SPIKE-acp.md`).
     Entry(
       id: "codex-acp",
       labelFR: "Codex (ACP)",
       backend: .acp,
       acpCommand: "codex-acp",
       nomAgentPropose: "codex",
-      indiceInstallation: "npm install -g @zed-industries/codex-acp",
+      indiceInstallation: "npm install -g @agentclientprotocol/codex-acp, puis `codex login` une fois "
+        + "— le compte ChatGPT, jamais de clé.",
+      versionEpinglee: nil
+    ),
+    // Éprouvé le même jour : `grok agent stdio` parle ACP sur le compte de
+    // `grok login` (SuperGrok ou X Premium), sans clé.
+    Entry(
+      id: "grok",
+      labelFR: "Grok Build (ACP)",
+      backend: .acp,
+      acpCommand: "grok",
+      acpArguments: ["agent", "stdio"],
+      nomAgentPropose: "grok",
+      indiceInstallation: "curl -fsSL https://x.ai/cli/install.sh | bash, puis `grok login` une fois "
+        + "— l'abonnement SuperGrok ou X Premium, jamais de clé.",
       versionEpinglee: nil
     ),
     Entry(
@@ -149,10 +168,15 @@ enum EngineCatalog {
       labelFR: "Goose (ACP)",
       backend: .acp,
       acpCommand: "goose",
+      acpArguments: ["acp"],
       nomAgentPropose: "goose",
       indiceInstallation: "brew install block-goose-cli — puis `goose acp` sert d'adaptateur.",
       versionEpinglee: nil
     ),
+    // Pas de Gemini : le 2 septembre 2026, `gemini --acp` connecté à un compte
+    // Google personnel répond « This client is no longer supported for Gemini
+    // Code Assist for individuals » et renvoie vers Antigravity. Sans
+    // abonnement qui passe, pas d'entrée.
   ]
 
   // MARK: - Constater

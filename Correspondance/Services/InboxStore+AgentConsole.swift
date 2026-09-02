@@ -45,7 +45,8 @@ extension InboxStore {
   func activateAgentConsole(
     agent: String? = nil,
     backend: String? = nil,
-    acpCommand: String? = nil
+    acpCommand: String? = nil,
+    acpArguments: [String]? = nil
   ) async -> MatrixBridgeService.AgentConsole? {
     let nom = agent ?? agentName
     var config = AgentConsoleConfig(agent: nom)
@@ -57,6 +58,7 @@ extension InboxStore {
     // avec le backend `claude` de l'amorce et répondrait avec le mauvais moteur.
     config.backend = backend
     config.acpCommand = acpCommand
+    config.acpArguments = acpArguments
     do {
       _ = try await matrix.ensureAgentConsole(agent: nom, config: config)
       return await loadAgentConsole(agent: nom)
@@ -78,13 +80,14 @@ extension InboxStore {
   func activateAgentOnThisMac(
     agent: String? = nil,
     backend: String? = nil,
-    acpCommand: String? = nil
+    acpCommand: String? = nil,
+    acpArguments: [String]? = nil
   ) async -> Result<AgentLocalHost.State, Error> {
     let nom = agent ?? agentName
     do {
       let bootstrap = try await matrix.provisionAgent(named: nom)
       let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: nom)
-      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand)
+      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments)
       await inviteAgentToSelfNote(agent: nom)
       return .success(state)
     } catch {
@@ -120,14 +123,15 @@ extension InboxStore {
   func remoteAgentToken(
     agent: String? = nil,
     backend: String? = nil,
-    acpCommand: String? = nil
+    acpCommand: String? = nil,
+    acpArguments: [String]? = nil
   ) async -> Result<AgentBootstrapToken, Error> {
     let nom = agent ?? agentName
     do {
       let bootstrap = try await matrix.provisionAgent(named: nom)
       // La console est ouverte au passage : l'agent distant y trouvera sa
       // configuration dès qu'il se connectera.
-      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand)
+      await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments)
       return .success(AgentBootstrapToken(bootstrap: bootstrap))
     } catch {
       Self.relayLog.error("jeton d'amorce impossible : \(error.localizedDescription, privacy: .public)")

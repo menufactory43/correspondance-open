@@ -46,6 +46,10 @@ public enum AgentWire {
     public static let systemPrompt = "systemPrompt"
     public static let rooms = "rooms"
     public static let acpCommand = "acpCommand"
+    /// Les arguments de l'adaptateur : `gemini --acp`, `grok agent stdio`,
+    /// `goose acp` — le binaire seul ouvre une interface interactive, pas un
+    /// serveur ACP. Absent : l'agent applique ce qu'il sait de la commande.
+    public static let acpArguments = "acpArguments"
     /// Les autres agents du Relais, par leur MXID. C'est ce qui fait d'un salon
     /// un **atelier** : la mention devient obligatoire, et un agent ne relance
     /// pas un agent.

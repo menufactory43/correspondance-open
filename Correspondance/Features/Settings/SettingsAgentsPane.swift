@@ -394,7 +394,8 @@ struct SettingsAgentsPane: View {
                       agent: nomLibre(base: entree?.nomAgentPropose ?? moteur),
                       cle: cle,
                       backend: entree?.backend.rawValue,
-                      acpCommand: entree?.acpCommand
+                      acpCommand: entree?.acpCommand,
+                      acpArguments: entree?.acpArguments
                     )
                   }
                 }
@@ -453,12 +454,15 @@ struct SettingsAgentsPane: View {
     }
     enCours = trouve.entry.id
     defer { enCours = nil }
-    await activer(agent: nom, backend: trouve.entry.backend.rawValue, acpCommand: trouve.entry.acpCommand)
+    await activer(
+      agent: nom, backend: trouve.entry.backend.rawValue,
+      acpCommand: trouve.entry.acpCommand, acpArguments: trouve.entry.acpArguments
+    )
   }
 
-  private func activer(agent: String, backend: String?, acpCommand: String?) async {
+  private func activer(agent: String, backend: String?, acpCommand: String?, acpArguments: [String]? = nil) async {
     erreur = nil
-    switch await store.activateAgentOnThisMac(agent: agent, backend: backend, acpCommand: acpCommand) {
+    switch await store.activateAgentOnThisMac(agent: agent, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments) {
     case .success:
       // On n'affiche pas l'état rendu par l'installation : il ne connaît pas
       // le status de l'agent, qui n'a pas encore eu le temps de parler. On
@@ -475,11 +479,13 @@ struct SettingsAgentsPane: View {
     }
   }
 
-  private func preparerCommande(agent: String, cle: String, backend: String?, acpCommand: String?) async {
+  private func preparerCommande(
+    agent: String, cle: String, backend: String?, acpCommand: String?, acpArguments: [String]? = nil
+  ) async {
     enCours = cle
     defer { enCours = nil }
     erreur = nil
-    switch await store.remoteAgentToken(agent: agent, backend: backend, acpCommand: acpCommand) {
+    switch await store.remoteAgentToken(agent: agent, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments) {
     case .success(let jeton):
       commandes[cle] = (texte: jeton.installCommand(), expire: jeton.expiresAt)
       await recharger()
