@@ -226,6 +226,12 @@ final class TypedStreamTextTests: XCTestCase {
     XCTAssertEqual(TypedStreamText.string(in: archive("À bientôt — ça va ?")), "À bientôt — ça va ?")
   }
 
+  /// Une pièce jointe occupe le corps par U+FFFC : ce n'est pas du texte.
+  func testObjectReplacementIsNotText() {
+    XCTAssertNil(TypedStreamText.string(in: archive("\u{FFFC}")))
+    XCTAssertEqual(TypedStreamText.string(in: archive("\u{FFFC}test4")), "test4")
+  }
+
   /// Au-delà de 128 octets, la longueur passe sur deux octets préfixés de 0x81.
   func testLongStringUsesTheTwoByteLength() {
     let long = String(repeating: "é", count: 200)

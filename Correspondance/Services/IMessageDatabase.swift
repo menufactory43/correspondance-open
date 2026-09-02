@@ -66,7 +66,8 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.is_delivered, 0),
       IFNULL(m.is_read, 0),
       IFNULL(c.style, 0),
-      c.properties
+      c.properties,
+      m.attributedBody
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -78,6 +79,11 @@ struct IMessageDatabase: Sendable {
       \(hiddenClause)
       AND (
         (m.text IS NOT NULL AND m.text != '')
+        -- Messages laisse parfois `text` vide et ne garde le corps que dans
+        -- `attributedBody` (typedstream) : c'est le cas de tout ce que
+        -- l'automatisation envoie. Sans cette ligne, un texte accompagné d'une
+        -- photo n'existait plus — seule la photo restait.
+        OR (m.attributedBody IS NOT NULL AND length(m.attributedBody) > 0)
         OR EXISTS (
           SELECT 1 FROM message_attachment_join maj
           WHERE maj.message_id = m.ROWID
@@ -116,6 +122,10 @@ struct IMessageDatabase: Sendable {
       let lastRead = sqlite3_column_int(statement, 10) != 0
       let style = Int(sqlite3_column_int(statement, 11))
       let properties = blobColumn(statement, 12)
+      if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+         let body = blobColumn(statement, 13), let decoded = TypedStreamText.string(in: body) {
+        text = decoded
+      }
 
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
         // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
@@ -244,7 +254,8 @@ struct IMessageDatabase: Sendable {
       IFNULL(m.item_type, 0),
       IFNULL(m.group_action_type, 0),
       IFNULL(m.group_title, ''),
-      IFNULL(oh.id, '')
+      IFNULL(oh.id, ''),
+      m.attributedBody
     FROM message m
     JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
     JOIN chat c ON c.ROWID = cmj.chat_id
@@ -255,6 +266,10 @@ struct IMessageDatabase: Sendable {
       AND IFNULL(m.associated_message_type, 0) = 0
       AND (
         (m.text IS NOT NULL AND m.text != '')
+        -- Le corps peut n'être que dans `attributedBody` (cf. la requête des
+        -- conversations) : un « test4 » envoyé avec une capture d'écran n'a
+        -- que ça, et la bulle de texte manquait à côté de la photo.
+        OR (m.attributedBody IS NOT NULL AND length(m.attributedBody) > 0)
         OR EXISTS (
           SELECT 1 FROM message_attachment_join maj
           WHERE maj.message_id = m.ROWID
@@ -282,7 +297,10 @@ struct IMessageDatabase: Sendable {
     while sqlite3_step(statement) == SQLITE_ROW {
       let rowID = sqlite3_column_int64(statement, 0)
       let guid = stringColumn(statement, 1)
-      let text = stringColumn(statement, 2)
+      var text = stringColumn(statement, 2)
+      if text.isEmpty, let body = blobColumn(statement, 16), let decoded = TypedStreamText.string(in: body) {
+        text = decoded
+      }
       let rawDate = sqlite3_column_int64(statement, 3)
       let fromMe = sqlite3_column_int(statement, 4) != 0
       let conversationID = "imessage:\(stringColumn(statement, 5))"
@@ -344,6 +362,11 @@ struct IMessageDatabase: Sendable {
       var message = draft.message
       message.attachments = attachmentsByRow[draft.rowID] ?? []
       message.reactions = reactionsByGUID[message.id] ?? []
+      // Un `attributedBody` dont on n'a rien tiré, sans pièce jointe ni
+      // événement : rien à montrer, on ne pose pas de bulle vide.
+      if message.text.isEmpty, message.attachments.isEmpty, !message.isRetracted, !message.isSystemEvent {
+        continue
+      }
       // Un envoi annulé et un événement de groupe n'ont pas de corps : ils
       // portent leur propre libellé, on ne leur colle pas « Pièce jointe ».
       if message.text.isEmpty, !message.isRetracted, !message.isSystemEvent {

@@ -24,7 +24,13 @@ enum TypedStreamText {
           start + length <= bytes.count
     else { return nil }
 
-    return String(bytes: bytes[start..<(start + length)], encoding: .utf8)
+    guard let raw = String(bytes: bytes[start..<(start + length)], encoding: .utf8) else { return nil }
+    // Une pièce jointe occupe sa place dans le corps par U+FFFC, le caractère
+    // « objet de remplacement ». Ce n'est pas du texte : l'enlever, sinon une
+    // photo traîne une bulle vide, et l'aperçu de la liste se vide avec.
+    let text = raw.replacingOccurrences(of: "\u{FFFC}", with: "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return text.isEmpty ? nil : text
   }
 
   private static func readLength(_ bytes: [UInt8], at index: Int) -> (length: Int, next: Int)? {
