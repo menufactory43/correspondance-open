@@ -183,7 +183,7 @@ avant un DMG : les deux cartes, la notarisation, la publication, le push.
 
 ### Phase 5 — Chantier E complet (sauvegarde des clés avec phrase, vérification d'appareil,
 trois états affichés, cc et l'extension iOS sur le même client).
-### Phase 6 — Binaires publiés, les deux cartes dans l'app, installeur en mode `--json`.
+### Phase 6 — Binaires publiés, les deux cartes dans l'app, installeur en mode `--json`. **Faite** (`phase-6.md`) : les quatre ponts sont construits en goolm et libolm a quitté la pile, l'installeur a son mode `--json`, l'app pose un Relais d'un clic en 26 s sans une frappe, et `publier.sh --dry-run` montre une publication qui n'a pas été faite.
 - Décision (2 sept.) : **libolm disparaît**. libolm est abandonnée amont (2024, faiblesses
   cryptographiques) ; les binaires mautrix officiels la chargent encore. On compile nos propres
   ponts avec `-tags goolm` (Olm en Go pur, sans dépendance C), pour macOS arm64 et Linux,
