@@ -52,6 +52,9 @@ public enum RequestBatch {
     /// Ce qui n'a pas tenu dans la borne de taille — les plus anciennes. Se dit
     /// dans le journal, **jamais dans la conversation**.
     public var dropped: [AgentRequest]
+    /// Les pièces jointes des demandes retenues, dans l'ordre. Une photo perdue
+    /// dans une fusion serait invisible : le texte partirait sans elle.
+    public var attachments: [AgentAttachment] = []
   }
 
   /// Fusionne les demandes en attente d'une conversation.
@@ -61,7 +64,10 @@ public enum RequestBatch {
   public static func merge(_ requests: [AgentRequest], tailleMax: Int = RequestBatch.tailleMax) -> Batch? {
     guard let derniere = requests.last else { return nil }
     guard requests.count > 1 else {
-      return Batch(prompt: derniere.prompt, reply: derniere, count: 1, dropped: [])
+      return Batch(
+        prompt: derniere.prompt, reply: derniere, count: 1, dropped: [],
+        attachments: derniere.attachments
+      )
     }
 
     // On garde les plus **récentes** : si quelque chose doit se perdre, que ce
@@ -82,7 +88,11 @@ public enum RequestBatch {
     perdues.reverse()
 
     let corps = gardees.map { requete in
-      "De \(requete.sender) : \(requete.prompt)"
+      // Un message qui n'était qu'une photo n'a pas de texte : le dire, plutôt
+      // que d'écrire « De @meffysto :  » et de laisser le moteur deviner.
+      requete.prompt.isEmpty
+        ? "De \(requete.sender) : (une pièce jointe, sans texte)"
+        : "De \(requete.sender) : \(requete.prompt)"
     }.joined(separator: "\n\n")
 
     let prompt = """
@@ -92,6 +102,9 @@ public enum RequestBatch {
 
       \(corps)
       """
-    return Batch(prompt: prompt, reply: derniere, count: gardees.count, dropped: perdues)
+    return Batch(
+      prompt: prompt, reply: derniere, count: gardees.count, dropped: perdues,
+      attachments: gardees.flatMap(\.attachments)
+    )
   }
 }

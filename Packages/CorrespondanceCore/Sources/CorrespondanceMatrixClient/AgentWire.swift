@@ -89,6 +89,9 @@ public enum AgentWire {
     /// Dans chaque entrée de `rooms`.
     public static let roomCwd = "cwd"
     public static let roomMode = "mode"
+    /// « Faut-il m'appeler par mon nom dans ce salon ? » `false` : tout message
+    /// d'un propriétaire est une demande.
+    public static let roomMention = "mention"
   }
 
   /// Les clés de `fr.correspondance.agent.status`, au-delà du texte lisible.

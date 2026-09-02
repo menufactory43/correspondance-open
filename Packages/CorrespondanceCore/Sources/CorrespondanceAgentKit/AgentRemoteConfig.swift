@@ -76,7 +76,8 @@ public struct AgentRemoteConfig: Sendable, Equatable {
       rooms = object.reduce(into: [String: AgentConfig.RoomBinding]()) { result, entry in
         result[entry.key] = AgentConfig.RoomBinding(
           cwd: entry.value[AgentWire.ConfigKey.roomCwd]?.stringValue,
-          mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:))
+          mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:)),
+          mention: entry.value[AgentWire.ConfigKey.roomMention]?.boolValue
         )
       }
     }
@@ -104,6 +105,7 @@ public struct AgentRemoteConfig: Sendable, Equatable {
         var entry: [String: MatrixJSON] = [:]
         if let cwd = binding.cwd { entry[AgentWire.ConfigKey.roomCwd] = .string(cwd) }
         if let mode = binding.mode { entry[AgentWire.ConfigKey.roomMode] = .string(mode.rawValue) }
+        if let mention = binding.mention { entry[AgentWire.ConfigKey.roomMention] = .bool(mention) }
         return .object(entry)
       })
     }

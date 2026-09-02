@@ -252,7 +252,7 @@ public actor Agent {
             }
             guard let request = Trigger.request(
               from: event, roomID: roomID, config: live, notBefore: notBefore,
-              requiresTrigger: !teteATeteRooms.contains(roomID)
+              requiresTrigger: requiresTrigger(in: roomID)
             ) else { continue }
             dispatch(request)
           }
@@ -344,6 +344,26 @@ public actor Agent {
         members[roomID] = set
       }
     }
+  }
+
+  /// Faut-il m'appeler par mon nom dans ce salon ?
+  ///
+  /// Non dans les salons qui sont **à moi** : un tête-à-tête ouvert par l'app
+  /// (elle le marque à la création) et ma console — leur seule raison d'être est
+  /// de me parler, y taper « @cc » à chaque ligne est une friction sans objet.
+  /// Oui partout ailleurs, et ce n'est pas négociable au hasard : dans la note à
+  /// soi, où je suis invité, comme dans un fil bridgé, tout message d'un
+  /// propriétaire me réveillerait. La config peut trancher salon par salon
+  /// (`rooms.<id>.mention`), dans un sens comme dans l'autre.
+  ///
+  /// Un atelier ne passe jamais ici : plusieurs agents dans un salon, c'est la
+  /// mention obligatoire de `Atelier`, et elle protège des boucles.
+  private func requiresTrigger(in roomID: String) -> Bool {
+    MentionPolicy.requiresTrigger(
+      binding: live.rooms[roomID],
+      isTeteATete: teteATeteRooms.contains(roomID),
+      isConsole: roomID == consoleRoomID
+    )
   }
 
   /// Tête-à-tête : personne dans la room hors les propriétaires et le bot.
@@ -459,9 +479,15 @@ public actor Agent {
           event.sentAt >= notBefore
     else { return nil }
     let msgtype = event.content?.string(at: "msgtype") ?? "m.text"
-    guard msgtype == "m.text" || msgtype == "m.notice" else { return nil }
-    let body = event.content?.string(at: "m.new_content.body")
-      ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
+    let media = AgentAttachment.mediaTypes.contains(msgtype)
+    guard msgtype == "m.text" || msgtype == "m.notice" || media else { return nil }
+    let attachments = [AgentAttachment.read(from: event.content, msgtype: msgtype)].compactMap { $0 }
+    guard !media || !attachments.isEmpty else { return nil }
+    // La mention reste obligatoire en atelier : elle est donc dans la légende.
+    let body = media
+      ? AgentAttachment.caption(from: event.content, msgtype: msgtype)
+      : event.content?.string(at: "m.new_content.body")
+        ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
 
     let budget = atelierBudgets[roomID] ?? HourlyCap(limit: live.atelierBudget)
     let contexte = Atelier.Context(
@@ -490,7 +516,8 @@ public actor Agent {
       atelierBudgets[roomID] = reserve
       let prompt = Trigger.prompt(in: body, trigger: live.trigger) ?? body
       return AgentRequest(
-        roomID: roomID, eventID: eventID, sender: sender, prompt: prompt, sentAt: event.sentAt
+        roomID: roomID, eventID: eventID, sender: sender, prompt: prompt,
+        sentAt: event.sentAt, attachments: attachments
       )
     case .ignore(let raison):
       if raison != .notMentioned {
@@ -551,8 +578,11 @@ public actor Agent {
     }
 
     let startedTurn = Date()
-    let prompt = lot.prompt.isEmpty ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase." : lot.prompt
-    log("[\(request.roomID)] \(request.sender) → « \(prompt.prefix(80)) »")
+    let texte = lot.prompt.isEmpty && lot.attachments.isEmpty
+      ? "Le propriétaire t'a appelé sans rien demander. Demande-lui ce qu'il veut, en une phrase."
+      : lot.prompt
+    log("[\(request.roomID)] \(request.sender) → « \(texte.prefix(80)) »"
+      + (lot.attachments.isEmpty ? "" : " + \(lot.attachments.count) pièce(s) jointe(s)"))
 
     let typing = Task { [client] in
       while !Task.isCancelled {
@@ -615,6 +645,18 @@ public actor Agent {
       let cwd = Workspace.prepare(
         Workspace.directory(agent: live.user, roomID: request.roomID, binding: live.rooms[request.roomID]?.cwd)
       )
+      // Les pièces jointes descendent sur le disque du tour, dans le dossier de
+      // la room — jamais ailleurs : c'est le même rayon d'explosion que le
+      // reste. Le prompt ne porte que leurs chemins ; un moteur sait ouvrir un
+      // fichier, il ne sait pas suivre un `mxc://`.
+      let lignes = await AgentAttachmentDrop.drop(
+        lot.attachments,
+        eventID: request.eventID,
+        cwd: cwd,
+        download: { [client] mxc in try await client.downloadMedia(mxcURI: mxc) }
+      )
+      for ligne in lignes { log("[\(request.roomID)] pièce jointe \(ligne.dropFirst(2))") }
+      let prompt = AgentAttachmentDrop.promptSection(lignes) + texte
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session

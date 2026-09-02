@@ -15,6 +15,37 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
 | Mode relais des ponts (réponse en ton nom, le pont préfixe « 🤖 cc : ») | ✅ testé sur le chat WhatsApp « Vous » : inviter cc, `!wa set-relay`, `@cc …` → réponse relayée en ~5 s |
 | Rendu des brouillons dans Correspondance (envoyer / modifier / ignorer) | ✅ |
 | Approbations d'outils depuis la conversation (`--permission-prompt-tool`, 👍/👎) | ✅ agent + serveur MCP testés en local — pas encore éprouvé sur le NUC |
+| Photo, vocal, PDF envoyés à cc → fichiers posés dans le dossier du tour, chemins nommés dans le prompt | ✅ testé (unités) — pas encore éprouvé sur le NUC |
+| Tête-à-tête et console : parler **sans nommer** l'agent | ✅ le marqueur de l'app, la console, ou `rooms.<id>.mention` |
+
+### Pièces jointes
+
+Un agent est un utilisateur Matrix : il télécharge le média du salon avec son
+propre jeton. Ce que le tour reçoit n'est donc pas un `mxc://` — c'est un
+fichier, sous `pieces-jointes/<event>/` dans le **dossier de travail de la
+room**, jamais ailleurs (même rayon d'explosion que le reste). Le prompt
+s'ouvre sur la liste de leurs chemins.
+
+Trois cas se disent au moteur au lieu d'être tus, parce qu'un moteur qui ignore
+une photo qu'on lui montre répond à côté sans que personne ne sache pourquoi :
+une pièce **chiffrée** (`content.file` — on sait qu'elle existe, pas la lire),
+une pièce **de plus de 25 Mio**, un **téléchargement en échec**.
+
+La légende porte le déclencheur (MSC2530 : `filename` présent ⇒ `body` est la
+légende). Sans légende, une photo ne réveille l'agent que là où la mention
+n'est pas requise — sinon toute image d'un salon le réveillerait.
+
+### Faut-il dire « @cc » ?
+
+Non dans les salons qui sont à lui : un tête-à-tête ouvert par l'app (elle le
+marque `kind: agent` à la création) et sa **console**. Oui partout ailleurs —
+dans la note à soi où il est invité comme dans un fil bridgé, sans mention il
+répondrait à ce qu'on écrit à quelqu'un d'autre. Un atelier ne passe jamais par
+cette règle : plusieurs agents dans un salon, c'est la mention obligatoire de
+`Atelier`, et elle protège des boucles.
+
+La config tranche salon par salon, dans les deux sens — `rooms.<id>.mention`
+dans l'event de config de la console (`MentionPolicy`, testé).
 
 ## Garde-fous
 
@@ -302,6 +333,9 @@ Le repli est complet : sans room console, un `config.json` d'hier tourne à l'id
 3. Hôte distant assisté : binaire publié, commande à coller, jeton d'amorce.
 4. `correspondance-mcp` : l'inbox comme outil pour un agent du dehors.
 5. Ateliers (salons multi-agents) puis chiffrement — cf. `docs/PLAN-relais-agents.md`.
+6. Réponse progressive : `ACP.swift` lit déjà les `agent_message_chunk`, mais
+   `AgentBackend.run` ne rend qu'à la fin — il manque un chemin pour les
+   morceaux, et l'édition du message au fil de l'eau côté Matrix.
 
 ## Multi-moteurs
 

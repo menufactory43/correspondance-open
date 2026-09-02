@@ -6,16 +6,53 @@ public struct AgentRequest: Sendable, Equatable {
   public var roomID: String
   public var eventID: String
   public var sender: String
-  /// Le texte sans le déclencheur. Vide si le propriétaire n'a écrit que `@cc`.
+  /// Le texte sans le déclencheur. Vide si le propriétaire n'a écrit que `@cc`,
+  /// ou s'il n'a envoyé qu'une photo — une image sans légende est une demande.
   public var prompt: String
   public var sentAt: Date
+  /// Ce que le message portait en plus du texte. Téléchargé au moment du tour,
+  /// jamais ici : reconnaître une demande reste pur, et testable sans réseau.
+  public var attachments: [AgentAttachment]
 
-  public init(roomID: String, eventID: String, sender: String, prompt: String, sentAt: Date) {
+  public init(
+    roomID: String,
+    eventID: String,
+    sender: String,
+    prompt: String,
+    sentAt: Date,
+    attachments: [AgentAttachment] = []
+  ) {
     self.roomID = roomID
     self.eventID = eventID
     self.sender = sender
     self.prompt = prompt
     self.sentAt = sentAt
+    self.attachments = attachments
+  }
+}
+
+/// Faut-il nommer l'agent pour lui parler dans ce salon ?
+///
+/// Pur, parce que c'est une règle et qu'une règle se teste : la friction du
+/// « @cc » à chaque ligne n'a de sens que là où d'autres conversations
+/// existent. Dans un salon qui est *à lui* — un tête-à-tête ouvert par l'app,
+/// sa console — elle n'en a aucun.
+public enum MentionPolicy {
+  /// - `binding` : ce que la config dit de ce salon, si elle en dit quelque
+  ///   chose. Elle a le dernier mot, dans un sens comme dans l'autre.
+  /// - `isTeteATete` : le salon porte le marqueur de l'app (`kind: agent`).
+  /// - `isConsole` : c'est la console de cet agent.
+  ///
+  /// Partout ailleurs — la note à soi où l'agent est invité, un fil bridgé —
+  /// la mention reste **obligatoire** : sans elle, chaque message qu'un
+  /// propriétaire écrit à quelqu'un d'autre réveillerait l'agent.
+  public static func requiresTrigger(
+    binding: AgentConfig.RoomBinding?,
+    isTeteATete: Bool,
+    isConsole: Bool
+  ) -> Bool {
+    if let choix = binding?.mention { return choix }
+    return !isTeteATete && !isConsole
   }
 }
 
@@ -81,10 +118,18 @@ public enum Trigger {
           event.sentAt >= notBefore
     else { return nil }
     // Une modification (`m.replace`) ou une réponse citée : on lit le vrai corps.
+    // Une photo, un vocal, un PDF : le corps est la **légende** (MSC2530), et
+    // c'est là que se trouve le déclencheur. Refuser ces msgtypes revenait à
+    // ne pas se réveiller du tout — pas même pour dire qu'on ne sait pas lire.
     let msgtype = event.content?.string(at: "msgtype") ?? "m.text"
-    guard msgtype == "m.text" || msgtype == "m.notice" else { return nil }
-    let body = event.content?.string(at: "m.new_content.body")
-      ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
+    let media = AgentAttachment.mediaTypes.contains(msgtype)
+    guard msgtype == "m.text" || msgtype == "m.notice" || media else { return nil }
+    let attachments = [AgentAttachment.read(from: event.content, msgtype: msgtype)].compactMap { $0 }
+    guard !media || !attachments.isEmpty else { return nil }
+    let body = media
+      ? AgentAttachment.caption(from: event.content, msgtype: msgtype)
+      : event.content?.string(at: "m.new_content.body")
+        ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
     let prompt: String
     if let mentionne = Self.prompt(in: body, trigger: config.trigger) {
       prompt = mentionne
@@ -93,8 +138,12 @@ public enum Trigger {
     } else {
       return nil
     }
-    guard !prompt.isEmpty else { return nil }
-    return AgentRequest(roomID: roomID, eventID: eventID, sender: sender, prompt: prompt, sentAt: event.sentAt)
+    // Une pièce jointe tient lieu de demande : « regarde » est dans le geste.
+    guard !prompt.isEmpty || !attachments.isEmpty else { return nil }
+    return AgentRequest(
+      roomID: roomID, eventID: eventID, sender: sender, prompt: prompt,
+      sentAt: event.sentAt, attachments: attachments
+    )
   }
 
   /// Le repli `> <@qui> …` que les clients posent avant une réponse citée.

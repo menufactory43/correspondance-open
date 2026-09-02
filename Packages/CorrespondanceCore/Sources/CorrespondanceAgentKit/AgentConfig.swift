@@ -242,10 +242,17 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     /// Répertoire de travail de Claude pour cette room. `nil` : le répertoire par défaut.
     public var cwd: String?
     public var mode: RoomMode?
+    /// Faut-il nommer l'agent pour lui parler ici ? `nil` vaut `true` partout,
+    /// sauf là où le salon est *à lui* : un tête-à-tête marqué par l'app, sa
+    /// console. Mettre `false` sur un salon ordinaire y rend tout message d'un
+    /// propriétaire une demande — c'est un choix, pas un défaut : dans une
+    /// note à soi ou un fil bridgé, ce serait insupportable.
+    public var mention: Bool?
 
-    public init(cwd: String? = nil, mode: RoomMode? = nil) {
+    public init(cwd: String? = nil, mode: RoomMode? = nil, mention: Bool? = nil) {
       self.cwd = cwd
       self.mode = mode
+      self.mention = mention
     }
   }
 

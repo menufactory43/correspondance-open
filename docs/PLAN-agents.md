@@ -83,10 +83,10 @@ Ce qui existe : owners seuls, invitation par un propriétaire seulement, plafond
 
 L'agent est un correspondant, pas un panneau. Ce qui suit fait la différence entre « un bot » et « quelqu'un dans la conversation ».
 
-- **L'appeler** : `@cc` en autocomplétion comme un membre (fait sur iPhone), et une action « Demander à cc » sur un message (contexte = le message cité).
+- **L'appeler** : `@cc` en autocomplétion comme un membre (fait sur iPhone), et une action « Demander à cc » sur un message (contexte = le message cité). La mention elle-même n'est plus requise là où le salon est à lui — tête-à-tête marqué, console, ou `rooms.<id>.mention` (`MentionPolicy`, fait le 2 sept. 2026).
 - **Le voir travailler** : « écrit… » (fait), puis **réponse progressive** — `claude -p --output-format stream-json` permet d'éditer le message au fil de l'eau plutôt que d'attendre trente secondes de silence.
 - **Le laisser durer** : un tour long devient un *travail* — une bulle qui dit « en cours, 2 min » avec « Arrêter », un résultat qui arrive plus tard, une notification. Techniquement un event `fr.correspondance.agent.job` mis à jour par édition.
-- **Lui donner des choses** : une photo, un fichier, un vocal (transcrit) dans le prompt. Le tour reçoit les pièces jointes du message et de la citation.
+- **Lui donner des choses** : ~~une photo, un fichier, un vocal dans le prompt~~ — **fait** (2 sept. 2026) : les msgtypes média réveillent l'agent, le fichier descend dans `pieces-jointes/<event>/` du dossier de la room, le prompt nomme les chemins, et ce qui est illisible (chiffré, > 25 Mio, échec) est dit au moteur. Reste les pièces **de la citation**, et la transcription d'un vocal — `VoiceTranscriber` est du `Speech` d'Apple, indisponible sur un hôte Linux : c'est au moteur d'ouvrir l'audio.
 - **Décider pour lui** : brouillon → Envoyer/Modifier/Ignorer (fait sur Mac, à faire sur iPhone) ; carte de permission (Q5).
 - **Le régler sans aller loin** : dans la fiche du fil, « cc répond ici : à voix haute / en brouillon » et « dossier lié ».
 
