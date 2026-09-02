@@ -89,3 +89,10 @@ Six ambiances (papier / dune / clair de lune / encre de nuit / vieux bureau / ci
 - ⌘↑ / ⌘↓ conversation précédente / suivante
 - ⌘E archiver
 - ⌘R actualiser
+
+## Livrer le Mac
+
+`scripts/release-mac.sh` fabrique le DMG : archive Release arm64 avec le chiffrement,
+export Developer ID par Xcode (compte de l'équipe connecté), notarisation avec le profil
+`notarisation` du Trousseau, ticket agrafé sur l'app puis sur le DMG. `NOTARIZE=0` pour une
+build signée sans l'aller-retour Apple. Le résultat est dans `build/release/`.

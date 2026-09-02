@@ -95,6 +95,13 @@ targets:
                 --show-bin-path 2>/dev/null)/correspondance-agent
           if [ -f "$BIN" ]; then
             cp -f "$BIN" "$APP/MacOS/correspondance-agent"
+            # Signé à part, runtime durci : la notarisation refuse un exécutable
+            # imbriqué sans lui (« does not have the hardened runtime enabled »),
+            # et l'export Developer ID ne rajoute pas le drapeau qu'il n'a pas trouvé.
+            IDENTITE="${EXPANDED_CODE_SIGN_IDENTITY_NAME:-${CODE_SIGN_IDENTITY:--}}"
+            codesign --force --options runtime --timestamp=none \
+              --sign "$IDENTITE" "$APP/MacOS/correspondance-agent" 2>/dev/null \
+              || codesign --force --options runtime --sign - "$APP/MacOS/correspondance-agent"
             echo "Embedded agent: $BIN"
           else
             echo "error: binaire de l'agent introuvable ($BIN)"
