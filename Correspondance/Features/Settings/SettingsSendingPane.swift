@@ -35,6 +35,28 @@ struct SettingsSendingPane: View {
           .fixedSize()
         }
       }
+
+      SettingsCard(
+        title: "Mode incognito",
+        footnote: "Ouvrir un fil n’envoie aucun accusé de lecture — ni au Relais, ni à Messages — "
+          + "et le compteur de non-lus reste là, comme un pense-bête. "
+          + "Répondre, ou « Marquer comme lu », dit alors au réseau qu’on a lu. ⌘⇧I dans le menu Inbox."
+      ) {
+        SettingsRow(
+          label: "Lire sans le dire",
+          detail: store.isIncognito
+            ? "Personne ne voit que vous lisez."
+            : "Ouvrir un fil l’accuse lu, comme d’habitude.",
+          systemImage: "eye.slash"
+        ) {
+          Toggle("", isOn: Binding(
+            get: { store.isIncognito },
+            set: { store.isIncognito = $0 }
+          ))
+          .labelsHidden()
+          .toggleStyle(.switch)
+        }
+      }
     }
   }
 }

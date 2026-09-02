@@ -195,6 +195,13 @@ struct InboxListView: View {
       .tint(theme.inkTertiary)
     }
     .contextMenu {
+      if conversation.hasUnread {
+        Button {
+          Task { await store.markRead(conversationID: conversation.id) }
+        } label: {
+          Label("Marquer comme lu", systemImage: "envelope.open")
+        }
+      }
       reminderMenu(conversation)
       requestMenu(conversation)
     }
@@ -254,11 +261,20 @@ struct InboxListView: View {
 
   /// Le titre est un titre : il nomme la portée et ne s'ouvre pas.
   private var titleLabel: some View {
-    Text(title)
-      .font(Typography.letterHeading(typeface, 24))
-      .foregroundStyle(theme.ink)
-      .fixedSize()
-      .accessibilityAddTraits(.isHeader)
+    HStack(spacing: 8) {
+      Text(title)
+        .font(Typography.letterHeading(typeface, 24))
+        .foregroundStyle(theme.ink)
+        .fixedSize()
+        .accessibilityAddTraits(.isHeader)
+      // L'incognito se voit : un œil barré à côté du titre, tant qu'il dure.
+      if store.isIncognito {
+        Image(systemName: "eye.slash")
+          .font(.system(size: 14, weight: .medium))
+          .foregroundStyle(theme.inkTertiary)
+          .accessibilityLabel("Mode incognito actif")
+      }
+    }
   }
 
   /// Le titre nomme la portée, ou le réseau quand un seul est choisi.
@@ -363,6 +379,14 @@ struct InboxListView: View {
         Label("Archiver tout ce qui est lu…", systemImage: "archivebox")
       }
       .disabled(store.readArchivableConversations.isEmpty)
+      Divider()
+      // Comme Beeper : lire sans accusé de lecture, répondre à son rythme.
+      Toggle(isOn: Binding(
+        get: { store.isIncognito },
+        set: { store.isIncognito = $0 }
+      )) {
+        Label("Mode incognito", systemImage: "eye.slash")
+      }
       Divider()
       Button {
         isShowingSettings = true

@@ -1001,7 +1001,7 @@ final class InboxStore {
       await loadMessages(into: session)
       indexMessages(session.messages, conversationID: id)
       if session === primarySession { refreshThreadSearchMatches() }
-      if isAttended(id) { clearUnread(for: id) }
+      if isAttended(id), !isIncognito { clearUnread(for: id) }
     }
   }
 
@@ -2266,7 +2266,8 @@ final class InboxStore {
     sendLaterConfig = nil
     sendLaterPicker = nil
     pruneSessions()
-    if let id { clearUnread(for: id) }
+    // En incognito, lire n'est pas lire : le compteur reste, le réseau ne sait rien.
+    if let id, !isIncognito { clearUnread(for: id) }
     await loadMessagesForSelection()
     if let id { indexMessages(messages, conversationID: id) }
     refreshThreadSearchMatches()
@@ -2281,8 +2282,10 @@ final class InboxStore {
   }
 
   /// Le même geste pour n'importe quel fil : c'est par là que passe une fenêtre
-  /// détachée quand elle arrive au premier plan.
-  func sendReadReceipt(conversationID: String) async {
+  /// détachée quand elle arrive au premier plan. En incognito, rien ne part —
+  /// sauf si le geste est explicite (« Marquer comme lu », une réponse).
+  func sendReadReceipt(conversationID: String, force: Bool = false) async {
+    guard force || !isIncognito else { return }
     guard let conversation = conversations.first(where: { $0.id == conversationID }) else { return }
     // Ouvrir une ligne fusionnée, c'est lire les deux fils.
     if isMerged(conversation.id) {
@@ -2302,7 +2305,43 @@ final class InboxStore {
 
   /// `clearUnread` est privé : `InboxStore+Detached` passe par ici.
   func clearUnreadForDetached(_ conversationID: String) {
+    guard !isIncognito else { return }
     clearUnread(for: conversationID)
+  }
+
+  // MARK: - Incognito
+
+  /// Le mode incognito de Beeper : on ouvre les fils, on lit, et personne ne
+  /// le sait. Aucun accusé de lecture ne part, ni vers le Relais ni vers
+  /// Messages ; le compteur de non-lus reste tel quel, pour répondre à son
+  /// rythme. Seul un geste explicite — « Marquer comme lu », ou répondre —
+  /// dit au réseau qu'on a lu.
+  var isIncognito: Bool = UserDefaults.standard.bool(forKey: Keys.incognito) {
+    didSet {
+      guard isIncognito != oldValue else { return }
+      UserDefaults.standard.set(isIncognito, forKey: Keys.incognito)
+      // Sortir de l'incognito avec un fil sous les yeux : ce fil est lu.
+      if !isIncognito, let id = selectedConversationID, selectionIsUserMade {
+        clearUnread(for: id)
+        Task { @MainActor in await self.sendReadReceipt(conversationID: id) }
+      }
+    }
+  }
+
+  func toggleIncognito() { isIncognito.toggle() }
+
+  /// Le geste explicite : quelle que soit la discrétion en cours, ce fil est
+  /// lu, ici et sur le réseau.
+  func markRead(conversationID: String) async {
+    clearUnread(for: conversationID)
+    await sendReadReceipt(conversationID: conversationID, force: true)
+  }
+
+  /// Répondre, c'est avouer qu'on a lu : en incognito, l'envoi lève le voile
+  /// sur ce fil-là seulement.
+  private func revealReadBeforeSending(_ conversationID: String) async {
+    guard isIncognito else { return }
+    await markRead(conversationID: conversationID)
   }
 
   private func markRead(_ conversation: Conversation) async {
@@ -2744,6 +2783,8 @@ final class InboxStore {
       scheduleDraft(config, text: text, attachments: attachments, conversation: row)
       return
     }
+
+    await revealReadBeforeSending(row.id)
 
     if conversation.network == .iMessage, let quotedID = replyingToMessageID {
       // AppleScript ne sait envoyer qu'un message nu. Avec l'automatisation
@@ -3526,7 +3567,7 @@ final class InboxStore {
       // qu'il soit rien arrivé. On n'écrit que si le fil a vraiment changé.
       if session.messages != recombined { session.messages = recombined }
       applySidebarPreview(conversationID: bridged[0].id, from: refreshed)
-      if isAttended(id) { clearUnread(for: id) }
+      if isAttended(id), !isIncognito { clearUnread(for: id) }
       return
     }
     guard conversation.network.livesOnRelay else { return }
@@ -3538,7 +3579,7 @@ final class InboxStore {
     if session.messages != refreshed { session.messages = refreshed }
     applySidebarPreview(conversationID: id, from: session.messages)
     recordReplyProof(for: id, in: session.messages)
-    if isAttended(id) { clearUnread(for: id) }
+    if isAttended(id), !isIncognito { clearUnread(for: id) }
   }
 
   /// La page du magasin, SANS effacer les bulles en vol. Un `/sync` peut
@@ -4053,6 +4094,7 @@ final class InboxStore {
     static let relayQueue = "correspondance.relayWriteQueue"
     static let stateMigrated = "correspondance.stateMigratedToRelay.v1"
     static let undoSendDelay = "correspondance.undoSendDelay"
+    static let incognito = "correspondance.incognito"
   }
 
   private static func demoConversations() -> [Conversation] {

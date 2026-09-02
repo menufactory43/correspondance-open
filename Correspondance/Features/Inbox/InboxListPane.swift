@@ -46,6 +46,8 @@ struct InboxListPane: View {
 
       searchField
 
+      if store.isIncognito { incognitoBanner }
+
       if store.isFilterBarVisible { filterRow }
 
       facetRow
@@ -228,6 +230,31 @@ struct InboxListPane: View {
   /// file qui ment. Les quatre premières pilules disent l'état du fil, les
   /// suivantes son réseau (le rail ⌘1…⌘9 mène au même endroit, par un autre
   /// chemin : ici on choisit à la souris, là au clavier).
+  /// Le mode incognito se voit : une ligne discrète, tant qu'il est là, qui
+  /// rappelle que rien de ce qu'on ouvre ne se dit au réseau. Un clic l'éteint.
+  private var incognitoBanner: some View {
+    Button {
+      store.toggleIncognito()
+    } label: {
+      HStack(spacing: 6) {
+        Image(systemName: "eye.slash")
+        Text("Incognito : lu sans le dire")
+        Spacer(minLength: 0)
+        Text("Quitter")
+          .foregroundStyle(theme.inkTertiary)
+      }
+      .font(Typography.meta(themes.typeface))
+      .foregroundStyle(theme.inkSecondary)
+      .padding(.horizontal, Spacing.sm)
+      .padding(.vertical, 6)
+      .frame(maxWidth: .infinity)
+      .background(theme.paperSecondary.opacity(0.7))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Mode incognito actif. Quitter")
+  }
+
   private var filterRow: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 4) {
@@ -541,7 +568,7 @@ struct InboxListPane: View {
     if conversation.network.livesOnRelay {
       Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
         if conversation.hasUnread {
-          Task { await store.select(conversation.id) }
+          Task { await store.markRead(conversationID: conversation.id) }
         } else {
           store.markUnread(conversationID: conversation.id)
         }
@@ -569,7 +596,7 @@ struct InboxListPane: View {
     } else {
       Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
         if conversation.hasUnread {
-          Task { await store.select(conversation.id) }
+          Task { await store.markRead(conversationID: conversation.id) }
         } else {
           store.markUnread(conversationID: conversation.id)
         }

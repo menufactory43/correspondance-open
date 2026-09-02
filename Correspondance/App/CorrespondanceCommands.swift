@@ -66,6 +66,13 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut("o", modifiers: [.command, .shift])
 
+      // Comme Beeper : lire sans accusé de lecture, répondre à son rythme.
+      Toggle("Mode incognito", isOn: Binding(
+        get: { store.isIncognito },
+        set: { store.isIncognito = $0 }
+      ))
+      .keyboardShortcut("i", modifiers: [.command, .shift])
+
       Divider()
 
       // Rail de réseaux : ⌘1 = Tous, puis l'ordre de `MessageNetwork`.

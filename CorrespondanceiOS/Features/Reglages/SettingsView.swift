@@ -37,6 +37,7 @@ struct SettingsView: View {
         bridgesSection
         themeSection
         sendingSection
+        incognitoSection
         agentSection
         notificationsSection
         signOutSection
@@ -185,6 +186,23 @@ struct SettingsView: View {
       Text("Envoi")
     } footer: {
       Text("La bulle paraît tout de suite, mais le message ne part qu'au bout de ce délai : d'ici là, « Annuler » sous la bulle rend le texte au composer.")
+        .font(Typography.meta(typeface))
+    }
+  }
+
+  // MARK: - Incognito
+
+  /// Lire sans le dire : aucun accusé de lecture, le compteur reste.
+  private var incognitoSection: some View {
+    Section {
+      Toggle("Mode incognito", isOn: Binding(
+        get: { store.isIncognito },
+        set: { store.isIncognito = $0 }
+      ))
+    } header: {
+      Text("Lecture")
+    } footer: {
+      Text("Ouvrir un fil n'envoie aucun accusé de lecture, et le compteur de non-lus reste là, comme un pense-bête. Répondre, ou « Marquer comme lu », dit alors au réseau qu'on a lu.")
         .font(Typography.meta(typeface))
     }
   }

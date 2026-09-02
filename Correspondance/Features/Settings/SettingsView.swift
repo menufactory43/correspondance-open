@@ -158,7 +158,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     switch self {
     case .comptes: "Les réseaux branchés sur Correspondance et l’état de chaque lien."
     case .matrix: "Le homeserver qui porte les ponts WhatsApp et Instagram."
-    case .envoi: "Le temps qu’un message reste rattrapable avant de partir."
+    case .envoi: "Le temps qu’un message reste rattrapable avant de partir, et le mode incognito."
     case .automatisation: "Piloter Messages en arrière-plan pour les actions qu’iMessage réserve à son app."
     case .agent: "Les agents du Relais, et les moteurs de ce Mac."
     case .autorisations: "Ce que macOS a accordé à Correspondance, et où le corriger."

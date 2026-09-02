@@ -554,10 +554,36 @@ final class RelayStore {
     let first = !openedConversationIDs.contains(conversationID)
     openedConversationIDs.insert(conversationID)
     await loadMessages(conversationID: conversationID, backfill: first)
+    // En incognito, ouvrir n'est pas lire : le compteur reste, le Relais ne sait rien.
+    guard !isIncognito else { return }
+    await markRead(conversationID: conversationID)
+  }
+
+  /// Le geste explicite : ce fil est lu, ici et sur le Relais, incognito ou pas.
+  func markRead(conversationID: String) async {
+    guard !isDemo else { return }
     for target in relayTargets(of: conversationID) {
       await matrix.markRead(conversationID: target)
     }
     markLocallyRead(conversationID)
+  }
+
+  // MARK: - Incognito
+
+  static let incognitoKey = "correspondance.ios.incognito"
+
+  /// Le mode incognito de Beeper : on lit, et personne ne le sait. Aucun
+  /// accusé de lecture ne part, le compteur de non-lus reste — pour répondre
+  /// à son rythme. Répondre, ou « Marquer comme lu », lève le voile.
+  var isIncognito: Bool = UserDefaults.standard.bool(forKey: RelayStore.incognitoKey) {
+    didSet {
+      guard isIncognito != oldValue else { return }
+      UserDefaults.standard.set(isIncognito, forKey: RelayStore.incognitoKey)
+      // Sortir de l'incognito avec un fil ouvert : ce fil est lu.
+      if !isIncognito, let id = selectedConversationID {
+        Task { @MainActor in await self.markRead(conversationID: id) }
+      }
+    }
   }
 
   /// Remonter d'une page : ce que le défilement demande en approchant du haut.
@@ -749,6 +775,9 @@ final class RelayStore {
 
     sendingConversationIDs.insert(conversationID)
     defer { sendingConversationIDs.remove(conversationID) }
+
+    // Répondre, c'est avouer qu'on a lu : l'incognito s'efface pour ce fil.
+    if isIncognito { await markRead(conversationID: conversationID) }
 
     // Le champ se vide tout de suite : on n'écrit pas contre le réseau.
     localDrafts[conversationID] = ""
