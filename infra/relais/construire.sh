@@ -239,7 +239,9 @@ scripts() {
 sommes() {
   ( cd "$SORTIE" && rm -f SHA256SUMS &&
     for f in *; do
-      case "$f" in SHA256SUMS|construction.log|*.log) continue ;; esac
+      # `NOTES.md` sert de corps à la release, il n'en est pas un fichier :
+      # lui donner une somme publierait un contrôle sur un absent.
+      case "$f" in SHA256SUMS|NOTES.md|construction.log|*.log) continue ;; esac
       printf '%s  %s\n' "$(somme "$f")" "$f"
     done > SHA256SUMS )
   dire "SHA256SUMS régénéré :"

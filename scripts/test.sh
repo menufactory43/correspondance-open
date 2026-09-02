@@ -21,3 +21,10 @@ DYLD_INSERT_LIBRARIES="$PLAT/usr/lib/libXCTestBundleInject.dylib" \
 XCInjectBundleInto="$APP/Contents/MacOS/Correspondance" \
 "$APP/Contents/MacOS/Correspondance" -XCTest All "$XCT" 2>&1 \
   | grep -E "Test Case .* (passed|failed)|error:|Executed .* tests|Test Suite 'All tests' (passed|failed)" | sort -u
+
+# Ce que le monde télécharge correspond-il à ce qu'on vient de tester ? Le
+# contrôle est ici parce que c'est ici qu'on regarde : une release en retard ne
+# se voit nulle part ailleurs, et le 2 septembre l'installeur publié a gardé
+# deux commits de retard sans que rien ne le dise. Il ne fait jamais échouer la
+# suite — le code est bon, c'est la publication qui traîne.
+bash infra/relais/tests/release-a-jour.sh --muet || true

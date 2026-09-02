@@ -19,8 +19,17 @@
 #   continuwuity-macos-arm64                 l'amont ne publie aucun binaire macOS
 #   mautrix-*-darwin-arm64                   nos ponts goolm : ils ne chargent plus libolm
 #   tailcat-darwin-arm64                     l'amont ne publie pas macOS (tap Homebrew)
+#   install.sh, correspondance-agent-*       l'agent : `latest` ne sert QUE la dernière
+#                                            release, donc publier le Relais seul rend
+#                                            404 à l'installeur de cc (vu le 2 sept.)
 #   SHA256SUMS                               relevé sur les fichiers publiés, pas ailleurs
-# Rien pour Linux : les releases amont suffisent, et l'installeur les prend là.
+# Rien pour Linux côté Relais : les releases amont suffisent, et l'installeur les prend là.
+#
+# Deux refus, parce qu'une release muette est pire qu'une release absente :
+#   — un script publié qui diffère de celui du dépôt (on publierait l'installeur
+#     d'hier en croyant publier celui d'aujourd'hui) ;
+#   — un fichier attendu qui manque du dossier (on viderait `latest`).
+# `--quand-meme` lève les deux, et le dit.
 set -euo pipefail
 
 DOSSIER="${CORRESPONDANCE_PUBLICATION:-$HOME/unclic-publication}"
@@ -28,16 +37,18 @@ DEPOT="${CORRESPONDANCE_DEPOT:-menufactory43/correspondance-releases}"
 TAG="relais-$(date +%Y.%m.%d)"
 VRAIMENT=0
 SIGNER=0
+QUAND_MEME=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) VRAIMENT=0 ;;
     --vraiment) VRAIMENT=1 ;;
     --signer) SIGNER=1 ;;
+    --quand-meme) QUAND_MEME=1 ;;
     --dossier) DOSSIER="$2"; shift ;;
     --depot) DEPOT="$2"; shift ;;
     --tag) TAG="$2"; shift ;;
-    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
     *) echo "!! option inconnue : $1" >&2; exit 2 ;;
   esac
   shift
@@ -45,6 +56,85 @@ done
 
 [ -d "$DOSSIER" ] || { echo "!! $DOSSIER n'existe pas — lance d'abord infra/relais/construire.sh" >&2; exit 1; }
 somme() { shasum -a 256 "$1" | awk '{print $1}'; }
+ICI="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# ------------------------------------------------- une release porte le produit
+# `releases/latest/download/<fichier>` ne sert que la release **la plus
+# récente** : publier le Relais seul le 2 septembre a rendu 404 à l'installeur
+# de cc pendant vingt minutes, parce que ses fichiers vivaient dans la release
+# d'avant. Une release porte donc tout, et ce tableau dit d'où vient chaque
+# chose — la colonne de gauche est le nom publié, celle de droite sa source
+# dans le dépôt quand il y en a une.
+declare -a ATTENDUS=(
+  "relais-install.sh:infra/relais/install.sh"
+  "relais-uninstall.sh:infra/relais/uninstall.sh"
+  "install.sh:infra/agent/install.sh"
+  "continuwuity-macos-arm64:"
+  "mautrix-whatsapp-darwin-arm64:"
+  "mautrix-signal-darwin-arm64:"
+  "mautrix-meta-darwin-arm64:"
+  "mautrix-instagram-darwin-arm64:"
+  "tailcat-darwin-arm64:"
+  "correspondance-agent-linux-x86_64:"
+  "correspondance-agent-macos-arm64:"
+)
+
+# ------------------------------------------------- publier ce qui est commité
+# Un binaire construit depuis un arbre sale ne correspond à aucun commit : le
+# jour où il se comporte mal, il n'y a rien à relire. Ce n'est pas une manie de
+# propreté — c'est la seule façon de répondre à « quelle version tourne chez
+# lui ? ».
+SALE="$(cd "$ICI" && git status --porcelain 2>/dev/null | grep -v '^?? ' || true)"
+if [ -n "$SALE" ]; then
+  echo "L'arbre de travail n'est pas propre :"
+  printf '%s\n' "$SALE" | sed 's/^/    /' | head -12
+  if [ "$QUAND_MEME" = 1 ]; then
+    echo "  (--quand-meme : on publie quand même, sans commit qui corresponde)"
+  else
+    echo "!! rien n'est publié : commit d'abord, pour qu'un binaire ait une version." >&2
+    exit 1
+  fi
+  echo
+fi
+
+echo "Ce que la release doit porter"
+manques=0
+derives=0
+for entree in "${ATTENDUS[@]}"; do
+  nom="${entree%%:*}"; source="${entree#*:}"
+  if [ ! -f "$DOSSIER/$nom" ]; then
+    printf '  ✗ %-34s absent du dossier\n' "$nom"
+    manques=$((manques+1))
+    continue
+  fi
+  # Un script publié doit être celui du dépôt, au bit près. Sinon on publie
+  # l'installeur d'hier en croyant publier celui d'aujourd'hui — c'est
+  # exactement ce qui rendait `relais-install.sh` vieux de deux commits.
+  if [ -n "$source" ] && [ -f "$ICI/$source" ]; then
+    if [ "$(somme "$DOSSIER/$nom")" = "$(somme "$ICI/$source")" ]; then
+      printf '  ✓ %-34s = %s\n' "$nom" "$source"
+    else
+      printf '  ✗ %-34s ≠ %s (le dossier a une autre version)\n' "$nom" "$source"
+      derives=$((derives+1))
+    fi
+  else
+    printf '  ✓ %-34s\n' "$nom"
+  fi
+done
+if [ "$manques" -gt 0 ] || [ "$derives" -gt 0 ]; then
+  echo
+  echo "  $manques absent(s), $derives dérive(s)."
+  [ "$manques" -gt 0 ] && echo "  → les binaires du Relais : infra/relais/construire.sh"
+  [ "$manques" -gt 0 ] && echo "  → ceux de l'agent : infra/agent/construire.sh"
+  [ "$derives" -gt 0 ] && echo "  → un script qui dérive se recopie : les deux construire.sh le font"
+  if [ "$QUAND_MEME" = 1 ]; then
+    echo "  (--quand-meme : on continue quand même)"
+  else
+    echo "!! rien n'est publié. --quand-meme pour passer outre, en le sachant." >&2
+    exit 1
+  fi
+fi
+echo
 
 echo "Publication du Relais Correspondance"
 echo "  dossier   $DOSSIER"
