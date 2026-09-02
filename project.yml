@@ -296,6 +296,11 @@ targets:
     info:
       path: CorrespondanceiOS/Info.plist
       properties:
+        # Déclaration d'export : le chiffrement de bout en bout de Correspondance
+        # repose sur des algorithmes standard (Curve25519, AES-256 via
+        # matrix-sdk-crypto), le cas exempté d'Apple. Sans cette clé, TestFlight
+        # bloque chaque build sur « Missing Compliance ».
+        ITSAppUsesNonExemptEncryption: false
         CFBundleName: Correspondance
         CFBundleDisplayName: Correspondance
         UILaunchScreen: {}
