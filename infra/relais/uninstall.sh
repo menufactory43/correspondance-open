@@ -25,7 +25,7 @@ dire() { printf '→ %s\n' "$*"; }
 
 case "$(uname -s)" in
   Darwin)
-    for nom in relais mautrix-whatsapp mautrix-signal; do
+    for nom in relais mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
       label="app.correspondance.$nom"
       plist="$HOME/Library/LaunchAgents/$label.plist"
       if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
@@ -36,7 +36,7 @@ case "$(uname -s)" in
     done
     ;;
   Linux)
-    for nom in relais mautrix-whatsapp mautrix-signal; do
+    for nom in relais mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger; do
       unite="$HOME/.config/systemd/user/correspondance-$nom.service"
       if systemctl --user cat "correspondance-$nom.service" >/dev/null 2>&1; then
         systemctl --user disable --now "correspondance-$nom.service" >/dev/null 2>&1 || true

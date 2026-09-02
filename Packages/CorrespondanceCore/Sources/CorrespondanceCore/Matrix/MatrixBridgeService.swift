@@ -1380,7 +1380,17 @@ public actor MatrixBridgeService {
     do {
       try await action()
     } catch MatrixError.http(403, _, _) {
-      try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      do {
+        try await client.makeRoomAdmin(roomID: roomID, userID: selfUserID)
+      } catch MatrixError.administrationIndisponible {
+        // Continuwuity n'a aucun équivalent de `make_room_admin` (matrice de la
+        // phase 1). On ne plante pas et on ne réessaie pas dans le vide : on dit
+        // ce qui manque et par où passer — le bot du pont, lui, sait donner un
+        // pouvoir dans son propre portail.
+        throw MatrixError.administrationIndisponible(
+          "me donner le pouvoir dans ce salon. Le pont y est seul au pouvoir ; "
+            + "demande-le-lui dans son salon de gestion (« set-pl <mon identifiant> 100 »)")
+      }
       try await action()
     }
   }

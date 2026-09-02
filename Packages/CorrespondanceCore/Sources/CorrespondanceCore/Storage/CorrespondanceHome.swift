@@ -33,7 +33,7 @@ public enum CorrespondanceHome {
   /// vraies conversations.
   public static var isTrial: Bool { name != nil }
 
-  static func resolvedName(from environment: [String: String]) -> String? {
+  public static func resolvedName(from environment: [String: String]) -> String? {
     guard let brut = environment["CORRESPONDANCE_HOME"] else { return nil }
     let propre = sanitize(brut)
     return propre.isEmpty ? nil : propre

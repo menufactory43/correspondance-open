@@ -6,7 +6,7 @@ import Foundation
 /// Client Matrix Client-Server v3 en REST pur (`URLSession`). Pas de SDK, pas d'E2EE :
 /// homeserver privé sur Tailscale, salons de bridge non chiffrés.
 public actor MatrixClient {
-  private var credentials: MatrixCredentials?
+  var credentials: MatrixCredentials?
   private let session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
   private var ledger = MatrixTransactionLedger()
@@ -24,6 +24,12 @@ public actor MatrixClient {
   public internal(set) var journalCryptoToDevice: [String] = []
   /// Les `to_device` **avant** déchiffrement, tels que le serveur les livre.
   public internal(set) var journalCryptoToDeviceBruts: [String] = []
+
+  /// Quelle administration ce Relais offre — détecté **une fois par session**
+  /// (cf. `MatrixClient+Admin.swift`), jamais redemandé ensuite.
+  var administration: RelaisAdministration?
+  /// La couche `#admins`, construite au premier besoin.
+  var couchesalonAdmin: MatrixSalonAdmin?
 
   public init(credentials: MatrixCredentials? = nil) {
     self.credentials = credentials
@@ -521,23 +527,49 @@ public actor MatrixClient {
   /// pont, dans un portail). C'est ce qui débloque « inviter » dans un groupe
   /// où le pont ne m'a rien accordé.
   public func makeRoomAdmin(roomID: String, userID: String) async throws {
-    _ = try await request(
-      method: "POST",
-      path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
-      body: .object(["user_id": .string(userID)])
-    )
+    if await administrationDuRelais() == .salonAdmin {
+      throw MatrixError.administrationIndisponible(
+        "donner le pouvoir dans un salon (make_room_admin)")
+    }
+    do {
+      _ = try await request(
+        method: "POST",
+        path: "/_synapse/admin/v1/rooms/\(Self.escape(roomID))/make_room_admin",
+        body: .object(["user_id": .string(userID)])
+      )
+    } catch let erreur where Self.estUneRouteInconnue(erreur) {
+      noterSalonAdmin()
+      // Continuwuity n'a **rien** d'équivalent : `!admin users` sait descendre
+      // un pouvoir (`force-demote`), jamais le monter. On le dit franchement
+      // plutôt que d'échouer d'une façon que l'écran ne saurait pas nommer.
+      throw MatrixError.administrationIndisponible(
+        "donner le pouvoir dans un salon (make_room_admin)")
+    }
   }
 
   /// Suis-je administrateur de ce Relais ? L'app le vérifie **avant** de
   /// promettre quoi que ce soit : sans ce pouvoir, « Activer cc » ne peut pas
   /// créer le compte du bot, et il vaut mieux le dire que d'échouer à mi-chemin.
   public func isServerAdmin(userID: String) async -> Bool {
-    let json = try? await request(
-      method: "GET",
-      path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
-      body: nil
-    )
-    return json?.value(at: "admin")?.boolValue == true
+    if await administrationDuRelais() != .salonAdmin {
+      do {
+        let json = try await request(
+          method: "GET",
+          path: "/_synapse/admin/v1/users/\(Self.escape(userID))/admin",
+          body: nil
+        )
+        return json.value(at: "admin")?.boolValue == true
+      } catch let erreur where Self.estUneRouteInconnue(erreur) {
+        noterSalonAdmin()
+      } catch {
+        return false
+      }
+    }
+    // Chez Continuwuity, « je suis administrateur » veut dire « je suis membre
+    // de #admins » : le premier compte enregistré y est mis d'office, et c'est
+    // par ce salon que passe toute l'administration.
+    guard let salon = salonAdmin() else { return false }
+    return await salon.jeSuisAdministrateur()
   }
 
   /// Crée (ou met à jour) le compte d'un bot — c'est ainsi qu'« Activer cc »
@@ -559,11 +591,19 @@ public actor MatrixClient {
       "logout_devices": .bool(false),
     ]
     if let displayName { body["displayname"] = .string(displayName) }
-    _ = try await request(
-      method: "PUT",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
-      body: .object(body)
-    )
+    if await administrationDuRelais() != .salonAdmin {
+      do {
+        _ = try await request(
+          method: "PUT",
+          path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
+          body: .object(body)
+        )
+        return
+      } catch let erreur where Self.estUneRouteInconnue(erreur) {
+        noterSalonAdmin()
+      }
+    }
+    try await provisionnerParSalonAdmin(userID: userID, password: password)
   }
 
   /// Renomme la session courante — `PUT /devices/<id>`. L'agent s'en sert quand
@@ -594,11 +634,20 @@ public actor MatrixClient {
   /// lui-même ne peut pas taire : un binaire d'hier qui ne publie aucun status
   /// a quand même une session, vue par le serveur à chaque `/sync`.
   public func userDevices(userID: String) async throws -> [UserDevice] {
-    let json = try await request(
-      method: "GET",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))/devices",
-      body: nil
-    )
+    if await administrationDuRelais() == .salonAdmin {
+      return try await sessionsParSalonAdmin(userID: userID)
+    }
+    let json: MatrixJSON
+    do {
+      json = try await request(
+        method: "GET",
+        path: "/_synapse/admin/v2/users/\(Self.escape(userID))/devices",
+        body: nil
+      )
+    } catch let erreur where Self.estUneRouteInconnue(erreur) {
+      noterSalonAdmin()
+      return try await sessionsParSalonAdmin(userID: userID)
+    }
     return (json.value(at: "devices")?.arrayValue ?? []).compactMap { device in
       guard let id = device.value(at: "device_id")?.stringValue else { return nil }
       let seen = device.value(at: "last_seen_ts")?.doubleValue.map { Date(timeIntervalSince1970: $0 / 1000) }
@@ -608,13 +657,25 @@ public actor MatrixClient {
 
   /// Ce compte existe-t-il déjà sur le Relais ? Pour ne pas réinitialiser le
   /// mot de passe d'un bot qui tourne très bien.
+  /// `GET /_matrix/client/v3/profile/{id}` : de l'API **cliente** standard, donc
+  /// vraie sur les deux Relais. Le chemin `_synapse/admin` d'avant n'apportait
+  /// rien de plus et ne marchait que chez Synapse. 404 = le compte n'existe pas.
   public func userExists(_ userID: String) async -> Bool {
-    let json = try? await request(
-      method: "GET",
-      path: "/_synapse/admin/v2/users/\(Self.escape(userID))",
-      body: nil
-    )
-    return json?.value(at: "name")?.stringValue != nil
+    do {
+      _ = try await request(
+        method: "GET",
+        path: "/_matrix/client/v3/profile/\(Self.escape(userID))",
+        body: nil
+      )
+      return true
+    } catch MatrixError.http(let status, _, _) where status == 404 {
+      return false
+    } catch {
+      // Une panne de réseau n'est pas une absence de compte : on ne promet
+      // rien, et l'appelant reposera un mot de passe pour rien plutôt que de
+      // croire à un compte qui n'existe pas.
+      return false
+    }
   }
 
   /// Retire un event — c'est ainsi qu'on retire une réaction.

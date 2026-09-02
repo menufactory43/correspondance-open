@@ -1,4 +1,5 @@
 import CorrespondanceAgentKit
+import CorrespondanceCore
 import Foundation
 import OSLog
 
@@ -59,7 +60,9 @@ final class AgentProcessHost {
           "run", "--agent", agent,
           "--watch-parent", String(ProcessInfo.processInfo.processIdentifier),
         ],
-        logURL: URL(fileURLWithPath: "/tmp/correspondance-\(agent).log")
+        // Le journal suit l'essai lui aussi : un cc d'essai ne doit pas écrire
+        // par-dessus le journal du cc de production.
+        logURL: URL(fileURLWithPath: "/tmp/correspondance-\(AgentPaths.sanitize(agent))\(CorrespondanceHome.trialSuffix).log")
       )
     }
 

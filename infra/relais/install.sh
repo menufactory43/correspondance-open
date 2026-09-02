@@ -73,6 +73,12 @@ CONTINUWUITY_TAG=v26.8.1
 AMONT_CONTINUWUITY="https://forgejo.ellis.link/continuwuation/continuwuity/releases/download/$CONTINUWUITY_TAG"
 RELEASES="${CORRESPONDANCE_RELEASES:-https://github.com/menufactory43/correspondance-releases/releases/latest/download}"
 MAUTRIX_TAG=v0.2608.0
+# Instagram et Messenger sont le MÊME dépôt (mautrix/meta) et le même tag, mais deux
+# binaires : depuis v26.08 un binaire ne fait plus qu'un réseau. `mautrix-instagram-*`
+# est Instagram ; `mautrix-meta-*`, sans préfixe, est Messenger (il se dit
+# « mautrix-facebook »). Deux processus, deux bases, deux salons de gestion —
+# rien ne se partage, pas même la session Meta (cf. infra/matrix/docker-compose.yml).
+META_AMONT="https://github.com/mautrix/meta/releases/download/$MAUTRIX_TAG"
 
 case "$HOTE" in
   macos-arm64)
@@ -82,6 +88,10 @@ case "$HOTE" in
     WA_SHA=938242a121df389706dc00e6cbdd9b6fedd267963e3eaddd2ee701c6ddeb4808
     SG_URL="https://github.com/mautrix/signal/releases/download/$MAUTRIX_TAG/mautrix-signal-darwin-arm64"
     SG_SHA=9d48db00fb3e7e7382d7b165a90e4952a6902d18ecf304436c29fc8cc216e586
+    IG_URL="$META_AMONT/mautrix-instagram-darwin-arm64"
+    IG_SHA=3c3eeec90b27406601882917ea7ed40263ebae2cbfcc040452f83bb4bcf75354
+    MS_URL="$META_AMONT/mautrix-meta-darwin-arm64"
+    MS_SHA=1f1c2d7ae185169b779bd3d62fa40533c9ffad85ef1b2e5a19870434f9c4df11
     # Les binaires mautrix de macOS chargent @rpath/libolm.3.dylib, que Homebrew
     # ne porte plus. Elle vient de notre publication, posée à côté d'eux.
     OLM_URL="$RELEASES/libolm.3.dylib"
@@ -94,6 +104,10 @@ case "$HOTE" in
     WA_SHA=dc519ea63f34dd0b0b33bffda1dc671360ba9e7f806d77ba9849b9586540e4f5
     SG_URL="https://github.com/mautrix/signal/releases/download/$MAUTRIX_TAG/mautrix-signal-amd64"
     SG_SHA=ab373049f98c3f1b48b3a386bc91166be401eda61176e2d528902f5d22c47afa
+    IG_URL="$META_AMONT/mautrix-instagram-amd64"
+    IG_SHA=229586e3e629e928a7f3ec9dbc490c48125b23135c93e0bf04a7d53f2b0b4de9
+    MS_URL="$META_AMONT/mautrix-meta-amd64"
+    MS_SHA=e861777b51f0e15959e66f0efc0c68b88e1bd1093b09737358b4af7dafd7e6cc
     OLM_URL=""; OLM_SHA=""
     ;;
   linux-arm64)
@@ -103,6 +117,10 @@ case "$HOTE" in
     WA_SHA=fb2872d5c3b4b3d1184ba5971a9940115f404acfe17aa9a74ce470ee1b2c5c11
     SG_URL="https://github.com/mautrix/signal/releases/download/$MAUTRIX_TAG/mautrix-signal-arm64"
     SG_SHA=ca8bc4a741e4bfb41334d803c188bcdb18845b2412ed0e9db8de1aa77dccd368
+    IG_URL="$META_AMONT/mautrix-instagram-arm64"
+    IG_SHA=8d130e30b5da0f2eeef21b92327ebee283d84b7d36b3ecc6960f3a331b0f4cad
+    MS_URL="$META_AMONT/mautrix-meta-arm64"
+    MS_SHA=5b76822b9ae445fb6fd644a09a12f619e4abc1216a887415d6500e65f61b64fe
     OLM_URL=""; OLM_SHA=""
     ;;
   *) echo "!! hôte inconnu : $HOTE" >&2; exit 2 ;;
@@ -110,6 +128,8 @@ esac
 
 WA_PORT=$((PORT + 21308))   # 8010 → 29318 : les ports de la phase 1
 SG_PORT=$((PORT + 21318))
+IG_PORT=$((PORT + 21320))   # 8010 → 29330 : les ports du docker-compose de la prod
+MS_PORT=$((PORT + 21321))   # 8010 → 29331
 BIN="$PREFIX/bin"
 RELAIS_DIR="$PREFIX/relais"
 LOGS="$PREFIX/logs"
@@ -148,7 +168,8 @@ plan() {
   echo "  hôte              $HOTE ($SYSTEME)"
   echo "  dossier           $PREFIX"
   echo "  serveur Matrix    $SERVER_NAME, propriétaire $MXID"
-  echo "  écoute            $BIND:$PORT ; ponts sur $WA_PORT (WhatsApp) et $SG_PORT (Signal)"
+  echo "  écoute            $BIND:$PORT ; ponts sur $WA_PORT (WhatsApp), $SG_PORT (Signal),"
+  echo "                    $IG_PORT (Instagram) et $MS_PORT (Messenger)"
   echo "  adresse du code   $PUBLIC"
   echo
   echo "  1. Prérequis : curl, python3, un calcul de sha256. Aucun sudo, aucun Docker, aucun Homebrew."
@@ -163,6 +184,12 @@ plan() {
     echo "       mautrix-signal $MAUTRIX_TAG"
     echo "         $SG_URL"
     echo "         sha256 $SG_SHA"
+    echo "       mautrix-instagram $MAUTRIX_TAG (dépôt mautrix/meta)"
+    echo "         $IG_URL"
+    echo "         sha256 $IG_SHA"
+    echo "       mautrix-messenger $MAUTRIX_TAG (dépôt mautrix/meta, binaire mautrix-meta)"
+    echo "         $MS_URL"
+    echo "         sha256 $MS_SHA"
     if [ -n "$OLM_URL" ]; then
       echo "       libolm.3.dylib"
       echo "         $OLM_URL"
@@ -186,7 +213,7 @@ plan() {
   echo "     n'écrit que dans son journal (celui du .toml ne marche pas sur une base neuve)."
   echo "     Le premier compte enregistré devient administrateur et rejoint #admins."
   if [ $PONTS = 1 ]; then
-    echo "  8. Configuration des deux ponts (SQLite, chiffrement des portails allow+default),"
+    echo "  8. Configuration des quatre ponts (SQLite, chiffrement des portails allow+default),"
     echo "     registration engendrée par le pont lui-même, puis déclarée au Relais par un message"
     echo "     « !admin appservices register » dans #admins — Continuwuity n'a pas de fichier de"
     echo "     registration, et la prend en compte à chaud."
@@ -239,6 +266,8 @@ if [ $PONTS = 1 ]; then
   [ -n "$OLM_URL" ] && poser libolm.3.dylib "$OLM_URL" "$OLM_SHA"
   poser mautrix-whatsapp "$WA_URL" "$WA_SHA"
   poser mautrix-signal "$SG_URL" "$SG_SHA"
+  poser mautrix-instagram "$IG_URL" "$IG_SHA"
+  poser mautrix-messenger "$MS_URL" "$MS_SHA"
 fi
 
 # =============================================================== 3. les secrets
@@ -656,6 +685,11 @@ CFG
   }
   pont whatsapp "$WA_PORT" '!wa' whatsappbot
   pont signal "$SG_PORT" '!signal' signalbot
+  # Les préfixes et les noms de bot sont ceux que l'app reconnaît mot pour mot
+  # (MatrixBridgeDescriptor) : `!ig`/instagrambot et `!fb`/messengerbot, comme
+  # les gabarits de infra/matrix/templates/.
+  pont instagram "$IG_PORT" '!ig' instagrambot
+  pont messenger "$MS_PORT" '!fb' messengerbot
 fi
 
 # ================================================== 9. la preuve, pas la promesse
@@ -687,7 +721,7 @@ curl -fsS -X POST -H "Authorization: Bearer $JETON_PREUVE" "$RELAIS/_matrix/clie
 echo
 echo "✓ le Relais répond, connecté comme $QUI (/login puis /account/whoami)."
 if [ $PONTS = 1 ]; then
-  echo "  Ponts : mautrix-whatsapp sur $WA_PORT, mautrix-signal sur $SG_PORT — portails chiffrés."
+  echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT — portails chiffrés."
 fi
 echo "  $TS_MOT"
 

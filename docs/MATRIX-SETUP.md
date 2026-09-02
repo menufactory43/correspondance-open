@@ -118,16 +118,18 @@ Puis, dans la note à soi : `@cc ping`. **Ce que tu dois voir** : une réponse e
 minute, et un tour de plus dans « Derniers tours ». Le journal de l'agent s'ouvre depuis les
 réglages, ou `tail -f /tmp/correspondance-cc.log`.
 
-**Attention, un dossier n'est pas isolé** : « Activer sur ce Mac » écrit l'amorce de `cc`
-dans `~/.correspondance-agent/`, et `CORRESPONDANCE_HOME` ne le déplace pas — il ne déplace
-que les données de l'**app**. Vérifie qu'il est libre avant :
+**Le dossier d'amorce suit l'essai** (corrigé en phase 4 du spike « un clic » ; avant, il ne
+le suivait pas et il fallait sauter cette étape). « Activer sur ce Mac » écrit l'amorce de
+`cc` dans `~/.correspondance-agent/`, et sous `CORRESPONDANCE_HOME=unclic` dans
+`~/.correspondance-agent-unclic/` — le même suffixe que le dossier de données et que
+l'entrée du Trousseau. L'agent, lancé par l'app, hérite de la variable et recalcule le même
+chemin ; le journal suit aussi (`/tmp/correspondance-cc-unclic.log`). Le cc de production
+n'est donc jamais touché par un essai. Pour le vérifier :
 
 ```bash
-ls ~/.correspondance-agent/config.json 2>/dev/null && echo "OCCUPÉ — ne pas activer cc ici"
+ls ~/.correspondance-agent/config.json 2>/dev/null && echo "un cc de production vit ici"
+ls ~/.correspondance-agent-unclic/config.json 2>/dev/null && echo "et celui de l'essai, là"
 ```
-
-S'il est occupé, saute cette étape : l'appairage et le MCP s'éprouvent très bien sans agent
-local.
 
 ### 5. Brancher `correspondance-mcp` dans Claude Desktop
 

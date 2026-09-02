@@ -9,6 +9,10 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
   case bridgeBotSilent(networkLabel: String)
   /// Le bot n'a pas accepté l'invitation au salon de gestion : Synapse ne le connaît pas.
   case bridgeBotNotJoined(networkLabel: String)
+  /// Ce Relais n'offre pas cette opération d'administration. Continuwuity n'a
+  /// aucun équivalent de `make_room_admin` : le dire franchement vaut mieux
+  /// qu'un 404 que l'écran traduirait en « Matrix (404) ».
+  case administrationIndisponible(String)
 
   public var errorDescription: String? {
     switch self {
@@ -26,6 +30,8 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
       "Le bot \(label) ne répond pas. Vérifie le pont sur le NUC."
     case .bridgeBotNotJoined(let label):
       "Le bot \(label) n'a pas rejoint le salon : Synapse n'a pas chargé la registration du pont. Sur le NUC : docker-compose restart synapse, puis Relancer."
+    case .administrationIndisponible(let operation):
+      "Pas disponible sur ce Relais : \(operation). C'est une fonction propre à Synapse ; ce Relais administre par son salon #admins, qui ne sait pas la faire."
     }
   }
 

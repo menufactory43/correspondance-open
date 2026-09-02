@@ -18,13 +18,49 @@ public enum AgentHome {
   /// Le dossier de cet agent. `cc` garde l'ancien chemin
   /// (`~/.correspondance-agent`) : un NUC en production ne doit pas perdre son
   /// état parce qu'on a introduit `--agent`.
+  ///
+  /// **`CORRESPONDANCE_HOME` le déplace, comme il déplace les données de l'app.**
+  /// C'était le piège que `docs/MATRIX-SETUP.md` signalait sans le corriger :
+  /// un essai déplaçait la base et le Trousseau, mais « Activer sur ce Mac »
+  /// écrivait quand même l'amorce dans `~/.correspondance-agent/` — le dossier
+  /// d'un cc de production, qu'un essai n'a rien à toucher. Le suffixe est le
+  /// même que celui du dossier de données (`Correspondance-unclic` →
+  /// `~/.correspondance-agent-unclic`), et il vaut pour l'app comme pour
+  /// l'agent : le processus enfant hérite de la variable, donc les deux
+  /// calculent le même chemin sans se parler.
   public static func directory(
     agent: String,
-    home: URL = FileManager.default.homeDirectoryForCurrentUser
+    home: URL = FileManager.default.homeDirectoryForCurrentUser,
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> URL {
+    home.appending(path: folderName(agent: agent, environment: environment))
+  }
+
+  /// Le nom du dossier, sans le chemin. Séparé pour être relu à l'envers.
+  public static func folderName(
+    agent: String,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> String {
     let name = sanitize(agent)
-    if name == defaultAgent { return home.appending(path: ".correspondance-agent") }
-    return home.appending(path: ".correspondance-\(name)")
+    let base = name == defaultAgent ? ".correspondance-agent" : ".correspondance-\(name)"
+    guard let essai = essai(environment) else { return base }
+    return "\(base)-\(essai)"
+  }
+
+  /// Le nom de l'essai en cours, s'il y en a un. Même nettoyage que
+  /// `CorrespondanceHome.sanitize` côté app — les deux doivent donner le même
+  /// suffixe, et un test les tient ensemble.
+  public static func essai(_ environment: [String: String] = ProcessInfo.processInfo.environment)
+    -> String?
+  {
+    guard let brut = environment["CORRESPONDANCE_HOME"] else { return nil }
+    let propre = String(
+      brut.map { caractere -> Character in
+        caractere.isLetter || caractere.isNumber || caractere == "-" || caractere == "_"
+          ? caractere : "-"
+      }
+    ).trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
+    return propre.isEmpty ? nil : propre
   }
 
   /// Un nom d'agent est un localpart Matrix : lettres, chiffres, `.`, `-`, `_`.
@@ -49,18 +85,23 @@ public enum AgentHome {
     home: URL = FileManager.default.homeDirectoryForCurrentUser
   ) -> (agent: String, directory: URL) {
     if let agent = agentName(in: arguments) {
-      return (agent, directory(agent: agent, home: home))
+      return (agent, directory(agent: agent, home: home, environment: environment))
     }
     if let path = environment["CORRESPONDANCE_AGENT_HOME"], !path.isEmpty {
       let url = URL(fileURLWithPath: path)
       // Le nom se relit du dossier : `~/.correspondance-hermes` → `hermes`.
-      let last = url.lastPathComponent
+      // Le suffixe d'essai se retire d'abord, sinon `.correspondance-agent-unclic`
+      // fabriquerait un agent qui s'appellerait « agent-unclic ».
+      var last = url.lastPathComponent
+      if let essai = essai(environment), last.hasSuffix("-\(essai)") {
+        last.removeLast(essai.count + 1)
+      }
       let agent = last.hasPrefix(".correspondance-") && last != ".correspondance-agent"
         ? String(last.dropFirst(".correspondance-".count))
         : defaultAgent
       return (agent, url)
     }
-    return (defaultAgent, directory(agent: defaultAgent, home: home))
+    return (defaultAgent, directory(agent: defaultAgent, home: home, environment: environment))
   }
 
   /// `--agent hermes` ou `--agent=hermes`.

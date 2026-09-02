@@ -151,6 +151,12 @@ extension MatrixBridgeService {
     let essai = MatrixClient(credentials: nil)
     do {
       _ = try await essai.login(homeserver: homeserver, user: user, password: password)
+      // **On referme.** Trouvé en phase 4 du spike : cette session de vérification
+      // s'appelle « Correspondance (Mac) » et restait ouverte sur le compte de
+      // l'agent. À l'activation suivante, la garde du second cc la voyait,
+      // vivante et pas de cette machine, et refusait en la nommant — l'app se
+      // bloquait elle-même en accusant une machine qui n'existe pas.
+      await essai.logout()
       return true
     } catch {
       return false
