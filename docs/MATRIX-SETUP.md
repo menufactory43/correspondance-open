@@ -305,8 +305,61 @@ Le jeton d'accès part dans le **Trousseau** (jamais dans UserDefaults, jamais d
 ligne « État » affiche ensuite le MXID connecté et le décompte des fils par réseau
 (« 12 WhatsApp · 3 Instagram »). **Déconnecter Matrix** révoque le jeton côté serveur, vide le Trousseau et le cache disque des conversations.
 
-Pas de chiffrement de bout en bout côté client : le homeserver est privé, sur Tailscale, et les
-salons de bridge sont créés non chiffrés (`encryption.allow: false`).
+### Chiffrement
+
+> Écrit à la phase 5 du spike « un clic » (`docs/spike-un-clic/phase-5.md`). Sur le Relais
+> **historique** (Synapse du NUC), rien de tout ceci n'est allumé : ses salons de bridge sont
+> créés non chiffrés (`encryption.allow: false`). Ce qui suit décrit le Relais que
+> `infra/relais/install.sh` pose, où les portails sont chiffrés par défaut.
+
+**Un seul drapeau, et il est dans le manifeste.** `CORRESPONDANCE_CRYPTO=1` à la construction
+ajoute `matrix-sdk-crypto-ffi` (XCFramework Apple, version épinglée et vérifiée par somme) et
+les cibles qui vont avec. Sans lui, le paquet est celui d'avant : aucune dépendance binaire
+résolue, et `correspondance-agent` se construit sous Linux, où l'XCFramework n'existe pas.
+
+```
+swift build                                   # sans chiffrement
+CORRESPONDANCE_CRYPTO=1 swift build \
+  --scratch-path /tmp/build-crypto            # avec
+```
+
+Le `--scratch-path` séparé n'est pas une coquetterie : les deux configurations qui partagent un
+`.build` laissent un module de la précédente traîner, et le `#if canImport` reste vrai.
+
+**`CORRESPONDANCE_CHIFFREMENT=1` n'est plus requis.** Il l'était pendant que le chantier était
+commencé et pas fini ; le garder livrerait une app dont le chiffrement est éteint chez tout le
+monde. Un binaire construit avec la crypto chiffre. `CORRESPONDANCE_CHIFFREMENT=0` reste lu
+comme **soupape** — revenir au comportement d'avant sans reconstruire — pour l'app comme pour
+`cc`, et l'écran des réglages le dit quand elle est tirée.
+
+**Ce que le chiffrement couvre.**
+
+| | |
+|---|---|
+| Salons natifs (note à soi, console d'agent, ateliers) | chiffrés de bout en bout, Megolm |
+| Portails de ponts | chiffrés **jusqu'au pont**, qui déchiffre pour traduire — jamais du bout en bout, et la fiche de conversation le dit |
+| `correspondance-agent` sur macOS | lit et écrit chiffré ; magasin sous `~/.correspondance-agent[-essai]/crypto/` |
+| `correspondance-agent` sur Linux | **en clair** : la bibliothèque Rust n'est pas encore construite pour Linux (recette dans `phase-5.md`) |
+| Extension de notification iOS | déchiffre, **si** l'App Group `group.com.correspondance` existe ; sinon elle affiche « Message chiffré — ouvre Correspondance » |
+
+**La phrase de récupération.** La sauvegarde des clés (`m.megolm_backup.v1.curve25519-aes-sha2`)
+se crée depuis une phrase ; le sel et le nombre de tours PBKDF partent dans `auth_data`, ce qui
+permet à un appareil neuf de redériver la même clé avec la seule phrase et de lire l'historique
+d'avant sa création. Sans elle, un appareil ajouté ne voit pas le passé — c'est le comportement
+de Megolm, pas un défaut.
+
+Deux pièges d'exploitation, mesurés :
+
+- **Continuwuity ne rend pas la version la plus récente** à `GET /room_keys/version`, alors
+  qu'il n'autorise à écrire que dans la dernière créée. Remplacer une sauvegarde exige donc de
+  retirer **toutes** les versions, pas seulement celle qu'il nomme.
+- **`POST /keys/device_signing/upload` ne passe sans authentification que sur un compte
+  vierge.** Dès qu'il porte des clés de signature, il faut le mot de passe (authentification
+  interactive) : remplacer la clé maîtresse, c'est remplacer l'identité du compte.
+
+**Le magasin de clés** vit sous le dossier de données de l'app (donc déplacé d'un bloc par
+`CORRESPONDANCE_HOME`), et sous le conteneur d'App Group sur iOS quand il existe. Le perdre,
+c'est perdre l'historique chiffré de cet appareil — sauf si la sauvegarde est faite.
 
 ## 2. Connecter WhatsApp — le QR
 
