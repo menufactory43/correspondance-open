@@ -83,19 +83,21 @@ META_AMONT="https://github.com/mautrix/meta/releases/download/$MAUTRIX_TAG"
 case "$HOTE" in
   macos-arm64)
     RELAIS_URL_BIN="$RELEASES/continuwuity-macos-arm64"
-    RELAIS_SHA=a7b4dd2099dd349631b24c3f3970cb440fb9365a3aa406830995d389fae16f77
-    WA_URL="https://github.com/mautrix/whatsapp/releases/download/$MAUTRIX_TAG/mautrix-whatsapp-darwin-arm64"
-    WA_SHA=938242a121df389706dc00e6cbdd9b6fedd267963e3eaddd2ee701c6ddeb4808
-    SG_URL="https://github.com/mautrix/signal/releases/download/$MAUTRIX_TAG/mautrix-signal-darwin-arm64"
-    SG_SHA=9d48db00fb3e7e7382d7b165a90e4952a6902d18ecf304436c29fc8cc216e586
-    IG_URL="$META_AMONT/mautrix-instagram-darwin-arm64"
-    IG_SHA=3c3eeec90b27406601882917ea7ed40263ebae2cbfcc040452f83bb4bcf75354
-    MS_URL="$META_AMONT/mautrix-meta-darwin-arm64"
-    MS_SHA=1f1c2d7ae185169b779bd3d62fa40533c9ffad85ef1b2e5a19870434f9c4df11
-    # Les binaires mautrix de macOS chargent @rpath/libolm.3.dylib, que Homebrew
-    # ne porte plus. Elle vient de notre publication, posée à côté d'eux.
-    OLM_URL="$RELEASES/libolm.3.dylib"
-    OLM_SHA=d946defe44adc62d706b3acde6a6904532f32abe4ef7e0096ec08d273ee07168
+    RELAIS_SHA=3851299c77ea1ecade76077d66f1646dca0237ee96753d1cb6364fa2b6ce2ff9
+    # Les ponts macOS viennent de NOTRE publication depuis la phase 6 : mêmes
+    # sources, même tag, mais construits avec `-tags goolm`. libolm — abandonnée
+    # amont en 2024 pour faiblesses cryptographiques, et retirée de Homebrew —
+    # disparaît de la pile : `otool -L` ne la nomme plus, il n'y a plus de dylib
+    # à poser, ni à signer, ni à notariser (infra/relais/construire.sh).
+    WA_URL="$RELEASES/mautrix-whatsapp-darwin-arm64"
+    WA_SHA=0b4d4bde775c73f6b5803f9dc048d51acee9de4a7593e6af6473b18fff769b11
+    SG_URL="$RELEASES/mautrix-signal-darwin-arm64"
+    SG_SHA=d85c48ffd92b8deb28748b54409ac3cd71019fe099ab9ad10b8e98f4e846f6f4
+    IG_URL="$RELEASES/mautrix-instagram-darwin-arm64"
+    IG_SHA=763f1cab3fcddee73e8c96eb408d73afc2e2461a4db4d1c790b4ceab01254b31
+    MS_URL="$RELEASES/mautrix-meta-darwin-arm64"
+    MS_SHA=bad1ef2d9e73d4e4a27f7def37070d2531aeddb95c57f3a9971c9baa6d3af5f1
+    OLM_URL=""; OLM_SHA=""
     ;;
   linux-x86_64)
     RELAIS_URL_BIN="$AMONT_CONTINUWUITY/conduwuit-linux-static-amd64"

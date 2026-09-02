@@ -27,11 +27,19 @@ verifier_absent() {
   else echo "  ✓ $nom"; fi
 }
 
+# L'adresse de publication par défaut : les ponts macOS et Continuwuity en
+# viennent tous depuis la phase 6.
+RELEASES_ATTENDU="https://github.com/menufactory43/correspondance-releases/releases/latest/download"
+
 echo "Hôte « macos-arm64 »"
 MAC="$(bash "$INSTALL" --dry-run --hote macos-arm64 2>&1)"
 verifier "prend le binaire macOS de NOTRE publication" "continuwuity-macos-arm64" "$MAC"
-verifier "pose libolm à côté des ponts" "libolm.3.dylib" "$MAC"
-verifier "prend les ponts darwin-arm64 d'amont" "mautrix-whatsapp-darwin-arm64" "$MAC"
+# Depuis la phase 6, les ponts macOS sont les NÔTRES, construits en `-tags
+# goolm` : plus une seule ligne de libolm dans le plan, sur aucun hôte. C'est
+# la seule preuve statique qu'on ait que la dylib a bien quitté la pile.
+verifier_absent "ne pose plus libolm nulle part" "libolm" "$MAC"
+verifier "prend les ponts darwin-arm64 de NOTRE publication" "mautrix-whatsapp-darwin-arm64" "$MAC"
+verifier "les ponts macOS ne viennent plus de github.com/mautrix" "$RELEASES_ATTENDU/mautrix-signal-darwin-arm64" "$MAC"
 verifier "prend Instagram en darwin-arm64" "mautrix-instagram-darwin-arm64" "$MAC"
 # Messenger, c'est le binaire `mautrix-meta` nu du même dépôt : le confondre avec
 # celui d'Instagram poserait deux fois le même réseau sous deux noms.
