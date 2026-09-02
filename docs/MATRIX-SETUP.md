@@ -891,7 +891,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://100.64.0.7:8008/_matrix/client
 
 | Symptôme | Cause probable |
 |----------|----------------|
-| `403 InvalidProviderToken` dans les logs Sygnal, et une 502 rendue à l'appelant | le `key_id` du `.env` ne correspond pas au `.p8` déposé, ou la clé a été révoquée, ou elle n'a pas la capacité APNs. La clé et le `team_id` peuvent être parfaitement valides par ailleurs |
+| `403 InvalidProviderToken` dans les logs Sygnal, et une 502 rendue à l'appelant | d'abord vérifier que `sygnal.yaml` porte le vrai `key_id` et non un `__APNS_KEY_ID__` ou `${APNS_KEY_ID}` resté en clair (c'est arrivé le 2 sept. 2026 : `grep -n key_id data/sygnal/sygnal.yaml`). Sinon : le `key_id` du `.env` ne correspond pas au `.p8` déposé, ou la clé a été révoquée, ou elle n'a pas la capacité APNs. Pour isoler Sygnal, signer un jeton à la main avec la clé et appeler APNs avec un device token bidon : `BadDeviceToken` = clé acceptée. La clé et le `team_id` peuvent être parfaitement valides par ailleurs |
 | `no app configured` | l'`app_id` du pusher ne correspond à aucune clé sous `apps:` dans `sygnal.yaml` |
 | `BadDeviceToken` | environnement croisé : jeton de sandbox envoyé à l'app_id de production (ou l'inverse), ou jeton d'un autre bundle |
 | `TopicDisallowed` | `topic:` n'est pas exactement l'identifiant de bundle de l'app |

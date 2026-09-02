@@ -254,11 +254,12 @@ toujours en quinze minutes. Un « tout retirer » emporte la clé, donc les jeto
    adresse de tailnet. Le nom de domaine est une valeur de configuration
    (`CORRESPONDANCE_PUSH_GATEWAY`, `PUSH_GATEWAY_HOST`), pas une constante : `fauconnier.app` est le
    domaine que le propriétaire possède déjà, en attendant celui de Correspondance.
-   **Reste un blocage, chez Apple et pas chez nous** : APNs répond `403 InvalidProviderToken` à
-   Sygnal. Le `.p8` est une clé P-256 valide et le `team_id` est bien celui qui signe l'IPA — c'est
-   donc le `key_id` qui ne correspond pas à ce fichier (la clé a été renommée en `apns.p8`, ce qui a
-   perdu le lien), ou la clé a été révoquée. À reprendre dans le portail développeur ; la chaîne
-   Relais → tunnel → Sygnal → Apple, elle, est éprouvée de bout en bout.
+   **Le `403 InvalidProviderToken` du premier essai n'était pas chez Apple** : le `sygnal.yaml`
+   du NUC avait été rendu avec `${APNS_KEY_ID}` en clair, jamais substitué — Sygnal envoyait un
+   identifiant de clé littéralement faux. La clé, testée directement contre APNs avec un jeton
+   signé à la main, est valide (`BadDeviceToken`, donc fournisseur accepté). Re-rendu par le
+   `sed` du bootstrap, Sygnal redémarré seul : la passerelle publique répond désormais
+   `{"rejected": [...]}` / 200 à un pushkey bidon, ce qui est la preuve de bout en bout.
 7. ~~Décider de Tailcat~~ — **décidé et fait en phase 7b** : par défaut sur Linux, embarqué et
    signé dans l'app. Reste la tranche iPhone (`gomobile bind`, et une façon de composer sans
    SOCKS), dont le coût est à chiffrer avant de s'engager.
