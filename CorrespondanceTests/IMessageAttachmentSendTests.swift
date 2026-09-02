@@ -57,6 +57,37 @@ final class IMessageAttachmentSendTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: copy), Data("bonjour".utf8))
   }
 
+  /// Le cas réel : une capture d'écran sur le Bureau. Messages n'a pas le droit
+  /// d'y lire, personne ne le lui a donné, et l'envoi finissait « Non
+  /// distribué ». On la recopie donc dans un dossier que TCC ne garde pas.
+  func testFileOnTheDesktopIsCopiedBecauseMessagesCannotReadThere() throws {
+    let desktop = FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent("Desktop", isDirectory: true)
+    let file = desktop.appendingPathComponent("correspondance-test-\(UUID().uuidString).png")
+    try Data("png".utf8).write(to: file)
+    defer { try? FileManager.default.removeItem(at: file) }
+
+    XCTAssertFalse(IMessageSender.isReachableByMessages(file))
+    let copy = try IMessageSender.readableCopy(of: file)
+    defer { try? FileManager.default.removeItem(at: copy.deletingLastPathComponent()) }
+    XCTAssertTrue(copy.path.hasPrefix(IMessageSender.outgoingDirectory.path))
+    XCTAssertEqual(copy.lastPathComponent, file.lastPathComponent)
+  }
+
+  func testOtherTccGuardedFoldersAreCopiedToo() {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    for dossier in ["Documents", "Downloads", "Pictures", "Library/Mobile Documents/com~apple~CloudDocs"] {
+      let file = home.appendingPathComponent(dossier).appendingPathComponent("vue.png")
+      XCTAssertFalse(IMessageSender.isReachableByMessages(file), dossier)
+    }
+    // Ce qui n'est pas gardé le reste : notre propre dossier d'envois.
+    XCTAssertTrue(
+      IMessageSender.isReachableByMessages(
+        IMessageSender.outgoingDirectory.appendingPathComponent("vue.png")
+      )
+    )
+  }
+
   func testMissingFileIsRefusedBeforeAnyAppleEvent() {
     let missing = URL(fileURLWithPath: "/nulle/part/absent.png")
     XCTAssertThrowsError(try IMessageSender.readableCopy(of: missing))

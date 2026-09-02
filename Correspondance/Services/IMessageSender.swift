@@ -154,13 +154,29 @@ struct IMessageSender: Sendable {
     }
   }
 
-  /// Vrai pour un fichier posé dans le dossier de départ, hors zone temporaire.
+  /// Les dossiers que TCC garde. Messages n'y a aucun droit tant que
+  /// l'utilisateur ne le lui a pas donné dans Réglages Système, et un envoi
+  /// AppleScript ne peut pas le lui demander : la boîte de dialogue n'a pas de
+  /// fenêtre à qui s'adresser. Le fichier part quand même, Messages n'arrive
+  /// pas à le lire, et la ligne reste dans `chat.db` en `error = 25`,
+  /// `transfer_state = 6` — « Non distribué » dans le fil, sans un mot de plus.
+  /// Une capture d'écran, qui atterrit sur le Bureau, tombait exactement là.
+  private static let tccGuardedFolders = [
+    "Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music",
+    // iCloud Drive, et le Bureau/Documents synchronisés qui vivent dessous.
+    "Library/Mobile Documents",
+  ]
+
+  /// Vrai pour un fichier que Messages saura lire tel quel : dans le dossier de
+  /// départ, hors zone temporaire et hors dossiers gardés par TCC.
   static func isReachableByMessages(_ fileURL: URL) -> Bool {
     let path = fileURL.resolvingSymlinksInPath().path
     let home = FileManager.default.homeDirectoryForCurrentUser
       .resolvingSymlinksInPath().path
     guard path.hasPrefix(home + "/") else { return false }
-    return !path.hasPrefix("/private/var/folders/") && !path.hasPrefix("/tmp/")
+    guard !path.hasPrefix("/private/var/folders/"), !path.hasPrefix("/tmp/") else { return false }
+    let relative = String(path.dropFirst(home.count + 1))
+    return !tccGuardedFolders.contains { relative == $0 || relative.hasPrefix($0 + "/") }
   }
 
   @MainActor
