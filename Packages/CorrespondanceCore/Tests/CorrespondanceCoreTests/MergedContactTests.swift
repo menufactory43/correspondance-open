@@ -65,7 +65,8 @@ final class MergedContactTests: XCTestCase {
   func testDetectsSameNumberAcrossNetworksDespiteFormats() {
     let imessage = conversation("imessage:1", network: .iMessage, address: "+33612345678", minutes: 10)
     let whatsapp = conversation("matrix:1", network: .whatsapp, address: "@whatsapp_33612345678:home", minutes: 20)
-    let other = conversation("signal:9", network: .signal, address: "+33699999999")
+    // Un autre nom : le même nom rapprocherait aussi, et c'est voulu.
+    let other = conversation("signal:9", network: .signal, address: "+33699999999", title: "Autre")
 
     let groups = MergeCandidates.detect(in: [imessage, whatsapp, other], dismissedPairs: [])
 
@@ -239,5 +240,55 @@ final class MergedContactTests: XCTestCase {
     XCTAssertNil(PhoneNormalizer.e164("alice.martin"))
     XCTAssertNil(PhoneNormalizer.e164("!salon:correspondance.local"))
     XCTAssertNil(PhoneNormalizer.e164("1234567"))
+  }
+}
+
+// MARK: - Nom identique, et ligne qui accueille
+
+extension MergedContactTests {
+  func testDetectsIdenticalNameAcrossNetworksWithoutAnyNumber() {
+    let signal = conversation("sig", network: .signal, address: "!room1:relais", title: "Marie-Françoise")
+    let insta = conversation("ig", network: .instagram, address: "!room2:relais", title: "marie-francoise")
+    let other = conversation("ig2", network: .instagram, address: "!room3:relais", title: "Marie")
+    let groups = MergeCandidates.detect(in: [signal, insta, other], dismissedPairs: [])
+    XCTAssertEqual(groups.count, 1)
+    XCTAssertEqual(Set(groups[0].map(\.id)), ["sig", "ig"])
+  }
+
+  func testNameAndNumberKeysJoinIntoOneGroup() {
+    let im = conversation("im", network: .iMessage, address: "+33612345678", title: "Vince")
+    let wa = conversation("wa", network: .whatsapp, address: "@whatsapp_33612345678:relais", title: "Vince WA")
+    let sig = conversation("sig", network: .signal, address: "!room:relais", title: "Vince")
+    let groups = MergeCandidates.detect(in: [im, wa, sig], dismissedPairs: [])
+    XCTAssertEqual(groups.count, 1)
+    XCTAssertEqual(Set(groups[0].map(\.id)), ["im", "wa", "sig"])
+  }
+
+  func testPlaceholderOrNumericTitlesNeverMatchByName() {
+    let a = conversation("a", network: .signal, address: "!r1:relais", title: "!r1:relais")
+    let b = conversation("b", network: .instagram, address: "!r2:relais", title: "!r1:relais")
+    let c = conversation("c", network: .signal, address: "!r3:relais", title: "+33612345678")
+    let d = conversation("d", network: .instagram, address: "!r4:relais", title: "+33612345678")
+    XCTAssertTrue(MergeCandidates.detect(in: [a, b, c, d], dismissedPairs: []).isEmpty)
+  }
+
+  func testAbsorbingAddsAThreadAndSwallowsAnotherMergedLine() {
+    let pasteque = MergedContact(id: "merged:p", title: "Pastèque", memberIDs: ["im", "wa"], defaultConversationID: "im")
+    let julie = MergedContact(id: "merged:j", title: "Julie", memberIDs: ["ms", "ig"], defaultConversationID: "ms")
+    let result = pasteque.absorbing(["sig", "merged:j", "im"], contacts: [pasteque, julie])
+    XCTAssertEqual(result.contact.memberIDs, ["im", "wa", "sig", "ms", "ig"])
+    XCTAssertEqual(result.contact.title, "Pastèque")
+    XCTAssertEqual(result.contact.defaultConversationID, "im")
+    XCTAssertEqual(result.absorbed.map(\.id), ["merged:j"])
+  }
+
+  func testPhoneEmbeddedInTitleOrTopic() {
+    XCTAssertEqual(MatrixIdentity.phoneNumber(embeddedIn: "Signal (+33699000001)"), "+33699000001")
+    XCTAssertEqual(MatrixIdentity.phoneNumber(embeddedIn: "Signal private chat with +33 6 12 34 56 78"), "+33612345678")
+    XCTAssertEqual(MatrixIdentity.phoneNumber(embeddedIn: "Agence 06 99 00 00 03"), "+33699000003")
+    XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "Signal private chat"))
+    XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "whatsapp_lid-1234567890"))
+    XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "Julie Wsp 100091001567594"), "un identifiant Meta n'est pas un numéro")
+    XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "Promo 2024"))
   }
 }

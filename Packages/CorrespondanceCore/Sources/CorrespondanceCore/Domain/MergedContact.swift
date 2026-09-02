@@ -46,6 +46,29 @@ public struct MergedContact: Identifiable, Codable, Hashable, Sendable {
   /// Un identifiant désigne-t-il une ligne fusionnée ?
   public static func isMergedID(_ id: String) -> Bool { id.hasPrefix(idPrefix) }
 
+  /// Cette ligne, agrandie d'autres fils. Un tête-à-tête entre tel quel ; une
+  /// autre ligne fusionnée apporte ses membres, et disparaît (`absorbed`).
+  /// Le nom, le visage et le chat par défaut restent ceux d'ici : c'est à
+  /// cette ligne qu'on a demandé d'accueillir, pas l'inverse.
+  public func absorbing(
+    _ conversationIDs: [String],
+    contacts: [MergedContact]
+  ) -> (contact: MergedContact, absorbed: [MergedContact]) {
+    var copy = self
+    var absorbed: [MergedContact] = []
+    for id in conversationIDs where id != self.id {
+      if let other = contacts.first(where: { $0.id == id }) {
+        absorbed.append(other)
+        for member in other.memberIDs where !copy.memberIDs.contains(member) {
+          copy.memberIDs.append(member)
+        }
+      } else if !copy.memberIDs.contains(id) {
+        copy.memberIDs.append(id)
+      }
+    }
+    return (copy, absorbed)
+  }
+
   /// Le membre où écrire : le dernier utilisé s'il est toujours là, le défaut sinon.
   public func activeMemberID(among present: Set<String>) -> String? {
     if let last = lastUsedConversationID, present.contains(last) { return last }
@@ -119,11 +142,35 @@ public enum MergeCandidates {
   /// - Parameter dismissedPairs: paires déjà écartées (`pairKey`), qui ne
   ///   reviennent plus proposer la même fusion à chaque lancement.
   public static func detect(in conversations: [Conversation], dismissedPairs: Set<String>) -> [[Conversation]] {
+    let candidates = conversations.filter { !$0.isGroup && !MergedContact.isMergedID($0.id) }
+
+    // Deux façons de se reconnaître : le même numéro (ou e-mail), ou le même
+    // nom, mot pour mot. Le nom seul est faible — mais la fusion n'est jamais
+    // automatique, et c'est la seule prise qu'on ait sur un Signal qui cache
+    // son numéro ou un Messenger, qui n'en a pas. Un fil peut porter les deux
+    // clés : les groupes qu'elles forment se réunissent (union-find).
+    var parent: [Int] = Array(candidates.indices)
+    func root(_ i: Int) -> Int {
+      var i = i
+      while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i] }
+      return i
+    }
+    var firstByKey: [String: Int] = [:]
+    for (index, conversation) in candidates.enumerated() {
+      var keys: [String] = []
+      if let identity = PhoneNormalizer.identityKey(for: conversation.address) { keys.append(identity) }
+      if let name = nameKey(conversation) { keys.append(name) }
+      for key in keys {
+        if let first = firstByKey[key] {
+          parent[root(index)] = root(first)
+        } else {
+          firstByKey[key] = index
+        }
+      }
+    }
     var buckets: [String: [Conversation]] = [:]
-    for conversation in conversations
-    where !conversation.isGroup && !MergedContact.isMergedID(conversation.id) {
-      guard let key = PhoneNormalizer.identityKey(for: conversation.address) else { continue }
-      buckets[key, default: []].append(conversation)
+    for (index, conversation) in candidates.enumerated() {
+      buckets[candidates[root(index)].id, default: []].append(conversation)
     }
 
     var groups: [[Conversation]] = []
@@ -143,6 +190,20 @@ public enum MergeCandidates {
       groups.append(members)
     }
     return groups
+  }
+
+  /// Le nom, ramené à ce qui se compare : sans accents, sans casse, sans
+  /// espaces superflus. `nil` si le fil n'a pas de vrai nom (un numéro, un
+  /// identifiant de salon) ou un nom trop court pour dire quoi que ce soit.
+  static func nameKey(_ conversation: Conversation) -> String? {
+    guard !conversation.hasPlaceholderTitle else { return nil }
+    let folded = conversation.title
+      .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+      .split(whereSeparator: \.isWhitespace)
+      .joined(separator: " ")
+    // Un titre qui est un numéro n'est pas un nom : c'est l'identité qui le rapproche.
+    guard folded.count >= 3, PhoneNormalizer.identityKey(for: folded) == nil else { return nil }
+    return "name:" + folded
   }
 
   /// Clé stable d'une paire (ou d'un groupe) : les identifiants triés, joints par `|`.

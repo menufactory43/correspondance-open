@@ -208,6 +208,18 @@ public struct MatrixSyncParser: Sendable {
   private func applyState(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
     guard let content = event.content else { return }
     switch event.type {
+    case "m.room.topic":
+      // mautrix-signal, avec `number_in_topic`, écrit le numéro du correspondant
+      // dans le sujet du portail : c'est le seul endroit où un fil Signal le
+      // porte, ses ghosts étant des UUID. Sans numéro connu du pont, le sujet
+      // reste « Signal private chat » et on n'en tire rien.
+      if model.bridgePhoneNumber == nil,
+         Self.networkMayCarryPhoneNumbers(model.network),
+         let phone = MatrixIdentity.phoneNumber(embeddedIn: content.string(at: "topic"))
+      {
+        model.bridgePhoneNumber = phone
+      }
+
     case "m.room.name":
       // `fi.mau.implicit_name` : nom dérivé du ghost par le bridge, pas un vrai nom de groupe.
       // On le laisse vide : le titre repartira du correspondant, puis du carnet d'adresses.
@@ -240,6 +252,7 @@ public struct MatrixSyncParser: Sendable {
          !MatrixIdentity.isBridgeBot(userID),
          userID != selfUserID,
          let phone = MatrixIdentity.phoneNumber(in: displayName)
+          ?? MatrixIdentity.phoneNumber(embeddedIn: displayName)
       {
         model.bridgePhoneNumber = phone
       }

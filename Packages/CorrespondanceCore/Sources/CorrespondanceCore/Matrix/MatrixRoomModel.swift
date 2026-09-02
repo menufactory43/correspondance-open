@@ -539,4 +539,33 @@ public enum MatrixIdentity {
     guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { return nil }
     return trimmed.hasPrefix("+") ? trimmed : "+\(digits)"
   }
+
+  /// Un numéro **au milieu** d'un texte : « Signal (+33699000001) », le nom que
+  /// le pont donne à un inconnu, ou « Signal private chat with +33… », le sujet
+  /// qu'il pose quand `number_in_topic` est actif. `phoneNumber(in:)` refuse
+  /// tout ce qui contient une lettre — juste pour ne pas prendre un `lid-…`
+  /// pour un numéro — et ratait donc ces deux formes-là.
+  ///
+  /// La règle reste étroite : un `+` ou un `0` de tête, puis 8 à 15 chiffres
+  /// avec leurs séparateurs, sans lettre collée devant (`lid-1234567890`).
+  public static func phoneNumber(embeddedIn text: String?) -> String? {
+    guard let text, !text.isEmpty else { return nil }
+    let pattern = #"(?<![\w-])\+?\d[\d\s().-]{6,}\d(?![\w-])"#
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let range = NSRange(text.startIndex..., in: text)
+    for match in regex.matches(in: text, range: range) {
+      guard let swiftRange = Range(match.range, in: text) else { continue }
+      let candidate = String(text[swiftRange])
+      let digits = candidate.filter(\.isNumber)
+      // Un numéro se compose : il commence par + ou par 0. Un identifiant Meta
+      // ou une date ne commencent par ni l'un ni l'autre.
+      guard candidate.hasPrefix("+") || candidate.hasPrefix("0"),
+            digits.count >= 8, digits.count <= 15
+      else { continue }
+      // En E.164 : un « 06 » lu dans un titre français devient « +336… », comme
+      // partout ailleurs dans l'app.
+      return PhoneNormalizer.e164(candidate)
+    }
+    return nil
+  }
 }

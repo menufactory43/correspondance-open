@@ -101,6 +101,19 @@ struct ContentView: View {
         .environment(store)
         .environment(themes)
     }
+    .sheet(
+      isPresented: Binding(
+        get: { store.mergePickerConversationID != nil },
+        set: { if !$0 { store.mergePickerConversationID = nil } }
+      )
+    ) {
+      if let id = store.mergePickerConversationID,
+         let source = store.conversationRow(id) {
+        MergePickerSheet(source: source, theme: themes.theme)
+          .environment(store)
+          .environment(themes)
+      }
+    }
     .sheet(isPresented: Bindable(store).isPresentingNewConversation) {
       NewConversationSheet()
         .environment(store)

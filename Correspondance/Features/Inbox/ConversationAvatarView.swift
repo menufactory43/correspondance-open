@@ -43,9 +43,16 @@ struct ConversationAvatarView: View {
   var body: some View {
     ZStack {
       if let image {
+        // Bornée ICI, pas seulement par le cadre de la pile : une image
+        // `scaledToFill` garde sa taille native comme taille idéale, et un hôte
+        // qui la lui accorde — l'étiquette d'un `Menu` sans bordure — la
+        // dessinait en grand par-dessus le composer (vu avec la photo de profil
+        // Signal d'un fil fusionné).
         Image(platformImage: image)
           .resizable()
           .scaledToFill()
+          .frame(width: size, height: size)
+          .clipped()
       } else {
         Circle()
           .fill(

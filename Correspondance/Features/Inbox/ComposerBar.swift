@@ -247,7 +247,7 @@ struct ComposerBar: View {
             store.setActiveMember(mergedID: mergedID, conversationID: member.id)
           } label: {
             Label {
-              Text("\(member.network.labelFR) · \(member.address)")
+              Text(member.networkAndReadableAddress)
             } icon: {
               Image(systemName: member.id == active.id ? "checkmark" : member.network.systemImage)
             }
@@ -256,8 +256,15 @@ struct ComposerBar: View {
       }
     } label: {
       ConversationAvatarView(conversation: active, size: 20, theme: theme)
+        .frame(width: 20, height: 20)
     }
-    .menuStyle(.borderlessButton)
+    // Pas `.borderlessButton` : ce style passe par un bouton AppKit qui prend
+    // l'image de l'étiquette à sa taille native et ignore le cadre SwiftUI —
+    // la photo de profil Signal d'un fil fusionné s'étalait sur tout le
+    // composer. Avec le style bouton plein et un `buttonStyle(.plain)`, c'est
+    // SwiftUI qui dessine l'étiquette, à 20 points.
+    .menuStyle(.button)
+    .buttonStyle(.plain)
     .menuIndicator(.hidden)
     .fixedSize()
     .padding(.bottom, 3)

@@ -120,6 +120,9 @@ final class InboxStore {
   private(set) var messagesAutomationHealth: IMessageAutomationHealth = .unknown
   var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
+  /// La feuille « Fusionner avec… » : le fil qui cherche sa jumelle sur un
+  /// autre réseau. `nil` = fermée.
+  var mergePickerConversationID: String?
   /// La feuille « Nouveau groupe ». Séparée de la précédente : créer un groupe
   /// n'est pas ouvrir une conversation, et deux ponts seulement le savent faire.
   var isPresentingNewGroup = false
@@ -1671,6 +1674,41 @@ final class InboxStore {
     Task { @MainActor in
       for contact in contacts { await self.adoptMergedAvatar(contact) }
     }
+  }
+
+  /// Ajoute des fils à une ligne fusionnée qui existe déjà — le cas de Julie
+  /// sur Signal et Messenger, à rattacher à la Pastèque qu'iMessage et WhatsApp
+  /// forment déjà. Une autre ligne fusionnée qu'on y glisse apporte ses membres
+  /// et disparaît. Aucune détection ici : ce geste est celui de l'utilisateur,
+  /// et c'est la seule voie pour un Signal qui cache son numéro ou un Messenger.
+  func addToMerge(mergedID: String, _ toAdd: [Conversation]) async {
+    guard let index = mergedContacts.firstIndex(where: { $0.id == mergedID }) else { return }
+    let ids = toAdd.filter { !$0.isGroup && $0.id != mergedID }.map(\.id)
+    guard !ids.isEmpty else { return }
+    let (contact, absorbed) = mergedContacts[index].absorbing(ids, contacts: mergedContacts)
+    guard contact.memberIDs != mergedContacts[index].memberIDs else { return }
+
+    // Les fils qui entrent quittent la liste : on les garde sous la main,
+    // comme à la fusion, pour que la ligne se recalcule et que « Séparer » les rende.
+    for conversation in toAdd where !MergedContact.isMergedID(conversation.id) {
+      mergedMemberCache[conversation.id] = conversation
+    }
+    mergedContacts[index] = contact
+    let absorbedIDs = Set(absorbed.map(\.id))
+    mergedContacts.removeAll { absorbedIDs.contains($0.id) }
+    conversations.removeAll { absorbedIDs.contains($0.id) }
+    for id in absorbedIDs {
+      archivedIDs.remove(id)
+      pinnedIDs.remove(id)
+      mutedIDs.remove(id)
+      sessions.removeValue(forKey: id)
+      drafts.removeValue(forKey: id)
+      await ConversationAvatarStore.shared.invalidate(conversationID: id)
+    }
+    if !absorbedIDs.isEmpty { persistFlags(); persistDraftsNow() }
+    persistMergedContacts()
+    normalizeMergedContacts()
+    await select(mergedID)
   }
 
   /// « ✕ » sur la proposition : cette paire ne se repropose plus.

@@ -15,12 +15,6 @@ struct ConversationPillHeader: View {
 
   @Environment(InboxStore.self) private var store
   @State private var isShowingInfo = false
-  @State private var isShowingMergeSuggestion = false
-
-  /// Les mêmes chiffres sur deux réseaux : il y a peut-être une fusion à faire.
-  private var mergeCandidates: [Conversation]? {
-    store.mergeCandidates(for: conversation)
-  }
 
   var body: some View {
     HStack(spacing: 6) {
@@ -58,27 +52,9 @@ struct ConversationPillHeader: View {
         ConversationInfoCard(conversation: conversation, theme: theme)
       }
 
-      // La proposition ne s'affiche pas d'elle-même en travers du fil : elle
-      // pose une pastille dans la pilule, et se déplie dessous si on la touche.
-      if let candidates = mergeCandidates {
-        Button {
-          isShowingMergeSuggestion.toggle()
-        } label: {
-          Image(systemName: "arrow.triangle.merge")
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(theme.accent)
-        }
-        .buttonStyle(.plain)
-        .help("Cette personne a un autre chat — fusionner ?")
-        .accessibilityLabel("Fusion possible : \(candidates.count) chats pour \(conversation.title)")
-        .popover(isPresented: $isShowingMergeSuggestion, arrowEdge: .bottom) {
-          MergeSuggestionBar(candidates: candidates, theme: theme)
-        }
-      }
     }
     .onChange(of: conversation.id) { _, _ in
       isShowingInfo = false
-      isShowingMergeSuggestion = false
     }
   }
 }
@@ -134,7 +110,7 @@ struct ConversationInfoCard: View {
           .foregroundStyle(.secondary)
         ForEach(members) { member in
           Label {
-            Text("\(member.network.labelFR) · \(member.address)")
+            Text(member.networkAndReadableAddress)
               .font(.system(size: 11))
               .lineLimit(1)
               .truncationMode(.middle)
@@ -149,9 +125,11 @@ struct ConversationInfoCard: View {
         .buttonStyle(.link)
       }
 
-      if !conversation.isGroup, members.isEmpty {
+      // L'adresse seulement quand elle dit quelque chose : un numéro, un e-mail.
+      // Un identifiant de salon n'apprend rien et fait peur pour rien.
+      if !conversation.isGroup, members.isEmpty, let readable = conversation.readableAddress {
         LabeledContent("Adresse") {
-          Text(conversation.address)
+          Text(readable)
             .textSelection(.enabled)
             .lineLimit(2)
         }
@@ -169,6 +147,46 @@ struct ConversationInfoCard: View {
         Text(conversation.lastMessageAt, format: .dateTime.day().month().hour().minute())
       }
       .font(.system(size: 11))
+
+      // Réunir cette personne avec ses autres réseaux : le geste vit dans sa
+      // fiche, là où l'on regarde qui elle est. Une fusion déjà repérée (même
+      // numéro, même nom) est dite ici, et proposée en tête du sélecteur.
+      if !conversation.isGroup, conversation.network != .selfNote, conversation.network != .agent {
+        Divider()
+        let suggested = store.mergeCandidates(for: conversation)
+        Button {
+          store.mergePickerConversationID = conversation.id
+        } label: {
+          HStack(spacing: 8) {
+            Image(systemName: "person.line.dotted.person.fill")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(theme.accent)
+              .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+              Text(members.isEmpty ? "Fusionner avec un autre chat…" : "Ajouter un chat à cette personne…")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.ink)
+              if let suggested {
+                Text("\(suggested.count - 1) chat\(suggested.count > 2 ? "s" : "") repéré\(suggested.count > 2 ? "s" : "") — même numéro ou même nom")
+                  .font(.system(size: 11))
+                  .foregroundStyle(theme.accent)
+              } else {
+                Text("Signal, Messenger, WhatsApp… la même personne, une seule ligne.")
+                  .font(.system(size: 11))
+                  .foregroundStyle(.secondary)
+              }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+              .font(.system(size: 9, weight: .semibold))
+              .foregroundStyle(.tertiary)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(members.isEmpty ? "Fusionner avec un autre chat" : "Ajouter un chat à cette personne")
+      }
 
       if !conversation.isGroup, conversation.network == .iMessage {
         Divider()

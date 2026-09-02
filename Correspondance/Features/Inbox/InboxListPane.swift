@@ -542,6 +542,12 @@ struct InboxListPane: View {
       store.detach(conversationID: conversation.id)
     }
 
+    if !conversation.isGroup, conversation.network != .selfNote, conversation.network != .agent {
+      Button(store.isMerged(conversation.id) ? "Ajouter un chat à cette personne…" : "Fusionner avec un autre chat…") {
+        store.mergePickerConversationID = conversation.id
+      }
+    }
+
     Button(store.isSelectionMode ? "Quitter la sélection" : "Sélectionner plusieurs fils") {
       store.toggleSelectionMode()
       if store.isSelectionMode { store.toggleSelection(conversation.id) }
