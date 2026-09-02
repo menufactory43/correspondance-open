@@ -316,18 +316,49 @@ struct SettingsAgentsPane: View {
                   .disabled(!peutProvisionner || nomDejaPris(trouve) || enCours != nil)
               }
             }
+          } else if case .nonConnecte(let geste) = trouve.state {
+            Button("Copier le geste") { copier(geste) }
+          } else if enCours == trouve.entry.id {
+            ProgressView().controlSize(.small)
           } else {
-            Button("Copier la commande") { copier(trouve.entry.indiceInstallation) }
+            HStack(spacing: Spacing.xs) {
+              if let commande = trouve.entry.commandeInstallation,
+                 trouve.state == .nonInstalle, EngineInstaller.estLancable(commande)
+              {
+                Button("Installer") { Task { await installerMoteur(trouve, commande: commande) } }
+                  .disabled(enCours != nil)
+              }
+              Button("Copier la commande") { copier(trouve.entry.indiceInstallation) }
+            }
           }
         }
       }
     }
   }
 
+  /// Lance la commande épinglée, puis **rescanne** : c'est le disque qui dira
+  /// « prêt », jamais le bouton. La sortie de la commande n'est montrée qu'en
+  /// cas d'échec — quand ça passe, la carte change, et c'est toute la réponse.
+  private func installerMoteur(_ trouve: EngineCatalog.Finding, commande: String) async {
+    enCours = trouve.entry.id
+    defer { enCours = nil }
+    erreur = nil
+    do {
+      _ = try await EngineInstaller.installer(commande)
+    } catch {
+      erreur = error.localizedDescription
+    }
+    await rescannerLesMoteurs()
+  }
+
   private func detailMoteur(_ trouve: EngineCatalog.Finding) -> String {
     var texte = trouve.state.labelFR
     if let path = trouve.path { texte += " · \(path)" }
-    if !trouve.state.estPret { texte += "\n\(trouve.entry.indiceInstallation)" }
+    if case .nonConnecte(let geste) = trouve.state {
+      texte += "\nLe binaire est là, la connexion pas encore : \(geste)"
+    } else if !trouve.state.estPret {
+      texte += "\n\(trouve.entry.indiceInstallation)"
+    }
     if trouve.state.estPret, nomDejaPris(trouve) {
       texte += "\nUn agent porte déjà ce nom : donne-lui-en un autre."
     }

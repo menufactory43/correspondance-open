@@ -511,6 +511,16 @@ public actor Agent {
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
       return
     }
+    // Là, mais jamais connecté : le tour remonterait « invalid credentials »
+    // en anglais, sans le geste. On le dit en français, avec le geste.
+    if scan.isLoggedOut(live.backend) {
+      let moteur = scan.configuredEngine ?? live.backend.rawValue
+      let message = EngineScan.nonConnecteFR(engine: moteur, host: EngineScan.hostName)
+      log("[\(request.roomID)] moteur \(moteur) installé mais pas connecté — on le dit")
+      await reply(message, to: request)
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
+      return
+    }
 
     do {
       // Jamais `~` : un tour travaille dans le dossier de sa room tant qu'aucun

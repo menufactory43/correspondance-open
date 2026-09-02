@@ -1,3 +1,4 @@
+import CorrespondanceMatrixClient
 import Foundation
 
 /// Quels moteurs cette machine sait lancer — le scan que `doctor` imprime et
@@ -12,8 +13,12 @@ public struct EngineScan: Sendable, Equatable {
     /// hors du PATH de la plupart des shells non-login).
     public var path: String?
     public var version: String?
+    /// `false` : installé mais jamais connecté — le premier tour échouerait
+    /// sur une erreur d'authentification. `nil` : pas de preuve connue.
+    public var loggedIn: Bool?
 
     public var isPresent: Bool { path != nil }
+    public var isLoggedOut: Bool { isPresent && loggedIn == false }
   }
 
   public var engines: [Engine]
@@ -51,7 +56,10 @@ public struct EngineScan: Sendable, Equatable {
       ).stdout
       let text = version.flatMap { String(data: $0, encoding: .utf8) }?
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      return Engine(name: candidate.name, path: path, version: text.flatMap { $0.isEmpty ? nil : $0 })
+      return Engine(
+        name: candidate.name, path: path, version: text.flatMap { $0.isEmpty ? nil : $0 },
+        loggedIn: EngineLogin.isLoggedIn(engine: candidate.name)
+      )
     }
     return EngineScan(engines: engines, configuredEngine: configuredEngine)
   }
@@ -63,7 +71,10 @@ public struct EngineScan: Sendable, Equatable {
   public func statusLine(backend: AgentConfig.Backend, agent: String? = nil, host: String? = nil, since: Date? = nil)
     -> String
   {
-    let present = engines.filter(\.isPresent).map(\.name)
+    // « Prêt » veut dire installé **et** pas prouvé déconnecté : un moteur à
+    // connecter est dit à part, pour que l'app ne le propose pas comme prêt.
+    let present = engines.filter { $0.isPresent && !$0.isLoggedOut }.map(\.name)
+    let aConnecter = engines.filter(\.isLoggedOut).map(\.name)
     let list = present.isEmpty ? "aucun" : present.joined(separator: ", ")
     var line = ""
     if let agent, let host {
@@ -71,7 +82,9 @@ public struct EngineScan: Sendable, Equatable {
       if let since { line += " depuis \(Self.hourFormatter.string(from: since))" }
       line += " · "
     }
-    return line + "moteur \(backend.rawValue) · prêts : \(list)"
+    line += "moteur \(backend.rawValue) · prêts : \(list)"
+    if !aConnecter.isEmpty { line += " · à connecter : \(aConnecter.joined(separator: ", "))" }
+    return line
   }
 
   /// Le nom de cette machine, court : `umbrel`, pas `umbrel.local`.
@@ -91,7 +104,9 @@ public struct EngineScan: Sendable, Equatable {
   public func reportFR(backend: AgentConfig.Backend) -> String {
     var lines = engines.map { engine in
       guard let path = engine.path else { return "✗ \(engine.name) — introuvable" }
-      return "✓ \(engine.name) — \(path)\(engine.version.map { " (\($0))" } ?? "")"
+      let version = engine.version.map { " (\($0))" } ?? ""
+      if engine.isLoggedOut { return "! \(engine.name) — \(path)\(version) — installé mais pas connecté" }
+      return "✓ \(engine.name) — \(path)\(version)"
     }
     let label = configuredEngine.map { $0 == backend.rawValue ? $0 : "\(backend.rawValue) (\($0))" } ?? backend.rawValue
     if isPresent(backend) {
@@ -137,5 +152,26 @@ public struct EngineScan: Sendable, Equatable {
   public func isPresent(_ backend: AgentConfig.Backend) -> Bool {
     let name = configuredEngine ?? backend.rawValue
     return engines.first { $0.name == name }?.isPresent == true
+  }
+
+  /// Installé, mais sa trace de connexion manque : le tour échouerait sur une
+  /// erreur d'authentification brute, en anglais, sans le geste.
+  public func isLoggedOut(_ backend: AgentConfig.Backend) -> Bool {
+    let name = configuredEngine ?? backend.rawValue
+    return engines.first { $0.name == name }?.isLoggedOut == true
+  }
+
+  /// Ce que l'agent répond quand son moteur est là mais pas connecté. Même
+  /// principe que l'absence : dire où, et quoi faire, plutôt que l'erreur brute.
+  public static func nonConnecteFR(engine: String, host: String) -> String {
+    var lignes = ["\(engine) est installé sur \(host) mais pas connecté : je ne peux pas répondre."]
+    if let geste = EngineLogin.gesture(for: engine) {
+      lignes.append("Là-bas : \(geste)")
+    }
+    lignes.append(
+      "Ou change mon moteur depuis Réglages › Agents — le réglage part par ma console, "
+        + "sans SSH ni redémarrage."
+    )
+    return lignes.joined(separator: "\n")
   }
 }

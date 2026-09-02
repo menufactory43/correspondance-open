@@ -116,6 +116,63 @@ final class EngineCatalogTests: XCTestCase {
     XCTAssertEqual(try entree("claude-code-acp").acpArguments, [])
   }
 
+  // MARK: - Installé n'est pas connecté
+
+  /// Vu en vrai avec `codex` et `grok` : tout disait « prêt », et le premier
+  /// tour remontait une erreur d'authentification brute. Une CLI sans sa
+  /// trace de connexion n'est pas prête — et l'écran dit le geste.
+  func testUneCLIInstalleeMaisPasConnecteeNEstPasPrete() throws {
+    let grok = try entree("grok")
+    let etat = EngineCatalog.decide(entry: grok, path: "/opt/homebrew/bin/grok", version: "grok 1.0.13", connecte: false)
+    guard case .nonConnecte(let geste) = etat else { return XCTFail("\(etat)") }
+    XCTAssertTrue(geste.contains("grok login"), geste)
+    XCTAssertFalse(etat.estPret)
+  }
+
+  /// L'adaptateur se connecte par la CLI qu'il lance : `codex-acp` par `codex`.
+  func testUnAdaptateurSeConnecteParSaCLI() throws {
+    let codex = try entree("codex-acp")
+    let etat = EngineCatalog.decide(entry: codex, path: "/opt/homebrew/bin/codex-acp", version: "1.8.0", connecte: false)
+    guard case .nonConnecte(let geste) = etat else { return XCTFail("\(etat)") }
+    XCTAssertTrue(geste.contains("codex login"), geste)
+  }
+
+  /// « On ne sait pas » n'est pas « non » : hermes n'a pas de preuve connue,
+  /// et il reste prêt.
+  func testSansPreuveConnueOnNeRetirePasLePret() throws {
+    let hermes = try entree("hermes")
+    XCTAssertTrue(EngineCatalog.decide(entry: hermes, path: "/Users/moi/.local/bin/hermes", version: nil, connecte: nil).estPret)
+    XCTAssertTrue(EngineCatalog.decide(entry: hermes, path: "/Users/moi/.local/bin/hermes", version: nil, connecte: false).estPret)
+  }
+
+  func testLeScanDemandeLaConnexionDesSeulsMoteursTrouves() {
+    var demandes: [String] = []
+    let resultats = EngineCatalog.scan(
+      which: { $0 == "codex-acp" ? "/opt/homebrew/bin/codex-acp" : nil },
+      version: { _ in "1.8.0" },
+      connecte: { demandes.append($0); return false }
+    )
+    XCTAssertEqual(demandes, ["codex-acp"])
+    guard case .nonConnecte = resultats.first(where: { $0.entry.id == "codex-acp" })?.state else {
+      return XCTFail("codex-acp trouvé mais pas connecté devait le dire")
+    }
+  }
+
+  // MARK: - Le bouton Installer ne lance que ce qu'on sait lire
+
+  func testSeulesLesCommandesNpmEtBrewSeCliquent() throws {
+    XCTAssertTrue(EngineInstaller.estLancable("npm install -g @agentclientprotocol/codex-acp"))
+    XCTAssertTrue(EngineInstaller.estLancable("brew install block-goose-cli"))
+    XCTAssertFalse(EngineInstaller.estLancable("curl -fsSL https://x.ai/cli/install.sh | bash"))
+    // Grok s'installe par un script : il se copie, il ne se clique pas.
+    XCTAssertNil(try entree("grok").commandeInstallation)
+    for entry in EngineCatalog.entries {
+      if let commande = entry.commandeInstallation {
+        XCTAssertTrue(EngineInstaller.estLancable(commande), entry.id)
+      }
+    }
+  }
+
   func testLeNumeroDeVersionSeLitDansUneLigneQuelconque() {
     XCTAssertEqual(EngineCatalog.numeroDeVersion("claude-code-acp 0.16.2"), "0.16.2")
     XCTAssertEqual(EngineCatalog.numeroDeVersion("goose 1.9.0 (build 42)"), "1.9.0")

@@ -1,3 +1,4 @@
+import CorrespondanceMatrixClient
 import Foundation
 
 /// **Le catalogue des moteurs de ce Mac** : ce avec quoi un agent peut penser
@@ -60,9 +61,12 @@ enum EngineCatalog {
     /// Le nom d'agent proposé quand on l'active. Modifiable dans l'écran :
     /// c'est une proposition, pas une contrainte.
     var nomAgentPropose: String
-    /// Ce qu'on affiche quand le moteur manque. Une commande à copier, ou une
-    /// page — jamais un bouton qui promettrait ce qu'on ne sait pas faire.
+    /// Ce qu'on affiche quand le moteur manque : la commande, et le geste de
+    /// connexion qui suit.
     var indiceInstallation: String
+    /// La commande que le bouton « Installer » lance — npm ou brew seulement,
+    /// `EngineInstaller.estLancable`. `nil` : ça se copie, ça ne se clique pas.
+    var commandeInstallation: String? = nil
     /// La version épinglée, pour les adaptateurs ACP seulement.
     var versionEpinglee: String?
 
@@ -79,6 +83,10 @@ enum EngineCatalog {
     /// Trouvé, mais pas à la version épinglée. Ce n'est pas « cassé » : c'est
     /// « on n'a pas éprouvé ce régime de permission », et ça se dit.
     case adaptateurPerime(version: String, epinglee: String)
+    /// Trouvé, à la bonne version, mais sa trace de connexion manque : le
+    /// premier tour échouerait sur une erreur d'authentification. Le geste
+    /// est celui de `EngineLogin`.
+    case nonConnecte(geste: String)
 
     var estPret: Bool { if case .pret = self { return true } else { return false } }
 
@@ -91,6 +99,8 @@ enum EngineCatalog {
       case .adaptateurPerime(let version, let epinglee):
         "version \(version) — l'installation en pose \(epinglee), "
           + "et le régime de permission d'un adaptateur change d'une version à l'autre"
+      case .nonConnecte:
+        "installé, mais pas connecté"
       }
     }
   }
@@ -116,6 +126,7 @@ enum EngineCatalog {
       nomAgentPropose: "cc",
       indiceInstallation: "npm install -g @anthropic-ai/claude-code, puis `claude` une fois "
         + "pour ouvrir la session — l'abonnement, jamais de clé.",
+      commandeInstallation: "npm install -g @anthropic-ai/claude-code",
       versionEpinglee: nil
     ),
     Entry(
@@ -136,6 +147,7 @@ enum EngineCatalog {
       acpCommand: "claude-code-acp",
       nomAgentPropose: "claude",
       indiceInstallation: "npm install -g @zed-industries/claude-code-acp@\(acpVersionEpinglee)",
+      commandeInstallation: "npm install -g @zed-industries/claude-code-acp@\(acpVersionEpinglee)",
       versionEpinglee: acpVersionEpinglee
     ),
     // Éprouvé le 2 septembre 2026 : `codex-acp` 1.8.0 parle ACP sur le compte
@@ -148,6 +160,7 @@ enum EngineCatalog {
       nomAgentPropose: "codex",
       indiceInstallation: "npm install -g @agentclientprotocol/codex-acp, puis `codex login` une fois "
         + "— le compte ChatGPT, jamais de clé.",
+      commandeInstallation: "npm install -g @agentclientprotocol/codex-acp",
       versionEpinglee: nil
     ),
     // Éprouvé le même jour : `grok agent stdio` parle ACP sur le compte de
@@ -171,6 +184,7 @@ enum EngineCatalog {
       acpArguments: ["acp"],
       nomAgentPropose: "goose",
       indiceInstallation: "brew install block-goose-cli — puis `goose acp` sert d'adaptateur.",
+      commandeInstallation: "brew install block-goose-cli",
       versionEpinglee: nil
     ),
     // Pas de Gemini : le 2 septembre 2026, `gemini --acp` connecté à un compte
@@ -192,8 +206,16 @@ enum EngineCatalog {
   /// La conclusion, à partir de ce qu'on a **vu** : un chemin exécutable, une
   /// ligne de version. Pure, donc éprouvée sans lancer un seul processus —
   /// c'est elle qui empêche l'écran d'affirmer « prêt » sans preuve.
-  static func decide(entry: Entry, path: String?, version: String?) -> State {
+  ///
+  /// `connecte` : la trace de connexion de la CLI (`EngineLogin`). `nil` quand
+  /// on n'a pas de preuve pour ce moteur — et « on ne sait pas » ne retire
+  /// pas le « prêt ». `false` le retire : un premier tour sans connexion
+  /// n'est qu'une erreur brute.
+  static func decide(entry: Entry, path: String?, version: String?, connecte: Bool? = nil) -> State {
     guard path != nil else { return .nonInstalle }
+    if connecte == false, let geste = EngineLogin.gesture(for: entry.acpCommand ?? entry.id) {
+      return .nonConnecte(geste: geste)
+    }
     guard let epinglee = entry.versionEpinglee else { return .pret(version: version) }
     guard let version, let lue = numeroDeVersion(version) else {
       // Trouvé, mais il n'a pas su dire sa version : on ne peut pas affirmer
@@ -224,12 +246,15 @@ enum EngineCatalog {
   static func scan(
     entries liste: [Entry] = entries,
     which: (String) -> String? = Self.trouver,
-    version: (String) -> String? = { Self.versionDepuisPackageJSON($0) ?? Self.versionDe($0) }
+    version: (String) -> String? = { Self.versionDepuisPackageJSON($0) ?? Self.versionDe($0) },
+    connecte: (String) -> Bool? = { EngineLogin.isLoggedIn(engine: $0) }
   ) -> [Finding] {
     liste.map { entry in
-      let path = which(entry.acpCommand ?? entry.id)
+      let binaire = entry.acpCommand ?? entry.id
+      let path = which(binaire)
       let ligne = path.flatMap { version($0) }
-      return Finding(entry: entry, state: decide(entry: entry, path: path, version: ligne), path: path)
+      let state = decide(entry: entry, path: path, version: ligne, connecte: path == nil ? nil : connecte(binaire))
+      return Finding(entry: entry, state: state, path: path)
     }
   }
 
