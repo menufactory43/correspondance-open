@@ -3131,9 +3131,6 @@ final class InboxStore {
         return IMessageSendError.automationDenied.localizedDescription
       }
     }
-    if conversation.network == .iMessage, !attachments.isEmpty {
-      return "Envoi d’images iMessage pas encore branché — Signal seulement pour l’instant."
-    }
     if conversation.network.livesOnRelay, !isMatrixConnected {
       return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
     }
@@ -3528,6 +3525,36 @@ final class InboxStore {
     return flying.isEmpty ? fresh : fresh + flying
   }
 
+  /// Le fil relu depuis la source, SANS perdre ce qu'on vient d'envoyer.
+  ///
+  /// Envoyer un iMessage fait écrire Messages dans le WAL de `chat.db` ; le
+  /// veilleur le voit et relit le fil — souvent avant que la ligne du message
+  /// n'y soit posée. La relecture remplaçait alors la bulle par une base qui
+  /// ne la contenait pas encore : le message était bel et bien parti, et il
+  /// disparaissait de l'app. Le veilleur ne repasse qu'au prochain coup de WAL,
+  /// donc la bulle pouvait manquer longtemps.
+  ///
+  /// On garde donc l'écho local tant que la source ne montre pas le message :
+  /// de moi, même texte, à quelques minutes près. Passé dix minutes sans
+  /// retrouvailles, on le lâche — une pièce jointe ne se compare pas au texte,
+  /// et un écho qu'on ne saura jamais apparier deviendrait un doublon éternel.
+  static func keepingLocalEchoes(_ fresh: [ChatMessage], from current: [ChatMessage]) -> [ChatMessage] {
+    let echoes = current.filter { $0.isFromMe && $0.id.hasPrefix("local-") }
+    guard !echoes.isEmpty else { return fresh }
+    let now = Date()
+    let survivors = echoes.filter { echo in
+      guard now.timeIntervalSince(echo.sentAt) < 600 else { return false }
+      let attendu = echo.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      return !fresh.contains { candidate in
+        candidate.isFromMe
+          && candidate.text.trimmingCharacters(in: .whitespacesAndNewlines) == attendu
+          && abs(candidate.sentAt.timeIntervalSince(echo.sentAt)) < 300
+      }
+    }
+    guard !survivors.isEmpty else { return fresh }
+    return (fresh + survivors).sorted { $0.sentAt < $1.sentAt }
+  }
+
   /// Ce fil est-il réellement lu par quelqu'un en ce moment ? L'inbox le lit si
   /// l'utilisateur l'a choisi ; une fenêtre détachée le lit si elle est devant.
   private func isAttended(_ conversationID: String) -> Bool {
@@ -3737,13 +3764,18 @@ final class InboxStore {
       // Les repères « Synchronisation… » d'un réseau vide n'ont pas de place
       // dans un fil qui, lui, a des messages ailleurs.
       let real = merged.filter { !Self.isPlaceholderMessageID($0.id) }
-      session.messages = (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt }
+      session.messages = Self.keepingLocalEchoes(
+        (real.isEmpty ? merged : real).sorted { $0.sentAt < $1.sentAt },
+        from: session.messages
+      )
       applySidebarPreview(conversationID: conversation.id, from: session.messages)
       recordReplyProof(for: conversation.id, in: session.messages)
       return
     }
 
-    session.messages = await fetchMessages(for: conversation)
+    session.messages = Self.keepingLocalEchoes(
+      await fetchMessages(for: conversation), from: session.messages
+    )
     recordReplyProof(for: conversation.id, in: session.messages)
   }
 

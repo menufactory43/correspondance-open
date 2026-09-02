@@ -31,4 +31,42 @@ final class InFlightBubbleTests: XCTestCase {
     let fresh = [message("local-1", fromMe: true)]
     XCTAssertEqual(InboxStore.keepingInFlight(fresh, from: current).map(\.id), ["local-1"])
   }
+
+  // MARK: - L'écho local d'un message déjà parti
+
+  private func echo(_ id: String, text: String, ageSeconds: Double = 5) -> ChatMessage {
+    ChatMessage(
+      id: id, conversationID: "imessage:1", network: .iMessage, text: text,
+      sentAt: Date().addingTimeInterval(-ageSeconds), isFromMe: true
+    )
+  }
+
+  /// Le cas du bug : Messages écrit dans le WAL, le veilleur relit `chat.db`
+  /// avant que la ligne n'y soit, et le message envoyé disparaissait du fil.
+  func testSentBubbleSurvivesAReadThatDoesNotSeeItYet() {
+    let current = [echo("local-1", text: "Salut")]
+    let fresh = [message("a", fromMe: false)]
+    XCTAssertEqual(InboxStore.keepingLocalEchoes(fresh, from: current).map(\.id), ["a", "local-1"])
+  }
+
+  /// La base a rattrapé son retard : c'est sa ligne qui reste, pas l'écho.
+  func testEchoYieldsOnceTheDatabaseShowsTheMessage() {
+    let current = [echo("local-1", text: "Salut")]
+    let fresh = [
+      ChatMessage(
+        id: "imessage:42", conversationID: "imessage:1", network: .iMessage,
+        text: " Salut ", sentAt: Date(), isFromMe: true
+      )
+    ]
+    XCTAssertEqual(InboxStore.keepingLocalEchoes(fresh, from: current).map(\.id), ["imessage:42"])
+  }
+
+  /// Un écho jamais apparié (une pièce jointe, dont le texte ne ressemble à
+  /// rien dans la base) finit par être lâché : mieux vaut le perdre que le
+  /// figer en doublon éternel.
+  func testStaleEchoIsDropped() {
+    let current = [echo("local-1", text: "📷 Photo", ageSeconds: 3600)]
+    let fresh = [message("a", fromMe: false)]
+    XCTAssertEqual(InboxStore.keepingLocalEchoes(fresh, from: current).map(\.id), ["a"])
+  }
 }
