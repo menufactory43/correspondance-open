@@ -156,6 +156,10 @@ struct AgentCommand {
       }
       defer { surveillance?.cancel() }
       stamp(binaryStamp())
+      // Dit AVANT le premier /sync : si l'amorce lue n'est pas celle
+      // qu'on croyait, il faut le savoir avant que l'agent se connecte,
+      // pas après qu'il a répondu au nom de quelqu'un.
+      if let alerte = AgentHome.contradiction(arguments: CommandLine.arguments) { stamp(alerte) }
       stamp(AgentCrypto.ligneDEtat())
       let agent = Agent(
         config: config, backend: makeBackend(config), stateURL: stateURL,

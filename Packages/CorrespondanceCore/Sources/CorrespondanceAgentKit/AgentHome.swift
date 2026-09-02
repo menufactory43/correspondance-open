@@ -104,6 +104,39 @@ public enum AgentHome {
     return (defaultAgent, directory(agent: defaultAgent, home: home, environment: environment))
   }
 
+  /// La contradiction qui a coûté la phase 7a, dite à voix haute.
+  ///
+  /// L'unité du NUC passait `--agent cc` **et** `CORRESPONDANCE_AGENT_HOME`
+  /// vers le dossier du spike. `--agent` gagne — c'est la règle, et elle est
+  /// juste : un plist statique doit gagner sur un environnement hérité, sinon
+  /// une variable oubliée détourne un agent vers le dossier d'un autre. Mais
+  /// ici les deux venaient de la même main, et le perdant était le seul des
+  /// deux à dire « ceci est un essai » : `cc` a donc lu l'amorce de la
+  /// production et s'est connecté au vrai Relais. Seule la garde du second
+  /// agent l'a arrêté.
+  ///
+  /// On ne renverse pas la règle — ce serait rouvrir le trou qu'elle bouche.
+  /// On rend le silence impossible : quand `--agent` fait ignorer un
+  /// `CORRESPONDANCE_AGENT_HOME` qui désignait ailleurs, la première ligne du
+  /// journal le dit et nomme la variable à utiliser à la place.
+  ///
+  /// Un essai s'écrit `CORRESPONDANCE_HOME`, qui se **multiplie** avec
+  /// `--agent` au lieu de se disputer avec lui.
+  public static func contradiction(
+    arguments: [String],
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    home: URL = FileManager.default.homeDirectoryForCurrentUser
+  ) -> String? {
+    guard let agent = agentName(in: arguments) else { return nil }
+    guard let chemin = environment["CORRESPONDANCE_AGENT_HOME"], !chemin.isEmpty else { return nil }
+    let retenu = directory(agent: agent, home: home, environment: environment)
+    let ignore = URL(fileURLWithPath: chemin).standardizedFileURL
+    guard ignore.path() != retenu.standardizedFileURL.path() else { return nil }
+    return "⚠ `--agent \(agent)` l'emporte : CORRESPONDANCE_AGENT_HOME=\(chemin) est ignoré,"
+      + " je lis \(retenu.path()). Pour un essai, c'est CORRESPONDANCE_HOME qu'il faut poser"
+      + " — elle se combine avec --agent au lieu de se faire ignorer."
+  }
+
   /// `--agent hermes` ou `--agent=hermes`.
   static func agentName(in arguments: [String]) -> String? {
     for (index, argument) in arguments.enumerated() {
