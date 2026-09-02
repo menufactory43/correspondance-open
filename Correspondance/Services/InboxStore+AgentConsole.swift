@@ -130,8 +130,12 @@ extension InboxStore {
     do {
       let bootstrap = try await matrix.provisionAgent(named: nom)
       // La console est ouverte au passage : l'agent distant y trouvera sa
-      // configuration dès qu'il se connectera.
+      // configuration dès qu'il se connectera. Et l'invitation dans la note
+      // à soi part maintenant : l'agent l'accepte à sa première synchro. Sans
+      // elle, l'installeur finissait sur « @claude ping dans ta note à soi »
+      // et le ping tombait dans une room où l'agent n'était pas — vu en vrai.
       await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments)
+      await inviteAgentToSelfNote(agent: nom)
       return .success(AgentBootstrapToken(bootstrap: bootstrap))
     } catch {
       Self.relayLog.error("jeton d'amorce impossible : \(error.localizedDescription, privacy: .public)")

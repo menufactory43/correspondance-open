@@ -531,7 +531,7 @@ struct SettingsAgentsPane: View {
       let cle = "\(moteur)@\(hote.nom)"
       SettingsRow(
         label: EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }?.labelFR ?? moteur,
-        detail: "prêt là-bas · " + commandeDetail(cle: cle),
+        detail: commandeDetail(cle: cle),
         systemImage: "checkmark.seal"
       ) {
         if let commande = commandes[cle]?.texte {
@@ -636,13 +636,20 @@ struct SettingsAgentsPane: View {
     return saisi.isEmpty ? nomLibre(base: entreeAutre?.nomAgentPropose ?? moteurAutre) : saisi
   }
 
+  /// Ce qu'on dit d'une commande préparée — **jamais la commande elle-même** :
+  /// elle contient le mot de passe du compte de l'agent, et un écran qui
+  /// l'affiche finit dans une capture ou un copier-coller. Le bouton Copier
+  /// est la seule façon de l'avoir.
   private func commandeDetail(cle: String) -> String {
     guard let commande = commandes[cle] else {
       return peutProvisionner
         ? "une commande à coller en SSH, et l'agent répond même Mac fermé"
         : "il faut être administrateur du Relais pour créer un agent"
     }
-    return commande.expire <= Date() ? "la commande a expiré — reprends-en une" : commande.texte
+    guard commande.expire > Date() else { return "la commande a expiré — reprends-en une" }
+    let heure = commande.expire.formatted(date: .omitted, time: .shortened)
+    return "commande prête, copie-la et colle-la dans un terminal là-bas — elle contient un mot de passe "
+      + "et périme à \(heure)"
   }
 
   /// Un nom qui n'est pris par aucune console. Deux agents du même nom, ce
