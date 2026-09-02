@@ -80,6 +80,7 @@
 		7CA729E3F5276CB3264503C0 /* ConversationAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */; };
 		83429DD41B742E4DEB048235 /* SettingsAppearancePane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C2362886157441127E0488B /* SettingsAppearancePane.swift */; };
 		837364980DCFAF643A2E9899 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5134D90E3C3D585B478FDD21 /* SettingsView.swift */; };
+		A7C1FF0400000000000000A4 /* ChiffrementSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1FF0300000000000000A3 /* ChiffrementSections.swift */; };
 		8520F818A51D69AE23716712 /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */; };
 		87C73BA02A60E838C154E1EE /* QuickReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */; };
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
@@ -119,6 +120,7 @@
 		C24D8539867956DA1A0AA941 /* GroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */; };
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
+		A7C1FF0200000000000000A2 /* SettingsChiffrementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */; };
 		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
 		C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA76B9F9792DFFD335C3F85C /* ContactBook.swift */; };
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
@@ -226,6 +228,7 @@
 		24200371D508DA6447F58B59 /* QuickReplyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyPanel.swift; sourceTree = "<group>"; };
 		258F2B6AE43BCA594215DA3E /* Correspondance.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Correspondance.entitlements; sourceTree = "<group>"; };
 		287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsMatrixPane.swift; sourceTree = "<group>"; };
+		A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsChiffrementCards.swift; sourceTree = "<group>"; };
 		2F765AC3695AED34BF7336EE /* ComposerControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControls.swift; sourceTree = "<group>"; };
 		31FB4ED97751DB01988DF12A /* InboxStore+Mentions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Mentions.swift"; sourceTree = "<group>"; };
 		33A2DEA6220E02771BAD4467 /* ThemePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePreferences.swift; sourceTree = "<group>"; };
@@ -253,6 +256,7 @@
 		503F3F88679B6D47523DF6E9 /* RelayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayStore.swift; sourceTree = "<group>"; };
 		506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageChatDatabaseTests.swift; sourceTree = "<group>"; };
 		5134D90E3C3D585B478FDD21 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A7C1FF0300000000000000A3 /* ChiffrementSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChiffrementSections.swift; sourceTree = "<group>"; };
 		55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAvatarView.swift; sourceTree = "<group>"; };
 		56ABFEA2CE8EC6FCC0E82519 /* SettingsSendingPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSendingPane.swift; sourceTree = "<group>"; };
 		5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = CorrespondanceiOSNotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -430,6 +434,7 @@
 			isa = PBXGroup;
 			children = (
 				5134D90E3C3D585B478FDD21 /* SettingsView.swift */,
+				A7C1FF0300000000000000A3 /* ChiffrementSections.swift */,
 			);
 			path = Reglages;
 			sourceTree = "<group>";
@@ -611,6 +616,7 @@
 				192CF26CAA43E2A421A52262 /* SettingsChrome.swift */,
 				95ED3D336C908CA8FB5DE7FA /* SettingsDictationPane.swift */,
 				287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */,
+				A7C1FF0100000000000000A1 /* SettingsChiffrementCards.swift */,
 				CC8813E85552216BB19289AD /* SettingsPermissionsPane.swift */,
 				56ABFEA2CE8EC6FCC0E82519 /* SettingsSendingPane.swift */,
 				B758EF0696E62CAE3AD887FF /* SettingsView.swift */,
@@ -1083,6 +1089,7 @@
 				8CE15690F8A69B4D6A577D11 /* SelectTextSheet.swift in Sources */,
 				5E84670E494B604BE024AE31 /* SendLaterSheet.swift in Sources */,
 				837364980DCFAF643A2E9899 /* SettingsView.swift in Sources */,
+				A7C1FF0400000000000000A4 /* ChiffrementSections.swift in Sources */,
 				E3F1D34B0B88C8E7035C29EE /* ThemePreferences.swift in Sources */,
 				76E873AC961652BB6447FF67 /* ThreadComposer.swift in Sources */,
 				C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */,
@@ -1179,6 +1186,7 @@
 				77CEA32444389E9AEF289985 /* SettingsChrome.swift in Sources */,
 				7A2860B411E6B8681020D48A /* SettingsDictationPane.swift in Sources */,
 				C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */,
+				A7C1FF0200000000000000A2 /* SettingsChiffrementCards.swift in Sources */,
 				987B506EA4A578724136E2A8 /* SettingsPermissionsPane.swift in Sources */,
 				DF853DCFFE8A5216ACE7A404 /* SettingsSendingPane.swift in Sources */,
 				EA89C17936DA66C2BD1966A5 /* SettingsView.swift in Sources */,

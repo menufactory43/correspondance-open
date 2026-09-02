@@ -17,10 +17,19 @@ struct SettingsMatrixPane: View {
   @State private var codeAppairage = ""
   @State private var motsDeVerification: [String] = []
   @State private var erreurCode: String?
+  /// Le modèle des deux écrans du chiffrement. Créé à la première connexion et
+  /// jeté à la déconnexion : il porte l'identité du compte, et un modèle qui
+  /// survivrait à un changement de compte montrerait la phrase de l'autre.
+  @State private var chiffrement: ModeleChiffrement?
 
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
+    contenu
+      .task(id: store.isMatrixConnected) { await preparerLeChiffrement() }
+  }
+
+  @ViewBuilder private var contenu: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       // Sur un jeu de données d'essai, on le dit avant tout le reste : personne
       // ne doit croire qu'il regarde ses vraies conversations.
@@ -45,7 +54,15 @@ struct SettingsMatrixPane: View {
           systemImage: store.isMatrixConnected ? "checkmark.seal.fill" : "exclamationmark.triangle"
         ) {
           Button("Re-sonder") {
-            Task { await store.refreshMatrixStatus() }
+            Task {
+              await store.refreshMatrixStatus()
+              // La machine crypto ne se branche qu'au premier `/sync` qui suit
+              // la connexion : sondée avant, elle répond « pas encore
+              // connecté ». Re-sonder doit donc resonder les deux, sinon
+              // l'écran de la phrase reste en arrière d'un tour.
+              await chiffrement?.sonder()
+              await chiffrement?.rafraichirLesAppareils()
+            }
           }
         }
 
@@ -66,6 +83,11 @@ struct SettingsMatrixPane: View {
             EmptyView()
           }
         }
+      }
+
+      if store.isMatrixConnected, let chiffrement {
+        PhraseDeRecuperationCard(modele: chiffrement)
+        AppareilsDuCompteCard(modele: chiffrement)
       }
 
       if store.isMatrixConnected {
@@ -149,6 +171,25 @@ struct SettingsMatrixPane: View {
         }
       }
     }
+  }
+
+  /// Le modèle des écrans du chiffrement suit la session : il naît avec elle et
+  /// meurt avec elle. `MatrixCredentialStore.load()` plutôt qu'un identifiant
+  /// gardé en vue : c'est la même source que le client, donc les deux ne peuvent
+  /// pas diverger.
+  private func preparerLeChiffrement() async {
+    guard store.isMatrixConnected, let compte = MatrixCredentialStore.load()?.userID else {
+      chiffrement = nil
+      return
+    }
+    if chiffrement == nil {
+      chiffrement = ModeleChiffrement(
+        compte: compte,
+        service: ChiffrementParLeRelais(store.matrix),
+        magasin: MagasinDePhraseAuTrousseau()
+      )
+    }
+    await chiffrement?.sonder()
   }
 
   /// Archives, épingles, sourdines et brouillons vivent dans le Relais (ADR 0001).
