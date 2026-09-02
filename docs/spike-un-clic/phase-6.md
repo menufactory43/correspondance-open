@@ -460,3 +460,18 @@ Les tests du paquet, inchangés : **798** sans crypto, **803** avec
 5. La carte « Sur ce Mac » suppose une app **hors bac à sable** : elle lance un script qui pose des
    `LaunchAgents`. Correspondance se distribue déjà en DMG notarisé hors App Store, donc c'est
    cohérent, mais c'est un engagement à écrire noir sur blanc.
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : `install-plan.sh` conforme, 798 tests du package, 15 tests `RelaisInstallationTests`
+sous Xcode ; `otool -L` des quatre ponts macOS de `~/unclic-publication` : aucune référence à
+libolm ; `install.sh --json` depuis un préfixe vide, dix étapes `ok` et l'objet d'appairage
+avec ses six mots, 15 s ; `publier.sh --dry-run` vérifie les sommes sans rien exécuter ;
+captures `phase-6-accueil.png` et `phase-6-etapes.png` : l'écran à deux cartes avec les
+phrases décidées, et « Installer ici » qui déroule les étapes. Je n'ai pas recliqué le bouton
+moi-même ; le rapport en montre le bout en bout (26 s, zéro frappe) et l'installation par
+`--json` que j'ai rejouée est exactement ce que l'app exécute. Retrait complet, aucun
+orphelin. Phase acceptée. Reste à décider par le propriétaire : la publication réelle, et la
+signature Developer ID des binaires que l'app télécharge.
