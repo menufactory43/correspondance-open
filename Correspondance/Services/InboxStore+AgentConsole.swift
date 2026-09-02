@@ -89,10 +89,41 @@ extension InboxStore {
       let state = try AgentLocalHost.install(bootstrap: bootstrap, agent: nom)
       await activateAgentConsole(agent: nom, backend: backend, acpCommand: acpCommand, acpArguments: acpArguments)
       await inviteAgentToSelfNote(agent: nom)
+      // L'agent n'a pas encore de clés à cette seconde — il vient d'être créé.
+      // On essaie quand même : le jour où l'ordre changera, ce sera déjà là.
+      await attesterAgent(nom)
       return .success(state)
     } catch {
       Self.relayLog.error("activation locale impossible : \(error.localizedDescription, privacy: .public)")
       return .failure(error)
+    }
+  }
+
+  /// Atteste un agent : sa clé maîtresse reçoit notre signature, et nos autres
+  /// appareils cessent de le voir comme un inconnu.
+  ///
+  /// Silencieux quand il n'y a rien à signer : l'agent pose ses propres clés à
+  /// son **premier démarrage**, donc juste après une activation il n'en a pas
+  /// encore. On réessaie à chaque ouverture des réglages, et ça finit par
+  /// prendre sans que personne n'ait rien à faire.
+  @discardableResult
+  func attesterAgent(_ agent: String? = nil) async -> AgentAttestation {
+    let resultat = await matrix.attesterAgent(named: agent ?? agentName)
+    switch resultat {
+    case .faite: Self.relayLog.info("agent attesté")
+    case .pasEncore(let raison):
+      Self.relayLog.debug("agent pas encore attestable : \(raison, privacy: .public)")
+    case .dejaFaite, .relaisAbsent: break
+    }
+    return resultat
+  }
+
+  /// Atteste tous les agents que la console connaît. Appelé quand les réglages
+  /// s'ouvrent : c'est le moment où l'utilisateur regarde, donc celui où un
+  /// « attesté » qui apparaît a du sens.
+  func attesterLesAgentsConnus() async {
+    for console in await listAgentConsoles() {
+      await attesterAgent(console.agent)
     }
   }
 

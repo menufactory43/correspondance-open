@@ -672,6 +672,10 @@ struct SettingsAgentsPane: View {
     // Le scan touche le disque et lance des `--version` : hors de l'acteur
     // principal, sinon l'écran se fige le temps qu'un moteur réponde.
     moteurs = await Task.detached { EngineCatalog.scan() }.value
+    // Un agent pose ses clés de signature à son premier démarrage : à
+    // l'activation il n'y avait rien à signer. On réessaie ici, à chaque
+    // ouverture, jusqu'à ce que ça prenne — sans rien demander à personne.
+    await store.attesterLesAgentsConnus()
   }
 
   /// L'ordre part dans la console ; l'agent rescanne à son prochain `/sync`
@@ -693,6 +697,10 @@ struct SettingsAgentsPane: View {
   /// qui a changé, pas l'annuaire.
   private func rescannerLesMoteurs() async {
     moteurs = await Task.detached { EngineCatalog.scan() }.value
+    // Un agent pose ses clés de signature à son premier démarrage : à
+    // l'activation il n'y avait rien à signer. On réessaie ici, à chaque
+    // ouverture, jusqu'à ce que ça prenne — sans rien demander à personne.
+    await store.attesterLesAgentsConnus()
   }
 
   private func activerMoteur(_ trouve: EngineCatalog.Finding) async {

@@ -163,7 +163,8 @@ struct AgentCommand {
       stamp(AgentCrypto.ligneDEtat())
       let agent = Agent(
         config: config, backend: makeBackend(config), stateURL: stateURL,
-        chiffrement: AgentCrypto.branchement(home: home), log: { stamp($0) })
+        chiffrement: AgentCrypto.branchement(home: home, motDePasse: config.password),
+        log: { stamp($0) })
       do {
         try await agent.run()
       } catch {

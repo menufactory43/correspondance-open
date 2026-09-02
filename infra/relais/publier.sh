@@ -262,10 +262,58 @@ if [ "$SIGNER" = 1 ] && [ ${#A_SIGNER[@]} -gt 0 ]; then
 fi
 echo
 
+# ------------------------------------------------------------ le corps du texte
+# Le corps de la release se périmait en silence : `gh release create` ne le pose
+# qu'à la **création**, et une republication (`--clobber`) ne remplace que les
+# fichiers. Le texte du 2 septembre annonçait donc « la pile du Relais » sur une
+# release qui portait aussi l'agent, sa crypto et le DMG, et citait une seule
+# soumission de notarisation quand il y en avait trois.
+#
+# Il s'engendre maintenant à chaque publication : une prose tenue à la main
+# (`infra/relais/NOTES-preambule.md`, où l'on écrit ce qu'on veut dire) et un
+# inventaire relevé sur les fichiers eux-mêmes — nom, poids, signature, somme.
+# Ce qui se vérifie ne s'écrit pas à la main.
+NOTES="$DOSSIER/NOTES.md"
+{
+  sed "s/\$TAG/$TAG/g" "$ICI/infra/relais/NOTES-preambule.md"
+  echo
+  echo "## Ce que cette release contient"
+  echo
+  echo "| Fichier | Poids | Signature |"
+  echo "| --- | --- | --- |"
+  for nom in "${FICHIERS[@]}"; do
+    f="$DOSSIER/$nom"
+    poids="$(du -h "$f" | cut -f1 | tr -d ' ')"
+    nature="$(file "$f" 2>/dev/null || true)"
+    case "$nom" in
+      *.dmg) etat="image disque, signée et agrafée" ;;
+      *)
+        if est_macho "$f"; then
+          if deja_signe "$f"; then etat="Developer ID, notarisé"; else etat="⚠ non signé"; fi
+        elif contient "ELF" "$nature"; then
+          # Statique ou non : c'est ce qui décide si le binaire tourne sur une
+          # distribution dont la glibc est plus vieille que la nôtre.
+          if contient "statically linked" "$nature"; then
+            etat="ELF statique — un ELF ne se signe pas"
+          else
+            etat="ELF dynamique — un ELF ne se signe pas"
+          fi
+        else
+          etat="script, vérifié par sa somme"
+        fi ;;
+    esac
+    printf '| `%s` | %s | %s |\n' "$nom" "$poids" "$etat"
+  done
+  echo
+  echo "Sommes SHA-256 : \`SHA256SUMS\`. Publié le $(date '+%d/%m/%Y à %H:%M')."
+} > "$NOTES"
+echo "Corps de la release engendré ($(wc -l < "$NOTES" | tr -d ' ') lignes)"
+echo
+
 # --------------------------------------------------------------- gh release
 echo "Ce qu'une publication exécuterait"
 CMD_VOIR="gh release view $TAG --repo $DEPOT"
-CMD_CREER="gh release create $TAG --repo $DEPOT --title 'Relais $TAG' --notes-file $DOSSIER/NOTES.md"
+CMD_CREER="gh release create $TAG --repo $DEPOT --title 'Correspondance $TAG' --notes-file $NOTES"
 CMD_ENVOI="gh release upload $TAG --repo $DEPOT --clobber"
 for nom in "${FICHIERS[@]}"; do CMD_ENVOI="$CMD_ENVOI '$DOSSIER/$nom'"; done
 CMD_ENVOI="$CMD_ENVOI '$DOSSIER/SHA256SUMS'"
@@ -285,6 +333,13 @@ fi
 
 command -v gh >/dev/null || { echo "!! gh est nécessaire pour publier" >&2; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "!! gh n'est pas authentifié" >&2; exit 1; }
-if ! eval "$CMD_VOIR" >/dev/null 2>&1; then eval "$CMD_CREER"; fi
+if ! eval "$CMD_VOIR" >/dev/null 2>&1; then
+  eval "$CMD_CREER"
+else
+  # `--clobber` ne remplace que les fichiers : sans ceci, le texte reste celui
+  # de la première publication, pour toujours.
+  gh release edit "$TAG" --repo "$DEPOT" --notes-file "$NOTES" >/dev/null
+  echo "  corps de la release mis à jour"
+fi
 eval "$CMD_ENVOI"
 echo "✓ publié sur $DEPOT au tag $TAG"

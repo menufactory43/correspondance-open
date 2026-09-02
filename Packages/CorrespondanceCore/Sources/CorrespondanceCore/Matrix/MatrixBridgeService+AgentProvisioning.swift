@@ -145,6 +145,34 @@ extension MatrixBridgeService {
     return AgentBootstrap(homeserver: homeserver, user: agent, password: secret, owner: currentUserID)
   }
 
+  /// Atteste l'agent : sa clé maîtresse porte notre signature, donc nos autres
+  /// appareils le voient vérifié sans qu'on ait comparé d'émojis avec un robot.
+  ///
+  /// **Il faut qu'il se soit connecté au moins une fois** : ses clés de
+  /// signature, il les pose lui-même au premier démarrage. Juste après un
+  /// provisionnement il n'y a donc rien à signer, et ce n'est pas une erreur —
+  /// d'où le rendu qui distingue « fait » de « pas encore ».
+  @discardableResult
+  public func attesterAgent(named agent: String) async -> AgentAttestation {
+    guard isConnected else { return .relaisAbsent }
+    let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
+    if await client.identiteVerifiee(userID: userID) { return .dejaFaite }
+    do {
+      try await client.verifierIdentite(userID: userID)
+      return .faite
+    } catch {
+      return .pasEncore(raison: error.localizedDescription)
+    }
+  }
+
+  /// Où en est l'attestation d'un agent — ce que les réglages affichent.
+  public func attestationDeLAgent(named agent: String) async -> Bool {
+    guard isConnected else { return false }
+    return await client.identiteVerifiee(
+      userID: MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID))
+  }
+
+
   /// Les identifiants ouvrent-ils vraiment une session ? Un client jetable,
   /// pour ne pas toucher à la nôtre.
   private func credentialsWork(homeserver: URL, user: String, password: String) async -> Bool {
@@ -230,5 +258,27 @@ public enum AgentSessions {
       return "une autre machine (session « \(nom) », vue \(depuis))"
     }
     return nil
+  }
+}
+
+/// Ce qu'une tentative d'attestation a donné. Trois issues, parce que « raté »
+/// et « rien à faire » ne se disent pas pareil à l'utilisateur.
+public enum AgentAttestation: Sendable, Equatable {
+  case faite
+  case dejaFaite
+  /// L'agent n'a pas encore posé ses clés — il ne s'est jamais connecté.
+  case pasEncore(raison: String)
+  case relaisAbsent
+
+  public var estAttestee: Bool { self == .faite || self == .dejaFaite }
+
+  public var phraseFR: String {
+    switch self {
+    case .faite: "Agent attesté : sa clé porte ta signature."
+    case .dejaFaite: "Agent déjà attesté."
+    case .pasEncore(let raison):
+      "Agent pas encore attestable — il pose ses clés à son premier démarrage. (\(raison))"
+    case .relaisAbsent: "Relais non connecté."
+    }
   }
 }

@@ -33,6 +33,15 @@ struct ConversationPillHeader: View {
             .font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
             .truncationMode(.tail)
+          // Ce que la conversation est vraiment. iMessage n'a pas de salon
+          // Matrix : sa confidentialité est celle d'Apple, et nous n'en savons
+          // rien — mieux vaut ne rien dire que dire à peu près.
+          if conversation.network != .iMessage {
+            ConfidentialiteBadge(
+              conversation.confidentialite,
+              teinte: conversation.privacy.showsClosedLock ? theme.accent : theme.inkTertiary
+            )
+          }
           Image(systemName: "chevron.right")
             .font(.system(size: 9, weight: .semibold))
             .foregroundStyle(theme.inkTertiary)

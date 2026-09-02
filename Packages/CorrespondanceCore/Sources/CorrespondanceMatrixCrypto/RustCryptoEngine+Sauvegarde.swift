@@ -159,6 +159,25 @@ extension RustCryptoEngine: MatrixCryptoSauvegarde {
       id: UUID().uuidString, kind: .signatureUpload, body: requete.body)
   }
 
+  /// Signe l'**identité** d'un autre utilisateur — sa clé maîtresse, avec notre
+  /// clé user-signing. C'est le geste qui vaut pour un agent : `verifyDevice`
+  /// signe un appareil du compte, ce qui n'a de sens que pour les nôtres ; un
+  /// agent est un autre utilisateur, et ce qu'on atteste c'est **qui il est**.
+  ///
+  /// Échoue tant que l'autre n'a pas posé ses propres clés de signature : il
+  /// n'y a alors littéralement rien à signer, et c'est le cas juste après un
+  /// provisionnement, avant que l'agent ne se soit connecté une première fois.
+  public func verifierIdentite(userID: String) async throws -> MatrixCryptoRequest {
+    let requete = try machine.verifyIdentity(userId: userID)
+    return MatrixCryptoRequest(
+      id: UUID().uuidString, kind: .signatureUpload, body: requete.body)
+  }
+
+  /// L'identité de cet utilisateur porte-t-elle déjà notre signature ?
+  public func identiteVerifiee(userID: String) async -> Bool {
+    (try? machine.isIdentityVerified(userId: userID)) ?? false
+  }
+
   public func appareils(de userID: String) async throws -> [MatrixAppareil] {
     try machine.getUserDevices(userId: userID, timeout: 10).map { appareil in
       MatrixAppareil(

@@ -71,9 +71,11 @@ machine crypto lui coûte 24,4 Mio bruts, et les deux binaires embarquent chacun
 statique de la bibliothèque Rust. La restauration depuis la sauvegarde coûte **0,64 s** pour
 douze sessions de salon, et ne grandit pas avec l'historique.
 
-Deux des trois finitions sont **faites en phase 7a** : la bibliothèque Rust pour Linux, et les
-deux écrans. Reste l'**App Group iOS**, qui n'existe toujours pas dans le portail développeur —
-sans lui l'extension de notification affiche « Message chiffré » au lieu du texte.
+Les trois finitions sont faites : la bibliothèque Rust pour Linux et les deux écrans en
+phase 7a, et l'**App Group iOS** le 2 septembre (`813fe89`) — Xcode l'a créé chez Apple en
+signature automatique, une fois le compte de l'équipe connecté ; l'app et son extension le
+portent dans leurs entitlements et partagent le magasin de clés. Sans lui, l'extension de
+notification affichait « Message chiffré » au lieu du texte.
 
 ## Les deux cartes — **faites** (phase 6)
 
@@ -225,12 +227,16 @@ toujours en quinze minutes. Un « tout retirer » emporte la clé, donc les jeto
 2. ~~La couche `#admins` dans le client~~ — **faite en phase 4**.
 3. ~~Le chantier E~~ — **fait en phase 5**, et ses trois finitions **en phase 7a**, sauf une :
    - ~~la bibliothèque Rust pour Linux~~ — **faite** : `infra/relais/crypto-linux.sh`, 2 min 07 s,
-     et `cc` croisé depuis ce Mac tourne chiffré sur le NUC. Reste à basculer
-     `infra/agent/deploy.sh` de « Docker sur le NUC » à « croisé sur la machine de construction »,
-     et à faire la tranche `arm64` (même recette) ;
-   - **l'App Group `group.com.correspondance`**, qui n'existe toujours pas dans le portail
-     développeur — il bloque l'extension de notification, et rend déjà inopérante la seconde
-     garde du muet ;
+     et `cc` croisé depuis ce Mac tourne chiffré sur le NUC. ~~Reste à basculer
+     `infra/agent/deploy.sh` de « Docker sur le NUC » à « croisé sur la machine de
+     construction »~~ — **fait le 2 septembre** : `deploy.sh` déploie la construction croisée (ou,
+     avec `--publie`, le binaire de la release), et `infra/agent/construire.sh` produit les deux
+     tranches avec la crypto. Reste la tranche `arm64` (même recette, `.a` pour
+     `aarch64-unknown-linux-musl`) ;
+   - ~~l'App Group `group.com.correspondance`~~ — **fait** le 2 septembre (`813fe89`) : créé
+     chez Apple par Xcode en signature automatique une fois le compte de l'équipe connecté, porté
+     par les entitlements des deux cibles, qui partagent désormais le magasin de clés. Les
+     profils manuels que le groupe avait périmés ne sont plus nommés ;
    - ~~les écrans~~ — **faits**, sur Mac et sur iPhone.
 4. ~~Les deux cartes~~ — **faites en phase 6**, avec l'installeur en mode `--json`.
 5. **Signature, notarisation et DMG**, puis TestFlight. Une identité Developer ID existe sur la
@@ -267,7 +273,8 @@ toujours en quinze minutes. Un « tout retirer » emporte la clé, donc les jeto
 Non testé : la branche « Tailscale présent » de l'installeur Linux (le NUC ne l'a pas en
 natif — la branche « Tailcat seul », elle, est éprouvée) ; aucun compte Meta, WhatsApp ou Signal n'a jamais été lié — la règle du spike
 l'interdit, et la feuille qui s'ouvre et demande la session est toute la preuve possible ;
-l'extension de notification en conditions réelles (ni App Group, ni push au simulateur) ; les
+l'extension de notification en conditions réelles — l'App Group existe depuis, mais rien n'a
+encore été déchiffré par elle sur un vrai iPhone ; les
 captures d'écran de la phase 5 — l'écran de la machine était verrouillé, et une capture noire ne
 prouve rien ; et les deux écrans du chiffrement **sur iPhone** — la cible construit, mais l'écran
 ne s'ouvre qu'une session liée, et appairer un simulateur au Relais du spike pour une capture n'a

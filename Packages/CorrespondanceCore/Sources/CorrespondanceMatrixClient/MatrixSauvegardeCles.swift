@@ -49,6 +49,8 @@ public protocol MatrixCryptoSauvegarde: MatrixCryptoEngine {
   /// Crée les trois clés de signature croisée (maîtresse, self-signing,
   /// user-signing) et rend ce qu'il faut téléverser.
   func amorcerSignaturesCroisees() async throws -> MatrixAmorceSignatures
+  func verifierIdentite(userID: String) async throws -> MatrixCryptoRequest
+  func identiteVerifiee(userID: String) async -> Bool
   /// Ce que cet appareil détient des trois clés privées.
   func etatDesSignatures() async -> MatrixEtatSignatures
   /// Signe un appareil avec notre clé self-signing : il devient vérifié pour
@@ -410,6 +412,28 @@ extension MatrixClient {
     let requete = try await moteur.verifierAppareil(userID: userID, deviceID: deviceID)
     let reponse = try await poster(requete)
     try await moteur.marquerEnvoyee(id: requete.id, genre: requete.kind, reponse: reponse)
+  }
+
+  /// Atteste l'identité d'un autre utilisateur — un agent — en la signant.
+  ///
+  /// Il faut d'abord **savoir** qui il est : sans `keys/query`, la machine ne
+  /// connaît pas son identité et refuserait de signer un inconnu.
+  public func verifierIdentite(userID: String) async throws {
+    guard let moteur = sauvegarde else {
+      throw MatrixError.decoding("vérification : pas de machine crypto branchée")
+    }
+    try await moteur.suivreUtilisateurs([userID])
+    let requete = try await moteur.verifierIdentite(userID: userID)
+    let reponse = try await poster(requete)
+    try await moteur.marquerEnvoyee(id: requete.id, genre: requete.kind, reponse: reponse)
+  }
+
+  /// Cette identité porte-t-elle déjà notre signature ? Silencieux : la question
+  /// se pose à chaque ouverture des réglages, elle ne doit jamais lever.
+  public func identiteVerifiee(userID: String) async -> Bool {
+    guard let moteur = sauvegarde else { return false }
+    try? await moteur.suivreUtilisateurs([userID])
+    return await moteur.identiteVerifiee(userID: userID)
   }
 
   /// Les appareils du compte, pour l'écran qui les liste.

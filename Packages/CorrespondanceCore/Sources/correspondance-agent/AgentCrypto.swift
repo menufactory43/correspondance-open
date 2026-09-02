@@ -49,7 +49,10 @@ enum AgentCrypto {
 
   /// La fermeture que l'`Agent` appelle après la connexion, ou `nil` s'il n'y a
   /// rien à brancher.
-  static func branchement(home: URL) -> AgentBranchementChiffrement? {
+  /// `motDePasse` : le sien, celui de son amorce. Il n'en sort pas — il ne sert
+  /// qu'au défi d'authentification que le Relais pose quand on **remplace** des
+  /// clés de signature existantes.
+  static func branchement(home: URL, motDePasse: String?) -> AgentBranchementChiffrement? {
     #if canImport(CorrespondanceMatrixCrypto)
       guard !eteintParLEnvironnement else { return nil }
       return { credentials, client in
@@ -63,8 +66,23 @@ enum AgentCrypto {
             userID: credentials.userID, deviceID: deviceID, dossier: dossier)
           await client.setCrypto(moteur)
           let cles = await moteur.clesDIdentite()
-          return "chiffrement branché — appareil \(deviceID), ed25519 \(cles["ed25519"] ?? "?")"
+          var ligne = "chiffrement branché — appareil \(deviceID), ed25519 \(cles["ed25519"] ?? "?")"
             + " · magasin \(dossier.path())"
+          // Un appareil sans identité signée n'est vérifiable par personne :
+          // le propriétaire pourrait bien vouloir attester son agent, il n'y
+          // aurait rien à signer. On les pose donc **une fois**, au premier
+          // démarrage, et jamais ensuite — remplacer une clé maîtresse, c'est
+          // remplacer l'identité du compte.
+          let etat = await moteur.etatDesSignatures()
+          if !etat.maitresse {
+            do {
+              _ = try await client.amorcerSignaturesCroisees(motDePasse: motDePasse)
+              ligne += "\n  signatures croisées posées — le propriétaire peut m'attester"
+            } catch {
+              ligne += "\n  ⚠ signatures croisées impossibles : \(error.localizedDescription)"
+            }
+          }
+          return ligne
         } catch {
           return "chiffrement refusé : \(error)"
         }
