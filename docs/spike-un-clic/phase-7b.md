@@ -565,3 +565,19 @@ ssh nuc 'cd /tmp && bash uninstall.sh --prefix ~/unclic; rm -f /tmp/install.sh /
   puisse rejouer l'incident de la phase 7a. Le vérificateur repose la pile en une
   commande (§ Rejouer) ; il lui faut de toute façon un code d'appairage frais,
   qui périme en quinze minutes.
+
+---
+
+## Vérification (2 sept. 2026, vérificateur)
+
+Rejoué : 838 tests (1 ignoré, la preuve distante), `install-plan.sh` conforme ; NUC posé
+depuis `~/unclic` vide en 34 s par `--json`, le code porte un jeton de 106 caractères, l'unité
+`correspondance-tailcat` active ; depuis ce Mac, `tailcat socks <jeton>` puis
+`curl --socks5-hostname … http://server.tailcat:8010/_continuwuity/server_version` rend
+Continuwuity 26.8.1, et le chemin direct rend `000`. Retrait complet du NUC, prod active,
+aucun tailcat ni orphelin des deux côtés. Le bundle Debug embarque `Contents/Helpers/tailcat`
+(28,8 Mio) et `codesign --verify --deep --strict` passe. **Un piège relevé** : un DerivedData
+résolu une fois avec `CORRESPONDANCE_CRYPTO=1` ne construit plus sans le drapeau (modules FFI
+introuvables) — soit on garde le drapeau partout, soit on change de DerivedData ; à écrire dans
+`MATRIX-SETUP.md` au moment de la fusion. Phase acceptée ; les trois vérifications visuelles
+restent à faire par le propriétaire.
