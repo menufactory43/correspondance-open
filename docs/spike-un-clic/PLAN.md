@@ -162,3 +162,26 @@ suivante ne commence pas avant.
 qu'il faut changer dans l'app (liste des appels Synapse à remplacer), le coût réel du
 chiffrement, la commande d'installation telle qu'un utilisateur la verra, et ce qui reste
 avant un DMG : les deux cartes, la notarisation, la publication, le push.
+
+---
+
+## Suite, après le spike (décidé le 2 sept. 2026)
+
+### Phase 4 — Les réseaux Meta, et cc sur Continuwuity
+- `mautrix-meta` (Instagram et Messenger, les deux modes) dans `infra/relais/install.sh`,
+  même traitement que WhatsApp et Signal : binaire épinglé + sha256, SQLite, portails chiffrés,
+  service. Preuve : le salon de gestion répond à `help`, et la feuille de connexion de l'app
+  s'ouvre (on ne lie aucun vrai compte).
+- La couche « salon d'administration » dans `CorrespondanceMatrixClient` : les cinq appels
+  `_synapse/admin` détectent le Relais (Synapse ou Continuwuity, par `/_matrix/client/versions`
+  ou un 404) et passent par `#admins` sur Continuwuity ; l'analyse du `Debug` Rust de
+  `list-devices-metadata` est testée unitairement sur la sortie réelle de la phase 1.
+  `makeRoomAdmin` dit franchement « pas sur ce Relais ». Tests avec un faux salon.
+- Preuve : « Activer sur ce Mac » sur le Relais du spike, avec un dossier d'amorce **à part**
+  (jamais `~/.correspondance-agent/`), cc répond à `@cc ping` dans la note à soi, et la garde
+  du second cc refuse une seconde activation.
+
+### Phase 5 — Chantier E complet (sauvegarde des clés avec phrase, vérification d'appareil,
+trois états affichés, cc et l'extension iOS sur le même client).
+### Phase 6 — Binaires macOS publiés, les deux cartes dans l'app, installeur en mode `--json`.
+### Phase 7 — DMG notarisé, TestFlight, passerelle push.
