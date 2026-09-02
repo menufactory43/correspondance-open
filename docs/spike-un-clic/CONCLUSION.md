@@ -1,9 +1,10 @@
 # Conclusion du spike « un clic » — 2 septembre 2026
 
 Trois phases de spike, puis la phase 4 qui en tire les conséquences dans le code, la phase 5
-qui referme le chantier du chiffrement, et la phase 6 qui construit les binaires, pose les deux
-cartes dans l'app et prépare la publication (`phase-1.md` à `phase-6.md`). Rien ici n'est une
-lecture : tout a tourné sur ce Mac et sur le NUC, sous des dossiers à part, sans toucher la prod.
+qui referme le chantier du chiffrement, la phase 6 qui construit les binaires, pose les deux
+cartes dans l'app et prépare la publication, et la phase 7a qui referme les trois finitions du
+chiffrement et essaie Tailcat (`phase-1.md` à `phase-7a.md`). Rien ici n'est une lecture : tout
+a tourné sur ce Mac et sur le NUC, sous des dossiers à part, sans toucher la prod.
 
 ## La pile retenue : Continuwuity + ponts mautrix en binaires, SQLite/RocksDB, sans conteneur
 
@@ -14,7 +15,7 @@ lecture : tout a tourné sur ce Mac et sur le NUC, sous des dossiers à part, sa
 | Disque | — | 220–260 Mo à deux ponts, **300–320 Mo à quatre**, presque tout en binaires |
 | Installation, dossier vide | bootstrap Docker | 9 s sur Mac et 23 s sur Linux à deux ponts ; 16 s et 30 s à quatre ; **14 s depuis la phase 6, ou un clic dans l'app (26 s)** — aucune question, aucun sudo |
 | Réseaux | WhatsApp, Signal, Instagram, Messenger | **les quatre**, depuis la phase 4 |
-| Chiffrement | possible | **fait** : salons natifs de bout en bout, sauvegarde avec phrase, appareils vérifiés ; ponts en Olm de **Go pur** depuis la phase 6, plus de libolm |
+| Chiffrement | possible | **fait** : salons natifs de bout en bout, sauvegarde avec phrase, appareils vérifiés ; ponts en Olm de **Go pur** depuis la phase 6, plus de libolm ; **`cc` chiffré sous Linux depuis la phase 7a** |
 | Administration | `_synapse/admin` | **rien de compatible** : commandes dans le salon `#admins` |
 
 Le contrepoint Synapse par `uv` n'a pas été fait : rien n'a bloqué.
@@ -69,10 +70,9 @@ machine crypto lui coûte 24,4 Mio bruts, et les deux binaires embarquent chacun
 statique de la bibliothèque Rust. La restauration depuis la sauvegarde coûte **0,64 s** pour
 douze sessions de salon, et ne grandit pas avec l'historique.
 
-**Reste 1,5 à 2 jours** : la bibliothèque Rust pour Linux (sans elle, un `cc` de VPS reste
-hors des salons chiffrés — il le dit), l'App Group iOS (sans lui l'extension de notification
-affiche « Message chiffré » au lieu du texte), et les écrans de la phrase de récupération et
-de la liste des appareils, que le noyau sert déjà.
+Deux des trois finitions sont **faites en phase 7a** : la bibliothèque Rust pour Linux, et les
+deux écrans. Reste l'**App Group iOS**, qui n'existe toujours pas dans le portail développeur —
+sans lui l'extension de notification affiche « Message chiffré » au lieu du texte.
 
 ## Les deux cartes — **faites** (phase 6)
 
@@ -122,6 +122,79 @@ Elle finit sur « le Relais répond, connecté comme @… » puis sur le code d'
 Tailscale manque, elle le dit et donne les deux commandes sudo ; elle ne les fait pas.
 Sur ce Mac : le bouton « Installer ici » de la carte, qui fait tout et ne demande rien.
 
+## `cc` chiffré sous Linux — **fait** (phase 7a)
+
+La phase 5 disait « la bibliothèque Rust s'y construit, il ne manque que l'empaquetage ».
+L'empaquetage, c'était trois choses qui ne se devinent pas, et une chaîne qui n'existait pas.
+
+**La question préalable, tranchée** : `infra/agent/deploy.sh` compilait `cc` **sur le NUC, dans
+un conteneur Docker `swift:6.1-bookworm`** — donc sur la machine de production, avec Docker,
+avec une autre version de Swift. Une chaîne croisée a été posée sur ce Mac : la chaîne Swift
+**open source** 6.3.3 (celle d'Xcode ne sert pas — ses modules Foundation sont d'un autre format
+que ceux du SDK, et le compilateur s'arrête sur « compiled module was created by an older
+version ») et le SDK `static-linux` 0.1.0, en musl.
+
+`infra/relais/crypto-linux.sh` construit la bibliothèque en **2 min 07 s**. Ce qui n'était pas
+devinable : on ne construit que le `staticlib` (le `cdylib` réclamerait un éditeur de liens
+Linux complet) ; la caisse `cc` de Rust ajoute d'elle-même `--target=x86_64-unknown-linux-musl`,
+la triplette **Rust**, que zig refuse ; et musl plutôt que glibc, parce que le SDK Swift statique
+est lui-même en musl — ce qui en sort est statique, donc tourne partout, le NUC en glibc 2.36
+compris. Trois pièges du manifeste, chacun muet : le vérificateur de types abandonne sur le
+littéral des cibles dès qu'on y ajoute une concaténation, un `let` déclaré après `Package(...)`
+se lit avant d'être initialisé (« Missing or empty JSON output »), et **`CryptoKit` n'existe pas
+sous Linux** — swift-crypto le remplace, même BoringSSL derrière la même API, donc un coffre
+scellé sur le Mac s'ouvre sur le Linux.
+
+Éprouvé sur le NUC, sans Docker, sans Rust ni Swift là-bas : `@cc ping` chiffré depuis ce Mac,
+`pong` rendu par le `cc` de Linux, stocké en `m.room.encrypted` / `m.megolm.v1.aes-sha2`, vu par
+HTTP sans le client. **87,7 Mio** dépouillé, **39,7 Mio** de RSS.
+
+Une erreur a servi de garde : l'unité passait `--agent cc` **et** `CORRESPONDANCE_AGENT_HOME`,
+or `--agent` gagne, donc `cc` a lu l'amorce de la production et s'est connecté au vrai Relais.
+C'est la garde du second agent qui l'a arrêté net, en nommant le pid du vrai `cc`.
+
+## Les deux écrans du chiffrement — **faits** (phase 7a)
+
+Ce qui manquait n'était pas de la cryptographie mais une décision : **quoi montrer à la première
+connexion d'un appareil ?** Elle ne se lit dans aucun fait pris seul — c'est la rencontre de ce
+que le Relais héberge (`GET /room_keys/version`) et de ce que cette machine-ci connaît. Sans
+sauvegarde, on en propose une ; une sauvegarde que cet appareil ignore, c'est un appareil neuf ;
+les deux d'accord, il n'y a plus rien à faire. `ModeleChiffrement` porte ces états dans
+`CorrespondanceCore`, éprouvé sans Relais — dix-neuf tests, dont celui qui tient la garde qui
+compte : `sonder()` tourne à chaque apparition de l'écran, et sans elle un rafraîchissement
+effacerait douze mots que personne n'a recopiés, en laissant sur le Relais une sauvegarde à
+jamais fermée.
+
+Trois choix se disent à l'écran plutôt que de se cacher : la sauvegarde ne naît qu'à « je l'ai
+notée » (créée avant, elle serait impossible à rouvrir) ; la phrase est gardée au Trousseau de
+cette machine, sinon « Revoir » serait un bouton qui ment ; et le mot de passe du compte ne part
+**que** si le Relais le réclame. La liste des appareils recolle le serveur (nom, dernière
+activité) et la machine crypto (vérifié ou non), d'où un troisième état — « état inconnu » — qui
+n'est pas « non vérifié ».
+
+Éprouvé sur le Relais du spike, écran allumé : six captures, dont la déconnexion menée jusqu'au
+bout — le Relais réclame le mot de passe, l'appareil disparaît, et son jeton répond depuis
+`M_UNKNOWN_TOKEN`.
+
+## Tailcat : joindre le Relais sans Tailscale ni tunnel ssh — **essayé** (phase 7a)
+
+Un Relais posé sur une machine à soi n'écoute que sur `127.0.0.1`, et c'est ce qu'il faut. Le
+joindre demandait Tailscale (un compte, un tailnet, une extension système) ou `ssh -N -L` (un
+terminal). Tailcat prend le plan de données de Tailscale — WireGuard, traversée de NAT, DERP en
+repli — **sans son plan de contrôle**.
+
+Le code d'appairage porte l'« addrblob » du Relais dans un champ facultatif, l'app lance
+`tailcat socks` en processus enfant et bascule tout son trafic Matrix dessus avant le `/login`.
+**Prouvé par `lsof`** : l'app n'a qu'une connexion TCP, vers le mandataire local ; rien ne va au
+NUC en direct, et il n'y a pas de tunnel ssh. Coût : `/sync` médian **44 ms** contre 32 ms par
+ssh, et **rien de mesurable** sur un média de 5 Mio.
+
+**Pour l'iPhone, deux murs**, tous deux découverts par le compilateur : `Process` n'existe pas
+sur iOS (une app n'y lance pas de processus enfant — il faudrait embarquer tailcat par
+`gomobile bind`, avec le runtime Go dans le bundle, 10 à 15 Mio par tranche) et
+`kCFNetworkProxiesSOCKS*` y est marqué indisponible. D'où `#if os(macOS)` plutôt qu'un code qui
+compilerait et ne ferait rien.
+
 ## Ce qui reste avant un DMG
 
 1. ~~Publier deux binaires macOS que nous construisons~~ — **construits en phase 6**, et il y en
@@ -132,15 +205,15 @@ Sur ce Mac : le bouton « Installer ici » de la carte, qui fait tout et ne dema
    exécuterait, et **rien n'a été poussé** — c'est une décision du propriétaire. Manque
    `mautrix-signal-linux-amd64`, qui demande un conteneur Linux.
 2. ~~La couche `#admins` dans le client~~ — **faite en phase 4**.
-3. ~~Le chantier E~~ — **fait en phase 5**, sauf trois finitions (1,5 à 2 jours) :
-   - **la bibliothèque Rust pour Linux.** `matrix-sdk-crypto-ffi` s'y construit — la CI amont
-     le fait sur `ubuntu-latest` à chaque PR —, mais l'artefact publié est un XCFramework
-     Apple : il faut régénérer (`cargo build` + `uniffi-bindgen`, 10 à 18 min sur 4 cœurs) et
-     empaqueter pour SwiftPM. À faire sur une machine de build, pas sur le NUC de production ;
+3. ~~Le chantier E~~ — **fait en phase 5**, et ses trois finitions **en phase 7a**, sauf une :
+   - ~~la bibliothèque Rust pour Linux~~ — **faite** : `infra/relais/crypto-linux.sh`, 2 min 07 s,
+     et `cc` croisé depuis ce Mac tourne chiffré sur le NUC. Reste à basculer
+     `infra/agent/deploy.sh` de « Docker sur le NUC » à « croisé sur la machine de construction »,
+     et à faire la tranche `arm64` (même recette) ;
    - **l'App Group `group.com.correspondance`**, qui n'existe toujours pas dans le portail
      développeur — il bloque l'extension de notification, et rend déjà inopérante la seconde
      garde du muet ;
-   - **les écrans** de la phrase de récupération et de la liste des appareils.
+   - ~~les écrans~~ — **faits**, sur Mac et sur iPhone.
 4. ~~Les deux cartes~~ — **faites en phase 6**, avec l'installeur en mode `--json`.
 5. **Signature, notarisation et DMG**, puis TestFlight. Une identité Developer ID existe sur la
    machine de construction. Mesuré en phase 6, parce que c'était une vraie question : un binaire
@@ -151,13 +224,20 @@ Sur ce Mac : le bouton « Installer ici » de la carte, qui fait tout et ne dema
    durcissement de macOS ferait tout tomber d'un coup, en silence. Piège à trancher : un binaire
    nu ne peut pas être agrafé (`stapler` n'agrafe que des paquets), donc le ticket reste en ligne.
 6. **Le push** : une passerelle Sygnal chez nous, quand un utilisateur externe a un iPhone.
+7. **Décider de Tailcat.** Il marche, il coûte une dizaine de millisecondes, et il remplace la
+   seule chose que l'installeur ne sait pas poser sans sudo (Tailscale). Ce qu'il faut avant de
+   s'engager : un binaire macOS que **nous** construisons et signons (aucun n'est publié), la
+   tranche iPhone (`gomobile`, chiffrée), et une réponse à « qui détient l'addrblob joint le
+   Relais » — même régime que le mot de passe du code d'appairage, mais à dire.
 
 Non testé : la branche « Tailscale présent » de l'installeur Linux (le NUC ne l'a pas en
 natif) ; aucun compte Meta, WhatsApp ou Signal n'a jamais été lié — la règle du spike
 l'interdit, et la feuille qui s'ouvre et demande la session est toute la preuve possible ;
-`cc` chiffré **sous Linux** ; l'extension de notification en conditions réelles (ni App Group,
-ni push au simulateur) ; et les captures d'écran de la phase 5 — l'écran de la machine était
-verrouillé, et une capture noire ne prouve rien.
+l'extension de notification en conditions réelles (ni App Group, ni push au simulateur) ; les
+captures d'écran de la phase 5 — l'écran de la machine était verrouillé, et une capture noire ne
+prouve rien ; et les deux écrans du chiffrement **sur iPhone** — la cible construit, mais l'écran
+ne s'ouvre qu'une session liée, et appairer un simulateur au Relais du spike pour une capture n'a
+pas été fait.
 
 Trois pièges de la phase 5, qui ne se voient qu'à l'exécution et valent pour tout Relais
 Continuwuity : `PUT /room_keys/keys` veut la version en paramètre **et** la carte des salons
