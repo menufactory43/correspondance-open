@@ -217,6 +217,82 @@ do {
     dire("→ \(AgentWire.configType) posé, \(args[3]) invité")
     dire("CONSOLE=\(console)")
 
+  // La sauvegarde des clés : on la crée depuis une phrase et on téléverse tout
+  // ce que la machine détient. C'est ce qui fera lire l'historique à un
+  // appareil qui n'existait pas encore.
+  case "sauvegarder":
+    guard args.count >= 3 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "sauvegarder <profil> <phrase>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    let version = try await c.creerSauvegarde(phrase: args[2], remplacerLExistante: true)
+    dire("→ sauvegarde créée, version \(version)")
+    let fournees = try await c.sauvegarderLesCles()
+    dire("→ \(fournees) fournée(s) de clés téléversée(s) en plus")
+    if let (v, auth) = try await c.versionDeSauvegarde() {
+      dire("→ ce que le Relais annonce : version=\(v) public_key=\(auth.string(at: "public_key") ?? "?")")
+      dire("  private_key_salt=\(auth.string(at: "private_key_salt") ?? "(absent)") iterations=\(auth.value(at: "private_key_iterations")?.intValue ?? -1)")
+    }
+    dire("VERSION=\(version)")
+
+  // L'appareil neuf qui n'a que la phrase.
+  case "restaurer":
+    guard args.count >= 3 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "restaurer <profil> <phrase>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    let bilan = try await c.rejoindreSauvegarde(phrase: args[2])
+    dire("→ clés réimportées : \(bilan.importees) sur \(bilan.total)")
+
+  case "etat":
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    let etat = await c.etatDuChiffrement()
+    dire("→ \(etat.resumeFR)  (appareil \(etat.appareilID ?? "?"))")
+
+  // Les signatures croisées : la clé maîtresse, la self-signing, la
+  // user-signing. À faire une fois, sur le premier appareil.
+  case "amorcer-signatures":
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    let amorce = try await c.amorcerSignaturesCroisees(motDePasse: motDePasse)
+    dire("→ clés de signature croisée posées sur le compte")
+    for (nom, cle) in [("maîtresse", amorce.cleMaitresse), ("self-signing", amorce.cleSelfSigning), ("user-signing", amorce.cleUserSigning)] {
+      let j = try? JSONDecoder().decode(MatrixJSON.self, from: Data(cle.utf8))
+      dire("  \(nom) : \((j?["keys"]?.objectValue?.keys.sorted() ?? []).joined(separator: ", "))")
+    }
+
+  case "appareils":
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    for a in try await c.appareilsDuCompte() {
+      dire("  \(a.deviceID)\(a.estMoi ? " (moi)" : "")  \(a.nom ?? "(sans nom)")  — \(a.etatFR)")
+    }
+
+  case "verifier":
+    guard args.count >= 4 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "verifier <profil> <userID> <deviceID>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    _ = try await c.appareilsDuCompte()
+    try await c.verifierAppareil(userID: args[2], deviceID: args[3])
+    dire("→ \(args[3]) signé par la clé self-signing")
+
+  // Porter les clés privées de signature croisée à un appareil neuf, chiffrées
+  // par la phrase dans le stockage secret (4S). C'est ce qui rend un appareil
+  // « vérifié par la phrase » sans comparer d'émojis.
+  case "deposer-signatures":
+    guard args.count >= 3 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "deposer-signatures <profil> <phrase>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    try await c.deposerLesSignaturesDansLeCoffre(phrase: args[2])
+    dire("→ clés de signature croisée déposées, chiffrées par la phrase")
+
+  case "reprendre-signatures":
+    guard args.count >= 3 else { throw NSError(domain: "preuve", code: 2, userInfo: [NSLocalizedDescriptionKey: "reprendre-signatures <profil> <phrase>"]) }
+    let (c, _, _) = try await client(args[1])
+    try await synchroniser(c, tours: 2)
+    try await c.reprendreLesSignaturesDuCoffre(phrase: args[2])
+    let etat = await c.etatDuChiffrement()
+    dire("→ \(etat.resumeFR)")
+
   case "salons":
     let (c, _, _) = try await client(args[1])
     try await synchroniser(c, tours: 2)

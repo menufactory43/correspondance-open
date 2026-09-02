@@ -10,6 +10,10 @@ public actor MatrixClient {
   private let session: URLSession
   /// `txnId` déjà consommés — un renvoi du même identifiant ne doit pas dupliquer le message.
   private var ledger = MatrixTransactionLedger()
+  /// Le corps JSON du dernier échec HTTP. `MatrixError.http` ne porte que le
+  /// code et le message ; or l'authentification interactive (le `401` de
+  /// `keys/device_signing/upload`) met la `session` du défi dans le corps.
+  var dernierCorpsDErreur: MatrixJSON?
   /// La machine crypto, si le drapeau du chiffrement est levé et qu'on l'a
   /// branchée. `nil` par défaut : le client est alors celui d'avant, au bit près.
   var cryptoEngine: MatrixCryptoEngine?
@@ -1221,6 +1225,7 @@ public actor MatrixClient {
     }
     guard (200..<300).contains(http.statusCode) else {
       let json = try? JSONDecoder().decode(MatrixJSON.self, from: data)
+      dernierCorpsDErreur = json
       throw MatrixError.http(
         status: http.statusCode,
         errcode: json?.string(at: "errcode"),

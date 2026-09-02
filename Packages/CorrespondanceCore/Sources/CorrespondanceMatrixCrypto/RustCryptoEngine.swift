@@ -12,8 +12,14 @@ import MatrixSDKCrypto
 /// (`Package.swift`) : sans lui, ni cette cible ni l'XCFramework ne sont
 /// résolus, et `cc` continue de se construire sur Linux.
 public actor RustCryptoEngine: MatrixCryptoEngine {
-  private let machine: OlmMachine
+  let machine: OlmMachine
   private let dossier: URL
+  /// La clé de sauvegarde dérivée de la phrase, gardée le temps de l'allumer et
+  /// de la confier au magasin. Elle ne survit pas au processus : c'est le
+  /// magasin qui la retient (`saveRecoveryKey`).
+  var clesDeSauvegarde: BackupRecoveryKey?
+  /// La version qu'on sauvegarde, quand on vient de l'allumer.
+  var versionDeSauvegarde: String?
   public nonisolated let userID: String
   public nonisolated let deviceID: String
 

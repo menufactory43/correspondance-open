@@ -94,13 +94,22 @@ public struct MatrixCryptoRequest: Sendable, Equatable {
   public var body: String
   /// `keysQuery` ne donne pas de corps : il donne la liste des comptes.
   public var users: [String]
+  /// La version de la sauvegarde, pour un `keysBackup`. **Sans elle, le
+  /// `PUT /room_keys/keys` part sans `?version=` et le serveur répond
+  /// `M_MISSING_PARAM`** : les clés ne sont jamais sauvegardées, et rien ne le
+  /// dit côté client.
+  public var version: String?
 
-  public init(id: String, kind: MatrixCryptoRequestKind, eventType: String? = nil, body: String = "{}", users: [String] = []) {
+  public init(
+    id: String, kind: MatrixCryptoRequestKind, eventType: String? = nil, body: String = "{}",
+    users: [String] = [], version: String? = nil
+  ) {
     self.id = id
     self.kind = kind
     self.eventType = eventType
     self.body = body
     self.users = users
+    self.version = version
   }
 }
 
@@ -300,7 +309,16 @@ extension MatrixClient {
     case .signatureUpload:
       return try await posterJSON("POST", "/_matrix/client/v3/keys/signatures/upload", requete.body)
     case .keysBackup:
-      return try await posterJSON("PUT", "/_matrix/client/v3/room_keys/keys", requete.body)
+      guard let version = requete.version else {
+        throw MatrixError.decoding("sauvegarde des clés : la machine n'a pas donné de version")
+      }
+      // Même piège que `to_device` : la machine rend la carte des salons toute
+      // nue, `/room_keys/keys` la veut sous `rooms`. Sans l'emballage,
+      // `M_BAD_JSON: missing field rooms` — et pas une clé n'est sauvegardée.
+      let salons = (try? JSONDecoder().decode(MatrixJSON.self, from: Data(requete.body.utf8))) ?? .object([:])
+      return try await posterJSON(
+        "PUT", "/_matrix/client/v3/room_keys/keys", Self.texte(.object(["rooms": salons])),
+        query: [URLQueryItem(name: "version", value: version)])
     case .toDevice:
       // La machine crypto donne la **carte des destinataires** toute nue
       // (`{"@moi:…":{"APPAREIL":{…}}}`) ; `/sendToDevice` la veut sous la clé
@@ -317,9 +335,11 @@ extension MatrixClient {
     }
   }
 
-  private func posterJSON(_ methode: String, _ chemin: String, _ corps: String) async throws -> String {
+  private func posterJSON(
+    _ methode: String, _ chemin: String, _ corps: String, query: [URLQueryItem] = []
+  ) async throws -> String {
     let json = (try? JSONDecoder().decode(MatrixJSON.self, from: Data(corps.utf8))) ?? .object([:])
-    let data = try await rawRequest(method: methode, path: chemin, body: json)
+    let data = try await rawRequest(method: methode, path: chemin, query: query, body: json)
     return data.isEmpty ? "{}" : (String(data: data, encoding: .utf8) ?? "{}")
   }
 
