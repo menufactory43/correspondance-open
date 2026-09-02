@@ -132,13 +132,13 @@ final class MessageEditTests: XCTestCase {
 
   /// La RÉCEPTION d'un `m.replace` vaut partout — un correspondant qui corrige
   /// son message le corrige chez nous, quel que soit le réseau. C'est l'ENVOI
-  /// qui se restreint, et c'est `NetworkCapabilities` qui en décide seul :
-  /// seul mautrix-meta remonte notre correction jusqu'au réseau. Le détail
-  /// réseau par réseau se lit dans `NetworkCapabilitiesTests`.
+  /// qui se restreint, et c'est `NetworkCapabilities` qui en décide seul : les
+  /// quatre ponts remontent notre correction, iMessage passe par ailleurs. Le
+  /// détail — et surtout les délais — se lit dans `NetworkCapabilitiesTests`.
   func testLEnvoiDUneCorrectionSuitLaTableDesCapacites() {
     XCTAssertEqual(
       MessageNetwork.allCases.filter(\.supportsEditing),
-      [.instagram, .messenger, .selfNote, .agent]
+      [.signal, .whatsapp, .instagram, .messenger, .selfNote, .agent]
     )
   }
 }

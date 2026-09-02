@@ -19,7 +19,11 @@ extension InboxStore {
     switch conversation.network {
     case .iMessage: return false
     // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent: return isMatrixConnected
+    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+      // Et pas après l'heure : Signal ferme à 24 h, WhatsApp à 48 h. Passé là,
+      // le pont refuse sans le dire et la bulle ne disparaîtrait que chez nous.
+      return isMatrixConnected
+        && conversation.network.acceptsDeleteForEveryone(sentAt: message.sentAt)
     }
   }
 
@@ -37,6 +41,11 @@ extension InboxStore {
     }
     if !message.isFromMe {
       return "On ne supprime pour tout le monde que ses propres messages."
+    }
+    if !conversation.network.acceptsDeleteForEveryone(sentAt: message.sentAt),
+       let delai = conversation.network.deleteWindowLabelFR {
+      return "Trop tard : \(conversation.network.labelFR) ne retire un message de partout "
+        + "que dans les \(delai). Ici, il ne disparaîtra que de Correspondance."
     }
     return nil
   }

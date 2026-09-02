@@ -931,6 +931,16 @@ public actor MatrixBridgeService {
     guard message.network.supportsEditing else {
       throw MatrixError.decoding("\(message.network.labelFR) ne sait pas modifier un message envoyé")
     }
+    // Le pont annonce sa fenêtre (`edit_max_age`) et refuse au-delà, sans rien
+    // nous dire : ni notice, ni accusé d'échec. Une correction partie trop tard
+    // ne reviendrait donc jamais — sauf chez nous, où le `m.replace` s'applique
+    // à la réception. On s'arrête avant de créer cet écart.
+    guard message.network.acceptsEdit(sentAt: message.sentAt) else {
+      throw MatrixError.decoding(
+        "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? "le délai"), "
+          + "\(message.network.labelFR) n’accepte plus de modification"
+      )
+    }
     let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, trimmed != message.text else { return }
     try await client.sendEdit(roomID: roomID, targetEventID: messageID, newText: trimmed)

@@ -677,6 +677,13 @@ final class RelayStore {
     let corrected = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
     endEditing(conversationID)
     guard !corrected.isEmpty, corrected != message.text else { return }
+    // La fenêtre a pu se fermer pendant qu'on écrivait : le pont refuserait en
+    // silence, et la correction ne vivrait que sur cet appareil.
+    guard message.network.acceptsEdit(sentAt: message.sentAt) else {
+      syncError = "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? "le délai"), "
+        + "\(message.network.labelFR) n’accepte plus de modification."
+      return
+    }
     await editMessage(messageID: message.id, newText: corrected, conversationID: conversationID)
   }
 
@@ -1034,10 +1041,12 @@ final class RelayStore {
   }
 
   /// Le geste « Modifier » est-il offert sur ce message ? Seulement les miens,
-  /// et seulement là où le réseau sait le faire.
+  /// seulement là où le réseau sait le faire, et seulement dans la fenêtre
+  /// qu'il laisse — quinze minutes chez Meta. Au-delà, le pont jette la
+  /// correction sans le dire et elle n'existerait que sur cet iPhone.
   func canEdit(_ message: ChatMessage) -> Bool {
     message.isFromMe && !message.isPending && !message.isRetracted && !message.isSystemEvent
-      && !message.text.isEmpty && message.network.supportsEditing && !isDemo
+      && !message.text.isEmpty && message.network.acceptsEdit(sentAt: message.sentAt) && !isDemo
   }
 
   // MARK: - Propositions de l'agent
@@ -1101,6 +1110,17 @@ final class RelayStore {
     else { return }
     try? await matrix.deleteMessage(conversationID: target, messageID: messageID)
     await loadMessages(conversationID: conversationID, backfill: false)
+  }
+
+  /// « Supprimer pour tout le monde » est-il encore possible ?
+  ///
+  /// Les miens seulement, et dans la fenêtre du réseau : Signal ferme à 24 h,
+  /// WhatsApp à 48 h, Meta ne ferme pas. Au-delà, la redaction part, le pont la
+  /// jette, et la bulle ne disparaîtrait que de cet iPhone.
+  func canDeleteEverywhere(_ message: ChatMessage) -> Bool {
+    message.isFromMe && !message.isPending && !message.isSystemEvent && !isDemo
+      && message.network != .iMessage
+      && message.network.acceptsDeleteForEveryone(sentAt: message.sentAt)
   }
 
   /// Les six réactions rapides — les mêmes que sur le Mac.

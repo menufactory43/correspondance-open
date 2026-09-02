@@ -166,7 +166,9 @@ struct MessageActionsOverlay: View {
           }
         }
       }
-      if message.isFromMe {
+      // Passé la fenêtre du réseau (24 h Signal, 48 h WhatsApp), le pont jette
+      // la suppression sans le dire : « Supprimer ici » reste, lui, toujours vrai.
+      if store.canDeleteEverywhere(message) {
         divider
         action("Supprimer pour tout le monde…", systemImage: "trash", destructive: true) {
           pendingDeletion = true

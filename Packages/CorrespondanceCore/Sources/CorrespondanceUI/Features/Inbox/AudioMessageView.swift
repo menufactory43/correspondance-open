@@ -70,14 +70,7 @@ public struct AudioMessageView: View {
       .accessibilityLabel(isPlaying ? "Suspendre le message audio" : "Écouter le message audio")
 
       VStack(alignment: .leading, spacing: 3) {
-        if let voice = attachment.voice, !voice.waveform.isEmpty {
-          waveform(voice)
-        } else {
-          ProgressView(value: fraction)
-            .progressViewStyle(.linear)
-            .tint(isFromMe ? theme.bubbleOutInk : theme.accent)
-            .frame(width: Self.waveformWidth)
-        }
+        positionBar
         HStack(spacing: 6) {
           Text(failed ? "Audio illisible" : timeLabel)
             .font(Typography.meta(typeface))
@@ -90,6 +83,40 @@ public struct AudioMessageView: View {
       if attachment.isVoiceNote {
         transcriptButton
       }
+    }
+  }
+
+  /// La barre de position, quelle que soit la source. Elle porte le
+  /// glissement : **tous** les audios se cherchent, pas seulement ceux qui
+  /// arrivent avec une onde. iMessage dépose des `.caf` nus, et sans onde la
+  /// bulle n'offrait aucune prise — impossible de revenir en arrière sur le
+  /// Mac.
+  private var positionBar: some View {
+    Group {
+      if let voice = attachment.voice, !voice.waveform.isEmpty {
+        waveform(voice)
+      } else {
+        plainBar
+      }
+    }
+    .frame(width: Self.waveformWidth, height: 22, alignment: .leading)
+    // La hauteur de prise dépasse celle du tracé — 22 pt de barres, c'est
+    // trop mince pour un pouce, et 4 pt de filet encore moins pour un curseur.
+    .contentShape(Rectangle().inset(by: -8))
+    .gesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { value in
+          isScrubbing = true
+          seek(toFraction: value.location.x / Self.waveformWidth)
+        }
+        .onEnded { _ in isScrubbing = false }
+    )
+    // Sans souris ni doigt : deux gestes de VoiceOver, cinq secondes chacun.
+    .accessibilityElement()
+    .accessibilityLabel("Position dans le message audio")
+    .accessibilityValue(timeLabel)
+    .accessibilityAdjustableAction { direction in
+      seek(by: direction == .increment ? 5 : -5)
     }
   }
 
@@ -109,25 +136,18 @@ public struct AudioMessageView: View {
       }
     }
     .frame(width: Self.waveformWidth, height: 22, alignment: .leading)
-    // L'onde EST la barre de position : on y pose le doigt et on cherche.
-    // La hauteur de prise dépasse celle du tracé — 22 pt de barres, c'est
-    // trop mince pour un pouce.
-    .contentShape(Rectangle().inset(by: -8))
-    .gesture(
-      DragGesture(minimumDistance: 0)
-        .onChanged { value in
-          isScrubbing = true
-          seek(toFraction: value.location.x / Self.waveformWidth)
-        }
-        .onEnded { _ in isScrubbing = false }
-    )
-    // Sans souris ni doigt : deux gestes de VoiceOver, cinq secondes chacun.
-    .accessibilityElement()
-    .accessibilityLabel("Position dans le message vocal")
-    .accessibilityValue(timeLabel)
-    .accessibilityAdjustableAction { direction in
-      seek(by: direction == .increment ? 5 : -5)
+  }
+
+  /// Faute d'onde : un filet, dessiné à la main plutôt qu'un `ProgressView` —
+  /// le style natif ne se laisse pas viser au doigt ni au curseur.
+  private var plainBar: some View {
+    let ink = isFromMe ? theme.bubbleOutInk : theme.accent
+    return ZStack(alignment: .leading) {
+      Capsule().fill(ink.opacity(0.32))
+      Capsule().fill(ink).frame(width: max(2, Self.waveformWidth * fraction))
     }
+    .frame(width: Self.waveformWidth, height: 4)
+    .frame(height: 22)
   }
 
   /// L'allure d'écoute, qui tourne : 1× → 1,5× → 2×.

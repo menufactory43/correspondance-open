@@ -501,13 +501,13 @@ struct ThreadView: View {
   /// Le type concret, pas `some View` : `.equatable()` a besoin de savoir que
   /// c'est une `MessageBubbleView` pour se servir de son `==`.
   private func bubble(for message: ChatMessage, position: BubblePosition, proxy: ScrollViewProxy) -> MessageBubbleView {
-    let automatable = automationAvailable(for: message)
     // « Modifier » ouvre le composer en mode correction ; c'est le magasin qui
     // choisit ensuite le chemin — automatisation Messages ou `m.replace`.
     let onEdit: (() -> Void)? = store.canEditAnyway(message)
       ? { store.beginEditing(message) }
       : nil
-    let onUndoSend: (() -> Void)? = automatable
+    // Deux minutes, pas plus : au-delà, Messages n'a plus l'entrée du menu.
+    let onUndoSend: (() -> Void)? = store.canUndoSendViaAutomation(message)
       ? { Task { await store.undoSendViaAutomation(messageID: message.id) } }
       : nil
     return MessageBubbleView(
@@ -545,12 +545,6 @@ struct ThreadView: View {
         Task { await store.votePoll(messageID: message.id, answerID: answerID) }
       }
     )
-  }
-
-  /// « Modifier » et « Annuler l'envoi » n'ont de sens que sur mes iMessages,
-  /// et seulement quand l'automatisation Messages est active et saine.
-  private func automationAvailable(for message: ChatMessage) -> Bool {
-    message.network == .iMessage && message.isFromMe && store.canAutomateMessages
   }
 
   /// L'encre ne prend que sur un vrai message, jamais sur une bascule de

@@ -68,20 +68,21 @@ public actor VoiceTranscriber {
     let request = SFSpeechURLRecognitionRequest(url: fileURL)
     // Sur l'appareil dès que possible : rien ne part chez Apple.
     request.requiresOnDeviceRecognition = recognizer.supportsOnDeviceRecognition
-    request.shouldReportPartialResults = false
+    // Les résultats partiels ne servent pas à afficher : ils servent à **ne
+    // rien perdre**. `Speech` découpe un fichier en énoncés et rend un résultat
+    // final par énoncé ; en n'écoutant que `isFinal` on gardait le premier et
+    // on jetait la suite — d'où des vocaux transcrits à moitié. On accumule
+    // donc chaque énoncé clos, et l'hypothèse en cours si le dernier n'a jamais
+    // été clos.
+    request.shouldReportPartialResults = true
+    if #available(macOS 13, iOS 16, *) { request.addsPunctuation = true }
 
+    let collecteur = Collecteur()
     let text = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-      // `recognitionTask` rappelle plusieurs fois ; on ne reprend qu'une.
-      let box = ResumeOnce(continuation)
-      recognizer.recognitionTask(with: request) { result, error in
-        if let error {
-          box.resume(throwing: Failure.failed(error.localizedDescription))
-          return
-        }
-        guard let result, result.isFinal else { return }
-        box.resume(returning: result.bestTranscription.formattedString)
-      }
+      collecteur.start(continuation)
+      collecteur.task = recognizer.recognitionTask(with: request, delegate: collecteur)
     }
+    withExtendedLifetime(collecteur) {}
 
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { throw Failure.empty }
@@ -90,30 +91,71 @@ public actor VoiceTranscriber {
   }
 }
 
-/// `recognitionTask` peut rappeler après un premier résultat final ; reprendre
-/// deux fois une continuation fait planter le processus. Cette petite boîte
-/// garantit qu'on ne la reprend qu'une fois, quel que soit le nombre d'appels.
-private final class ResumeOnce: @unchecked Sendable {
+/// Le ramasseur d'énoncés.
+///
+/// `Speech` rappelle plusieurs fois : une hypothèse à chaque avancée, un
+/// résultat final à chaque énoncé clos, puis une fin de tâche. On garde tous
+/// les énoncés dans l'ordre, plus l'hypothèse en cours si la fin arrive sans
+/// l'avoir close, et on ne reprend la continuation qu'une seule fois — la
+/// reprendre deux fois fait planter le processus.
+private final class Collecteur: NSObject, SFSpeechRecognitionTaskDelegate, @unchecked Sendable {
   private let lock = NSLock()
   private var continuation: CheckedContinuation<String, Error>?
+  private var enonces: [String] = []
+  private var encours = ""
+  /// La tâche, gardée pour son `error` : le délégué ne le transporte pas.
+  var task: SFSpeechRecognitionTask?
 
-  init(_ continuation: CheckedContinuation<String, Error>) {
+  func start(_ continuation: CheckedContinuation<String, Error>) {
+    lock.lock()
     self.continuation = continuation
+    lock.unlock()
   }
 
-  func resume(returning value: String) {
+  func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didHypothesizeTranscription transcription: SFTranscription) {
     lock.lock()
+    encours = transcription.formattedString
+    lock.unlock()
+  }
+
+  func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishRecognition result: SFSpeechRecognitionResult) {
+    lock.lock()
+    ajouter(result.bestTranscription.formattedString)
+    encours = ""
+    lock.unlock()
+  }
+
+  /// Ajoute un énoncé sans se répéter — **verrou déjà pris**.
+  ///
+  /// Selon les versions, `Speech` rend des énoncés successifs ou un texte
+  /// cumulatif qui reprend tout depuis le début. Un texte qui commence par ce
+  /// qu'on a déjà remplace ce qu'on a ; un texte déjà contenu est ignoré.
+  private func ajouter(_ brut: String) {
+    let texte = brut.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !texte.isEmpty else { return }
+    let acquis = enonces.joined(separator: " ")
+    if acquis.isEmpty { enonces = [texte]; return }
+    if texte.hasPrefix(acquis) { enonces = [texte]; return }
+    if acquis.hasSuffix(texte) || acquis.contains(texte) { return }
+    enonces.append(texte)
+  }
+
+  func speechRecognitionTask(_ task: SFSpeechRecognitionTask, didFinishSuccessfully successfully: Bool) {
+    lock.lock()
+    ajouter(encours)
+    encours = ""
+    let texte = enonces.joined(separator: " ")
     let pending = continuation
     continuation = nil
     lock.unlock()
-    pending?.resume(returning: value)
-  }
-
-  func resume(throwing error: Error) {
-    lock.lock()
-    let pending = continuation
-    continuation = nil
-    lock.unlock()
-    pending?.resume(throwing: error)
+    guard let pending else { return }
+    // Une erreur en cours de route ne doit pas effacer ce qui a déjà été
+    // compris : un vocal à demi transcrit vaut mieux qu'un message d'échec.
+    if !successfully, texte.isEmpty {
+      let raison = task.error?.localizedDescription ?? self.task?.error?.localizedDescription
+      pending.resume(throwing: VoiceTranscriber.Failure.failed(raison ?? "Transcription interrompue."))
+      return
+    }
+    pending.resume(returning: texte)
   }
 }

@@ -1143,7 +1143,7 @@ final class InboxStore {
   func editMessage(messageID: String, newText: String) async {
     guard let message = messages.first(where: { $0.id == messageID }),
           let conversation = conversation(ofMessage: message),
-          conversation.network.supportsEditing, isMatrixConnected
+          conversation.network.acceptsEdit(sentAt: message.sentAt), isMatrixConnected
     else { return }
     do {
       try await matrix.editMessage(
@@ -1158,14 +1158,15 @@ final class InboxStore {
   }
 
   /// Le geste « Modifier » est-il offert sur ce message ? Seulement sur les
-  /// miens, et seulement là où le réseau sait le faire — proposer ailleurs,
-  /// c'est promettre une correction que personne d'autre ne verra.
+  /// miens, seulement là où le réseau sait le faire, et seulement tant qu'il
+  /// l'accepte encore — proposer ailleurs, ou trop tard, c'est promettre une
+  /// correction que personne d'autre ne verra.
   func canEdit(_ message: ChatMessage) -> Bool {
     guard message.isFromMe, !message.isPending, !message.isRetracted, !message.isSystemEvent,
           !message.text.isEmpty
     else { return false }
     guard let conversation = conversation(ofMessage: message) else { return false }
-    return conversation.network.supportsEditing && isMatrixConnected
+    return conversation.network.acceptsEdit(sentAt: message.sentAt) && isMatrixConnected
   }
 
   // MARK: - Corriger un message envoyé
@@ -1200,6 +1201,13 @@ final class InboxStore {
     let corrected = session.draftText.trimmingCharacters(in: .whitespacesAndNewlines)
     session.endEditing()
     guard !corrected.isEmpty, corrected != message.text else { return }
+    // La fenêtre a pu se fermer pendant qu'on écrivait la correction : mieux
+    // vaut le dire que laisser partir un `m.replace` que le pont jettera.
+    guard isEditWindowOpen(message) else {
+      lastErrorMessage = "Trop tard pour corriger : passé \(Self.editWindowLabel(message)), "
+        + "\(message.network.labelFR) n’accepte plus de modification."
+      return
+    }
     if canEditViaAutomation(message) {
       await editMessageViaAutomation(messageID: message.id, newText: corrected)
     } else {
@@ -1207,10 +1215,36 @@ final class InboxStore {
     }
   }
 
+  /// La fenêtre de correction est-elle encore ouverte ? Celle du réseau, ou
+  /// celle de Messages pour un iMessage — dont le chemin n'est pas dans la
+  /// table. Distinguée du reste de `canEditAnyway` : un refus pour cause de
+  /// délai se dit, les autres empêchements ont déjà leur propre message.
+  private func isEditWindowOpen(_ message: ChatMessage) -> Bool {
+    message.network == .iMessage
+      ? MessagesAutomationWindow.isOpen(MessagesAutomationWindow.edit, since: message.sentAt)
+      : message.network.acceptsEdit(sentAt: message.sentAt)
+  }
+
+  /// Le délai à annoncer quand on refuse : celui du réseau, ou celui de
+  /// Messages pour un iMessage — son chemin ne passe pas par la table.
+  private static func editWindowLabel(_ message: ChatMessage) -> String {
+    if message.network == .iMessage { return "15 minutes" }
+    return message.network.editWindowLabelFR ?? "le délai"
+  }
+
   /// « Modifier » sur un iMessage : c'est le menu de Messages que l'on
   /// actionne, pas un `m.replace` — et il n'existe que 15 minutes.
   func canEditViaAutomation(_ message: ChatMessage) -> Bool {
     message.network == .iMessage && message.isFromMe && canAutomateMessages
+      && MessagesAutomationWindow.isOpen(MessagesAutomationWindow.edit, since: message.sentAt)
+  }
+
+  /// « Annuler l'envoi » sur un iMessage : même menu, deux minutes seulement.
+  /// Sans ce délai, le geste s'offrait sur n'importe quel message à moi et
+  /// l'AppleScript butait sur une entrée de menu qui n'existe plus.
+  func canUndoSendViaAutomation(_ message: ChatMessage) -> Bool {
+    message.network == .iMessage && message.isFromMe && canAutomateMessages
+      && MessagesAutomationWindow.isOpen(MessagesAutomationWindow.undoSend, since: message.sentAt)
   }
 
   /// Le geste est-il offert, par l'un OU l'autre chemin ?

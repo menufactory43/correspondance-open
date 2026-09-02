@@ -637,6 +637,41 @@ docker-compose restart mautrix-meta      # redémarrer un pont seul
 docker-compose up -d                     # tout relancer (idempotent)
 ```
 
+### Un geste part et ne fait rien (correction, suppression)
+
+Les ponts bridgev2 **refusent en silence** ce qui sort de leurs bornes : ni notice
+dans le salon, ni accusé d'échec, rien dans le journal en `info`. La correction
+part, Synapse la garde, l'app l'applique chez elle — et le réseau ne bouge pas.
+La bulle est alors juste chez nous, ce qui est pire qu'un échec visible.
+
+Ce que le pont accepte est écrit dans chaque salon, dans l'état
+`com.beeper.room_features` (`edit: 2` = pleinement porté, `edit_max_age` et
+`delete_max_age` en secondes) :
+
+```sh
+ROOM='!xxxx:correspondance.local'
+docker exec correspondance-postgres psql -U matrix -d synapse -tAc \
+  "select j.json from current_state_events c join event_json j using(event_id)
+   where c.room_id='$ROOM' and c.type='com.beeper.room_features';" | python3 -m json.tool
+```
+
+Relevé le 2026-09-02 — à relire après chaque montée de version d'un pont, c'est
+de là que vient `Domain/NetworkCapabilities.swift` :
+
+| Réseau | Corriger | Supprimer pour tout le monde | Texte max |
+| --- | --- | --- | --- |
+| Messenger / Instagram | 15 min, 5 fois | sans limite | 20 000 |
+| WhatsApp | 15 min | 48 h | 65 536 |
+| Signal | 24 h, 10 fois | 24 h | 2 000 |
+
+Pour savoir si une correction précise est passée, la base du pont fait foi :
+`edit_count` reste à 0 quand elle a été jetée.
+
+```sh
+docker exec correspondance-postgres psql -U matrix -d mautrix_messenger -tAc \
+  "select id, edit_count from message where mxid='\$eventID';"
+```
+
 **Commandes utiles à envoyer au bot WhatsApp** (dans le DM avec `@whatsappbot`, depuis l'app ou
 Element ; hors salon de gestion, les préfixer de `!wa`) :
 
