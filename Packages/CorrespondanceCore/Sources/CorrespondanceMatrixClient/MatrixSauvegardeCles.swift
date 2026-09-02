@@ -428,6 +428,14 @@ extension MatrixClient {
     try await moteur.marquerEnvoyee(id: requete.id, genre: requete.kind, reponse: reponse)
   }
 
+  /// Avons-nous **nous-mêmes** de quoi signer ? Attester quelqu'un demande une
+  /// clé user-signing ; sans elle la machine refuse, et le message qu'elle rend
+  /// ne dit pas où est le manque.
+  public func peutAttester() async -> Bool {
+    guard let moteur = sauvegarde else { return false }
+    return await moteur.etatDesSignatures().userSigning
+  }
+
   /// Cette identité porte-t-elle déjà notre signature ? Silencieux : la question
   /// se pose à chaque ouverture des réglages, elle ne doit jamais lever.
   public func identiteVerifiee(userID: String) async -> Bool {

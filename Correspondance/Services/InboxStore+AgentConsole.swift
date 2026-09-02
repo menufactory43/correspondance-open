@@ -113,6 +113,10 @@ extension InboxStore {
     case .faite: Self.relayLog.info("agent attesté")
     case .pasEncore(let raison):
       Self.relayLog.debug("agent pas encore attestable : \(raison, privacy: .public)")
+    case .sansClesDeSignature:
+      // Ce manque-là est le nôtre, et il se répare en un geste dans les
+      // réglages : il mérite mieux qu'une ligne de debug.
+      Self.relayLog.info("agent non attesté : cet appareil n'a pas de clés de signature")
     case .dejaFaite, .relaisAbsent: break
     }
     return resultat

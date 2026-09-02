@@ -157,6 +157,11 @@ extension MatrixBridgeService {
     guard isConnected else { return .relaisAbsent }
     let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: currentUserID)
     if await client.identiteVerifiee(userID: userID) { return .dejaFaite }
+    // Deux manques opposés, deux phrases : l'agent peut n'avoir aucune clé à
+    // signer, ou c'est **nous** qui n'avons pas de quoi signer. Le second cas
+    // est celui d'un compte qui n'a jamais amorcé ses signatures croisées —
+    // renvoyer « pas encore » enverrait chercher la panne chez l'agent.
+    guard await client.peutAttester() else { return .sansClesDeSignature }
     do {
       try await client.verifierIdentite(userID: userID)
       return .faite
@@ -268,6 +273,9 @@ public enum AgentAttestation: Sendable, Equatable {
   case dejaFaite
   /// L'agent n'a pas encore posé ses clés — il ne s'est jamais connecté.
   case pasEncore(raison: String)
+  /// C'est **cet appareil** qui n'a pas de clé user-signing : il ne peut
+  /// attester personne tant qu'on n'a pas amorcé ses signatures croisées.
+  case sansClesDeSignature
   case relaisAbsent
 
   public var estAttestee: Bool { self == .faite || self == .dejaFaite }
@@ -278,6 +286,9 @@ public enum AgentAttestation: Sendable, Equatable {
     case .dejaFaite: "Agent déjà attesté."
     case .pasEncore(let raison):
       "Agent pas encore attestable — il pose ses clés à son premier démarrage. (\(raison))"
+    case .sansClesDeSignature:
+      "Cet appareil n'a pas encore de clés de signature : Réglages › Chiffrement, "
+        + "« poser les signatures ». Sans elles, on ne peut attester personne."
     case .relaisAbsent: "Relais non connecté."
     }
   }
