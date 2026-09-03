@@ -54,14 +54,55 @@ public enum AgentEvents {
 
   /// Le contenu d'une proposition : le texte, l'agent qui le signe, et le
   /// message auquel il répond — pour que l'app la place au bon endroit du fil.
-  public static func proposal(text: String, agent: String, inReplyTo eventID: String) -> MatrixJSON {
-    .object([
+  /// `kind` dit ce qu'elle est (`AgentWire.ProposalKind`) : un brouillon
+  /// demandé, une suggestion sans qu'on demande, un résumé, une passation de
+  /// main — et `reason`, pour cette dernière, pourquoi.
+  public static func proposal(
+    text: String, agent: String, inReplyTo eventID: String,
+    kind: String = AgentWire.ProposalKind.reply, reason: String? = nil
+  ) -> MatrixJSON {
+    var fields: [String: MatrixJSON] = [
       "body": .string(text),
       "agent": .string(agent),
+      AgentWire.ProposalKey.kind: .string(kind),
       "m.relates_to": .object([
         "m.in_reply_to": .object(["event_id": .string(eventID)])
       ]),
+    ]
+    if let reason, !reason.isEmpty { fields[AgentWire.ProposalKey.reason] = .string(reason) }
+    return .object(fields)
+  }
+
+  /// Ce que l'agent dit de lui-même à ses propriétaires (`AgentWire.noticeType`) :
+  /// un échec et sa cause, un moteur absent, un plafond. Les ponts ne le
+  /// relaient pas ; l'app le rend en ligne système avec le geste (`action`).
+  /// Une panne qui ne se voit pas passe pour de la lenteur.
+  public static func notice(agent: String, body: String, reason: String, action: String? = nil) -> MatrixJSON {
+    var fields: [String: MatrixJSON] = [
+      AgentWire.NoticeKey.agent: .string(agent),
+      AgentWire.NoticeKey.body: .string(body),
+      AgentWire.NoticeKey.reason: .string(reason),
+    ]
+    if let action { fields[AgentWire.NoticeKey.action] = .string(action) }
+    return .object(fields)
+  }
+
+  /// Un message envoyé **au nom du propriétaire** par un tour piloté : une
+  /// réponse citée ordinaire, marquée `AgentWire.pilotedKey` pour que l'app le
+  /// dise (« Envoyé par cc pour vous ») et qu'aucun agent n'y réponde.
+  public static func pilotedText(_ text: String, inReplyTo eventID: String) -> MatrixJSON {
+    .object([
+      "msgtype": .string("m.text"),
+      "body": .string(text),
+      "m.relates_to": .object(["m.in_reply_to": .object(["event_id": .string(eventID)])]),
+      AgentWire.pilotedKey: .bool(true),
     ])
+  }
+
+  /// Ce message a-t-il été envoyé par un agent au nom d'un propriétaire ?
+  /// Alors aucun agent n'y répond seul.
+  public static func isPiloted(_ content: MatrixJSON?) -> Bool {
+    content?[AgentWire.pilotedKey]?.boolValue == true
   }
 
   /// Une réponse **dans un thread** (MSC3440) : le travail d'un tour se déroule

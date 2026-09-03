@@ -51,6 +51,13 @@ public actor Agent {
   /// bulle pour dire qu'on attend : ça remplirait la file au lieu de la vider,
   /// et ça perdait la demande.
   private var enAttente: [String: [AgentRequest]] = [:]
+  /// Quand un propriétaire a écrit pour la dernière fois dans chaque salon —
+  /// c'est ce qui fait taire une suggestion : s'il a répondu lui-même pendant
+  /// les trois secondes d'attente, l'agent n'a rien à proposer.
+  private var derniereActiviteProprietaire: [String: Date] = [:]
+  /// Le délai avant qu'une suggestion parte : le temps de laisser le
+  /// propriétaire répondre lui-même.
+  var delaiDeSuggestion: Duration = .seconds(3)
   /// Les tours consommés par atelier dans l'heure — un budget de salon, en plus
   /// du plafond de l'agent : deux agents qui se répondent brûleraient une
   /// fenêtre d'abonnement en une nuit.
@@ -270,15 +277,21 @@ public actor Agent {
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
+            noteActiviteProprietaire(event, in: roomID)
             if isAtelier(roomID) {
               if let request = atelierRequest(from: event, roomID: roomID) { dispatch(request) }
               continue
             }
-            guard let request = Trigger.request(
+            if let request = Trigger.request(
               from: event, roomID: roomID, config: live, notBefore: notBefore,
               requiresTrigger: requiresTrigger(in: roomID)
-            ) else { continue }
-            dispatch(request)
+            ) {
+              dispatch(request)
+            } else if let suggestion = Trigger.suggestion(from: event, roomID: roomID, config: live, notBefore: notBefore) {
+              // Personne n'a parlé à l'agent, mais un tiers a écrit dans un
+              // salon réglé sur *Propose* ou *Répond seul*.
+              dispatch(suggestion)
+            }
           }
         }
         state.nextBatch = response.nextBatch
@@ -289,6 +302,13 @@ public actor Agent {
         backoff = min(backoff * 2, 60)
       }
     }
+  }
+
+  /// Un propriétaire qui écrit dans un salon : on retient quand. C'est ce qui
+  /// abandonne une suggestion en attente — il a répondu lui-même.
+  private func noteActiviteProprietaire(_ event: MatrixEvent, in roomID: String) {
+    guard event.type == "m.room.message", let sender = event.sender, live.owners.contains(sender) else { return }
+    derniereActiviteProprietaire[roomID] = max(derniereActiviteProprietaire[roomID] ?? .distantPast, event.sentAt)
   }
 
   /// Un `m.room.encrypted` qui traverse le `/sync` sans avoir été déchiffré,
@@ -630,6 +650,27 @@ public actor Agent {
   }
 
   private func handle(_ arrivee: AgentRequest) async {
+    // Une suggestion ne fait pas la queue : si un tour est en vol, elle est
+    // abandonnée — personne ne l'a demandée, et elle serait fusionnée à un
+    // ordre qu'elle n'est pas. Pareil pour un tour piloté.
+    if arrivee.kind == .suggest || arrivee.kind == .pilot, busyRooms.contains(arrivee.roomID) {
+      log("[\(arrivee.roomID)] \(arrivee.kind.rawValue) abandonné : un tour est en vol")
+      return
+    }
+    if arrivee.kind == .suggest {
+      // Trois secondes : le temps que le propriétaire réponde lui-même. S'il
+      // l'a fait, l'agent se tait — une proposition sous une réponse déjà
+      // envoyée serait du bruit.
+      try? await Task.sleep(for: delaiDeSuggestion)
+      if Trigger.suggestionDepassee(arrivee, derniereActiviteProprietaire: derniereActiviteProprietaire[arrivee.roomID]) {
+        log("[\(arrivee.roomID)] suggestion abandonnée : le propriétaire a répondu")
+        return
+      }
+      if busyRooms.contains(arrivee.roomID) {
+        log("[\(arrivee.roomID)] suggestion abandonnée : un tour est en vol")
+        return
+      }
+    }
     // Un tour est déjà en vol ici : la demande attend, et elle partira avec les
     // autres. Aucune bulle — le « écrit… » dit déjà qu'on travaille, et une
     // bulle de refus remplissait la file en perdant la demande.
@@ -990,6 +1031,31 @@ public actor Agent {
 
   /// La réponse va là où l'ordre a été donné, dans la forme que la room impose.
   private func reply(_ text: String, to request: AgentRequest) async {
+    // Le genre du tour passe avant le mode du salon : ce que personne n'a
+    // demandé ne parle jamais. Une suggestion est une proposition `suggest`,
+    // quel que soit le mode ; le point du matin, une proposition `summary` ;
+    // et ce qu'un tour piloté n'a pas pu envoyer seul — une erreur, un
+    // plafond — passe la main (`handover`) plutôt que de partir au tiers.
+    let genre: String? = switch request.kind {
+    case .suggest: AgentWire.ProposalKind.suggest
+    case .summary: AgentWire.ProposalKind.summary
+    case .pilot: AgentWire.ProposalKind.handover
+    case .reply: nil
+    }
+    if let genre {
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: AgentEvents.proposalType,
+          content: AgentEvents.proposal(
+            text: text, agent: config.user, inReplyTo: request.eventID, kind: genre,
+            reason: request.kind == .pilot ? text : nil
+          )
+        )
+      } catch {
+        log("[\(request.roomID)] envoi impossible : \(error.localizedDescription)")
+      }
+      return
+    }
     let mode = await mode(for: request.roomID)
     do {
       // Dans un atelier, le tour se déroule dans un thread : seul le résultat
