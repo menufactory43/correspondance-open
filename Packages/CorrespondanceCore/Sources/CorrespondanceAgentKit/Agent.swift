@@ -705,7 +705,11 @@ public actor Agent {
 
     guard cap.admit() else {
       let wait = Int((cap.nextSlot() ?? 0) / 60) + 1
-      await reply("Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
+      let message = "Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min."
+      await reply(message, to: request)
+      // Le texte reste pour les clients qui ne connaissent pas l'avis ; l'avis
+      // est ce que l'app rend en ligne système, avec la cause.
+      await avis(message, reason: "cap", in: request.roomID)
       return
     }
 
@@ -778,6 +782,7 @@ public actor Agent {
       let message = EngineScan.absenceFR(engine: moteur, host: EngineScan.hostName)
       log("[\(request.roomID)] moteur \(moteur) absent — on le dit plutôt que de se taire")
       await reply(message, to: request)
+      await avis(message, reason: "engine_missing", action: "rescan", in: request.roomID)
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
       return
     }
@@ -788,6 +793,7 @@ public actor Agent {
       let message = EngineScan.nonConnecteFR(engine: moteur, host: EngineScan.hostName)
       log("[\(request.roomID)] moteur \(moteur) installé mais pas connecté — on le dit")
       await reply(message, to: request)
+      await avis(message, reason: "engine_offline", action: "rescan", in: request.roomID)
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
       return
     }
@@ -830,7 +836,14 @@ public actor Agent {
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
     } catch {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
-      await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
+      let message = "Je n'ai pas pu répondre : \(error.localizedDescription)"
+      await reply(message, to: request)
+      // Un délai dépassé se distingue d'une panne : le geste est le même
+      // (réessayer), mais l'app peut dire « trop long » plutôt que « cassé ».
+      // Le délai lui-même est celui du moteur (`claude.timeoutSeconds`,
+      // `hermes.timeoutSeconds`, `acp.timeoutSeconds`) : c'est là qu'il se règle.
+      let raison: String = if case AgentBackendError.timedOut = error { "timeout" } else { "error" }
+      await avis(message, reason: raison, action: "retry", in: request.roomID)
     }
   }
 
