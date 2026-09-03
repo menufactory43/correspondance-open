@@ -248,6 +248,19 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   /// ponts n'ont pas relayé. La bulle est la mienne, mais elle le dit — le
   /// correspondant ne l'a jamais vue.
   public var agentAside: AgentAside?
+  /// Envoyé **par l'agent en mon nom** (mode « répond seul ») : la bulle est
+  /// la mienne, et une ligne sous elle le dit — « Envoyé par cc pour vous ».
+  /// Rangé en optionnel : les lignes déjà en base n'ont pas la clé, et un
+  /// `Bool` nu les rendrait illisibles.
+  private var piloted: Bool?
+  public var isPiloted: Bool {
+    get { piloted ?? false }
+    set { piloted = newValue ? true : nil }
+  }
+  /// Un avis de l'agent sur lui-même (panne, délai, main passée) : une ligne
+  /// système avec un geste, pas une bulle. `systemEventText` porte aussi le
+  /// texte, pour que tout ce qui compte les messages le traite en événement.
+  public var agentNotice: AgentNotice?
 
   /// Un aparté avec un agent, invisible pour le correspondant.
   public var isAgentAside: Bool { agentAside != nil }
@@ -280,7 +293,9 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     poll: Poll? = nil,
     systemEventText: String? = nil,
     agentProposal: AgentProposal? = nil,
-    agentAside: AgentAside? = nil
+    agentAside: AgentAside? = nil,
+    isPiloted: Bool = false,
+    agentNotice: AgentNotice? = nil
   ) {
     self.id = id
     self.conversationID = conversationID
@@ -303,6 +318,8 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     self.systemEventText = systemEventText
     self.agentProposal = agentProposal
     self.agentAside = agentAside
+    self.piloted = isPiloted ? true : nil
+    self.agentNotice = agentNotice
   }
 
   public var sidebarPreviewText: String {

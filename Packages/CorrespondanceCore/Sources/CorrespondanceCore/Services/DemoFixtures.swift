@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 /// ce qui s'affiche en démonstration sort du VRAI analyseur, appliqué aux
 /// VRAIS payloads mautrix. Jamais de conversation réelle ici.
 public enum DemoFixtures {
-  public static let syncNames = ["matrix-sync-whatsapp", "matrix-sync-signal", "matrix-sync-instagram"]
+  public static let syncNames = ["matrix-sync-whatsapp", "matrix-sync-signal", "matrix-sync-instagram", "matrix-sync-cc"]
   public static let selfUserID = "@meffysto:correspondance.local"
 
   /// Décode un payload du bundle, en ramenant ses horodatages à maintenant :

@@ -66,7 +66,9 @@ struct ThreadView: View {
   private var thread: [ChatMessage] {
     if awaitsFirstFrame { return [] }
     let cap = launchTail.map { min($0, windowCount) } ?? windowCount
-    return Array(store.messages.suffix(cap))
+    // Une réponse proposée sans qu'on demande (`suggest`) ne vit pas dans le
+    // fil : elle se rend en bandeau au-dessus de la saisie (`SuggestionBanner`).
+    return Array(store.messages.suffix(cap)).filter { $0.agentProposal?.kind != .suggest }
   }
 
   /// Ce que la fenêtre laisse hors champ, au-dessus.
@@ -132,8 +134,11 @@ struct ThreadView: View {
             agentVoices: agentVoices,
             onToggleAgentVoice: agentVoices.isEmpty ? nil : { agent in
               guard let courante = agentVoices.first(where: { $0.agent == agent })?.mode else { return }
+              // Brouillon ⇄ voix haute ; « répond seul » ne se choisit que
+              // dans la fiche du fil, avec un cadre — cliquer le bouton en sort.
+              let suivante: AgentSettings.Mode = courante == .draft ? .direct : .draft
               Task {
-                if let posee = await store.setAgentVoice(courante == .direct ? .draft : .direct, agent: agent) {
+                if let posee = await store.setAgentVoice(suivante, agent: agent) {
                   agentVoices = agentVoices.map {
                     $0.agent == agent ? AgentVoice(agent: agent, mode: posee) : $0
                   }
@@ -477,12 +482,45 @@ struct ThreadView: View {
               typeface: themes.typeface,
               onSend: { Task { await store.sendAgentProposal(message) } },
               onEdit: { store.editAgentProposal(message) },
-              onIgnore: { store.ignoreAgentProposal(message) }
+              onIgnore: { store.ignoreAgentProposal(message) },
+              onReply: { store.requestComposerFocus() }
+            )
+            .id(message.id)
+          } else if let notice = message.agentNotice {
+            // L'avis de cc sur lui-même : une pastille, et le geste qu'il propose.
+            AgentNoticePill(
+              notice: notice,
+              theme: theme,
+              typeface: themes.typeface,
+              onAction: notice.action.map { action in
+                {
+                  Task {
+                    switch action {
+                    case .rescan: await store.rescanAgent(named: notice.agent)
+                    case .retry: await store.retryLastAside()
+                    }
+                  }
+                }
+              }
             )
             .id(message.id)
           } else if let event = message.systemEventText {
             ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
               .id(message.id)
+          } else if message.isFromMe, message.isPiloted {
+            // Envoyé par cc en mon nom : la bulle est la mienne, la ligne
+            // dessous le dit — en rouge, parce que c'est le mode qui engage.
+            VStack(alignment: .trailing, spacing: 2) {
+              bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
+                .equatable()
+              PilotedFootnote(
+                agent: store.agentsInSelectedConversation.first ?? MatrixIdentity.agentName,
+                sentAt: message.sentAt,
+                theme: theme,
+                typeface: themes.typeface
+              )
+            }
+            .id(message.id)
           } else {
             // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
             // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.

@@ -296,19 +296,72 @@ extension InboxStore {
         )
       }
     } catch {
-      lastErrorMessage = "\(agent) répondra \(mode == .direct ? "à voix haute" : "en brouillon"), "
+      let comment = switch mode {
+      case .direct: "à voix haute"
+      case .draft: "en brouillon"
+      case .pilot: "seul, en ton nom"
+      }
+      lastErrorMessage = "\(agent) répondra \(comment), "
         + "mais le pont n'a pas pris la commande de relais : \(error.localizedDescription)"
     }
     return mode
   }
 
-  /// Au moins un agent présent parle-t-il à voix haute ici, une fois ce
-  /// changement pris en compte ? La voix qu'on vient d'écrire prime sur ce
-  /// qu'on relit : le `/sync` n'a pas forcément rapporté l'écriture.
+  /// Au moins un agent présent parle-t-il ici — à voix haute, ou seul en mon
+  /// nom — une fois ce changement pris en compte ? La voix qu'on vient
+  /// d'écrire prime sur ce qu'on relit : le `/sync` n'a pas forcément
+  /// rapporté l'écriture. « Répond seul » a besoin du relais comme la voix
+  /// haute : ce qu'il envoie doit atteindre le correspondant.
   private func voixHauteDansLeFil(roomID: String, apres: (agent: String, mode: AgentSettings.Mode)) async -> Bool {
-    if apres.mode == .direct { return true }
+    if apres.mode.parleAuCorrespondant { return true }
     let voix = await agentVoicesInSelectedConversation()
-    return voix.contains { $0.agent != apres.agent && $0.mode == .direct }
+    return voix.contains { $0.agent != apres.agent && $0.mode.parleAuCorrespondant }
+  }
+
+  /// Ce que la console de `agent` règle pour le fil ouvert : mode, suggest,
+  /// cadre. La carte Assistant part de là. `nil` : pas de fil au Relais.
+  func agentRoomBinding(agent: String) async -> AgentConsoleConfig.RoomBinding? {
+    guard let conversation = selectedConversation,
+          let roomID = await matrix.roomID(ofConversation: conversation.id)
+    else { return nil }
+    let config = ((try? await matrix.agentConfigs()) ?? []).first { $0.agent == agent }
+    return config?.binding(in: roomID) ?? AgentConsoleConfig.RoomBinding()
+  }
+
+  /// Pose `suggest` (`AgentWire.Suggest` : `off`, `always`, `keywords`) pour
+  /// `agent` dans le fil ouvert, sans toucher au reste de sa console.
+  @discardableResult
+  func setAgentSuggest(_ value: String, agent: String) async -> Bool {
+    await modifierLaConsole(de: agent) { $0.settingSuggest(value, in: $1) }
+  }
+
+  /// Pose le cadre du mode « répond seul » pour `agent` dans le fil ouvert.
+  @discardableResult
+  func setAgentFrame(_ frame: String, agent: String) async -> Bool {
+    await modifierLaConsole(de: agent) { $0.settingFrame(frame, in: $1) }
+  }
+
+  /// Relit la console entière, la modifie pour la room du fil ouvert, la
+  /// réécrit. On ne part jamais d'une config de départ : ce qu'on n'a pas
+  /// relu, on l'effacerait.
+  private func modifierLaConsole(
+    de agent: String,
+    _ change: (AgentConsoleConfig, String) -> AgentConsoleConfig
+  ) async -> Bool {
+    guard let conversation = selectedConversation,
+          let roomID = await matrix.roomID(ofConversation: conversation.id)
+    else { return false }
+    var console = await loadAgentConsole(agent: agent)
+    if console == nil { console = await activateAgentConsole(agent: agent) }
+    guard let console, let config = console.config else {
+      lastErrorMessage = "la console de \(agent) n'est pas joignable — le réglage n'est pas parti"
+      return false
+    }
+    guard await writeAgentConsoleConfig(change(config, roomID), in: console.roomID) else {
+      lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
+      return false
+    }
+    return true
   }
 
   /// Ouvre le tête-à-tête avec un agent — le fil existant, ou un salon neuf
@@ -364,4 +417,25 @@ struct AgentVoice: Identifiable, Equatable, Sendable {
   let mode: AgentSettings.Mode
 
   var id: String { agent }
+
+  /// Le dessin du bouton dans le tiroir « + » : le crayon du brouillon, le
+  /// mégaphone de la voix haute, la personne qui parle pour « répond seul ».
+  var systemImage: String {
+    switch mode {
+    case .direct: "megaphone"
+    case .draft: "pencil.line"
+    case .pilot: "person.wave.2"
+    }
+  }
+
+  /// Ce que le bouton dit au survol, et ce que le clic fera : brouillon ⇄
+  /// voix haute ; « répond seul » revient au brouillon (il ne se choisit que
+  /// dans la fiche du fil, avec un cadre).
+  var helpFR: String {
+    switch mode {
+    case .direct: "\(agent) répond à voix haute ici, le correspondant le lit — passer en brouillon"
+    case .draft: "\(agent) propose des brouillons ici, visibles de toi seul — passer à voix haute"
+    case .pilot: "\(agent) répond seul ici, en ton nom, dans son cadre — repasser en brouillon"
+    }
+  }
 }

@@ -161,6 +161,32 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     return copy
   }
 
+  /// La même config avec `suggest` (`AgentWire.Suggest`) posé sur cette room.
+  /// `off` s'écrit tel quel : c'est un choix, pas une absence.
+  public func settingSuggest(_ suggest: String, in roomID: String) -> AgentConsoleConfig {
+    var copy = self
+    var binding = copy.rooms[roomID] ?? RoomBinding()
+    binding.suggest = suggest
+    copy.rooms[roomID] = binding
+    return copy
+  }
+
+  /// La même config avec le cadre du mode « répond seul » posé sur cette
+  /// room. Un cadre vide l'efface.
+  public func settingFrame(_ frame: String, in roomID: String) -> AgentConsoleConfig {
+    var copy = self
+    var binding = copy.rooms[roomID] ?? RoomBinding()
+    let trimmed = frame.trimmingCharacters(in: .whitespacesAndNewlines)
+    binding.frame = trimmed.isEmpty ? nil : trimmed
+    copy.rooms[roomID] = binding
+    return copy
+  }
+
+  /// Ce que la room règle, ou rien : la carte Assistant part de là.
+  public func binding(in roomID: String) -> RoomBinding {
+    rooms[roomID] ?? RoomBinding()
+  }
+
   /// Les paliers d'outils tels que l'app les propose. Les listes exactes vivent
   /// côté agent (`AgentConfig.Presets`) : ici on ne manipule que leur nom.
   public enum ToolPreset: String, CaseIterable, Identifiable, Sendable {

@@ -30,6 +30,9 @@ struct ComposerCircleButton: View {
   var isPrimary: Bool = false
   var isDisabled: Bool = false
   var isActive: Bool = false
+  /// La couleur de l'état actif quand ce n'est pas l'accent — le rouge du
+  /// mode « répond seul ».
+  var activeTint: Color? = nil
   var showsProgress: Bool = false
   var symbolFillsControl: Bool = false
   let action: () -> Void
@@ -64,7 +67,7 @@ struct ComposerCircleButton: View {
   private var foreground: Color {
     if isDisabled { return theme.inkTertiary.opacity(0.4) }
     if isPrimary { return theme.paper }
-    if isActive { return theme.accent }
+    if isActive { return activeTint ?? theme.accent }
     if hovered { return theme.ink }
     return theme.inkSecondary
   }
@@ -75,6 +78,8 @@ struct ComposerCircleButton: View {
       Circle().fill(Color.clear)
     } else if isPrimary {
       Circle().fill(isDisabled ? theme.inkTertiary.opacity(0.18) : theme.accent)
+    } else if isActive, let activeTint {
+      Circle().fill(activeTint.opacity(0.18))
     } else if isActive {
       Circle().fill(theme.accentSoft.opacity(0.55))
     } else if hovered && !isDisabled {
@@ -342,13 +347,13 @@ struct ComposerPlusTray: View {
         if let onToggleAgentVoice {
           ForEach(agentVoices) { voix in
             ComposerCircleButton(
-              systemImage: voix.mode == .direct ? "megaphone" : "pencil.line",
-              helpText: voix.mode == .direct
-                ? "\(voix.agent) répond à voix haute ici, le correspondant le lit — passer en brouillon"
-                : "\(voix.agent) propose des brouillons ici, visibles de toi seul — passer à voix haute",
+              systemImage: voix.systemImage,
+              helpText: voix.helpFR,
               theme: theme,
               iconSize: 15,
-              isActive: voix.mode == .direct,
+              isActive: voix.mode != .draft,
+              // « Répond seul » est rouge partout : c'est le mode qui engage.
+              activeTint: voix.mode == .pilot ? .red : nil,
               action: { choose { onToggleAgentVoice(voix.agent) } }
             )
           }

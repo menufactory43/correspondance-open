@@ -103,6 +103,11 @@ struct ConversationInfoCard: View {
       }
       .font(.system(size: 11))
 
+      // Ce que cc fait dans ce fil — présent seulement quand il y est.
+      if conversation.network.livesOnRelay {
+        AssistantSection(conversation: conversation, theme: theme)
+      }
+
       if !members.isEmpty {
         Divider()
         Text("Chats réunis")

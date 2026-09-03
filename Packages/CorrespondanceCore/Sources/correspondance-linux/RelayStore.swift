@@ -1134,7 +1134,7 @@ final class RelayStore {
   }
 
   /// Les six réactions rapides — les mêmes que sur le Mac.
-  static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+  static let quickReactions = QuickReactions.base
 
   // MARK: - Gestes sur une ligne
 

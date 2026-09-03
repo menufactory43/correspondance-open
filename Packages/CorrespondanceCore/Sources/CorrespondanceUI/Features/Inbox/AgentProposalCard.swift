@@ -11,6 +11,16 @@ import CorrespondanceCore
 /// thème, un liseré en pointillés (rien n'est encore posé), l'encre secondaire
 /// pour l'en-tête. Aucune couleur criarde — l'accent ne sert qu'au verbe qui
 /// engage, « Envoyer ».
+///
+/// La carte change de visage avec `proposal.kind` :
+/// - `reply` : « cc propose », Envoyer / Modifier / Ignorer ;
+/// - `summary` : « Résumé de cc · visible par vous seul », le texte en Markdown
+///   léger, Fermer / Répondre (la saisie s'ouvre, vide) ;
+/// - `handover` : « cc te passe la main », la raison en italique, puis les
+///   trois gestes du brouillon ;
+/// - `suggest` : pas ici — la réponse proposée sans qu'on demande vit en
+///   bandeau au-dessus de la saisie (`SuggestionBanner`). Si la carte en reçoit
+///   une quand même (l'iPhone, pour l'instant), elle la rend comme un `reply`.
 public struct AgentProposalCard: View {
   public let proposal: AgentProposal
   public let theme: WritingTheme
@@ -21,6 +31,9 @@ public struct AgentProposalCard: View {
   public var onEdit: (() -> Void)?
   /// La proposition disparaît, sans rien envoyer.
   public var onIgnore: (() -> Void)?
+  /// « Répondre » sur un résumé : la saisie prend le focus, vide. À défaut,
+  /// « Modifier » en tient lieu.
+  public var onReply: (() -> Void)?
 
   public init(
     proposal: AgentProposal,
@@ -28,7 +41,8 @@ public struct AgentProposalCard: View {
     typeface: WritingTypeface = .quattro,
     onSend: (() -> Void)? = nil,
     onEdit: (() -> Void)? = nil,
-    onIgnore: (() -> Void)? = nil
+    onIgnore: (() -> Void)? = nil,
+    onReply: (() -> Void)? = nil
   ) {
     self.proposal = proposal
     self.theme = theme
@@ -36,24 +50,51 @@ public struct AgentProposalCard: View {
     self.onSend = onSend
     self.onEdit = onEdit
     self.onIgnore = onIgnore
+    self.onReply = onReply
+  }
+
+  private var headerIcon: String {
+    switch proposal.kind {
+    case .reply, .suggest: "pencil.line"
+    case .summary: "list.bullet.rectangle"
+    case .handover: "person.wave.2"
+    }
+  }
+
+  /// Ce que la carte dit d'elle-même, à droite de l'en-tête.
+  private var privacyNote: String {
+    switch proposal.kind {
+    case .summary: "visible par vous seul"
+    default: "visible ici seulement"
+    }
   }
 
   public var body: some View {
     VStack(alignment: .leading, spacing: 9) {
       HStack(spacing: 5) {
-        Image(systemName: "pencil.line")
+        Image(systemName: headerIcon)
           .font(.system(size: 10, weight: .semibold))
         Text(proposal.headerFR)
           .font(Typography.meta(typeface))
         Spacer(minLength: 0)
         // Dit ce que la carte est, pour qu'on ne la croie jamais partie.
-        Text("visible ici seulement")
+        Text(privacyNote)
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.inkTertiary)
       }
       .foregroundStyle(theme.inkSecondary)
 
-      Text(proposal.text)
+      if proposal.kind == .handover, let reason = proposal.reason?.trimmingCharacters(in: .whitespacesAndNewlines),
+         !reason.isEmpty {
+        Text(reason)
+          .font(Typography.bubble(typeface))
+          .italic()
+          .foregroundStyle(theme.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+
+      bodyText
         .font(Typography.bubble(typeface))
         .lineSpacing(theme.bubbleLineSpacing(forBodySize: Typography.bubbleSize()))
         .foregroundStyle(theme.ink)
@@ -61,15 +102,21 @@ public struct AgentProposalCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
 
       HStack(spacing: 6) {
-        action("Envoyer", systemImage: "paperplane", isPrimary: true, run: onSend)
-        action("Modifier", systemImage: "pencil", isPrimary: false, run: onEdit)
-        action("Ignorer", systemImage: "xmark", isPrimary: false, run: onIgnore)
+        switch proposal.kind {
+        case .summary:
+          action("Répondre", systemImage: "arrowshape.turn.up.left", isPrimary: true, run: onReply ?? onEdit)
+          action("Fermer", systemImage: "xmark", isPrimary: false, run: onIgnore)
+        case .reply, .suggest, .handover:
+          action("Envoyer", systemImage: "paperplane", isPrimary: true, run: onSend)
+          action("Modifier", systemImage: "pencil", isPrimary: false, run: onEdit)
+          action("Ignorer", systemImage: "xmark", isPrimary: false, run: onIgnore)
+        }
         Spacer(minLength: 0)
       }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 10)
-    .frame(maxWidth: 340, alignment: .leading)
+    .frame(maxWidth: proposal.kind == .summary ? 420 : 340, alignment: .leading)
     .background(
       RoundedRectangle(cornerRadius: 14, style: .continuous)
         .fill(theme.paperSecondary)
@@ -84,6 +131,17 @@ public struct AgentProposalCard: View {
     )
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(proposal.headerFR) : \(proposal.text)")
+  }
+
+  /// Un résumé arrive balisé (listes, gras) : on le lit en Markdown léger.
+  /// Un brouillon, lui, se montre tel qu'il partirait.
+  @ViewBuilder
+  private var bodyText: some View {
+    if proposal.kind == .summary, let attributed = InlineMarkdown.attributed(proposal.text) {
+      Text(attributed)
+    } else {
+      Text(proposal.text)
+    }
   }
 
   @ViewBuilder
