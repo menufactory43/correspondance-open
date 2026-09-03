@@ -159,6 +159,9 @@ struct InboxListView: View {
       store.selectedConversationID == conversation.id ? theme.selection : Color.clear
     )
     .tag(conversation.id)
+    // La ligne paraît : sa page locale se charge déjà, pour que le fil
+    // s'ouvre plein plutôt que vide puis rempli.
+    .task { await store.warm(conversationID: conversation.id) }
     .onTapGesture { open(conversation.id) }
     // Balayage à droite : archiver — le geste qui vide la file.
     .swipeActions(edge: .trailing, allowsFullSwipe: true) {

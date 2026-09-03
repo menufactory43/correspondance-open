@@ -219,6 +219,11 @@ struct ThreadComposer: View {
         // Verre non interactif, comme le chevron : la variante interactive
         // avale les touches hors barre d'outils.
         .glassSurface(cornerRadius: 17, fallbackFill: theme.paperSecondary, border: theme.edge)
+        // Aussi haut que la pilule sur une ligne (40) : posé au bas de la
+        // rangée, le rond de 34 tombait trois points sous le centre du champ.
+        // Quand la pilule grandit — citation, plusieurs lignes — il reste
+        // centré sur sa dernière ligne.
+        .frame(height: 40)
     }
     .accessibilityLabel("Joindre une photo, une prise de vue ou un fichier")
   }

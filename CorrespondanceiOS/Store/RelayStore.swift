@@ -562,6 +562,24 @@ final class RelayStore {
     await markRead(conversationID: conversationID)
   }
 
+  /// Réchauffe un fil qu'on n'a pas encore ouvert : sa page locale seulement,
+  /// sans réseau ni accusé. Une ligne de l'inbox qui paraît le demande, pour
+  /// que le fil s'ouvre déjà plein — sans ça, on arrivait sur du vide le temps
+  /// que l'acteur Matrix rende la page, et les bulles surgissaient après coup.
+  func warm(conversationID: String) async {
+    guard !isDemo else { return }
+    for target in relayTargets(of: conversationID) where messages[target] == nil && !warmingIDs.contains(target) {
+      warmingIDs.insert(target)
+      let local = await matrix.messages(conversationID: target)
+      // Un `open` a pu passer devant : on ne recouvre pas ce qu'il a posé.
+      if messages[target] == nil { showLoaded(local, in: target) }
+      warmingIDs.remove(target)
+    }
+  }
+
+  /// Les fils dont la page locale est en route (cf. `warm`).
+  private var warmingIDs: Set<String> = []
+
   /// Le geste explicite : ce fil est lu, ici et sur le Relais, incognito ou pas.
   func markRead(conversationID: String) async {
     guard !isDemo else { return }

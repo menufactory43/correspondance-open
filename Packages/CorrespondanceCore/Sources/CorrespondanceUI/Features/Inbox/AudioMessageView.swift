@@ -336,11 +336,13 @@ public struct AudioMessageView: View {
       player.pause()
       isPlaying = false
       ticker?.cancel()
+      Self.releasePlaybackSession()
       return
     }
     // Relire depuis le début quand la lecture précédente est allée au bout.
     if duration > 0, elapsed >= duration - 0.1 { commitSeek(to: 0) }
     isPlaying = true
+    Self.claimPlaybackSession()
     player.play()
     applyRate()
     startTicker()
@@ -360,6 +362,7 @@ public struct AudioMessageView: View {
           isPlaying = false
           elapsed = 0
           player.seek(to: .zero) { _ in }
+          Self.releasePlaybackSession()
           return
         }
         try? await Task.sleep(for: .milliseconds(120))
@@ -371,7 +374,35 @@ public struct AudioMessageView: View {
     ticker?.cancel()
     ticker = nil
     player?.pause()
+    if isPlaying { Self.releasePlaybackSession() }
     isPlaying = false
+  }
+
+  /// La session audio de l'iPhone, prise pour LIRE. Sans ça, `AVPlayer`
+  /// joue dans la catégorie par défaut, que l'interrupteur silencieux coupe :
+  /// un vocal se lisait sans un son. Et après un enregistrement, la session
+  /// restait en « playAndRecord », qui route vers l'écouteur — la voix sortait
+  /// par le haut du téléphone, inaudible à bout de bras. Un vocal se lit
+  /// comme un message : sur le haut-parleur, silencieux ou pas, et il baisse
+  /// la musique le temps de parler. Hors de l'acteur principal : `setActive`
+  /// attend le matériel.
+  private static func claimPlaybackSession() {
+    #if os(iOS)
+    Task.detached(priority: .userInitiated) {
+      let session = AVAudioSession.sharedInstance()
+      try? session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+      try? session.setActive(true)
+    }
+    #endif
+  }
+
+  /// Rendre la session quand on a fini : la musique reprend son volume.
+  private static func releasePlaybackSession() {
+    #if os(iOS)
+    Task.detached(priority: .utility) {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    #endif
   }
 
   public init(attachment: MessageAttachment, theme: WritingTheme, typeface: WritingTypeface = .quattro, isFromMe: Bool = false) {

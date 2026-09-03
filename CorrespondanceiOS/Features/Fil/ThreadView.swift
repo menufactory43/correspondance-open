@@ -74,6 +74,13 @@ struct ThreadView: View {
     var id: String { text }
   }
 
+  /// Le clavier est levé : le composer se pose dessus, sans la marge de
+  /// l'indicateur d'accueil sous lui.
+  @State private var isKeyboardUp = false
+
+  /// En compact, le fil prend l'écran et la barre d'onglets s'efface.
+  private var hidesTabBar: Bool { showsHeader && sizeClass == .compact }
+
   var body: some View {
     thread
       .background(theme.paper.ignoresSafeArea())
@@ -84,6 +91,24 @@ struct ThreadView: View {
             ThreadComposer(conversationID: conversationID, members: members)
           }
         }
+        // Le fil ignore la zone sûre du bas (voir plus bas) : c'est donc au
+        // composer de garder la marge de l'indicateur d'accueil — sauf sur
+        // le clavier, qui la remplace.
+        .padding(.bottom, hidesTabBar && !isKeyboardUp ? Self.homeIndicatorInset : 0)
+      }
+      // La barre d'onglets s'efface AVEC la poussée : le temps de la
+      // transition, l'encart du bas passait de 140 à 91 points, et la pile
+      // paresseuse ré-estimait tout le fil à cet instant — sur un groupe de
+      // 130 messages, la hauteur sautait de 14 000 à 20 000 points, le
+      // décalage suivait vers des rangées pas encore posées, et l'écran
+      // restait vide une seconde. Le fil ne regarde donc plus la zone sûre du
+      // bas : barre ou pas, son encart ne bouge pas.
+      .ignoresSafeArea(.container, edges: hidesTabBar ? .bottom : [])
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+        isKeyboardUp = true
+      }
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+        isKeyboardUp = false
       }
       .overlay {
         if let focused {
@@ -363,6 +388,16 @@ struct ThreadView: View {
       if delta > 0, !isNearBottom {
         scrollPosition.scrollTo(y: new.offsetY + delta + new.insetTop)
       }
+      // Et quand le bas se libère — citation retirée, clavier rangé — le
+      // décalage, lui, ne bouge pas : le fil reste garé SOUS son propre bas,
+      // du vide entre le dernier message et le composer, jusqu'à ce qu'un
+      // doigt le fasse rebondir. On le recolle nous-mêmes, sans animation :
+      // la pilule qui se replie fait déjà le mouvement.
+      if delta < 0, new.distanceToBottom < -1 {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { scrollPosition.scrollTo(y: new.bottomScrollTarget) }
+      }
       let nearBottom = !new.isScrollable || new.distanceToBottom <= 60
       if nearBottom != isNearBottom {
         if nearBottom { missedCount = 0 }
@@ -401,11 +436,23 @@ struct ThreadView: View {
       // force en bas : la pilule ↓ le dit, et on y va quand on veut. Mes
       // propres envois, eux, se suivent toujours.
       guard isNearBottom || new == nil || messages.last?.isFromMe == true else { return }
+      // Le fil qui s'ouvre ou se remplit : l'ancre initiale l'a déjà posé en
+      // bas presque toujours. On vérifie sans bouger, et on ne recolle que si
+      // c'est faux — d'un coup, sans animation. Avant, un trajet animé vers le
+      // dernier message partait d'un bas déjà atteint, traversait le vide des
+      // rangées estimées, puis revenait : les bulles paraissaient,
+      // disparaissaient, reparaissaient à chaque ouverture.
+      let isOpening = old == nil
       // Un souffle : la bulle qui vient d'arriver doit être mesurée avant
       // qu'on sache où est le nouveau bas.
       Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(80))
-        scrollToBottom()
+        if isOpening {
+          guard abs(metrics.distanceToBottom) > 60 else { return }
+          scrollToBottom(duration: 0)
+        } else {
+          scrollToBottom()
+        }
       }
     }
     // Le clavier qui s'ouvre masque le bas du fil : si l'on y était, on y
@@ -425,7 +472,11 @@ struct ThreadView: View {
   /// la première visée peut atterrir court quand une grande bulle se
   /// matérialise en route. On recolle donc jusqu'à toucher le bas.
   private func scrollToBottom(duration: Double = 0.25) {
-    withAnimation(.easeOut(duration: duration)) {
+    // Durée nulle : un saut sec, sans transaction animée — une animation de
+    // zéro seconde passe encore par une interpolation visible.
+    var transaction = Transaction(animation: duration > 0 ? .easeOut(duration: duration) : nil)
+    transaction.disablesAnimations = duration <= 0
+    withTransaction(transaction) {
       // Viser LE DERNIER MESSAGE, pas un décalage en points : la pile
       // paresseuse ESTIME les rangées qu'elle n'a pas mesurées, et une bulle
       // qui se révèle plus petite que son estimation (une photo absente,
@@ -445,9 +496,9 @@ struct ThreadView: View {
         // vocal, une photo absente — laissait le fil garé SOUS son propre bas,
         // écran vide, et la correction ne regardait que le manque.
         guard abs(metrics.distanceToBottom) > 60 else { return }
-        withAnimation(.easeOut(duration: 0.15)) {
-          scrollPosition.scrollTo(y: metrics.bottomScrollTarget)
-        }
+        var fix = Transaction(animation: duration > 0 ? .easeOut(duration: 0.15) : nil)
+        fix.disablesAnimations = duration <= 0
+        withTransaction(fix) { scrollPosition.scrollTo(y: metrics.bottomScrollTarget) }
       }
     }
   }
@@ -501,6 +552,14 @@ struct ThreadView: View {
       guard flashedMessageID == messageID else { return }
       withAnimation(.easeOut(duration: 0.5)) { flashedMessageID = nil }
     }
+  }
+
+  /// La marge de l'indicateur d'accueil, lue sur la fenêtre : elle ne compte
+  /// que lui, jamais la barre d'onglets.
+  private static var homeIndicatorInset: CGFloat {
+    UIApplication.shared.connectedScenes
+      .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+      .first?.safeAreaInsets.bottom ?? 0
   }
 
   /// Ce qu'on relève du défilement, via `visibleRect` — exprimé dans les
