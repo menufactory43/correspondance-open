@@ -42,9 +42,77 @@ public enum AgentWire {
   /// natif n'est rien pour l'app, et l'agent y exige sa mention : ni la note
   /// à soi ni un salon de gestion ne deviennent un tête-à-tête par accident.
   public static let conversationType = "fr.correspondance.conversation"
+  /// Un **aparté** : ce qu'un propriétaire dit à un agent devant des humains.
+  /// L'app l'envoie à la place d'un `m.room.message` dès qu'un message d'un
+  /// fil bridgé nomme un agent présent (`@cc résume`, `dis à @claude…`) : les
+  /// ponts mautrix ne relaient que `m.room.message`, donc le correspondant ne
+  /// le voit jamais — ni la question, ni le brouillon qui lui répond. Le
+  /// contenu a la forme d'un message texte (`msgtype`, `body`, `m.relates_to`),
+  /// plus `agents` : les noms des agents nommés, pour que le fil dise avec qui
+  /// l'aparté a eu lieu.
+  public static let asideType = "fr.correspondance.agent.aside"
 
   public enum ConversationKey {
     public static let kind = "kind"
+    /// L'agent **à qui est** ce fil, par son nom court (`claude`). Quand un
+    /// second agent y est invité, c'est lui qui répond à ce qui ne nomme
+    /// personne — l'autre attend qu'on l'appelle. Absent sur les fils d'avant :
+    /// le nom du salon, que l'app pose au nom de l'agent, en tient lieu.
+    public static let agent = "agent"
+  }
+
+  public enum AsideKey {
+    public static let agents = "agents"
+  }
+
+  /// Un agent qui répond parce qu'un autre agent l'a chargé le dit dans son
+  /// message : un agent qui lit ce drapeau ne répond jamais à ce message-là.
+  /// C'est la profondeur 1 de la délégation, portée par l'event lui-même.
+  public static let delegatedKey = "fr.correspondance.agent.delegated"
+
+  // MARK: - Mentions
+
+  /// Le nom sous lequel on appelle un agent dans un message : `@` et son nom court.
+  public static func trigger(forAgent name: String) -> String {
+    name.hasPrefix("@") ? name : "@\(name)"
+  }
+
+  /// Les agents, parmi `agents` (noms courts), que ce texte nomme — n'importe
+  /// où, en mot entier : `@cc` dans « dis à @cc de voir » compte, `@ccc` non.
+  /// Pure et partagée : l'app s'en sert pour décider qu'un message part en
+  /// aparté, l'agent pour savoir s'il est nommé — une seule règle, pas deux.
+  public static func agentsMentioned(in text: String, among agents: [String]) -> [String] {
+    let texte = text.lowercased()
+    return agents.filter { agent in
+      let mot = trigger(forAgent: agent).lowercased()
+      var recherche = texte.startIndex
+      while let plage = texte.range(of: mot, range: recherche..<texte.endIndex) {
+        let apres = plage.upperBound
+        let suivantOK = apres == texte.endIndex || !(texte[apres].isLetter || texte[apres].isNumber || texte[apres] == "_")
+        let avantOK = plage.lowerBound == texte.startIndex || !(texte[texte.index(before: plage.lowerBound)].isLetter || texte[texte.index(before: plage.lowerBound)].isNumber)
+        if suivantOK && avantOK { return true }
+        recherche = apres
+      }
+      return false
+    }
+  }
+
+  /// Les agents **à qui s'adresse** ce message. Ceux qui ouvrent la phrase
+  /// (`@claude @cc vous allez bien ?`) sont les destinataires, et eux seuls :
+  /// « @cc dis à @claude de… » parle **à** cc **de** claude. Sans agent en
+  /// tête, tous ceux qui sont nommés sont appelés (« hey @cc et @claude »).
+  /// Vide : personne n'est nommé.
+  public static func agentsAddressed(in text: String, among agents: [String]) -> [String] {
+    var reste = Substring(text).drop { $0.isWhitespace }
+    var enTete: [String] = []
+    boucle: while reste.first == "@" {
+      let mot = reste.prefix { !($0.isWhitespace || $0 == "," || $0 == ":") }
+      guard let agent = agents.first(where: { trigger(forAgent: $0).caseInsensitiveCompare(String(mot)) == .orderedSame }) else { break boucle }
+      if !enTete.contains(agent) { enTete.append(agent) }
+      reste = reste.dropFirst(mot.count).drop { $0.isWhitespace || $0 == "," || $0 == ":" }
+    }
+    if !enTete.isEmpty { return enTete }
+    return agentsMentioned(in: text, among: agents)
   }
 
   public enum ConversationKind {

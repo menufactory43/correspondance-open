@@ -50,6 +50,40 @@ final class AgentProposalTests: XCTestCase {
     """
   }
 
+  private func aside(_ id: String = "$aside", _ body: String = "@cc résume ce fil", at ts: Int = 1_800_000_600_000) -> String {
+    """
+    {"type":"fr.correspondance.agent.aside","event_id":"\(id)","sender":"\(moi)",
+     "origin_server_ts":\(ts),
+     "content":{"msgtype":"m.text","body":"\(body)","agents":["cc"]}}
+    """
+  }
+
+  // MARK: - Aparté
+
+  /// Ce que je dis à cc devant des humains est un message du fil — le mien —
+  /// mais la bulle sait que personne d'autre ne l'a vu.
+  func testLAparteEstMonMessageEtLeDit() throws {
+    let model = try parse([message("$m1", "on fait quoi samedi ?", at: 1_800_000_000_000), aside()])
+    let message = try XCTUnwrap(model.messagesByID["$aside"])
+    XCTAssertTrue(message.isFromMe)
+    XCTAssertEqual(message.text, "@cc résume ce fil")
+    XCTAssertEqual(message.agentAside?.agents, ["cc"])
+    XCTAssertEqual(message.agentAside?.footnoteFR, "Aparté avec cc · invisible pour les autres")
+  }
+
+  func testLAparteSurvitAuStockageLocal() throws {
+    let model = try parse([aside()])
+    let message = try XCTUnwrap(model.messagesByID["$aside"])
+    let data = try JSONEncoder().encode(message)
+    let relu = try JSONDecoder().decode(ChatMessage.self, from: data)
+    XCTAssertEqual(relu.agentAside, message.agentAside)
+    // Un message stocké avant l'aparté se relit sans le champ.
+    var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    json.removeValue(forKey: "agentAside")
+    let ancien = try JSONDecoder().decode(ChatMessage.self, from: JSONSerialization.data(withJSONObject: json))
+    XCTAssertNil(ancien.agentAside)
+  }
+
   // MARK: - Analyse
 
   func testLaPropositionDevientUnMessagePorteurDeBrouillon() throws {

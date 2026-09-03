@@ -322,6 +322,7 @@ struct MessageBubble: View {
     if let effect = message.expressiveEffectName, !message.isRetracted {
       parts.append("envoyé avec \(effect)")
     }
+    if let aside = message.agentAside { parts.append(aside.footnoteFR) }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
   }
 

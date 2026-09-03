@@ -3595,6 +3595,9 @@ final class InboxStore {
         refreshed.append(contentsOf: await matrix.ensureLocalAttachments(fetched))
       }
       guard !refreshed.isEmpty else { return }
+      // Le masquage « ici » se réapplique à chaque relecture — sinon un
+      // brouillon d'agent qu'on vient d'ignorer revenait au message suivant.
+      refreshed = HiddenMessageStore.visible(refreshed, hiddenIDs: hiddenMessageIDs)
       let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
       let recombined = (others + Self.keepingInFlight(refreshed, from: session.messages))
         .sorted { $0.sentAt < $1.sentAt }
@@ -3611,7 +3614,13 @@ final class InboxStore {
     guard conversation.network.livesOnRelay else { return }
     let fetched = await matrix.messages(conversationID: id)
     guard !fetched.isEmpty else { return }
-    let refreshed = Self.keepingInFlight(await matrix.ensureLocalAttachments(fetched), from: session.messages)
+    // Même chose ici : un brouillon ignoré (`deleteLocally`) ne revient pas
+    // parce qu'un `/sync` a relu le fil — c'est ce qui le faisait réapparaître
+    // dès qu'on tapait un autre message.
+    let refreshed = HiddenMessageStore.visible(
+      Self.keepingInFlight(await matrix.ensureLocalAttachments(fetched), from: session.messages),
+      hiddenIDs: hiddenMessageIDs
+    )
     // Même raison qu'au-dessus : un fil identique se réécrit sans rien apporter,
     // et l'observation, elle, y croit.
     if session.messages != refreshed { session.messages = refreshed }

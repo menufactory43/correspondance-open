@@ -123,8 +123,19 @@ struct ComposerBar: View {
     if isEditing { return "Corriger le message" }
     guard let member = activeMember, let merged = mergedID,
           let contact = store.mergedContact(for: merged)
-    else { return "Message" }
-    return "Écrire à \(contact.title) sur \(member.network.labelFR)"
+    else { return Self.placeholder(base: "Message", asideAgents: store.primarySession?.asideAgents ?? []) }
+    return Self.placeholder(
+      base: "Écrire à \(contact.title) sur \(member.network.labelFR)",
+      asideAgents: store.primarySession?.asideAgents ?? []
+    )
+  }
+
+  /// Un agent est là : le champ vide le dit, et dit comment lui parler. Sans
+  /// ça, après le message initial « cc a rejoint », rien ne rappelle qu'on
+  /// peut le nommer — ni que ce sera un aparté, que les autres ne verront pas.
+  static func placeholder(base: String, asideAgents: [String]) -> String {
+    guard let premier = asideAgents.first else { return base }
+    return "\(base) · @\(premier) pour un aparté"
   }
 
   /// Le composer suit l'échelle de lecture (⌘+ / ⌘−), comme les bulles.

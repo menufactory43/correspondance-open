@@ -13,6 +13,9 @@ public struct AgentRequest: Sendable, Equatable {
   /// Ce que le message portait en plus du texte. Téléchargé au moment du tour,
   /// jamais ici : reconnaître une demande reste pur, et testable sans réseau.
   public var attachments: [AgentAttachment]
+  /// Ce tour vient d'un autre agent, chargé par un propriétaire : la réponse
+  /// portera le drapeau `AgentWire.delegatedKey`, et personne n'y répondra.
+  public var delegated: Bool
 
   public init(
     roomID: String,
@@ -20,7 +23,8 @@ public struct AgentRequest: Sendable, Equatable {
     sender: String,
     prompt: String,
     sentAt: Date,
-    attachments: [AgentAttachment] = []
+    attachments: [AgentAttachment] = [],
+    delegated: Bool = false
   ) {
     self.roomID = roomID
     self.eventID = eventID
@@ -28,6 +32,7 @@ public struct AgentRequest: Sendable, Equatable {
     self.prompt = prompt
     self.sentAt = sentAt
     self.attachments = attachments
+    self.delegated = delegated
   }
 }
 
@@ -110,7 +115,7 @@ public enum Trigger {
     notBefore: Date,
     requiresTrigger: Bool = true
   ) -> AgentRequest? {
-    guard event.type == "m.room.message",
+    guard Self.carriesText(event),
           let eventID = event.eventID,
           let sender = event.sender,
           !isBridgeGhost(sender),
@@ -144,6 +149,14 @@ public enum Trigger {
       roomID: roomID, eventID: eventID, sender: sender, prompt: prompt,
       sentAt: event.sentAt, attachments: attachments
     )
+  }
+
+  /// Un message ordinaire, ou un **aparté** (`AgentWire.asideType`) : ce que
+  /// l'app envoie à la place d'un message quand on nomme un agent devant des
+  /// humains. Même corps, même déclencheur — seul le type change, pour que
+  /// les ponts ne le relaient pas. Pour l'agent, les deux sont des ordres.
+  public static func carriesText(_ event: MatrixEvent) -> Bool {
+    event.type == "m.room.message" || event.type == AgentWire.asideType
   }
 
   /// Le repli `> <@qui> …` que les clients posent avant une réponse citée.

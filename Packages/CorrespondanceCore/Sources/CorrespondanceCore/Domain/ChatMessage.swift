@@ -244,6 +244,13 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
   /// Ce que « cc » propose d'envoyer ici. Le fil montre alors une carte au lieu
   /// d'une bulle — visible chez nous seulement, tant qu'on n'a rien envoyé.
   public var agentProposal: AgentProposal?
+  /// Un **aparté** : ce que j'ai dit à un agent devant des humains, et que les
+  /// ponts n'ont pas relayé. La bulle est la mienne, mais elle le dit — le
+  /// correspondant ne l'a jamais vue.
+  public var agentAside: AgentAside?
+
+  /// Un aparté avec un agent, invisible pour le correspondant.
+  public var isAgentAside: Bool { agentAside != nil }
 
   /// Un événement de conversation, pas une prise de parole.
   public var isSystemEvent: Bool { systemEventText != nil }
@@ -272,7 +279,8 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     expressiveEffectName: String? = nil,
     poll: Poll? = nil,
     systemEventText: String? = nil,
-    agentProposal: AgentProposal? = nil
+    agentProposal: AgentProposal? = nil,
+    agentAside: AgentAside? = nil
   ) {
     self.id = id
     self.conversationID = conversationID
@@ -294,6 +302,7 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     self.poll = poll
     self.systemEventText = systemEventText
     self.agentProposal = agentProposal
+    self.agentAside = agentAside
   }
 
   public var sidebarPreviewText: String {

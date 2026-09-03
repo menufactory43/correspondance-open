@@ -395,6 +395,10 @@ struct MessageBubbleView: View {
       parts.append("envoyé avec \(effect)")
       help.append("Effet d’envoi : \(effect)")
     }
+    if let aside = message.agentAside {
+      parts.append(aside.footnoteFR)
+      help.append("Ce message nomme un agent : il n’est pas parti sur le réseau. Seuls toi et l’agent le voient.")
+    }
     guard !parts.isEmpty else { return nil }
     return (parts.joined(separator: " · "), help.joined(separator: "\n\n"))
   }

@@ -40,3 +40,30 @@ public struct AgentProposal: Hashable, Codable, Sendable {
     text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 }
+
+/// Un **aparté** : ce que je dis à un agent devant des humains.
+///
+/// Dans un fil bridgé, nommer un agent (« @cc résume », « dis à @claude… »)
+/// fait partir le message en `fr.correspondance.agent.aside` au lieu d'un
+/// `m.room.message` : les ponts mautrix ne relaient que ce dernier, donc le
+/// correspondant ne voit ni la question ni le brouillon qui lui répond.
+/// L'aparté reste entre le Relais, ses appareils et l'agent.
+public struct AgentAside: Hashable, Codable, Sendable {
+  /// Le type d'event qui le porte — la même chaîne qu'`AgentWire.asideType`.
+  public static let eventType = "fr.correspondance.agent.aside"
+
+  /// Les agents nommés, par leur nom court (`cc`, `claude`).
+  public var agents: [String]
+
+  public init(agents: [String]) {
+    self.agents = agents
+  }
+
+  /// « Aparté avec cc · invisible pour les autres » — sous la bulle, sur les
+  /// deux plateformes.
+  public var footnoteFR: String {
+    let noms = agents.filter { !$0.isEmpty }
+    let avec = noms.isEmpty ? "Aparté" : "Aparté avec \(noms.joined(separator: ", "))"
+    return "\(avec) · invisible pour les autres"
+  }
+}

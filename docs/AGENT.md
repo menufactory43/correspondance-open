@@ -47,6 +47,52 @@ cette règle : plusieurs agents dans un salon, c'est la mention obligatoire de
 La config tranche salon par salon, dans les deux sens — `rooms.<id>.mention`
 dans l'event de config de la console (`MentionPolicy`, testé).
 
+Le marqueur se lit **directement** à l'arrivée dans un salon
+(`client.roomState`), pas seulement au fil du `/sync` : un sync incrémental ne
+porte pas toujours l'état complet d'un salon qu'on vient de rejoindre, et un
+fil d'agent où l'on exige la mention est un fil muet.
+
+### Un fil d'agent où un second agent est invité
+
+Le fil de claude, où l'on invite cc : c'est un atelier de fait, et il n'a pas
+besoin que `peers` le dise — dans un salon marqué `kind: agent`, **tout membre
+qui n'est pas un propriétaire est un agent** (l'app n'y invite personne
+d'autre). Trois règles, toutes dans `Atelier` :
+
+- **ce qui ne nomme personne va à l'hôte** — l'agent à qui est le fil (le champ
+  `agent` du marqueur, posé par l'app à la création ; à défaut, le nom du
+  salon, que l'app pose au nom de l'agent). L'autre attend qu'on l'appelle ;
+- **ceux qui ouvrent la phrase sont les destinataires, et eux seuls** :
+  « @cc dis à @claude de faire un test » parle *à* cc *de* claude — claude ne
+  répond pas, c'est à cc de le charger. « @claude @cc vous allez bien ? »
+  s'adresse aux deux. Sans agent en tête, tous ceux qui sont nommés sont
+  appelés. Une phrase, une réponse — vu en vrai avant : les deux agents
+  répondaient au même message ;
+- **jamais de brouillon** : on parle à un agent, il n'y a personne à ménager.
+  Un autre agent n'est pas un tiers (`isPrivateWithOwners`), et le mode est
+  `direct` quel que soit le réglage par défaut.
+
+La délégation : un agent chargé par un propriétaire appelle l'autre **en tête
+de phrase** (« @claude fais un test de math »), ou avec la formule « demande à
+@claude ». La réponse porte `fr.correspondance.agent.delegated: true`, et un
+agent qui lit ce drapeau sur le message d'un agent ne répond jamais — c'est la
+profondeur 1, portée par l'event lui-même, pas par un compteur.
+
+### L'aparté : parler à l'agent devant des humains
+
+Dans un fil bridgé, nommer un agent présent (`@cc résume`, « dis à @claude… »)
+fait partir le message en **`fr.correspondance.agent.aside`** au lieu d'un
+`m.room.message`. Les ponts mautrix ne relaient que ce dernier : le
+correspondant ne voit ni la question, ni le brouillon (`proposal`) qui lui
+répond. L'aparté reste entre le Relais, tes appareils et l'agent. Le fil le
+montre comme ta bulle, avec « Aparté avec cc · invisible pour les autres »
+dessous ; le composer vide dit « @cc pour un aparté » dès qu'un agent est là.
+
+La règle « qui est nommé » (`AgentWire.agentsMentioned`, mot entier, n'importe
+où) est **partagée** entre l'app et l'agent : une seule définition, pas deux qui
+divergent. Pour l'agent, un aparté est un ordre comme un autre
+(`Trigger.carriesText`).
+
 ## Garde-fous
 
 - Seuls les `owners` déclenchent ; tout autre expéditeur est ignoré en silence.

@@ -28,12 +28,32 @@ public enum Atelier {
     public var turnsThisHour: Int
     /// Le budget du salon.
     public var budget: Int
+    /// Le nom sous lequel on appelle chaque agent (`@cc`), quand il diffère de
+    /// `@` + son nom court. Sans entrée, c'est le nom court qui fait foi.
+    public var triggers: [String: String]
+    /// L'agent **à qui est** ce salon — un fil ouvert pour lui par l'app, où
+    /// un second agent a été invité. C'est lui qui répond à ce qui ne nomme
+    /// personne ; l'autre attend qu'on l'appelle. `nil` : un atelier ordinaire,
+    /// où personne ne répond au bruit.
+    public var host: String?
 
-    public init(agents: Set<String> = [], owners: Set<String> = [], turnsThisHour: Int = 0, budget: Int = 20) {
+    public init(
+      agents: Set<String> = [], owners: Set<String> = [], turnsThisHour: Int = 0, budget: Int = 20,
+      triggers: [String: String] = [:], host: String? = nil
+    ) {
       self.agents = agents
       self.owners = owners
       self.turnsThisHour = turnsThisHour
       self.budget = budget
+      self.triggers = triggers
+      self.host = host
+    }
+
+    /// Le nom court d'un agent, tel qu'on l'appelle : `@cc` → `cc`.
+    func shortName(of agent: String) -> String {
+      if let trigger = triggers[agent] { return trigger.hasPrefix("@") ? String(trigger.dropFirst()) : trigger }
+      let local = agent.hasPrefix("@") ? String(agent.dropFirst()) : agent
+      return local.split(separator: ":").first.map(String.init) ?? local
     }
   }
 
@@ -72,7 +92,18 @@ public enum Atelier {
     delegationDepth: Int = 0
   ) -> Decision {
     guard context.turnsThisHour < context.budget else { return .ignore(.budgetSpent) }
-    guard mentions(agent: agent, trigger: trigger, in: body) else { return .ignore(.notMentioned) }
+    var contexte = context
+    contexte.triggers[agent] = trigger
+    let destinataires = addressees(in: body, context: contexte)
+    if destinataires.isEmpty {
+      // Personne n'est nommé. Dans un fil qui est à moi, c'est à moi qu'on
+      // parle — l'autre agent invité attend qu'on l'appelle. Ailleurs, c'est
+      // du bruit : on ne répond pas.
+      guard contexte.host == agent, !context.agents.contains(sender) else { return .ignore(.notMentioned) }
+      guard context.owners.contains(sender) else { return .ignore(.notAnOwner) }
+      return .respond(delegated: false)
+    }
+    guard destinataires.contains(agent) else { return .ignore(.notMentioned) }
 
     let senderIsAgent = context.agents.contains(sender)
     if senderIsAgent {
@@ -82,6 +113,24 @@ public enum Atelier {
     }
     guard context.owners.contains(sender) else { return .ignore(.notAnOwner) }
     return .respond(delegated: false)
+  }
+
+  /// À qui ce message s'adresse, parmi les agents du salon.
+  ///
+  /// Ceux qui **ouvrent** la phrase sont les destinataires, et eux seuls :
+  /// « @cc dis à @claude de faire un test » parle à cc, de claude — claude ne
+  /// répond pas, c'est à cc de le charger. « @claude @cc vous allez bien ? »
+  /// s'adresse aux deux. Sans agent en tête, tous ceux qui sont nommés sont
+  /// appelés : « hey @cc et @claude, un avis ? ». C'est ce qui fait qu'une
+  /// mention n'apporte qu'**une** réponse, jamais deux pour la même phrase.
+  public static func addressees(in body: String, context: Context) -> Set<String> {
+    let noms = Dictionary(uniqueKeysWithValues: context.agents.map { (context.shortName(of: $0), $0) })
+    // Le MXID complet vaut mention, comme avant.
+    let texte = body.lowercased()
+    var parMXID: Set<String> = []
+    for agent in context.agents where texte.contains(agent.lowercased()) { parMXID.insert(agent) }
+    let parNom = AgentWire.agentsAddressed(in: body, among: Array(noms.keys)).compactMap { noms[$0] }
+    return parMXID.union(parNom)
   }
 
   /// L'agent est-il nommé ? Son déclencheur (`@cc`) ou son MXID complet, et

@@ -374,7 +374,12 @@ public actor MatrixBridgeService {
       name: agent, invite: [agentID], isDirect: true,
       initialState: [(
         type: AgentWire.conversationType,
-        content: .object([AgentWire.ConversationKey.kind: .string(AgentWire.ConversationKind.agent)])
+        // `agent` : à qui est ce fil. Si un second agent y est invité un
+        // jour, c'est celui-ci qui répond à ce qui ne nomme personne.
+        content: .object([
+          AgentWire.ConversationKey.kind: .string(AgentWire.ConversationKind.agent),
+          AgentWire.ConversationKey.agent: .string(agent),
+        ])
       )]
     )
     var model = rooms[roomID] ?? MatrixRoomModel(roomID: roomID)
@@ -768,6 +773,23 @@ public actor MatrixBridgeService {
       )
     }
     if !text.isEmpty {
+      // Un agent nommé devant des humains : le message part en **aparté**, un
+      // type que les ponts ne relaient pas. Le correspondant ne voit ni la
+      // question ni le brouillon qui lui répondra — c'est toute l'idée d'un
+      // agent invité dans une conversation qui n'est pas la sienne.
+      let apartes = asideAgents(conversationID: conversationID, text: text)
+      if !apartes.isEmpty {
+        var content: [String: MatrixJSON] = [
+          "msgtype": .string("m.text"),
+          "body": .string(text),
+          AgentWire.AsideKey.agents: .array(apartes.map(MatrixJSON.string)),
+        ]
+        if let replyToMessageID {
+          content["m.relates_to"] = .object(["m.in_reply_to": .object(["event_id": .string(replyToMessageID)])])
+        }
+        try await client.sendEvent(roomID: roomID, type: AgentWire.asideType, content: .object(content), transactionID: txnID)
+        return
+      }
       let quoted = replyToMessageID.flatMap { rooms[roomID]?.messagesByID[$0] }
       let sendsFallback = Self.sendsReplyFallback(on: rooms[roomID]?.network)
       try await client.sendText(
@@ -780,6 +802,22 @@ public actor MatrixBridgeService {
         transactionID: txnID
       )
     }
+  }
+
+  /// Les agents présents dans ce fil, par leur nom court — vide hors des fils
+  /// bridgés : dans une note à soi ou un fil d'agent, il n'y a pas d'humain
+  /// à qui cacher quoi que ce soit, et le message part comme un message.
+  public func asideAgents(conversationID: String) -> [String] {
+    hydrateIfNeeded()
+    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }),
+          let network = model.network, network.isMatrixBridged
+    else { return [] }
+    return model.agentNames(selfUserID: selfUserID)
+  }
+
+  /// Ceux de ces agents que ce texte nomme : s'il y en a, le message part en aparté.
+  public func asideAgents(conversationID: String, text: String) -> [String] {
+    AgentWire.agentsMentioned(in: text, among: asideAgents(conversationID: conversationID))
   }
 
   /// Faut-il joindre le repli « > <@x> … » à une réponse citée ?

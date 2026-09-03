@@ -437,7 +437,12 @@ public struct MatrixSyncParser: Sendable {
   // MARK: - Messages
 
   private func applyMessage(_ event: MatrixEvent, roomID: String, to model: inout MatrixRoomModel) {
-    guard event.type == "m.room.message",
+    // Un aparté (`AgentAside.eventType`) est un message à tous égards — sauf
+    // que les ponts ne l'ont pas relayé, et que la bulle doit le dire.
+    let aside: AgentAside? = event.type == AgentAside.eventType
+      ? AgentAside(agents: event.content?[AgentWire.AsideKey.agents]?.arrayValue?.compactMap(\.stringValue) ?? [])
+      : nil
+    guard event.type == "m.room.message" || aside != nil,
           let eventID = event.eventID,
           let content = event.content
     else { return }
@@ -559,7 +564,8 @@ public struct MatrixSyncParser: Sendable {
       senderName: event.sender.map { displayName(of: $0, in: model) },
       attachments: attachments,
       replyTo: replyTo,
-      linkPreview: linkPreview
+      linkPreview: linkPreview,
+      agentAside: aside
     )
     guard message.hasVisibleBody else { return }
     // Une modification arrivée avant sa cible s'applique à sa naissance — si

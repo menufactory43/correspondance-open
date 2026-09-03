@@ -46,6 +46,10 @@ final class ConversationSession {
   /// Les gens de CE fil, pour le menu « @ » de CE composer. Deux fenêtres
   /// ouvertes sur deux fils ne se disputent plus une seule liste.
   var mentionCandidates: [MentionCandidate] = []
+  /// Les agents présents dans ce fil bridgé, par leur nom court : le composer
+  /// dit qu'on peut les nommer, et que ce sera un aparté. Vide hors des fils
+  /// bridgés, où il n'y a personne à qui cacher quoi que ce soit.
+  var asideAgents: [String] = []
 
   /// Le magasin garde ses sessions ; une session ne fait que lui rendre son
   /// brouillon. La référence est faible pour que la boucle ne se referme pas.

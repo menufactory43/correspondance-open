@@ -30,6 +30,16 @@ extension InboxStore {
     // Le fil a pu se recharger pendant qu'on résolvait les noms — la session,
     // elle, ne change jamais de fil : ce qu'on a calculé lui appartient.
     session.mentionCandidates = result
+
+    // Les agents présents : le composer le dit, sinon on ne sait qu'après le
+    // premier message qu'un agent est là et qu'on peut le nommer.
+    var agents: [String] = []
+    for conversation in members where conversation.network.isMatrixBridged {
+      for agent in await matrix.asideAgents(conversationID: conversation.id) where !agents.contains(agent) {
+        agents.append(agent)
+      }
+    }
+    session.asideAgents = agents
   }
 
   private func mentionCandidates(

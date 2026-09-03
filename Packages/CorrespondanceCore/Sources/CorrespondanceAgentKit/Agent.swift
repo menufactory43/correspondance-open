@@ -16,6 +16,12 @@ public actor Agent {
   /// Les salons que l'app a marqués tête-à-tête (`kind: agent`) : on y répond
   /// à tout message d'un propriétaire, sans mention.
   private var teteATeteRooms: Set<String> = []
+  /// L'agent à qui est chaque tête-à-tête (`AgentWire.ConversationKey.agent`,
+  /// sinon le nom du salon, que l'app pose au nom de l'agent). Quand un second
+  /// agent y est invité, c'est l'hôte qui répond à ce qui ne nomme personne.
+  private var teteATeteHosts: [String: String] = [:]
+  /// Le nom des salons, pour reconnaître l'hôte d'un fil d'avant le champ `agent`.
+  private var roomNames: [String: String] = [:]
   private let client: MatrixClient
   private let backend: any AgentBackend
   private let stateURL: URL
@@ -185,20 +191,34 @@ public actor Agent {
       journalIndisponible = AgentJournal.sansConsole
       return
     }
+    var console: String?
     for roomID in joined {
-      guard let content = try? await client.roomState(roomID: roomID, type: AgentEvents.configType),
+      // Le marqueur de fil et le nom du salon, **relus à chaque démarrage** :
+      // même correctif que pour la console. Avec un `state.json`, les syncs
+      // sont incrémentaux, l'état ne repasse jamais, et un agent redémarré
+      // exigeait « @claude » dans son propre fil — c'est ce qu'on a vu.
+      if let marqueur = try? await client.roomState(roomID: roomID, type: AgentWire.conversationType) {
+        noteRoomKind(roomID, content: marqueur)
+      }
+      if let nom = (try? await client.roomState(roomID: roomID, type: "m.room.name"))?.string(at: "name") {
+        roomNames[roomID] = nom
+      }
+      guard console == nil,
+            let content = try? await client.roomState(roomID: roomID, type: AgentEvents.configType),
             let remote = AgentRemoteConfig(content: content),
             remote.agent == config.user, remote.isReadable
       else { continue }
+      console = roomID
       consoleRoomID = roomID
       live = config.applying(remote)
       cap = HourlyCap(limit: live.hourlyCap)
       log("console trouvée : \(roomID)")
-      return
     }
-    // Un garde-fou qui ne peut pas s'exercer doit le dire — ici, et dans le
-    // status que l'app affiche.
-    log("⚠ \(AgentJournal.sansConsole)")
+    if console == nil {
+      // Un garde-fou qui ne peut pas s'exercer doit le dire — ici, et dans le
+      // status que l'app affiche.
+      log("⚠ \(AgentJournal.sansConsole)")
+    }
   }
 
   public func run() async throws {
@@ -305,6 +325,15 @@ public actor Agent {
       do {
         _ = try await client.join(roomID: roomID)
         log("rejoint \(roomID) sur invitation de \(inviter)")
+        // Le marqueur du salon, lu **directement** : un `/sync` incrémental ne
+        // porte pas toujours l'état complet d'un salon qu'on vient de rejoindre,
+        // et un fil d'agent où l'on exige la mention est un fil muet.
+        if let marqueur = try? await client.roomState(roomID: roomID, type: AgentWire.conversationType) {
+          noteRoomKind(roomID, content: marqueur)
+        }
+        if let nom = (try? await client.roomState(roomID: roomID, type: "m.room.name"))?.string(at: "name") {
+          roomNames[roomID] = nom
+        }
         // Un status à l'arrivée : sans ça, un bot invité après le démarrage
         // reste muet dans les réglages jusqu'au prochain redémarrage.
         members[roomID] = nil
@@ -319,16 +348,62 @@ public actor Agent {
   /// arrive avec le premier `/sync` qui porte le salon.
   private func absorbRoomKinds(from response: MatrixSyncResponse) {
     for (roomID, room) in response.rooms?.join ?? [:] {
-      for event in (room.state?.events ?? []) + (room.timeline?.events ?? [])
-      where event.type == AgentWire.conversationType {
-        let kind = event.content?.string(at: AgentWire.ConversationKey.kind)
-        if kind == AgentWire.ConversationKind.agent {
-          if teteATeteRooms.insert(roomID).inserted { log("[\(roomID)] tête-à-tête : je réponds sans mention") }
-        } else {
-          teteATeteRooms.remove(roomID)
+      for event in (room.state?.events ?? []) + (room.timeline?.events ?? []) {
+        if event.type == "m.room.name", let name = event.content?.string(at: "name") {
+          roomNames[roomID] = name
         }
+        if event.type == AgentWire.conversationType { noteRoomKind(roomID, content: event.content) }
       }
     }
+  }
+
+  /// Le marqueur d'un salon, d'où qu'il vienne — le `/sync`, ou une lecture
+  /// directe de l'état à l'arrivée. `kind: agent` fait du salon un
+  /// tête-à-tête ; le champ `agent` dit à qui il est.
+  private func noteRoomKind(_ roomID: String, content: MatrixJSON?) {
+    let kind = content?.string(at: AgentWire.ConversationKey.kind)
+    guard kind == AgentWire.ConversationKind.agent else {
+      teteATeteRooms.remove(roomID)
+      teteATeteHosts[roomID] = nil
+      return
+    }
+    if let hote = content?.string(at: AgentWire.ConversationKey.agent), !hote.isEmpty {
+      teteATeteHosts[roomID] = mxid(ofAgentNamed: hote)
+    }
+    if teteATeteRooms.insert(roomID).inserted { log("[\(roomID)] tête-à-tête : je réponds sans mention") }
+  }
+
+  /// Le MXID d'un agent nommé par son nom court, sur mon Relais.
+  private func mxid(ofAgentNamed name: String) -> String {
+    if name.hasPrefix("@"), name.contains(":") { return name }
+    let serveur = live.botUserID.split(separator: ":").dropFirst().joined(separator: ":")
+    return "@\(name):\(serveur)"
+  }
+
+  /// L'agent à qui est ce fil : le champ `agent` du marqueur, sinon le nom du
+  /// salon — l'app le pose au nom de l'agent à la création. `nil` : un salon
+  /// qui n'est pas un tête-à-tête, ou dont on ne sait pas l'hôte.
+  private func host(of roomID: String) -> String? {
+    guard teteATeteRooms.contains(roomID) else { return nil }
+    if let hote = teteATeteHosts[roomID] { return hote }
+    guard let nom = roomNames[roomID]?.trimmingCharacters(in: .whitespacesAndNewlines), !nom.isEmpty else { return nil }
+    let candidat = mxid(ofAgentNamed: nom.lowercased())
+    return agents(in: roomID).contains(candidat) ? candidat : nil
+  }
+
+  /// Les agents présents dans ce salon, moi compris : les pairs déclarés
+  /// (`peers`) qui en sont membres, et, dans un tête-à-tête marqué par l'app,
+  /// **tout membre qui n'est pas un propriétaire** — l'app n'y invite que des
+  /// agents, il n'y a pas besoin de les déclarer pour les reconnaître.
+  private func agents(in roomID: String) -> Set<String> {
+    let membres = members[roomID] ?? []
+    var resultat = membres.intersection(Set(live.peers))
+    if teteATeteRooms.contains(roomID) {
+      let proprietaires = Set(live.owners)
+      resultat.formUnion(membres.filter { !proprietaires.contains($0) && !Trigger.isBridgeGhost($0) })
+    }
+    resultat.insert(live.botUserID)
+    return resultat
   }
 
   private func absorbMembers(from response: MatrixSyncResponse) {
@@ -376,7 +451,9 @@ public actor Agent {
       }
       members[roomID] = set
     }
-    let allowed = Set(live.owners + [live.botUserID])
+    // Un autre agent n'est pas un tiers : un brouillon n'aurait personne à
+    // ménager. Dans un fil d'agent, il n'y a que des agents et moi-même.
+    let allowed = Set(live.owners + [live.botUserID]).union(agents(in: roomID))
     return (members[roomID] ?? []).isSubset(of: allowed)
   }
 
@@ -451,7 +528,10 @@ public actor Agent {
   }
 
   func mode(for roomID: String) async -> AgentConfig.RoomMode {
-    await AgentMode.resolve(
+    // Dans un fil d'agent, on parle à un agent : un brouillon n'y a aucun
+    // sens, quel que soit le réglage par défaut.
+    if teteATeteRooms.contains(roomID) { return .direct }
+    return await AgentMode.resolve(
       roomMode: live.rooms[roomID]?.mode,
       isPrivateWithOwners: isPrivateWithOwners(roomID),
       accountDataDefault: accountDefaultMode,
@@ -464,15 +544,14 @@ public actor Agent {
   /// Un salon où l'un des autres agents du Relais est présent. Sans pair
   /// déclaré, il n'y a pas d'atelier et rien ne change.
   private func isAtelier(_ roomID: String) -> Bool {
-    guard !live.peers.isEmpty, let membres = members[roomID] else { return false }
-    return !membres.isDisjoint(with: Set(live.peers))
+    agents(in: roomID).count > 1
   }
 
   /// Les règles d'un atelier : mention obligatoire (n'importe où dans le
   /// message), un agent ne déclenche pas un agent sauf délégation nommée par un
   /// propriétaire, et un budget de tours par salon. Cf. `Atelier`.
   private func atelierRequest(from event: MatrixEvent, roomID: String) -> AgentRequest? {
-    guard event.type == "m.room.message",
+    guard Trigger.carriesText(event),
           let eventID = event.eventID,
           let sender = event.sender,
           !Trigger.isBridgeGhost(sender),
@@ -490,23 +569,29 @@ public actor Agent {
         ?? Trigger.stripReplyFallback(event.content?.string(at: "body") ?? "")
 
     let budget = atelierBudgets[roomID] ?? HourlyCap(limit: live.atelierBudget)
+    let presents = agents(in: roomID)
     let contexte = Atelier.Context(
-      agents: Set(live.peers),
+      agents: presents,
       owners: Set(live.owners),
       turnsThisHour: budget.limit - budget.remaining(),
-      budget: live.atelierBudget
+      budget: live.atelierBudget,
+      triggers: [live.botUserID: live.trigger],
+      host: host(of: roomID)
     )
-    // Une délégation : un propriétaire a chargé un agent d'en appeler un autre.
-    let delegation = Atelier.delegationTarget(
-      in: body, among: Set(live.peers + [live.botUserID]),
-      triggers: [live.botUserID: live.trigger]
-    ) == live.botUserID
+    // La réponse d'une délégation ne déclenche jamais personne : profondeur 1.
+    if presents.contains(sender), AgentEvents.isDelegatedReply(event.content) { return nil }
+    // Une délégation : un propriétaire a chargé un agent d'en appeler un autre
+    // (« @cc demande à @claude de… »), ou l'agent chargé m'appelle en tête de
+    // phrase (« @claude fais un test de math »).
+    let delegation = presents.contains(sender)
+      && (Atelier.delegationTarget(in: body, among: presents, triggers: [live.botUserID: live.trigger]) == live.botUserID
+          || Trigger.prompt(in: body, trigger: live.trigger) != nil)
 
     switch Atelier.decide(
       agent: live.botUserID, sender: sender, body: body, trigger: live.trigger,
       context: contexte, isDelegation: delegation
     ) {
-    case .respond:
+    case .respond(let delegated):
       var reserve = budget
       guard reserve.admit() else {
         log("[\(roomID)] budget de l'atelier épuisé (\(live.atelierBudget)/h)")
@@ -517,7 +602,7 @@ public actor Agent {
       let prompt = Trigger.prompt(in: body, trigger: live.trigger) ?? body
       return AgentRequest(
         roomID: roomID, eventID: eventID, sender: sender, prompt: prompt,
-        sentAt: event.sentAt, attachments: attachments
+        sentAt: event.sentAt, attachments: attachments, delegated: delegated
       )
     case .ignore(let raison):
       if raison != .notMentioned {
@@ -656,7 +741,7 @@ public actor Agent {
         download: { [client] mxc in try await client.downloadMedia(mxcURI: mxc) }
       )
       for ligne in lignes { log("[\(request.roomID)] pièce jointe \(ligne.dropFirst(2))") }
-      let prompt = AgentAttachmentDrop.promptSection(lignes) + texte
+      let prompt = AgentAttachmentDrop.promptSection(lignes) + atelierPreamble(for: request.roomID) + texte
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
@@ -670,6 +755,24 @@ public actor Agent {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
     }
+  }
+
+  /// Ce que le moteur doit savoir des autres agents du salon : qu'ils sont
+  /// là, et **comment** leur confier une tâche — un message qui commence par
+  /// leur mention. Sans ça, « dis à @claude de… » fait chercher au moteur une
+  /// session claude sur sa machine, et il répond « injoignable » : le salon
+  /// est le seul chemin, et rien ne le lui disait.
+  private func atelierPreamble(for roomID: String) -> String {
+    let autres = agents(in: roomID).subtracting([live.botUserID]).sorted()
+    guard !autres.isEmpty else { return "" }
+    let noms = autres.map { agent -> String in
+      let local = agent.hasPrefix("@") ? String(agent.dropFirst()) : agent
+      return "@" + (local.split(separator: ":").first.map(String.init) ?? local)
+    }
+    return "Autres agents présents dans cette conversation : \(noms.joined(separator: ", ")). "
+      + "Pour confier une tâche à l'un d'eux, réponds par un message qui **commence** par sa mention "
+      + "(par exemple « \(noms[0]) fais ceci ») : lui seul y répondra, dans cette conversation. "
+      + "Ne cherche pas à le joindre autrement.\n\n"
   }
 
   /// Le scan des moteurs, refait seulement quand le moteur configuré change.
@@ -838,11 +941,11 @@ public actor Agent {
     do {
       // Dans un atelier, le tour se déroule dans un thread : seul le résultat
       // remonte, et le salon reste lisible à trois moteurs.
-      if isAtelier(request.roomID), mode == .direct {
+      if isAtelier(request.roomID), mode == .direct, !teteATeteRooms.contains(request.roomID) {
         try await client.sendEvent(
           roomID: request.roomID,
           type: "m.room.message",
-          content: AgentEvents.threadedText(text, root: request.eventID, lastEventID: request.eventID)
+          content: AgentEvents.threadedText(text, root: request.eventID, lastEventID: request.eventID, delegated: request.delegated)
         )
         return
       }
@@ -851,7 +954,10 @@ public actor Agent {
         // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un
         // portail en relais c'est le pont qui signe (`message_formats`) — en
         // préfixer un ici doublerait la signature chez le correspondant.
-        try await client.sendText(roomID: request.roomID, body: text, replyToEventID: request.eventID)
+        try await client.sendEvent(
+          roomID: request.roomID, type: "m.room.message",
+          content: AgentEvents.replyText(text, inReplyTo: request.eventID, delegated: request.delegated)
+        )
       case .draft:
         try await client.sendEvent(
           roomID: request.roomID,

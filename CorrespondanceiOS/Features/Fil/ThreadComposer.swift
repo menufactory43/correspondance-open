@@ -80,7 +80,12 @@ struct ThreadComposer: View {
   private var placeholder: String {
     if isEditing { return "Corriger le message" }
     guard let network = store.sendingNetwork(conversationID) else { return "Répondre" }
-    return "Répondre sur \(network.labelFR)"
+    let base = "Répondre sur \(network.labelFR)"
+    // Un agent est là : le champ vide le dit, et que ce sera un aparté.
+    guard network.isMatrixBridged,
+          let agent = members.first(where: { MatrixIdentity.isAgent($0.userID) })
+    else { return base }
+    return "\(base) · @\(MatrixIdentity.localpart(agent.userID)) pour un aparté"
   }
 
   /// Le composer corrige une bulle : le champ le dit, et le bouton d'envoi

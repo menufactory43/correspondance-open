@@ -72,8 +72,8 @@ public enum AgentEvents {
   ///
   /// `m.in_reply_to` avec `is_falling_back` : les clients qui ignorent les
   /// threads voient une réponse citée ordinaire, pas un message orphelin.
-  public static func threadedText(_ text: String, root: String, lastEventID: String) -> MatrixJSON {
-    .object([
+  public static func threadedText(_ text: String, root: String, lastEventID: String, delegated: Bool = false) -> MatrixJSON {
+    var fields: [String: MatrixJSON] = [
       "msgtype": .string("m.text"),
       "body": .string(text),
       "m.relates_to": .object([
@@ -82,7 +82,28 @@ public enum AgentEvents {
         "is_falling_back": .bool(true),
         "m.in_reply_to": .object(["event_id": .string(lastEventID)]),
       ]),
-    ])
+    ]
+    if delegated { fields[AgentWire.delegatedKey] = .bool(true) }
+    return .object(fields)
+  }
+
+  /// Une réponse citée ordinaire, avec le drapeau de délégation quand le tour
+  /// vient d'un autre agent : c'est ce qui empêche le troisième tour. Un agent
+  /// qui lit ce drapeau sur le message d'un agent ne répond jamais.
+  public static func replyText(_ text: String, inReplyTo eventID: String, delegated: Bool) -> MatrixJSON {
+    var fields: [String: MatrixJSON] = [
+      "msgtype": .string("m.text"),
+      "body": .string(text),
+      "m.relates_to": .object(["m.in_reply_to": .object(["event_id": .string(eventID)])]),
+    ]
+    if delegated { fields[AgentWire.delegatedKey] = .bool(true) }
+    return .object(fields)
+  }
+
+  /// Ce message d'agent est-il la réponse d'une délégation ? Alors personne
+  /// n'y répond — profondeur 1.
+  public static func isDelegatedReply(_ content: MatrixJSON?) -> Bool {
+    content?[AgentWire.delegatedKey]?.boolValue == true
   }
 
   /// Le contenu d'un status : la ligne des moteurs, et l'agent qui la signe.
