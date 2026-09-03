@@ -291,4 +291,18 @@ extension MergedContactTests {
     XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "Julie Wsp 100091001567594"), "un identifiant Meta n'est pas un numéro")
     XCTAssertNil(MatrixIdentity.phoneNumber(embeddedIn: "Promo 2024"))
   }
+
+  func testRowKeepsAPhotoFromItsMembers() {
+    let signal = Conversation(
+      id: "signal:!a:r", network: .signal, address: "uuid", title: "Julie", preview: "",
+      lastMessageAt: Date(timeIntervalSince1970: 100), unreadCount: 0, isArchived: false,
+      transportKey: "!a:r", isGroup: false, remoteAvatarID: nil)
+    let whatsapp = Conversation(
+      id: "whatsapp:!b:r", network: .whatsapp, address: "+33", title: "Julie", preview: "",
+      lastMessageAt: Date(timeIntervalSince1970: 50), unreadCount: 0, isArchived: false,
+      transportKey: "!b:r", isGroup: false, remoteAvatarID: "mxc://r/julie")
+    let contact = MergedContact(
+      id: "merged:1", title: "Julie", memberIDs: [signal.id, whatsapp.id], defaultConversationID: signal.id)
+    XCTAssertEqual(contact.row(from: [signal, whatsapp])?.remoteAvatarID, "mxc://r/julie")
+  }
 }

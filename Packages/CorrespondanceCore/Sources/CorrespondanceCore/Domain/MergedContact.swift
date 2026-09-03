@@ -105,7 +105,12 @@ public struct MergedContact: Identifiable, Codable, Hashable, Sendable {
       // là que la recherche retrouve la ligne quand on tape le numéro WhatsApp
       // d'un contact dont la ligne, elle, porte l'adresse iMessage.
       participantHandles: members.flatMap { [$0.address] + $0.participantHandles },
-      groupPhotoPath: nil
+      // La photo : celle du chat par défaut, sinon la première qu'un membre
+      // porte. Une ligne sans photo perdait celle de la personne dans l'inbox,
+      // la notification et la rangée de partage, alors que Julie a la même
+      // tête sur Signal et sur WhatsApp.
+      groupPhotoPath: ([base] + members).first { $0.groupPhotoPath != nil }?.groupPhotoPath,
+      remoteAvatarID: ([base] + members).first { $0.remoteAvatarID != nil }?.remoteAvatarID
     )
   }
 
