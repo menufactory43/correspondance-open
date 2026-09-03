@@ -38,6 +38,9 @@ targets:
         excludes:
           - Resources/**
           - Info.plist
+      # Payloads /sync de démonstration, les mêmes que l'iPhone (cf. DemoMode.swift).
+      - path: CorrespondanceiOS/Demo
+        buildPhase: resources
     resources:
       # xcassets à la racine projet — évite le conflit avec sources excludes Resources/**
       - path: Assets.xcassets

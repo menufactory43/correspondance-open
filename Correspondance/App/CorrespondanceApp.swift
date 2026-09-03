@@ -22,9 +22,13 @@ struct CorrespondanceApp: App {
     // `NSSplitView Subview Frames…`) et survivent à un quit sans lui — vérifié.
     // Mesuré : fenêtre à l'écran 53 ms plus tôt. Domaine volatil : rien n'est
     // écrit dans les préférences de l'utilisateur.
-    UserDefaults.standard.setVolatileDomain(
-      ["ApplePersistenceIgnoreState": true], forName: UserDefaults.argumentDomain
-    )
+    // On COMPLÈTE le domaine des arguments, on ne le remplace pas : les
+    // `-clé valeur` de la ligne de commande (thème, mode, démonstration) y
+    // vivent, et c'est ce qui permet de forcer un réglage sans rien écrire
+    // dans les préférences.
+    var arguments = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
+    arguments["ApplePersistenceIgnoreState"] = true
+    UserDefaults.standard.setVolatileDomain(arguments, forName: UserDefaults.argumentDomain)
     // Les cœurs libres préchauffent détecteur de liens et fonte pendant
     // qu'AppKit monte la fenêtre : la première bulle les trouve déjà prêts.
     LaunchWarmup.begin()

@@ -11,6 +11,7 @@
 		008F0335DF322F07E1AAC636 /* IMessageConversationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4622A947AD3FB3A0B5B3F601 /* IMessageConversationCache.swift */; };
 		01BBAC3FB153B50AF690A9DF /* ConversationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F05230BF81C295B4DEAB342E /* ConversationSession.swift */; };
 		02B6048F769F60C78C012557 /* ThreadScrollUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8389AC7B1B1BBA8D7D6A7F0B /* ThreadScrollUITests.swift */; };
+		0330C8DD1EB27CE062CA8D29 /* DemoMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = E696093D4D571FE8BD9F43B2 /* DemoMode.swift */; };
 		033185C5BA411C7BF93BE797 /* InboxNavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D03259AAAF015B7E7C7ED0F /* InboxNavigationUITests.swift */; };
 		0697C1C5E290F34B64FD7ADD /* SettingsAutomationPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471DBB431518CAF077924600 /* SettingsAutomationPane.swift */; };
 		06A497228CF2E7907D9DA088 /* matrix-sync-signal.json in Resources */ = {isa = PBXBuildFile; fileRef = 1FC4572D06EDA67F5C867772 /* matrix-sync-signal.json */; };
@@ -37,6 +38,7 @@
 		26CA1D96200F9F1AA700D982 /* DetachedConversationWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D01FDE40EA14E84BD9E90B /* DetachedConversationWindow.swift */; };
 		26F67B749DE75A8A18BA1BD9 /* ReachablePeopleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 649686B445D4756B9F10D1EB /* ReachablePeopleTests.swift */; };
 		272F9F6E19B8F69616CED1F3 /* InboxStore+Detached.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */; };
+		2AB9876AC71EC987284A904B /* InboxStore+Demo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83924FBCBE217B6A217A3DC /* InboxStore+Demo.swift */; };
 		2ABA6E026D46714A83FDDAB2 /* RelayStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 503F3F88679B6D47523DF6E9 /* RelayStore.swift */; };
 		2D29C0D4AFAF6044FEB74ABD /* QuickReplyStatusItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6748DC1C57D97BE188A16CFE /* QuickReplyStatusItem.swift */; };
 		311D77754F8B72FE73312593 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = 21829BB1FE43A554B3B54DF1 /* CorrespondanceCore */; };
@@ -130,6 +132,7 @@
 		B29C767B7919B5E7524CE9E1 /* ForwardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED6F4C2276CC3788BBBE29D /* ForwardSheet.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B844FE3D594D5B5ADC44DAAA /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */; };
+		BDB95DEEA193251CCCFDFCDB /* matrix-sync-instagram.json in Resources */ = {isa = PBXBuildFile; fileRef = 97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */; };
 		BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F807FD24E1467416CB81E90 /* MentionMenu.swift */; };
 		C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */; };
 		C0D97B4BFDC2206209990811 /* CorrespondanceAgentKit in Frameworks */ = {isa = PBXBuildFile; productRef = 02E1C9BC6573CFBBE8797C6F /* CorrespondanceAgentKit */; };
@@ -145,6 +148,7 @@
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
 		CBF6C6ABEF0222C311EB0678 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBB93444E46571A2B149F9D0 /* CorrespondanceCore */; };
 		D15D7A95318463E9AB25D6BD /* ConversationPillHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */; };
+		D2343A8A5F28659A2C88CB28 /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */; };
 		D5D194636ECCA227A0CA1491 /* InFlightBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */; };
 		D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
@@ -166,6 +170,7 @@
 		EC1212CFBD2945B1C6C24144 /* IMessageWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9DA724E006C61D5C1C8140 /* IMessageWatcher.swift */; };
 		EEB24836FDC67C64A30C1376 /* AvatarStoreReadinessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */; };
 		F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */; };
+		F0692AE682215359679974A7 /* matrix-sync-signal.json in Resources */ = {isa = PBXBuildFile; fileRef = 1FC4572D06EDA67F5C867772 /* matrix-sync-signal.json */; };
 		F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF291CB888D9703104F47AB1 /* WindowChrome.swift */; };
 		F3B68D8106CADA5A9231319B /* ConversationAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D036048B51C98A0393A7072 /* ConversationAvatarView.swift */; };
 		F3BAFA4B3445328D8221B7D5 /* InboxStore+AgentConsole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */; };
@@ -400,6 +405,7 @@
 		D7EE88352A330EB051B836D4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DE05DF5AB0829B0A55A79DD4 /* IMessageSummaryInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSummaryInfo.swift; sourceTree = "<group>"; };
 		E637F86CB35FBFE62AD7A64C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E696093D4D571FE8BD9F43B2 /* DemoMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMode.swift; sourceTree = "<group>"; };
 		E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalHost.swift; sourceTree = "<group>"; };
 		E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-whatsapp.json"; sourceTree = "<group>"; };
 		E9B5F5874770558B125F18B0 /* ReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactionTests.swift; sourceTree = "<group>"; };
@@ -414,6 +420,7 @@
 		F69827D334B0A62C8E003293 /* TopScrollFade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopScrollFade.swift; sourceTree = "<group>"; };
 		F7E8B4040804E0B8928CA910 /* RelayStore+Relay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Relay.swift"; sourceTree = "<group>"; };
 		F8263FFCE5BDC949B3FBEDE7 /* ThreadSearchJumpUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadSearchJumpUITests.swift; sourceTree = "<group>"; };
+		F83924FBCBE217B6A217A3DC /* InboxStore+Demo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Demo.swift"; sourceTree = "<group>"; };
 		F9871E56079721B8B15FCBA5 /* QuickReplyPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyPreferences.swift; sourceTree = "<group>"; };
 		F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentVideoView.swift; sourceTree = "<group>"; };
 		FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
@@ -852,6 +859,7 @@
 				D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */,
 				73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */,
 				F05230BF81C295B4DEAB342E /* ConversationSession.swift */,
+				E696093D4D571FE8BD9F43B2 /* DemoMode.swift */,
 				1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */,
 				C618DA341603EEA853087279 /* DictusBridge.swift */,
 				B7928E8ED800BA36957A5A50 /* EngineCatalog.swift */,
@@ -868,6 +876,7 @@
 				16EE06AF0526360BC841BE21 /* InboxStore.swift */,
 				7BE4A293073C27491B25539E /* InboxStore+AgentConsole.swift */,
 				9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */,
+				F83924FBCBE217B6A217A3DC /* InboxStore+Demo.swift */,
 				8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */,
 				8FCCC768619D417D8C2B6ACC /* InboxStore+Group.swift */,
 				0A2310A0569EFBBA9C502AAC /* InboxStore+IMessageAutomation.swift */,
@@ -979,6 +988,7 @@
 				C84BE8061D3051A37A0DEA11 /* Embed Resources */,
 				0CE527D1E2F569B1545F2958 /* Embed correspondance-agent */,
 				379F86502E4370A53E56F04E /* Embed tailcat */,
+				7F24F5190FAA6040D599E8BE /* Resources */,
 				F1CBB850AC822DD73ED3DB22 /* Frameworks */,
 				004CACC00DE7CD29EC5BDA54 /* Embed Foundation Extensions */,
 			);
@@ -1165,6 +1175,16 @@
 				07B6C02B1DE1EC005EB56849 /* matrix-sync-instagram.json in Resources */,
 				06A497228CF2E7907D9DA088 /* matrix-sync-signal.json in Resources */,
 				1473C4F2298AE3C138B95AAA /* matrix-sync-whatsapp.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7F24F5190FAA6040D599E8BE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BDB95DEEA193251CCCFDFCDB /* matrix-sync-instagram.json in Resources */,
+				F0692AE682215359679974A7 /* matrix-sync-signal.json in Resources */,
+				D2343A8A5F28659A2C88CB28 /* matrix-sync-whatsapp.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1366,6 +1386,7 @@
 				01BBAC3FB153B50AF690A9DF /* ConversationSession.swift in Sources */,
 				663F23A0665CEAF93A881FEE /* CorrespondanceApp.swift in Sources */,
 				D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */,
+				0330C8DD1EB27CE062CA8D29 /* DemoMode.swift in Sources */,
 				26CA1D96200F9F1AA700D982 /* DetachedConversationWindow.swift in Sources */,
 				E701985C896FDF358142ACB9 /* DetachedWindowState.swift in Sources */,
 				E76EBCBFD0E0FF83CB0370C3 /* DictusBridge.swift in Sources */,
@@ -1387,6 +1408,7 @@
 				7737D7C6BEBF99FA9E9F64B0 /* InboxListPane.swift in Sources */,
 				F3BAFA4B3445328D8221B7D5 /* InboxStore+AgentConsole.swift in Sources */,
 				9DE1C25B859BECA488321758 /* InboxStore+Deletion.swift in Sources */,
+				2AB9876AC71EC987284A904B /* InboxStore+Demo.swift in Sources */,
 				272F9F6E19B8F69616CED1F3 /* InboxStore+Detached.swift in Sources */,
 				FE60F6A979BA6DE4DFFA3AF6 /* InboxStore+Group.swift in Sources */,
 				6E566A2430EFFF7E54B7B929 /* InboxStore+IMessageAutomation.swift in Sources */,

@@ -23,7 +23,7 @@ extension InboxStore {
   }
 
   private func ecrireIndexDuPartage() async {
-    guard !usingDemoData, let boite = PartageBoite.partagee() else { return }
+    guard !usingDemoData, !isDemo, let boite = PartageBoite.partagee() else { return }
     // Les photos : celles que le store a déjà, pour les cinquante fils les plus
     // récents. Au-delà, les initiales suffisent, et on ne télécharge rien ici.
     let recents = conversations.filter { !$0.isArchived }
@@ -47,7 +47,7 @@ extension InboxStore {
   /// Ce que l'extension a déposé part maintenant. Le fil s'ouvre d'abord, pour
   /// que la bulle se pose sous les yeux.
   func viderLaBoiteDuPartage() async {
-    guard !usingDemoData, !partageVidageEnCours, let boite = PartageBoite.partagee() else { return }
+    guard !usingDemoData, !isDemo, !partageVidageEnCours, let boite = PartageBoite.partagee() else { return }
     partageVidageEnCours = true
     defer { partageVidageEnCours = false }
     let depots = boite.enAttente()

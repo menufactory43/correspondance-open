@@ -196,7 +196,11 @@ final class InboxStore {
 
   private let iMessageDB = IMessageDatabase()
   private let iMessageSender = IMessageSender()
-  let matrix = MatrixBridgeService()
+  /// Vrai en démonstration (`-CorrespondanceDemo`) : aucune donnée réelle, aucun réseau.
+  let isDemo = DemoMode.isRequested
+  /// Les fils iMessage inventés de la démonstration, par fil.
+  var demoMessagesByID: [String: [ChatMessage]] = [:]
+  let matrix: MatrixBridgeService
   /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
   /// aussi longtemps que l'app : le tuer couperait le `/sync`.
   @ObservationIgnored private var tailcat: TailcatProxy?
@@ -744,6 +748,9 @@ final class InboxStore {
   }
 
   init() {
+    // En démonstration, un service sans identifiants ni magasin : ce qu'il
+    // avale ne touche jamais la base réelle, et rien ne peut partir.
+    matrix = isDemo ? MatrixBridgeService(credentials: nil, store: nil) : MatrixBridgeService()
     if let raw = UserDefaults.standard.string(forKey: Keys.mode),
        let stored = InboxMode(rawValue: raw)
     {
@@ -858,6 +865,7 @@ final class InboxStore {
 
   /// Affiche tout de suite les caches iMessage + Matrix (démarrage type Messages).
   private func hydrateFromDiskCache() {
+    guard !isDemo else { return }
     var list: [Conversation] = []
 
     var iMessage = IMessageConversationCache.load()
@@ -900,6 +908,10 @@ final class InboxStore {
 
   /// Point d’entrée app : hydrate (déjà fait) + plein load + boucle receive.
   func start() async {
+    if isDemo {
+      await startDemo()
+      return
+    }
     // Demande Contacts tout de suite (sinon l’app n’apparaît pas dans Confidentialité).
     await requestContactsPermission()
     requestMessagesAutomation()
@@ -969,7 +981,7 @@ final class InboxStore {
   /// Relecture ciblée de chat.db : les conversations iMessage et, si c'en est une,
   /// le fil ouvert. Ne touche ni à Signal ni à Matrix, qui ont leurs propres boucles.
   private func refreshIMessageIncrementally() async {
-    guard !isLoading, !usingDemoData else { return }
+    guard !isLoading, !usingDemoData, !isDemo else { return }
     // Chaque passe copie `chat.db` (liste, puis fil ouvert). Messages écrit dans le WAL
     // en rafale : sans ces deux garde-fous, on empile des copies de la base entière.
     guard !isRefreshingIMessage else { return }
@@ -2287,6 +2299,7 @@ final class InboxStore {
 
   /// Boucle `/sync` Matrix : long-poll côté serveur, donc pas de sleep entre deux passes.
   func startMatrixSync() {
+    guard !isDemo else { return }
     matrixSyncTask?.cancel()
     matrixSyncTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -3274,6 +3287,7 @@ final class InboxStore {
   /// et à l'échéance d'un message programmé ; `interactive` autorise à demander
   /// l'automatisation Messages (jamais depuis la boucle d'échéance).
   private func sendBlocker(for conversation: Conversation, attachments: [String], interactive: Bool) -> String? {
+    if isDemo { return "Démonstration : rien ne part." }
     if usingDemoData && conversation.network == .iMessage {
       return "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages."
     }
@@ -3772,6 +3786,7 @@ final class InboxStore {
   }
 
   private func performLoad() async {
+    guard !isDemo else { return }
     isLoading = true
     defer {
       isLoading = false
@@ -3977,6 +3992,7 @@ final class InboxStore {
   private func fetchMessages(for conversation: Conversation) async -> [ChatMessage] {
     switch conversation.network {
     case .iMessage:
+      if isDemo { return demoMessagesByID[conversation.id] ?? [] }
       if usingDemoData {
         return Self.demoMessages(for: conversation.id)
       }
@@ -4215,6 +4231,15 @@ final class InboxStore {
     static let stateMigrated = "correspondance.stateMigratedToRelay.v1"
     static let undoSendDelay = "correspondance.undoSendDelay"
     static let incognito = "correspondance.incognito"
+  }
+
+  /// Pose l'inbox de démonstration d'un bloc, sans passer par les gestes qui
+  /// écrivent chez l'utilisateur (préférences, file d'écritures du Relais).
+  func applyDemoState(conversations list: [Conversation], pinned: Set<String>, archived: Set<String>, muted: Set<String>) {
+    pinnedIDs = pinned
+    archivedIDs = archived
+    mutedIDs = muted
+    conversations = list.sorted(by: { sortForInbox($0, $1) })
   }
 
   private static func demoConversations() -> [Conversation] {

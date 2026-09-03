@@ -179,8 +179,8 @@ enum DemoRelay {
     seedAttachments()
     var rooms: [String: MatrixRoomModel] = [:]
     let parser = MatrixSyncParser(selfUserID: selfUserID)
-    for name in ["matrix-sync-whatsapp", "matrix-sync-signal", "matrix-sync-instagram"] {
-      guard let response = response(named: name) else { continue }
+    for name in DemoFixtures.syncNames {
+      guard let response = DemoFixtures.response(named: name) else { continue }
       parser.apply(response, to: &rooms)
     }
 
@@ -207,41 +207,7 @@ enum DemoRelay {
     return catalogue
   }
 
-  /// Décode un payload, en ramenant ses horodatages à aujourd'hui : une inbox
-  /// de démonstration datée de l'an dernier ne dit rien de la mise en page des
-  /// heures et des jours, qui est justement ce qu'on veut regarder.
-  private static func response(named name: String) -> MatrixSyncResponse? {
-    guard let url = Bundle.main.url(forResource: name, withExtension: "json"),
-          let raw = try? String(contentsOf: url, encoding: .utf8)
-    else { return nil }
-    let shifted = shiftingTimestamps(in: raw)
-    guard let data = shifted.data(using: .utf8) else { return nil }
-    return try? JSONDecoder().decode(MatrixSyncResponse.self, from: data)
-  }
-
-  /// Décale tous les `origin_server_ts` pour que le plus récent tombe il y a
-  /// quelques minutes. Purement textuel : le payload reste un payload Matrix.
   static func shiftingTimestamps(in json: String, now: Date = .now) -> String {
-    let pattern = #""origin_server_ts"\s*:\s*(\d+)"#
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return json }
-    let full = NSRange(json.startIndex..., in: json)
-    let matches = regex.matches(in: json, range: full)
-    let values: [Int] = matches.compactMap {
-      guard let range = Range($0.range(at: 1), in: json) else { return nil }
-      return Int(json[range])
-    }
-    guard let newest = values.max() else { return json }
-    let target = Int(now.addingTimeInterval(-8 * 60).timeIntervalSince1970 * 1000)
-    let delta = target - newest
-
-    var result = json
-    for match in matches.reversed() {
-      guard let whole = Range(match.range, in: result),
-            let digits = Range(match.range(at: 1), in: result),
-            let value = Int(result[digits])
-      else { continue }
-      result.replaceSubrange(whole, with: "\"origin_server_ts\": \(value + delta)")
-    }
-    return result
+    DemoFixtures.shiftingTimestamps(in: json, now: now)
   }
 }
