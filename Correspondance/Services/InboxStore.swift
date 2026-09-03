@@ -933,6 +933,8 @@ final class InboxStore {
     primeNotifications()
     startMatrixSync()
     startIMessageWatch()
+    // Ce que l'extension de partage a déposé pendant que l'app était fermée.
+    await viderLaBoiteDuPartage()
   }
 
   // MARK: - Temps réel iMessage
@@ -1398,6 +1400,7 @@ final class InboxStore {
   /// qui vaut trente secondes et ouvre toujours la sienne.
   private func conversationsDidChange() {
     updateDockBadge()
+    planifierIndexDuPartage()
     defer { notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
     guard isNotificationPrimed else { return }
     for conversation in conversations {
@@ -1743,6 +1746,13 @@ final class InboxStore {
       alreadyNotifiedAt: lastNotifiedAt[conversation.id]
     )
   }
+
+  /// L'écriture de l'index du partage en attente (InboxStore+Partage).
+  var partageIndexTask: Task<Void, Never>?
+  /// Un vidage de la boîte du partage est en cours : le lancement par
+  /// `correspondance://partage` et la fin de `start()` peuvent tomber ensemble,
+  /// et deux vidages liraient les mêmes dépôts.
+  var partageVidageEnCours = false
 
   /// Pastille du Dock : total des non-lus, hors fils archivés ou muets.
   private func updateDockBadge() {

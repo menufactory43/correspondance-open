@@ -83,6 +83,9 @@ final class RelayStore {
   /// Brouillons en cours de frappe. Priment sur `state.drafts` : ce qu'on tape
   /// maintenant est plus vrai que ce que le Relais a renvoyé il y a dix secondes.
   private(set) var localDrafts: [String: String] = [:]
+  /// Un vidage de la boîte du partage est en cours (RelayStore+Partage) : le
+  /// retour au premier plan et la connexion peuvent tomber ensemble.
+  var partageVidageEnCours = false
   private(set) var pendingAttachments: [String: [String]] = [:]
   private(set) var replyTargets: [String: String] = [:]
   private(set) var sendingConversationIDs: Set<String> = []

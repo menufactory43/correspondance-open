@@ -9,6 +9,7 @@ struct CorrespondanceiOSApp: App {
   @State private var store = RelayStore(demo: DemoRelay.isRequested)
   @State private var themes = ThemePreferences()
   @State private var push = PushRegistration()
+  @Environment(\.scenePhase) private var scenePhase
 
   init() {
     // Avant tout appel Matrix : la session s'écrit dans le Trousseau PARTAGÉ,
@@ -39,6 +40,21 @@ struct CorrespondanceiOSApp: App {
           if store.session == .connected, !store.isDemo {
             await push.requestAuthorizationIfNeeded()
           }
+        }
+        // Ce que l'extension de partage n'a pas pu envoyer elle-même (Relais
+        // muet, salon chiffré) part au réveil de l'app — et une extension
+        // iPhone ne peut pas nous réveiller, c'est donc ici que ça se joue.
+        .onChange(of: scenePhase) { _, phase in
+          guard phase == .active else { return }
+          Task { await store.viderLaBoiteDuPartage() }
+        }
+        .onChange(of: store.session) { _, session in
+          guard session == .connected else { return }
+          Task { await store.viderLaBoiteDuPartage() }
+        }
+        .onOpenURL { url in
+          guard url.scheme == Partage.schemaURL else { return }
+          Task { await store.viderLaBoiteDuPartage() }
         }
         .onChange(of: store.session) { _, session in
           guard session == .connected, !store.isDemo else { return }

@@ -10,5 +10,12 @@
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- Le conteneur que l'extension de partage et l'app se partagent (l'index des
+	     fils, les dépôts). Forme préfixée par l'équipe : celle qu'un binaire
+	     Developer ID porte sans profil, et sans boîte de consentement. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>AKMNXGVVGX.app.correspondance</string>
+	</array>
 </dict>
 </plist>

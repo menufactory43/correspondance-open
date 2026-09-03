@@ -154,6 +154,11 @@ targets:
       # toutes seules. Un contrat partagé, jamais recopié.
       - package: CorrespondanceCore
         product: CorrespondanceAgentKit
+      # L'extension de partage (Finder, Safari, Photos → une personne). Elle
+      # voyage dans l'app, comme celle des notifications sur iPhone.
+      - target: CorrespondancePartage
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
@@ -190,6 +195,11 @@ targets:
         NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages et enregistrer vos messages vocaux.
         NSSpeechRecognitionUsageDescription: Correspondance convertit votre dictée en texte dans le composer.
+        # `correspondance://partage` : l'extension de partage a déposé, et
+        # réveille l'app pour qu'elle envoie (cf. Partage.urlDeReveil).
+        CFBundleURLTypes:
+          - CFBundleURLName: app.correspondance.Correspondance
+            CFBundleURLSchemes: [correspondance]
         # UserNotifications ne demande AUCUNE clé d'usage sur macOS : l'autorisation
         # se demande à l'exécution (NotificationService.requestAuthorization). Ne rien
         # ajouter ici pour les notifications — et jamais rien dans Info.plist, régénéré.
@@ -257,6 +267,9 @@ targets:
       - target: CorrespondanceiOSNotificationService
         embed: true
         codeSign: true
+      - target: CorrespondanceiOSPartage
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.correspondance.ios
@@ -313,6 +326,9 @@ targets:
         # clé, `updating(from:)` rend la notification inchangée, sans un mot.
         NSUserActivityTypes:
           - INSendMessageIntent
+        CFBundleURLTypes:
+          - CFBundleURLName: com.correspondance.ios
+            CFBundleURLSchemes: [correspondance]
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -399,6 +415,69 @@ targets:
         CODE_SIGN_ENTITLEMENTS: CorrespondanceiOSNotificationService/CorrespondanceiOSNotificationService.entitlements
         ENTITLEMENTS_REQUIRED: YES
         AD_HOC_CODE_SIGNING_ALLOWED: YES
+        SKIP_INSTALL: YES
+
+  # L'extension de partage iPhone : Photos, Safari, Fichiers → une personne.
+  # Elle envoie elle-même au Relais (session du Trousseau partagé), et dépose
+  # dans le conteneur du groupe quand il ne répond pas. Cf. Partage.swift.
+  CorrespondanceiOSPartage:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CorrespondanceiOSPartage
+        excludes:
+          - Info.plist
+      # La feuille elle-même, la même sur Mac.
+      - path: Partage
+    dependencies:
+      - package: CorrespondanceCore
+        product: CorrespondanceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.correspondance.ios.Partage
+        PRODUCT_NAME: CorrespondanceiOSPartage
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: CorrespondanceiOSPartage/Info.plist
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AKMNXGVVGX
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGNING_REQUIRED: YES
+        CODE_SIGNING_ALLOWED: YES
+        CODE_SIGN_ENTITLEMENTS: CorrespondanceiOSPartage/CorrespondanceiOSPartage.entitlements
+        ENTITLEMENTS_REQUIRED: YES
+        AD_HOC_CODE_SIGNING_ALLOWED: YES
+        SKIP_INSTALL: YES
+
+  # L'extension de partage Mac : Finder, Safari, Photos → une personne. Elle
+  # dépose toujours et réveille l'app : une extension Mac est sandboxée, et
+  # iMessage ne part que par Messages, que seule l'app sait piloter.
+  CorrespondancePartage:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CorrespondancePartage
+        excludes:
+          - Info.plist
+      - path: Partage
+    dependencies:
+      - package: CorrespondanceCore
+        product: CorrespondanceCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance.Partage
+        PRODUCT_NAME: CorrespondancePartage
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: CorrespondancePartage/Info.plist
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AKMNXGVVGX
+        CODE_SIGN_IDENTITY: "Apple Development"
+        CODE_SIGN_ENTITLEMENTS: CorrespondancePartage/CorrespondancePartage.entitlements
         SKIP_INSTALL: YES
 
   CorrespondanceiOSUITests:

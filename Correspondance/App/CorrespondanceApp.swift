@@ -35,6 +35,13 @@ struct CorrespondanceApp: App {
       ContentView()
         .environment(store)
         .environment(themes)
+        // `correspondance://partage` : l'extension de partage vient de déposer.
+        // L'app tourne déjà ou vient d'être lancée par l'adresse ; dans les
+        // deux cas on vide la boîte (InboxStore+Partage).
+        .onOpenURL { url in
+          guard url.scheme == Partage.schemaURL else { return }
+          Task { await store.viderLaBoiteDuPartage() }
+        }
         .task {
           // Fenêtre visible → puis demande Contacts (sinon pas dans Confidentialité).
           // Visible pour de vrai, pas « après 500 ms » : sinon Contacts, la sonde

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import CorrespondanceCore
 import CorrespondanceUI
@@ -72,8 +73,23 @@ struct SettingsPermissionsPane: View {
         SettingsRow(label: "Accessibilité", systemImage: "accessibility") {
           Button("Ouvrir") { store.openAccessibilityPrivacySettings() }
         }
+        SettingsDivider()
+        // L'extension de partage est là dès l'installation, mais macOS ne coche
+        // pas une extension tierce tout seul : une case, une fois.
+        SettingsRow(
+          label: "Partager depuis le Finder, Safari, Photos",
+          detail: "Coche Correspondance dans Extensions › Partage, une fois.",
+          systemImage: "square.and.arrow.up"
+        ) {
+          Button("Ouvrir") { openExtensions() }
+        }
       }
     }
+  }
+
+  private func openExtensions() {
+    guard let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences?Sharing") else { return }
+    NSWorkspace.shared.open(url)
   }
 
   private func openPrivacy(_ anchor: String) {

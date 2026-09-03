@@ -224,5 +224,8 @@ extension RelayStore {
     // quels salons sont muets. Elle ne tient pas de `/sync` — c'est ce dépôt-là
     // qui lui permet de taire une notification déjà arrivée (SharedRelayState).
     SharedRelayState.saveMutedRoomIDs(SharedRelayState.mutedRoomIDs(in: snapshot))
+    // Et ce que l'extension de partage a le droit de savoir : les fils, pour
+    // sa liste (RelayStore+Partage).
+    ecrireIndexDuPartage()
   }
 }
