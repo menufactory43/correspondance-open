@@ -188,6 +188,8 @@ struct ConversationInfoCard: View {
         .accessibilityLabel(members.isEmpty ? "Fusionner avec un autre chat" : "Ajouter un chat à cette personne")
       }
 
+      TranslationCard(conversationID: conversation.id, theme: theme)
+
       if !conversation.isGroup, conversation.network == .iMessage {
         Divider()
         Button("Ouvrir dans Contacts") {

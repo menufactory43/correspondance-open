@@ -10,6 +10,8 @@ struct ThreadView: View {
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isShowingThread = false
+  /// « Traduire ce que j'envoie » a retenu l'envoi : le panneau est ouvert.
+  @State private var outgoingTranslation: OutgoingTranslationRequest?
   /// Faux tant que le fil se met en place : à l'ouverture d'une conversation,
   /// les vingt dernières bulles ne doivent pas prendre l'encre une par une.
   @State private var animatesArrivals = false
@@ -103,6 +105,11 @@ struct ThreadView: View {
           if let config = store.sendLaterConfig {
             SendLaterBanner(config: config, theme: theme, typeface: themes.typeface)
           }
+          if #available(macOS 15, *), let request = outgoingTranslation {
+            OutgoingTranslationPanel(request: request, theme: theme, typeface: themes.typeface) {
+              outgoingTranslation = nil
+            }
+          }
           ComposerBar(
             text: Bindable(store).draftText,
             attachmentPaths: Bindable(store).pendingAttachmentPaths,
@@ -139,7 +146,13 @@ struct ThreadView: View {
             voiceConversationID: store.canRecordVoice(in: store.selectedConversationID)
               ? store.selectedConversationID
               : nil,
-            onSend: { Task { await store.sendDraft() } }
+            onSend: {
+              if #available(macOS 15, *) {
+                OutgoingTranslationPanel.send(store: store, request: $outgoingTranslation)
+              } else {
+                Task { await store.sendDraft() }
+              }
+            }
           )
           .popover(isPresented: sendLaterPickerPresented, arrowEdge: .top) {
             SendLaterPicker()
