@@ -62,6 +62,9 @@ public actor Agent {
   /// du plafond de l'agent : deux agents qui se répondent brûleraient une
   /// fenêtre d'abonnement en une nuit.
   private var atelierBudgets: [String: HourlyCap] = [:]
+  /// Les réponses pilotées de l'heure, par salon (`Pilotage.plafondParHeure`) :
+  /// un cadre mal écrit ne parle pas au nom du propriétaire sans fin.
+  private var pilotCaps: [String: HourlyCap] = [:]
   /// Les demandes de permission posées dans une room, en attente d'un 👍 —
   /// clef : l'event de la question ; valeur : où écrire la décision.
   private var pendingPermissions: [String: PendingPermission] = [:]
@@ -706,6 +709,20 @@ public actor Agent {
       return
     }
 
+    // Un tour piloté a son propre plafond, par salon : au-delà, on ne répond
+    // plus seul — on le dit au propriétaire, et on ne dit rien au tiers.
+    if request.kind == .pilot {
+      var reserve = pilotCaps[request.roomID] ?? HourlyCap(limit: Pilotage.plafondParHeure)
+      let admis = reserve.admit()
+      pilotCaps[request.roomID] = reserve
+      guard admis else {
+        log("[\(request.roomID)] plafond des réponses pilotées atteint (\(Pilotage.plafondParHeure)/h) — je passe la main")
+        await avis("Plafond des réponses en votre nom atteint (\(Pilotage.plafondParHeure) par heure) : je ne réponds plus seul ici pour l'instant.",
+                   reason: "cap", in: request.roomID)
+        return
+      }
+    }
+
     if !lot.dropped.isEmpty {
       // Une perte se dit dans le journal, jamais dans la conversation.
       log("[\(request.roomID)] ⚠ \(lot.dropped.count) demande(s) trop anciennes écartées du lot (prompt trop long)")
@@ -803,6 +820,10 @@ public actor Agent {
         state.claudeSessions[request.roomID] = session
         try? persist()
       }
+      if request.kind == .pilot {
+        await pilote(turn, for: request, startedTurn: startedTurn)
+        return
+      }
       let text = turn.text.isEmpty ? "(Claude n'a rien répondu.)" : turn.text
       await reply(text, to: request)
       log("[\(request.roomID)] ← \(text.count) caractères\(turn.isError ? " (erreur)" : "")")
@@ -810,6 +831,63 @@ public actor Agent {
     } catch {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
+    }
+  }
+
+  /// La sortie d'un tour piloté : la réponse part **au nom du propriétaire**,
+  /// marquée `pilotedKey` et journalisée « piloté » ; ou, hors cadre, l'agent
+  /// passe la main — proposition `handover` avec la raison, et un avis qui
+  /// déclenche une notification. Une erreur du moteur passe la main aussi :
+  /// on n'envoie jamais un message d'erreur à un tiers en votre nom.
+  private func pilote(_ turn: AgentTurn, for request: AgentRequest, startedTurn: Date) async {
+    let verdict: Pilotage.Verdict = turn.isError
+      ? .horsCadre(raison: "le moteur a répondu en erreur")
+      : Pilotage.lire(turn.text)
+    switch verdict {
+    case .reponse(let texte):
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: "m.room.message",
+          content: AgentEvents.pilotedText(texte, inReplyTo: request.eventID)
+        )
+        log("[\(request.roomID)] ← piloté, \(texte.count) caractères, en votre nom")
+      } catch {
+        log("[\(request.roomID)] envoi piloté impossible : \(error.localizedDescription)")
+      }
+      var journalise = request
+      journalise.prompt = "piloté : " + request.prompt
+      await journal(journalise, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
+    case .horsCadre(let raison):
+      log("[\(request.roomID)] hors cadre — je passe la main : \(raison)")
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: AgentEvents.proposalType,
+          content: AgentEvents.proposal(
+            text: "", agent: config.user, inReplyTo: request.eventID,
+            kind: AgentWire.ProposalKind.handover, reason: raison
+          )
+        )
+      } catch {
+        log("[\(request.roomID)] passation impossible : \(error.localizedDescription)")
+      }
+      await avis("Un message sort du cadre, je n'ai pas répondu : \(raison)", reason: "handover", in: request.roomID)
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
+    }
+  }
+
+  /// Ce que l'agent dit de lui-même à ses propriétaires, dans le salon
+  /// (`AgentWire.noticeType`) : les ponts ne le relaient pas, l'app le rend
+  /// en ligne système avec le geste. Une panne qui ne se voit pas passe pour
+  /// de la lenteur — et un tour piloté qui passe la main sans le dire laisse
+  /// un tiers sans réponse.
+  private func avis(_ body: String, reason: String, action: String? = nil, in roomID: String) async {
+    do {
+      try await client.sendEvent(
+        roomID: roomID, type: AgentWire.noticeType,
+        content: AgentEvents.notice(agent: config.user, body: body, reason: reason, action: action)
+      )
+    } catch {
+      log("[\(roomID)] avis impostable (\(reason)) : \(error.localizedDescription)")
     }
   }
 
