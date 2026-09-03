@@ -41,6 +41,16 @@ public struct AgentSettings: Hashable, Codable, Sendable {
     /// Les modes qu'un **compte** peut avoir par défaut. « Répond seul » ne
     /// se choisit que fil par fil, avec un cadre.
     public static let accountDefaults: [Mode] = [.draft, .direct]
+
+    /// Ce que l'agent écrit atteint-il le correspondant ? À voix haute et
+    /// seul en mon nom, oui : le relais du pont doit être allumé. En
+    /// brouillon, rien ne part sans moi.
+    public var parleAuCorrespondant: Bool {
+      switch self {
+      case .direct, .pilot: true
+      case .draft: false
+      }
+    }
   }
 
   /// Le mode des conversations où d'autres humains lisent. En tête-à-tête avec

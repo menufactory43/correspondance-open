@@ -127,8 +127,11 @@ struct ThreadView: View {
             agentVoices: agentVoices,
             onToggleAgentVoice: agentVoices.isEmpty ? nil : { agent in
               guard let courante = agentVoices.first(where: { $0.agent == agent })?.mode else { return }
+              // Brouillon ⇄ voix haute ; « répond seul » ne se choisit que
+              // dans la fiche du fil, avec un cadre — cliquer le bouton en sort.
+              let suivante: AgentSettings.Mode = courante == .draft ? .direct : .draft
               Task {
-                if let posee = await store.setAgentVoice(courante == .direct ? .draft : .direct, agent: agent) {
+                if let posee = await store.setAgentVoice(suivante, agent: agent) {
                   agentVoices = agentVoices.map {
                     $0.agent == agent ? AgentVoice(agent: agent, mode: posee) : $0
                   }

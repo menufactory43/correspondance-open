@@ -25,6 +25,36 @@ final class AgentConsoleConfigTests: XCTestCase {
     XCTAssertEqual(relu, config)
   }
 
+  func testLaCarteAssistantNeTouchePasAuResteDeLaRoom() {
+    var config = AgentConsoleConfig(agent: "cc")
+    config.rooms["!vente:local"] = .init(cwd: "/tmp/vente", mode: .draft, mention: false, context: 12, keywords: ["prix"])
+
+    let propose = config.settingSuggest(AgentWire.Suggest.always, in: "!vente:local")
+    XCTAssertEqual(propose.rooms["!vente:local"]?.suggest, "always")
+    XCTAssertEqual(propose.rooms["!vente:local"]?.cwd, "/tmp/vente")
+    XCTAssertEqual(propose.rooms["!vente:local"]?.mention, false)
+    XCTAssertEqual(propose.rooms["!vente:local"]?.context, 12)
+    XCTAssertEqual(propose.rooms["!vente:local"]?.keywords, ["prix"])
+
+    let seul = propose.settingVoice(.pilot, in: "!vente:local")
+      .settingFrame("  Dis que c'est disponible. Pour le prix, passe-moi la main.  ", in: "!vente:local")
+    XCTAssertEqual(seul.rooms["!vente:local"]?.mode, .pilot)
+    XCTAssertEqual(seul.rooms["!vente:local"]?.frame, "Dis que c'est disponible. Pour le prix, passe-moi la main.")
+    XCTAssertEqual(seul.rooms["!vente:local"]?.suggest, "always", "le cadre ne défait pas la proposition")
+
+    // Un cadre vide s'efface ; l'aller-retour par l'event garde tout le reste.
+    let sansCadre = seul.settingFrame("   ", in: "!vente:local")
+    XCTAssertNil(sansCadre.rooms["!vente:local"]?.frame)
+    XCTAssertEqual(AgentConsoleConfig(content: seul.content()), seul)
+    XCTAssertEqual(seul.binding(in: "!ailleurs:local"), AgentConsoleConfig.RoomBinding())
+  }
+
+  func testRepondSeulParleAuCorrespondantCommeLaVoixHaute() {
+    XCTAssertTrue(AgentSettings.Mode.pilot.parleAuCorrespondant)
+    XCTAssertTrue(AgentSettings.Mode.direct.parleAuCorrespondant)
+    XCTAssertFalse(AgentSettings.Mode.draft.parleAuCorrespondant)
+  }
+
   func testUnEventSansAgentNeConfigurePersonne() {
     let content = MatrixJSON.object([AgentWire.ConfigKey.version: .number(1)])
     XCTAssertNil(AgentConsoleConfig(content: content))
