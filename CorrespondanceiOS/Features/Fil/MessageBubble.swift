@@ -198,6 +198,19 @@ struct MessageBubble: View {
       // Le débord se réserve, sinon la suite passerait par-dessus.
       .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
+      // Une bulle reçue dans une autre langue porte « Traduire » — sur
+      // l'iPhone, sans réseau : cf. `TextTranslator`.
+      #if canImport(Translation)
+      if !message.isFromMe, showsTextBubble, !message.isRetracted,
+         let source = TextTranslator.foreignLanguage(of: displayText) {
+        IncomingTranslationSlot(
+          messageID: message.id, text: displayText, source: source,
+          conversationID: message.conversationID, theme: theme, typeface: typeface,
+          font: Typography.bubble(typeface)
+        )
+      }
+      #endif
+
       if let onCancelPending {
         Button("Annuler", action: onCancelPending)
           .buttonStyle(.plain)
