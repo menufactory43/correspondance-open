@@ -1,0 +1,88 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-slack
+# (`dock.mau.dev/mautrix/slack:v26.08`). Fusion profonde (bootstrap.sh) : on ne fige
+# pas le config amont, seulement nos choix.
+#
+# Périmètre : DM, DM de groupe ET canaux (un canal arrive comme un groupe). C'est
+# le défaut du pont ; `dm_only` reste faux. Le pont garde son nom d'origine partout
+# où le Relais le voit — bot @slackbot, ghosts slack_… — c'est ce que l'app reconnaît.
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-slack:29335
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  # 29332 est pris par X ; Slack prend le port par défaut du connecteur.
+  port: 29335
+  id: slack
+  bot:
+    username: slackbot
+    displayname: Slack bridge bot
+  username_template: slack_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_slack?sslmode=disable
+
+bridge:
+  command_prefix: '!slack'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Mode relais : ce qu'un utilisateur du Relais non connecté au réseau — l'agent
+# « cc » — dit dans un portail part via MON compte, préfixé de son nom. Rien ne se
+# relaie tout seul : il faut, par room, `!slack set-relay` (admin).
+  relay:
+    enabled: true
+    admin_only: true
+    message_formats:
+      m.text: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+      m.notice: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+
+# Historique initial : sans ça les salons arrivent vides côté Correspondance.
+backfill:
+  enabled: true
+  max_initial_messages: 50
+  max_catchup_messages: 500
+
+network:
+  # DM ET canaux, comme Beeper. Passer à true restreindrait aux seuls DM.
+  dm_only: false
+
+# Double puppeting : sans lui, les messages que j'envoie depuis l'app Slack du
+# téléphone remontent signés par mon propre ghost, et Correspondance les prend pour
+# ceux d'un correspondant. Le jeton est celui de `doublepuppet-registration.yaml`.
+double_puppet:
+  servers: {}
+  allow_discovery: false
+  secrets:
+    __remplacer__: true
+    __SERVER_NAME__: "as_token:__DOUBLEPUPPET_AS_TOKEN__"
+
+# L'API de provisioning : l'app y démarre le flow e-mail et y répond étape par
+# étape (e-mail, captcha rendu par le script du pont, code, espace de travail).
+# Authentifiée par le jeton Matrix de l'utilisateur — pas de secret dans l'app.
+# Le port 29335 est publié par docker-compose sur l'interface de Synapse.
+provisioning:
+  allow_matrix_auth: true
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

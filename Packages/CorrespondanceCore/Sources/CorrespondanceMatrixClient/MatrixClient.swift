@@ -1240,7 +1240,7 @@ public actor MatrixClient {
     }
   }
 
-  func rawRequest(
+  public func rawRequest(
     method: String,
     path: String,
     query: [URLQueryItem] = [],

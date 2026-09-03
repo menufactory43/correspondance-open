@@ -108,6 +108,7 @@
 		92AC856559A16911CAAA1F3F /* AgentProcessHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA336BFDFCEEDDA19D5DC305 /* AgentProcessHostTests.swift */; };
 		92C6001F623F01A3D78A0DAE /* InboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16EE06AF0526360BC841BE21 /* InboxStore.swift */; };
 		93FC9A7390A493C419E1A7BF /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = C62337EDC213EAEAD5361C6E /* matrix-sync-whatsapp.json */; };
+		942D045B7399FA287198B768 /* BridgeExtractionWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98D635A1828C929B185F59E0 /* BridgeExtractionWebView.swift */; };
 		95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9FE253FDC407E62EAAAAADD /* AttachmentVideoView.swift */; };
 		987B506EA4A578724136E2A8 /* SettingsPermissionsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8813E85552216BB19289AD /* SettingsPermissionsPane.swift */; };
 		98CC18687A786A47780B32B9 /* IMessageAutomationVerifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */; };
@@ -359,6 +360,7 @@
 		95A2B2CA8609C3F95DE1AF80 /* AvatarStoreReadinessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarStoreReadinessTests.swift; sourceTree = "<group>"; };
 		95ED3D336C908CA8FB5DE7FA /* SettingsDictationPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDictationPane.swift; sourceTree = "<group>"; };
 		97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-instagram.json"; sourceTree = "<group>"; };
+		98D635A1828C929B185F59E0 /* BridgeExtractionWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeExtractionWebView.swift; sourceTree = "<group>"; };
 		9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageDatabase.swift; sourceTree = "<group>"; };
 		9BF1A03D10B09F999B0FC7AC /* CorrespondanceiOSNotificationService.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CorrespondanceiOSNotificationService.entitlements; sourceTree = "<group>"; };
 		9C41963F5AA875508D844FF1 /* IMessageSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSender.swift; sourceTree = "<group>"; };
@@ -705,6 +707,7 @@
 		82A1969C625E899DECA1D59A /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				98D635A1828C929B185F59E0 /* BridgeExtractionWebView.swift */,
 				875396DAA284F465F40D8CBA /* BridgeLoginWindow.swift */,
 				112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */,
 				A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */,
@@ -1370,6 +1373,7 @@
 				FB906E79A0021105489C55C5 /* AgentLocalHost.swift in Sources */,
 				8FB4EE081AF166F768B70D08 /* AgentProcessHost.swift in Sources */,
 				95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */,
+				942D045B7399FA287198B768 /* BridgeExtractionWebView.swift in Sources */,
 				46388E619423FEFE377DE8F3 /* BridgeLoginWindow.swift in Sources */,
 				D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */,
 				4EC0CDC118192164FD9DEBE6 /* BrowserSessionImporter.swift in Sources */,

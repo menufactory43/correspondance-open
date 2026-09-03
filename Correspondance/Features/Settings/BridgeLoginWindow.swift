@@ -23,6 +23,7 @@ struct BridgeLoginWindow: View {
 
   @State private var cookies = ""
   @State private var passcode = ""
+  @State private var inputText = ""
   @State private var showsManualCookies = false
   @State private var browsers: [InstalledBrowser] = []
 
@@ -72,6 +73,11 @@ struct BridgeLoginWindow: View {
             passcodePanel(prompt)
           } else if showsManualCookies {
             manualCookiesPanel(for: network)
+          } else if network.bridge?.provisionedLoginFlowID != nil {
+            // Slack : l'API de provisioning décrit chaque étape — une saisie
+            // (e-mail, code, espace de travail), ou une page à ouvrir avec le
+            // script qui en tire la réponse (le captcha). Comme Beeper.
+            provisionedStepPanel
           } else {
             webPanel(for: network)
           }
@@ -106,9 +112,13 @@ struct BridgeLoginWindow: View {
     case .qrCode:
       "Comme un nouveau téléphone : scanne le code depuis \(network.labelFR), dans Appareils liés."
     case .webSession:
-      network == .twitter
-        ? "Connecte-toi comme sur x.com. Si ton compte a une passkey, passe par ton navigateur, en bas."
-        : "Connecte-toi comme sur le site : identifiants, code à deux facteurs, tout se passe ici."
+      if network == .slack {
+        "Connecte-toi par e-mail : tu recevras un code, puis tu choisiras ton espace de travail."
+      } else if network == .twitter {
+        "Connecte-toi comme sur x.com. Si ton compte a une passkey, passe par ton navigateur, en bas."
+      } else {
+        "Connecte-toi comme sur le site : identifiants, code à deux facteurs, tout se passe ici."
+      }
     }
   }
 
@@ -126,12 +136,18 @@ struct BridgeLoginWindow: View {
           if !browsers.isEmpty {
             browserImportMenu(for: network)
           }
-          if let url = BridgeSessionCookies.Profile.of(network)?.loginURL {
+          if let url = loginURL(for: network) {
             Button("Ouvrir dans le navigateur") { NSWorkspace.shared.open(url) }
               .help("Ouvre la page de connexion dans ton navigateur habituel. Reviens ensuite ici pour importer ou coller la session.")
           }
           Toggle(isOn: $showsManualCookies) { Text("Coller la session") }
             .toggleStyle(.button)
+            .onChange(of: showsManualCookies) { _, on in
+              // Slack : le flow token et le flow e-mail s'excluent — passer au
+              // collage démarre le flow `token` ; revenir relance l'e-mail.
+              guard network == .slack else { return }
+              if on { store.beginSlackTokenLogin() } else { store.presentBridgeLogin(network: network) }
+            }
         }
         Spacer()
         Button("Relancer") { store.presentBridgeLogin(network: network) }
@@ -165,6 +181,25 @@ struct BridgeLoginWindow: View {
       .disabled(store.bridgeLoginImportBusy)
       .fixedSize()
     }
+  }
+
+  // MARK: - Selon le réseau
+
+  /// La page de connexion à ouvrir dans le navigateur, s'il y en a une.
+  private func loginURL(for network: MessageNetwork) -> URL? {
+    if let profile = BridgeSessionCookies.Profile.of(network) { return profile.loginURL }
+    return network == .slack ? SlackLoginSession.loginURL : nil
+  }
+
+  /// Le mode d'emploi du repli, du profil de cookies ou — pour Slack — de sa propre session.
+  private func manualSteps(for network: MessageNetwork) -> [String] {
+    if let profile = BridgeSessionCookies.Profile.of(network) { return profile.manualCookieStepsFR }
+    return network == .slack ? SlackLoginSession.manualStepsFR : []
+  }
+
+  private func manualTemplate(for network: MessageNetwork) -> String {
+    if let profile = BridgeSessionCookies.Profile.of(network) { return profile.manualCookieTemplate }
+    return network == .slack ? SlackLoginSession.manualTemplate : ""
   }
 
   // MARK: - QR (WhatsApp, Signal)
@@ -215,6 +250,102 @@ struct BridgeLoginWindow: View {
     .padding(.bottom, Spacing.md)
   }
 
+  // MARK: - Les étapes de l'API de provisioning (Slack)
+
+  /// L'étape en cours, selon son type : une saisie, ou une page à ouvrir dont le
+  /// script rend la réponse. Le captcha de Slack est de la seconde sorte.
+  @ViewBuilder
+  private var provisionedStepPanel: some View {
+    if let step = store.bridgeLoginProcessStep, step.type == .cookies, let params = step.cookies {
+      BridgeExtractionWebView(
+        params: params,
+        onValues: { values in store.submitBridgeLoginExtractedValues(values) },
+        onError: { message in store.bridgeLoginStatusFR = message },
+        scriptTransform: { SlackLoginFrench.localizedExtractJS($0) }
+      )
+      .id(step.stepID + step.loginID)
+      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .strokeBorder(theme.edge.opacity(0.4), lineWidth: 0.5)
+      )
+      .padding(.horizontal, Spacing.lg)
+      .padding(.bottom, Spacing.md)
+    } else {
+      slackInputPanel
+    }
+  }
+
+  /// La question du pont et un champ pour y répondre : e-mail, code reçu par mail,
+  /// choix de l'espace de travail. L'instruction du pont est la question elle-même.
+  @ViewBuilder
+  private var slackInputPanel: some View {
+    if let prompt = store.bridgeLoginInputPrompt {
+      VStack(spacing: Spacing.md) {
+        Spacer()
+        Text(LocalizedStringKey(cleanedPrompt(prompt.prompt)))
+          .font(Typography.body(themes.typeface))
+          .foregroundStyle(theme.ink)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 460)
+          .textSelection(.enabled)
+        if prompt.options.isEmpty {
+          field(secret: prompt.isSecret)
+        } else {
+          // Le choix de l'espace de travail : un bouton par option.
+          VStack(spacing: Spacing.xs) {
+            ForEach(prompt.options, id: \.self) { option in
+              Button(option) { store.submitBridgeLoginInput(option) }
+                .buttonStyle(.borderedProminent)
+            }
+          }
+          field(secret: false)
+        }
+        Spacer()
+      }
+      .padding(Spacing.lg)
+    } else {
+      VStack(spacing: Spacing.md) {
+        ProgressView()
+        Text("Préparation de la connexion Slack…")
+          .font(Typography.meta(themes.typeface))
+          .foregroundStyle(theme.inkSecondary)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  private func field(secret: Bool) -> some View {
+    HStack {
+      Group {
+        if secret {
+          SecureField("Ta réponse", text: $inputText)
+        } else {
+          TextField("Ta réponse", text: $inputText)
+        }
+      }
+      .textFieldStyle(.roundedBorder)
+      .frame(width: 260)
+      .onSubmit(sendInput)
+      Button("Envoyer", action: sendInput)
+        .keyboardShortcut(.defaultAction)
+        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+  }
+
+  private func sendInput() {
+    let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return }
+    store.submitBridgeLoginInput(text)
+    inputText = ""
+  }
+
+  /// bridgev2 préfixe souvent la question de l'instruction du connecteur : on garde
+  /// la dernière ligne utile, « Please enter your … » compris.
+  private func cleanedPrompt(_ body: String) -> String {
+    body.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
   // MARK: - Code PIN (X Chat)
 
   /// Le code à quatre chiffres que X demande après la session. On ne le garde
@@ -256,10 +387,11 @@ struct BridgeLoginWindow: View {
   /// Quand ni le formulaire ni l'import ne passent : les cookies, copiés depuis
   /// les outils de développement, avec le mode d'emploi du réseau.
   private func manualCookiesPanel(for network: MessageNetwork) -> some View {
-    VStack(alignment: .leading, spacing: Spacing.sm) {
-      if let profile = BridgeSessionCookies.Profile.of(network) {
+    let steps = manualSteps(for: network)
+    return VStack(alignment: .leading, spacing: Spacing.sm) {
+      if !steps.isEmpty {
         VStack(alignment: .leading, spacing: 4) {
-          ForEach(Array(profile.manualCookieStepsFR.enumerated()), id: \.offset) { index, step in
+          ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
             HStack(alignment: .firstTextBaseline, spacing: 6) {
               Text("\(index + 1).")
                 .monospacedDigit()
@@ -271,7 +403,7 @@ struct BridgeLoginWindow: View {
         .font(Typography.body(themes.typeface))
         .foregroundStyle(theme.inkSecondary)
         .textSelection(.enabled)
-        .onAppear { if cookies.isEmpty { cookies = profile.manualCookieTemplate } }
+        .onAppear { if cookies.isEmpty { cookies = manualTemplate(for: network) } }
       }
 
       TextEditor(text: $cookies)

@@ -254,7 +254,7 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("signal"), .signal)
 
     XCTAssertNil(MessageNetwork.iMessage.bridge)
-    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger])
+    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack])
   }
 
   /// Les réponses du bot pendant un login par cookies, telles que bridgev2 les écrit.

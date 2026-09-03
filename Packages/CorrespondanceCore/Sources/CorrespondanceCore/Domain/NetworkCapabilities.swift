@@ -149,6 +149,19 @@ public struct NetworkCapabilities: Sendable, Hashable {
         renamesGroup: true,
         addsMember: true
       )
+    // Slack : lu dans `capabilities.go` de mautrix-slack v26.08 — correction sans
+    // limite de temps, suppression, réactions, vocal (audio/ogg via ffmpeg),
+    // renommage d'un canal, invitation et retrait d'un membre. Threads portés,
+    // mais on ne les modélise pas encore. Pas de `create-group` : Slack exige de
+    // choisir un type de canal, non vérifié depuis l'app.
+    case .slack:
+      NetworkCapabilities(
+        editsSentMessages: true,
+        renamesGroup: true,
+        removesMember: true,
+        addsMember: true,
+        sendsVoiceMessages: true
+      )
     case .selfNote:
       NetworkCapabilities(
         editsSentMessages: true,

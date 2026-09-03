@@ -83,3 +83,9 @@ logging:
   writers:
     - type: stdout
       format: json
+
+# L'API de provisioning : Réglages › Comptes y lit les comptes connectés et y
+# déconnecte. Authentifiée par le jeton Matrix de l'utilisateur — pas de secret
+# dans l'app. Le port est publié par docker-compose sur l'interface de Synapse.
+provisioning:
+  allow_matrix_auth: true

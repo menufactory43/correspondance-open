@@ -148,6 +148,36 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: false
   )
 
+  /// Slack : les espaces de travail, par mautrix-slack (v26.08, tag `v0.2608.0`).
+  ///
+  /// La session tient en deux morceaux, de deux endroits différents : le jeton
+  /// `auth_token` (`xoxc-…`) vit dans le `localStorage` de la page (`localConfig_v2`),
+  /// et le `cookie_token` (`xoxd-…`) est le cookie `d` de slack.com. D'où un type
+  /// de session à part (`SlackLoginSession`) : ce n'est pas un pur jeu de cookies.
+  ///
+  /// Le connecteur annonce trois flows — `email`, `token`, `app`. On suit `email`
+  /// par l'API de provisioning du pont (`provisioningPort`) : c'est la seule qui
+  /// décrive le captcha que Slack exige avant d'envoyer le code. `token` reste le
+  /// repli « coller la session ».
+  public static let slack = MatrixBridgeDescriptor(
+    network: .slack,
+    botLocalpart: "slackbot",
+    commandPrefix: "!slack",
+    ghostPrefix: "slack_",
+    protocolIDs: ["slack", "slackgo"],
+    loginFlow: .webSession,
+    identifiersArePhoneNumbers: false,
+    displayNameSuffixes: [" (Slack)"],
+    supportsPhonePairing: false,
+    // Le flow natif : e-mail → code reçu par mail → espace de travail, piloté par
+    // des saisies dans la fenêtre (comme Beeper). Le flow `token` (coller la
+    // session) reste en repli, lancé à la demande.
+    webLoginFlowID: "email",
+    // Quitter un canal est relayé (le pont porte MemberActionLeave), mais on garde
+    // la même prudence que les autres tant que ce n'est pas vu sur un vrai compte.
+    relaysGroupLeave: false
+  )
+
   /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
   /// Réglages › Appareils liés. Le pont n'expose que ce flow : pas de code
   /// d'appairage, et l'enregistrement en appareil primaire n'existe plus.
@@ -170,7 +200,44 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: true
   )
 
-  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .twitter, .signal]
+  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .twitter, .slack, .signal]
+
+  /// Port de l'API de provisioning du pont (`/_matrix/provision/v3`), publié par
+  /// docker-compose sur la même interface que Synapse (jamais 0.0.0.0). C'est le
+  /// port `appservice.port` de chaque surcouche (`infra/matrix/templates`).
+  ///
+  /// L'app y lit les comptes connectés (`whoami`) et en déconnecte un
+  /// (`logout/<id>`). Slack y suit aussi tout son flow de connexion : son captcha
+  /// n'est décrit que là — un JavaScript à exécuter dans une vue web.
+  public var provisioningPort: Int? {
+    switch network {
+    case .whatsapp: 29318
+    case .signal: 29328
+    case .instagram: 29330
+    case .messenger: 29331
+    case .twitter: 29332
+    case .slack: 29335
+    default: nil
+    }
+  }
+
+  /// Le flow de connexion à suivre par l'API de provisioning plutôt que par le
+  /// chat. Slack seulement : les autres ponts gardent le chat (QR posté dans le
+  /// salon, session collée), qui marche et que les tests couvrent.
+  public var provisionedLoginFlowID: String? {
+    network == .slack ? webLoginFlowID : nil
+  }
+
+  /// Ce qu'est « un compte » sur ce réseau, et ce qu'il en est de plusieurs.
+  /// bridgev2 accepte plusieurs connexions par utilisateur sur chaque pont ;
+  /// c'est l'identité du compte qui change d'un réseau à l'autre.
+  public var accountsHintFR: String {
+    switch network {
+    case .whatsapp, .signal: "Un compte par numéro. Plusieurs numéros possibles."
+    case .slack: "Un compte par espace de travail. Plusieurs espaces possibles, même avec la même adresse."
+    default: "Plusieurs comptes possibles."
+    }
+  }
 
   public static func descriptor(for network: MessageNetwork) -> MatrixBridgeDescriptor? {
     all.first { $0.network == network }

@@ -131,6 +131,8 @@ struct ConversationAvatar: View {
     case .messenger: Color(red: 0.35, green: 0.40, blue: 0.95)
     // X est noir : l'encre du thème, noire sur papier, claire sur fond sombre.
     case .twitter: theme.ink
+    // L'aubergine de Slack.
+    case .slack: Color(red: 0.29, green: 0.12, blue: 0.35)
     }
   }
 

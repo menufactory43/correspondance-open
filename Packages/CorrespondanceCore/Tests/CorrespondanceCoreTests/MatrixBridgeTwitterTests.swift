@@ -40,7 +40,7 @@ final class MatrixBridgeTwitterTests: XCTestCase {
     XCTAssertTrue(MessageNetwork.twitter.isMatrixBridged)
     XCTAssertTrue(MessageNetwork.twitter.livesOnRelay)
     XCTAssertEqual(MessageNetwork.twitter.labelFR, "X")
-    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger, .twitter])
+    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack])
   }
 
   // MARK: - Identités

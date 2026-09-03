@@ -95,6 +95,7 @@ extension InboxStore {
     case .instagram: "Pseudo ou identifiant Instagram"
     case .messenger: "Nom ou identifiant Messenger"
     case .twitter: "Pseudo X"
+    case .slack: "Nom ou e-mail Slack"
     case .signal: "Identifiant Signal (UUID)"
     default: ""
     }

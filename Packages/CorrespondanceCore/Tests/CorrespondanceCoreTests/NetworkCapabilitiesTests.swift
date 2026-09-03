@@ -126,7 +126,7 @@ final class NetworkCapabilitiesTests: XCTestCase {
   }
 
   func testAjouterQuelquUnSuitLesPontsQuiOntUnGhostComposable() {
-    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .twitter, .signal] {
+    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .twitter, .slack, .signal] {
       XCTAssertTrue(network.supportsMemberInvite, "\(network.labelFR) devrait accepter l'ajout")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsMemberInvite)
@@ -135,7 +135,7 @@ final class NetworkCapabilitiesTests: XCTestCase {
   /// iMessage n'envoie pas de pièce jointe par notre chemin : pas de micro. X non
   /// plus : son pont n'annonce aucun type audio dans sa table des fichiers.
   func testLeVocalEstOffertPartoutSaufSurIMessageEtX() {
-    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .signal, .selfNote] {
+    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .slack, .signal, .selfNote] {
       XCTAssertTrue(network.supportsVoiceMessages, "\(network.labelFR) devrait accepter le vocal")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsVoiceMessages)

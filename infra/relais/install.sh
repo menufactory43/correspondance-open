@@ -101,6 +101,9 @@ META_AMONT="https://github.com/mautrix/meta/releases/download/$MAUTRIX_TAG"
 # publie un darwin-arm64, mais qui charge libolm par @rpath comme les autres :
 # sur macOS on prend donc le NÔTRE, construit en `-tags goolm`.
 TW_AMONT="https://github.com/mautrix/twitter/releases/download/$MAUTRIX_TAG"
+# Slack : mautrix-slack, même cadence. Comme les autres, le darwin-arm64 amont
+# charge libolm ; sur macOS on prend le NÔTRE, `-tags goolm`.
+SK_AMONT="https://github.com/mautrix/slack/releases/download/$MAUTRIX_TAG"
 # Tailcat : l'amont publie Linux (amd64/arm64/armv7) et Windows, **pas macOS** —
 # là-bas il passe par un tap Homebrew, que le spike s'interdit dans la pile
 # livrée. Le binaire macOS est donc le NÔTRE, construit au même tag par
@@ -128,6 +131,8 @@ case "$HOTE" in
     MS_SHA=bad1ef2d9e73d4e4a27f7def37070d2531aeddb95c57f3a9971c9baa6d3af5f1
     TW_URL="$RELEASES/mautrix-twitter-darwin-arm64"
     TW_SHA=4cac3a7f76de18c82656e9e36dcaef23a5ac442e3700152def6ee4f333588e50
+    SK_URL="$RELEASES/mautrix-slack-darwin-arm64"
+    SK_SHA=391260d8512c3b5aae7182c44433929b6ac3c8e7ea70f160d98f9705f29a86db
     TAILCAT_URL=""; TAILCAT_SHA=""; TAILCAT_ARCHIVE=""
     OLM_URL=""; OLM_SHA=""
     ;;
@@ -144,6 +149,8 @@ case "$HOTE" in
     MS_SHA=e861777b51f0e15959e66f0efc0c68b88e1bd1093b09737358b4af7dafd7e6cc
     TW_URL="$TW_AMONT/mautrix-twitter-amd64"
     TW_SHA=24924d7ae11510b6c6757d7f7d6d319b62ba784b1f4f5cddd5180031cbf04923
+    SK_URL="$SK_AMONT/mautrix-slack-amd64"
+    SK_SHA=6d5241a07be562e1c42c7c35886743baa83b4e554d426f09fcebf62a5918bf45
     TAILCAT_ARCHIVE="tailcat_0.4.0_linux_amd64.tar.gz"
     TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
     TAILCAT_SHA=8b819c43dfdf806b5663e23535aba557bb106075b0b5839df289af9bba70bec2
@@ -162,6 +169,8 @@ case "$HOTE" in
     MS_SHA=5b76822b9ae445fb6fd644a09a12f619e4abc1216a887415d6500e65f61b64fe
     TW_URL="$TW_AMONT/mautrix-twitter-arm64"
     TW_SHA=87155351076f84fdcf397d327d99ad7a796cc853d5b3adacc47d2a183d5ac340
+    SK_URL="$SK_AMONT/mautrix-slack-arm64"
+    SK_SHA=943aee9b83fc46eed6cd65583bc1282ebbd12ac08eff2b7b67e1085f9a3c3669
     TAILCAT_ARCHIVE="tailcat_0.4.0_linux_arm64.tar.gz"
     TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
     TAILCAT_SHA=3b77322350f64d229d5b2119b159b863b4bcffa0a62a0294682423a19956dc76
@@ -175,6 +184,7 @@ SG_PORT=$((PORT + 21318))
 IG_PORT=$((PORT + 21320))   # 8010 → 29330 : les ports du docker-compose de la prod
 MS_PORT=$((PORT + 21321))   # 8010 → 29331
 TW_PORT=$((PORT + 21322))   # 8010 → 29332
+SK_PORT=$((PORT + 21325))   # 8010 → 29335
 BIN="$PREFIX/bin"
 RELAIS_DIR="$PREFIX/relais"
 LOGS="$PREFIX/logs"
@@ -257,7 +267,7 @@ plan() {
   echo "  dossier           $PREFIX"
   echo "  serveur Matrix    $SERVER_NAME, propriétaire $MXID"
   echo "  écoute            $BIND:$PORT ; ponts sur $WA_PORT (WhatsApp), $SG_PORT (Signal),"
-  echo "                    $IG_PORT (Instagram), $MS_PORT (Messenger) et $TW_PORT (X)"
+  echo "                    $IG_PORT (Instagram), $MS_PORT (Messenger), $TW_PORT (X) et $SK_PORT (Slack)"
   if [ "$TAILCAT_ACTIF" = 1 ]; then
     echo "  adresse du code   $PUBLIC, plus le jeton Tailcat (le chemin par défaut)"
   else
@@ -290,6 +300,9 @@ plan() {
     echo "       mautrix-twitter $MAUTRIX_TAG (X)"
     echo "         $TW_URL"
     echo "         sha256 $TW_SHA"
+    echo "       mautrix-slack $MAUTRIX_TAG"
+    echo "         $SK_URL"
+    echo "         sha256 $SK_SHA"
     if [ -n "$OLM_URL" ]; then
       echo "       libolm.3.dylib"
       echo "         $OLM_URL"
@@ -412,6 +425,7 @@ if [ $PONTS = 1 ]; then
   poser mautrix-instagram "$IG_URL" "$IG_SHA"
   poser mautrix-messenger "$MS_URL" "$MS_SHA"
   poser mautrix-twitter "$TW_URL" "$TW_SHA"
+  poser mautrix-slack "$SK_URL" "$SK_SHA"
 fi
 etape binaires ok "posés dans $BIN, toutes les sommes conformes"
 
@@ -685,7 +699,7 @@ SUPERVISEUR_POSE=0
 # d'arrière-plan ne notifie rien.
 superviseur_purger_anciens() {
   local nom label plist
-  for nom in tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter; do
+  for nom in tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter mautrix-slack; do
     label="app.correspondance.$nom"
     plist="$HOME/Library/LaunchAgents/$label.plist"
     [ -f "$plist" ] || continue
@@ -1031,7 +1045,7 @@ JETON_PROPRIO="$(jeton_session)"
 # ================================================================= 8. les ponts
 if [ $PONTS = 1 ]; then
   ETAPE_COURANTE=ponts
-  etape ponts debut "WhatsApp, Signal, Instagram, Messenger, X — portails chiffrés"
+  etape ponts debut "WhatsApp, Signal, Instagram, Messenger, X, Slack — portails chiffrés"
   pont() {
     local nom="$1" port="$2" prefixe="$3" bot="$4"
     local dir="$PREFIX/mautrix-$nom"
@@ -1127,7 +1141,8 @@ CFG
   # X : le pont s'appelle toujours mautrix-twitter, et ses ghosts `twitter_…` —
   # c'est ce que l'app reconnaît. Seul le nom lu à l'écran dit « X ».
   pont twitter "$TW_PORT" '!tw' twitterbot
-  etape ponts ok "cinq ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT, $TW_PORT)"
+  pont slack "$SK_PORT" '!slack' slackbot
+  etape ponts ok "six ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT, $TW_PORT, $SK_PORT)"
 fi
 
 # ================================================== 9. la preuve, pas la promesse
@@ -1162,7 +1177,7 @@ etape preuve ok "connecté comme $QUI"
 echo
 echo "✓ le Relais répond, connecté comme $QUI (/login puis /account/whoami)."
 if [ $PONTS = 1 ]; then
-  echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT, X $TW_PORT — portails chiffrés."
+  echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT, X $TW_PORT, Slack $SK_PORT — portails chiffrés."
 fi
 echo "  $TS_MOT"
 

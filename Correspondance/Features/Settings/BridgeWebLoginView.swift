@@ -32,21 +32,36 @@ struct BridgeWebLoginView: NSViewRepresentable {
     (KHTML, like Gecko) Version/17.6 Safari/605.1.15
     """
 
+  /// Slack refuse Safari pour son app web (« votre navigateur n'est pas pris en
+  /// charge ») : on se présente en Chrome, qu'il accepte. Sur une seule ligne —
+  /// un `User-Agent` ne doit porter aucun retour à la ligne.
+  private static let chromeUserAgent =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+  private var userAgent: String {
+    network == .slack ? Self.chromeUserAgent : Self.safariUserAgent
+  }
+
   func makeCoordinator() -> Coordinator {
-    Coordinator(profile: BridgeSessionCookies.Profile.of(network), onSessionCookies: onSessionCookies)
+    Coordinator(network: network, profile: BridgeSessionCookies.Profile.of(network), onSessionCookies: onSessionCookies)
   }
 
   func makeNSView(context: Context) -> WKWebView {
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .nonPersistent()
+    // Chrome se reconnaît aussi à `navigator.userAgentData` et au suffixe du UA :
+    // on complète le UA nommé, pas seulement `customUserAgent`.
+    if network == .slack {
+      configuration.applicationNameForUserAgent = "Chrome/128.0.0.0"
+    }
     let webView = WKWebView(frame: .zero, configuration: configuration)
-    webView.customUserAgent = Self.safariUserAgent
+    webView.customUserAgent = userAgent
     webView.navigationDelegate = context.coordinator
     webView.uiDelegate = context.coordinator
     context.coordinator.observe(webView)
     // Un réseau sans profil ne se connecte pas par session de navigateur : la vue
     // reste vide plutôt que d'ouvrir une page au hasard.
-    if let url = BridgeSessionCookies.Profile.of(network)?.loginURL {
+    if let url = BridgeSessionCookies.Profile.of(network)?.loginURL ?? (network == .slack ? SlackLoginSession.loginURL : nil) {
       webView.load(URLRequest(url: url))
     }
     return webView
@@ -63,6 +78,7 @@ struct BridgeWebLoginView: NSViewRepresentable {
   /// de navigation que WebKit nous signale.
   @MainActor
   final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    private let network: MessageNetwork
     private let profile: BridgeSessionCookies.Profile?
     private let onSessionCookies: ([String: String]) -> Void
     private weak var webView: WKWebView?
@@ -70,7 +86,8 @@ struct BridgeWebLoginView: NSViewRepresentable {
     /// Garde-fou : la récolte est déclenchée de deux endroits, l'envoi n'a lieu qu'une fois.
     private var hasDelivered = false
 
-    init(profile: BridgeSessionCookies.Profile?, onSessionCookies: @escaping ([String: String]) -> Void) {
+    init(network: MessageNetwork, profile: BridgeSessionCookies.Profile?, onSessionCookies: @escaping ([String: String]) -> Void) {
+      self.network = network
       self.profile = profile
       self.onSessionCookies = onSessionCookies
     }
@@ -92,9 +109,35 @@ struct BridgeWebLoginView: NSViewRepresentable {
     }
 
     private func harvestSession() async {
-      guard !hasDelivered, let profile, let webView else { return }
+      guard !hasDelivered, let webView else { return }
+      if network == .slack {
+        await harvestSlackSession(webView)
+        return
+      }
+      guard let profile else { return }
       let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
       guard let session = BridgeSessionCookies(httpCookies: cookies, profile: profile) else { return }
+      hasDelivered = true
+      stopObserving()
+      onSessionCookies(session.values)
+    }
+
+    /// Slack tient sa session en deux endroits : le jeton `auth_token` dans le
+    /// `localStorage` (lu par le JS du connecteur), le `cookie_token` dans le cookie
+    /// `d`. On n'envoie que quand les deux sont là et bien formés.
+    private func harvestSlackSession(_ webView: WKWebView) async {
+      let authToken: String? = await withCheckedContinuation { continuation in
+        webView.evaluateJavaScript(SlackLoginSession.extractAuthTokenJS) { value, _ in
+          continuation.resume(returning: value as? String)
+        }
+      }
+      guard let authToken else { return }
+      let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
+      let cookieToken = cookies.first {
+        $0.name == SlackLoginSession.cookieName
+          && $0.domain.hasSuffix(SlackLoginSession.cookieDomain)
+      }?.value
+      guard let session = SlackLoginSession(authToken: authToken, cookieToken: cookieToken) else { return }
       hasDelivered = true
       stopObserving()
       onSessionCookies(session.values)

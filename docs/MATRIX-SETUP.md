@@ -1,6 +1,6 @@
-# Matrix, WhatsApp, Instagram, Messenger, X & Signal — installation, usage, dépannage
+# Matrix, WhatsApp, Instagram, Messenger, X, Slack & Signal — installation, usage, dépannage
 
-Correspondance parle WhatsApp, Instagram, Messenger, X et Signal par des ponts : un homeserver
+Correspondance parle WhatsApp, Instagram, Messenger, X, Slack et Signal par des ponts : un homeserver
 **Synapse** privé et les bridges **mautrix**, tous sur le NUC, joints depuis le Mac par Tailscale.
 Seul iMessage reste natif et ne passe pas par là.
 
@@ -266,6 +266,7 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
 | `correspondance-mautrix-messenger` | `dock.mau.dev/mautrix/meta:v26.08` | pont Messenger (tag **épinglé**, **sans** `ig-`) |
 | `correspondance-mautrix-twitter` | `dock.mau.dev/mautrix/twitter:v26.08` | pont X (tag **épinglé** ; le pont, son bot et ses ghosts gardent le nom `twitter`) |
+| `correspondance-mautrix-slack` | `dock.mau.dev/mautrix/slack:v26.08` | pont Slack (tag **épinglé** ; DM et canaux) |
 | `correspondance-mautrix-signal` | `dock.mau.dev/mautrix/signal:v26.08` | pont Signal (tag **épinglé**) |
 
 Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
@@ -566,6 +567,78 @@ Ce que le pont porte (`capabilities.go`) : correction dans les 15 minutes, suppr
 délai, réactions, réponses, nom et photo du groupe, invitation. **Pas de vocal** (aucun type
 audio dans sa table), pas de retrait d'un membre, pas de `create-group`.
 
+## 2 bis bis. Les comptes connectés, et les déconnecter
+
+**Réglages › Comptes** lit, pour chaque réseau, les comptes connectés au pont et leur état
+(« Connecté », « Session expirée : à reconnecter »…), et offre **Déconnecter** — un bouton pour un
+compte, un menu s'il y en a plusieurs. Déconnecter ferme la session côté réseau ; les
+conversations restent dans l'inbox, en historique.
+
+Chaque pont accepte **plusieurs comptes** par utilisateur ; ce qui change, c'est l'identité d'un
+compte : un numéro (WhatsApp, Signal), un compte (Instagram, Messenger, X), un espace de travail
+(Slack — plusieurs espaces possibles avec la même adresse). « Ajouter un compte… » relance le flow
+de connexion du réseau.
+
+Tout passe par l'**API de provisioning** de chaque pont (`whoami`, `logout/<id>`), publiée par
+docker-compose sur l'interface de Synapse aux ports `appservice.port` des surcouches : WhatsApp
+29318, Signal 29328, Instagram 29330, Messenger 29331, X 29332, Slack 29335. L'app s'y authentifie
+avec son jeton Matrix (`provisioning.allow_matrix_auth: true`). Sans ces ports, la ligne dit
+« Comptes inconnus » et le reste marche quand même.
+
+Par le bot, la même chose : `!wa list-logins` puis `!wa logout <id>` (préfixe du réseau).
+
+## 2 ter ter. Connecter Slack — par e-mail, comme Beeper
+
+`mautrix-slack` (v26.08) amène tout un espace de travail : les messages privés, les DM de groupe,
+et **les canaux** — qui arrivent comme des groupes, une ligne par canal, exactement comme un groupe
+WhatsApp (réglage `dm_only: false`, le défaut). Beeper fait pareil.
+
+**Réglages › Comptes › Slack › Connecter…** suit le flow `email` du connecteur : ton adresse, un
+code à six caractères reçu par mail, le choix de l'espace de travail (et le 2FA de l'espace, s'il
+en a un). Slack exige presque toujours un **captcha** avant d'envoyer le code : la fenêtre ouvre
+alors `slack.com/signin` dans une vue web, avec le script du pont qui y pose un reCAPTCHA — tu le
+passes, la fenêtre reprend.
+
+Ce flow ne passe **pas par le chat avec le bot** mais par l'**API de provisioning** du pont
+(`http://<relais>:29335/_matrix/provision/v3/login/…`), la même que Beeper. Dans le chat, le bot ne
+sait décrire le captcha que par « Login URL: https://slack.com/signin » ; l'API, elle, rend
+l'étape entière — le type de champ, les options, le JavaScript d'extraction. C'est ce qui bloquait
+avant. Le port est publié par docker-compose sur l'interface de Synapse (jamais 0.0.0.0), et
+l'app s'y authentifie avec son jeton Matrix (`provisioning.allow_matrix_auth: true`) — aucun
+secret du pont dans l'app.
+
+**Le repli « Coller la session »** démarre le flow `token`. La session tient en deux morceaux, de
+deux endroits — c'est ce qui distingue Slack de X et de Meta :
+
+- `auth_token` (`xoxc-…`) : le jeton de session, dans le `localStorage` de la page
+  (`localConfig_v2`, sous `teams[…].token`). Ce **n'est pas** un cookie.
+- `cookie_token` (`xoxd-…`) : le cookie `d` de slack.com.
+
+Le repli accepte une commande **cURL** copiée depuis l'onglet Réseau (l'app en extrait les deux
+jetons), ou l'objet à la main :
+
+```json
+{"auth_token":"xoxc-…","cookie_token":"xoxd-…"}
+```
+
+⚠️ **Pas d'« Importer depuis Brave » pour Slack** : le jeton vit dans le `localStorage`, pas dans le
+magasin de cookies qu'on sait lire. ⚠️ **Pas de formulaire slack.com dans l'app** : Slack refuse
+son client web dans une WKWebView (« navigateur non pris en charge »), même en se présentant en
+Chrome — d'où le flow e-mail.
+
+Au succès : « Successfully logged into <espace> as <toi> », puis le backfill. Un login = un espace
+de travail ; plusieurs espaces = plusieurs connexions sur le même pont.
+
+### Ouvrir un fil Slack
+
+Les ghosts portent l'identifiant du membre (`@slack_<team>-<user>`). `pm <e-mail>` ou `pm <nom>`
+suffit : le connecteur résout par e-mail (LookupEmail) ou par recherche. Un canal, lui, s'ouvre
+en recevant un message ou via le pont ; il apparaît comme un groupe nommé (`#général`).
+
+**Commandes du bot Slack** : DM avec `@slackbot`, préfixe **`!slack`**. `login token` (puis la
+session), `login email` (code par mail, workspace, 2FA), `logout`, `ping`, `pm <identifiant>`,
+`resolve-identifier <identifiant>`.
+
 ## 2 quater. Connecter Signal — le QR, et ce qu'on laisse derrière
 
 `mautrix-signal` se lie comme **appareil secondaire**, exactement comme Signal Desktop.
@@ -747,6 +820,8 @@ Element ; hors salon de gestion, les préfixer de `!wa`) :
 **Commandes du bot X** : DM avec `@twitterbot`, préfixe **`!tw`**. `login cookies` (puis le PIN,
 en clair, préfixé), `cancel`, `logout`, `ping`, `pm <pseudo>`, `resolve-identifier <pseudo>`.
 Pas de `search`.
+
+**Slack** : voir § 2 ter ter. Bot `@slackbot`, préfixe **`!slack`**.
 
 **Commandes du bot Instagram** (DM avec `@instagrambot`, préfixe `!ig` hors salon de gestion) :
 

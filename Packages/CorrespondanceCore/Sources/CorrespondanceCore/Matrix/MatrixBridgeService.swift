@@ -1191,6 +1191,11 @@ public actor MatrixBridgeService {
     case pairingCode(String)
     /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram, Messenger, X).
     case awaitingCookies(String)
+    /// Le bot attend une saisie libre, du flow conversationel de Slack (e-mail,
+    /// code reçu par mail, espace de travail, 2FA). `prompt` est ce que le bot
+    /// demande, `isSecret` masque le champ (code, mot de passe). `options` liste
+    /// les choix quand il y en a (les espaces de travail).
+    case awaitingInput(prompt: String, isSecret: Bool, options: [String])
     /// Le bot attend le code PIN à quatre chiffres de X Chat — celui qui
     /// déverrouille les clés des messages privés chiffrés. `isSetup` : le compte
     /// n'en a pas encore, et c'est ici qu'il se crée. `hint` : ce que le pont a
@@ -1240,6 +1245,21 @@ public actor MatrixBridgeService {
     // tentative passée (QR périmés, « login timed out »…) et ne doit pas être lu.
     loginCommandEventIDs[network] = try await sendBotCommand(command, to: network)
     loginCommandSentAt[network] = Date()
+  }
+
+  /// (Re)lance une connexion en nommant explicitement le flow — utilisé pour passer
+  /// Slack du flow e-mail au flow `token` quand l'utilisateur ouvre « Coller la session ».
+  public func startLoginFlow(_ flow: String, network: MessageNetwork) async throws {
+    _ = try? await sendBotCommand("cancel", to: network)
+    loginCommandEventIDs[network] = try await sendBotCommand("login \(flow)", to: network)
+    loginCommandSentAt[network] = Date()
+  }
+
+  /// Envoie une saisie libre au bot pendant un flow conversationnel (l'e-mail, le
+  /// code, l'espace de travail de Slack). Même chemin que les cookies : préfixé,
+  /// et rédigé aussitôt — un code de connexion n'a rien à laisser dans la timeline.
+  public func submitLoginInput(_ text: String, network: MessageNetwork) async throws {
+    try await submitLoginCookies(text, network: network)
   }
 
   /// Envoie la session au bot, en réponse à son invite : soit le JSON fabriqué à partir
@@ -1331,6 +1351,19 @@ public actor MatrixBridgeService {
             MatrixIdentity.network(ofBot: sender) == network
       else { continue }
       let body = content.string(at: "body") ?? ""
+      if network == .slack {
+        // Le flow conversationnel : la saisie ou le captcha priment. On saute le
+        // bruit (« Login URL: … », l'invite « coller une session ») pour ne pas
+        // masquer le message qui compte — le captcha arrive AVANT « Login URL ».
+        if let step = Self.slackInputStep(inBotMessage: body) { return step }
+        if let step = Self.loginStep(inBotMessage: body) {
+          switch step {
+          case .success, .failure: return step
+          default: continue   // awaitingCookies / login url : on remonte plus loin
+          }
+        }
+        continue
+      }
       if let step = Self.loginStep(inBotMessage: body) {
         // Le pont dit d'abord ce qu'il reproche (« Invalid passcode… »), puis
         // redemande (« Please enter your Passcode »). Le plus récent est la
@@ -1395,11 +1428,44 @@ public actor MatrixBridgeService {
     }
     if let code = pairingCode(in: body) { return .pairingCode(code) }
     if let passcode = passcodeStep(inBotMessage: body) { return passcode }
-    // Invite de l'étape « cookies » : l'instruction du connecteur, puis l'URL de login.
-    if lower.contains("enter a json object with your cookies") || lower.hasPrefix("login url:") {
+    // Invite de l'étape « session » : l'instruction du connecteur, puis l'URL de
+    // login. Meta et X disent « with your cookies », Slack « with your auth token
+    // and cookie token » — d'où la forme courte, commune aux deux.
+    if lower.contains("enter a json object") || lower.hasPrefix("login url:") {
       return .awaitingCookies(body)
     }
     return nil
+  }
+
+  /// Le flow e-mail de Slack, tel que bridgev2 l'écrit dans le salon : une suite
+  /// de « Please enter your <champ> », parfois avec « Options: `a`, `b` ». On rend
+  /// une saisie libre, en masquant les champs sensibles et en offrant les options
+  /// quand il y en a. C'est le chemin « natif » à la Beeper — pas de vue web.
+  ///
+  /// Le captcha est le seul mur : si le bot le demande, on ne sait pas l'afficher,
+  /// et on renvoie un échec qui pointe vers le repli « coller la session ».
+  static func slackInputStep(inBotMessage body: String) -> BridgeLoginStep? {
+    let lower = body.lowercased()
+    if lower.contains("captcha") {
+      return .failure("Slack demande un captcha, que la fenêtre ne sait pas afficher. Utilise « Coller la session ».")
+    }
+    guard let range = body.range(of: "please enter your ", options: [.caseInsensitive]) else { return nil }
+    // Le nom du champ, première ligne après « Please enter your ».
+    let afterField = body[range.upperBound...]
+    let fieldName = afterField.prefix { $0 != "\n" }.trimmingCharacters(in: .whitespaces)
+    let lowerField = fieldName.lowercased()
+    let isSecret = lowerField.contains("code") || lowerField.contains("password")
+      || lowerField.contains("passcode") || lowerField.contains("2fa") || lowerField.contains("token")
+    // « Options: `T123`, `T456` » → les choix, entre accents graves.
+    var options: [String] = []
+    if let optRange = body.range(of: "options:", options: [.caseInsensitive]) {
+      let tail = body[optRange.upperBound...]
+      options = tail.split(separator: "`").enumerated()
+        .filter { $0.offset % 2 == 1 }
+        .map { $0.element.trimmingCharacters(in: .whitespaces) }
+        .filter { !$0.isEmpty }
+    }
+    return .awaitingInput(prompt: body, isSecret: isSecret, options: options)
   }
 
   /// L'étape PIN de mautrix-twitter, dans les mots de `makePINStep` (pkg/connector/login.go)
@@ -1469,6 +1535,12 @@ public actor MatrixBridgeService {
       let handle = Self.twitterHandle(identifier)
       guard !handle.isEmpty else { throw MatrixError.decoding("pseudo X vide") }
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: handle), to: network)
+    case .slack:
+      // Slack résout par e-mail (LookupEmail) ou par recherche : `pm <identifiant>`,
+      // le connecteur s'en charge.
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Slack vide") }
+      _ = try await sendBotCommand(bridge.startChatCommand(identifier: trimmed), to: network)
     default:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
@@ -1539,6 +1611,15 @@ public actor MatrixBridgeService {
       let userID = handle.allSatisfy(\.isNumber)
         ? handle
         : try await resolveRemoteID(username: handle, network: network)
+      localpart = bridge.ghostPrefix + userID
+    case .slack:
+      // Un ghost Slack porte l'identifiant du membre ; un e-mail ou un nom passe
+      // par `resolve-identifier`, formaté comme `search`.
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Slack vide") }
+      let userID = trimmed.contains("-") && !trimmed.contains("@")
+        ? trimmed
+        : try await resolveRemoteID(username: trimmed, network: network)
       localpart = bridge.ghostPrefix + userID
     case .signal:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1716,7 +1797,7 @@ public actor MatrixBridgeService {
   /// (`Search: false` dans ses capacités) mais `resolve-identifier <pseudo>`, qui
   /// répond « Found `id` / Nom » — le même format, lu par la même expression.
   private func resolveRemoteID(username: String, network: MessageNetwork) async throws -> String {
-    let command = network == .twitter ? "resolve-identifier \(username)" : "search \(username)"
+    let command = (network == .twitter || network == .slack) ? "resolve-identifier \(username)" : "search \(username)"
     let commandEventID = try await sendBotCommand(command, to: network)
     let roomID = try await ensureManagementRoom(for: network)
     // Le bot interroge le réseau : quelques secondes au plus, sinon on renonce proprement.

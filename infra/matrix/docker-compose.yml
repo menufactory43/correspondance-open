@@ -60,6 +60,10 @@ services:
       GID: "1000"
     volumes:
       - ./data/mautrix-whatsapp:/data
+    ports:
+      # L'API de provisioning : les comptes connectés et leur déconnexion, depuis
+      # Réglages › Comptes. Même interface que Synapse, jeton Matrix de l'utilisateur.
+      - "${SYNAPSE_BIND_IP}:29318:29318"
     networks:
       - matrix
 
@@ -80,6 +84,10 @@ services:
       GID: "1000"
     volumes:
       - ./data/mautrix-meta:/data
+    ports:
+      # L'API de provisioning : les comptes connectés et leur déconnexion, depuis
+      # Réglages › Comptes. Même interface que Synapse, jeton Matrix de l'utilisateur.
+      - "${SYNAPSE_BIND_IP}:29330:29330"
     networks:
       - matrix
 
@@ -100,6 +108,10 @@ services:
       GID: "1000"
     volumes:
       - ./data/mautrix-messenger:/data
+    ports:
+      # L'API de provisioning : les comptes connectés et leur déconnexion, depuis
+      # Réglages › Comptes. Même interface que Synapse, jeton Matrix de l'utilisateur.
+      - "${SYNAPSE_BIND_IP}:29331:29331"
     networks:
       - matrix
 
@@ -118,6 +130,34 @@ services:
       GID: "1000"
     volumes:
       - ./data/mautrix-twitter:/data
+    ports:
+      # L'API de provisioning : les comptes connectés et leur déconnexion, depuis
+      # Réglages › Comptes. Même interface que Synapse, jeton Matrix de l'utilisateur.
+      - "${SYNAPSE_BIND_IP}:29332:29332"
+    networks:
+      - matrix
+
+  mautrix-slack:
+    # Slack. Espaces de travail : DM, DM de groupe, et canaux (qui arrivent comme
+    # des groupes). Le pont garde son nom d'origine partout — bot @slackbot,
+    # ghosts slack_…
+    image: dock.mau.dev/mautrix/slack:v26.08
+    container_name: correspondance-mautrix-slack
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - postgres
+    environment:
+      UID: "1000"
+      GID: "1000"
+    volumes:
+      - ./data/mautrix-slack:/data
+    ports:
+      # L'API de provisioning (/_matrix/provision/v3) : l'app y suit le flow de
+      # connexion étape par étape — le captcha du flow e-mail n'existe que là.
+      # Même interface que Synapse, jamais 0.0.0.0. Authentifié par le jeton
+      # Matrix de l'utilisateur (allow_matrix_auth).
+      - "${SYNAPSE_BIND_IP}:29335:29335"
     networks:
       - matrix
 
@@ -136,6 +176,10 @@ services:
       GID: "1000"
     volumes:
       - ./data/mautrix-signal:/data
+    ports:
+      # L'API de provisioning : les comptes connectés et leur déconnexion, depuis
+      # Réglages › Comptes. Même interface que Synapse, jeton Matrix de l'utilisateur.
+      - "${SYNAPSE_BIND_IP}:29328:29328"
     networks:
       - matrix
 

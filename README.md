@@ -1,6 +1,6 @@
 # Correspondance
 
-> Inbox Focus pour **iMessage**, **Signal**, **WhatsApp**, **Instagram**, **Messenger** et **X** (dogfood).
+> Inbox Focus pour **iMessage**, **Signal**, **WhatsApp**, **Instagram**, **Messenger**, **X** et **Slack** (dogfood).
 > Spec : [`docs/PRODUCT.md`](docs/PRODUCT.md) · agent « cc » : [`docs/AGENT.md`](docs/AGENT.md) · les deux derniers passent par des ponts mautrix,
 > voir [`docs/MATRIX-SETUP.md`](docs/MATRIX-SETUP.md).
 

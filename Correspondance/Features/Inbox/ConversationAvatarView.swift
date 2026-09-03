@@ -118,6 +118,8 @@ struct ConversationAvatarView: View {
     // X est noir. Un noir pur ferait un trou dans la marge ; on prend l'encre
     // du thème, qui reste noire sur papier et claire sur fond sombre.
     case .twitter: theme.ink
+    // L'aubergine de Slack.
+    case .slack: Color(red: 0.29, green: 0.12, blue: 0.35)
     }
   }
 

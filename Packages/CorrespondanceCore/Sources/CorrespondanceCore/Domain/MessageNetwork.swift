@@ -13,6 +13,10 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// son nom d'origine partout où ça se voit dans le Relais (`@twitterbot`,
   /// ghosts `twitter_…`, protocole `twitter`) ; l'utilisateur, lui, ne lit que « X ».
   case twitter
+  /// Slack, par mautrix-slack. Un compte, c'est un espace de travail : ses DM,
+  /// ses DM de groupe, et ses canaux — qui arrivent comme des groupes, une ligne
+  /// par canal, exactement comme un groupe WhatsApp. Rien de nouveau à l'écran.
+  case slack
   /// La note à soi : le seul fil qui ne vienne d'aucun réseau. Il vit dans le
   /// Relais, dans un salon dont on est le seul membre — de quoi se laisser un
   /// mot, une adresse, une photo, et le retrouver sur l'autre appareil.
@@ -33,6 +37,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .instagram: "Instagram"
     case .messenger: "Messenger"
     case .twitter: "X"
+    case .slack: "Slack"
     case .selfNote: "Note à soi"
     case .agent: "Agent"
     }
@@ -50,6 +55,8 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     // Une croix, en gras dans la pastille : ce qu'un logo de X a de plus
     // reconnaissable, sans en copier le dessin.
     case .twitter: "xmark"
+    // Le croisillon d'un canal : ce que Slack a de plus reconnaissable.
+    case .slack: "number"
     case .selfNote: "note.text"
     case .agent: "sparkles"
     }

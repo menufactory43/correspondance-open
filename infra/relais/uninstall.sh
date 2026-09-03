@@ -32,7 +32,7 @@ case "$(uname -s)" in
     # `relais` est le superviseur : le sortir emporte le Relais et les ponts (il
     # tue ses enfants sur SIGTERM). Les autres labels sont ceux d'avant le
     # superviseur — un agent par service ; on les retire s'ils traînent encore.
-    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter; do
+    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter mautrix-slack; do
       label="app.correspondance.$nom"
       plist="$HOME/Library/LaunchAgents/$label.plist"
       if launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
@@ -43,7 +43,7 @@ case "$(uname -s)" in
     done
     ;;
   Linux)
-    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter; do
+    for nom in relais tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter mautrix-slack; do
       unite="$HOME/.config/systemd/user/correspondance-$nom.service"
       if systemctl --user cat "correspondance-$nom.service" >/dev/null 2>&1; then
         systemctl --user disable --now "correspondance-$nom.service" >/dev/null 2>&1 || true
