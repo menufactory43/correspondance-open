@@ -168,6 +168,74 @@ Environ 25 jours de travail pour l'ensemble, livrables un par un. Après 0+1+2 (
 site peut à nouveau écrire « résume le groupe famille » et « propose une réponse à l'acheteur » ;
 après 5, « il sait que Julie est végétarienne » ; après 8, « il répond aux acheteurs pour vous ».
 
+## Ce qu'on prend à Buzz, en plus
+
+`PLAN-relais-agents.md` a déjà pris ACP, le batch par canal, la politique d'auteur à quatre modes,
+`!cancel` / `!rotate` / `!shutdown`, la portée de session. Une relecture du dépôt (septembre 2026)
+donne huit idées de plus, chacune rattachée à un chantier.
+
+1. **Les personas comme fichiers** (`buzz-persona`, `PERSONA_PACK_SPEC.md`). Un agent est un
+   markdown à en-tête YAML : `display_name`, `model`, `subscribe`, `triggers` (`mentions`,
+   `keywords`, tous les messages), `skills` chargés à la demande, `mcp_servers`, `hooks`. Le corps
+   du fichier est le prompt. Précédence : variables d'environnement > réglages UI par agent >
+   en-tête > défauts du pack. **Pour nous** : le cadre du mode pilote (chantier 8) *est* une
+   persona par fil ; le catalogue « Ajouter un moteur » devient un catalogue de personas ; et on
+   livre avec l'app des **skills** prêts (« vendeur Marketplace », « réponse client », « famille »),
+   que Claude Code sait déjà charger. Un fil, une persona, trois lignes de YAML.
+
+2. **Déclencheur par mots-clés**, en plus de la mention. Chez Buzz `triggers.keywords`. **Pour
+   nous** (chantier 2) : `rooms.<id>.suggest` gagne un mode `keywords: ["dispo", "devis", "prix"]`
+   — la réponse proposée n'apparaît que quand ça vaut le coup, pas à chaque « ok ».
+
+3. **La réaction comme commande** (`buzz-workflow` : déclencheurs `message`, `reaction`, `schedule`,
+   `webhook`, avec portes d'approbation). **Pour nous** : sur iPhone, une réaction est le geste le
+   moins cher qui existe. Réagir 🤖 à un message = « propose-moi une réponse à ça » ; 📌 = « retiens
+   ça sur cette personne » (chantier 5) ; 🌐 = « traduis » (chantier 3). Zéro saisie, zéro mention,
+   et l'agent voit exactement quel message on désigne. La porte d'approbation, c'est déjà le brouillon.
+
+4. **Le battement de cœur** (`--heartbeat-interval`, mode `nobody` : « l'agent n'agit que sur les
+   prompts de battement »). Un prompt périodique, sans message entrant. **Pour nous** (chantiers 1
+   et 7) : c'est le mécanisme des rappels (« jeudi, relance Noé ») et du **point du matin**
+   (« qu'est-ce que j'ai raté cette nuit ? » à 8h, visible par soi seul). Une implémentation, deux
+   fonctionnalités, et rien à inventer côté planification.
+
+5. **La passation de contexte** (`buzz-agent` : quand le contexte est plein, « l'agent résume son
+   propre historique et continue », `MAX_HANDOFFS` avant repli sur la troncature) et le hook
+   `_PostCompact` (`MCP_DRIVEN_HOOKS.md`) qui réinjecte un état après compaction. **Pour nous**
+   (chantier 5) : la mémoire par correspondant est précisément ce qu'on réinjecte après une
+   compaction — sinon un fil long fait oublier à cc que Camille est végétarienne. Les hooks sont
+   des outils MCP dont le nom commence par `_`, cachés au modèle, réponses encodées en JSON, budget
+   de refus (3 par prompt), délai 2,5 s : la mécanique est simple et vaut d'être reprise telle quelle.
+
+6. **« N'imposez pas la parole, imposez l'honnêteté »** (`welcome-kickoff-silent-failures.md`).
+   Trois pannes silencieuses documentées : la *fausse histoire* (un minuteur écrit « ça prend plus
+   de temps » et ne se corrige jamais), le *trop bruyant* (des agents qui s'accusent réception en
+   boucle), le *trop silencieux* (un canal vide sans erreur visible). Règle : « pas d'accusé de
+   réception nu », les faits décident, le minuteur n'est qu'un dernier recours. **Pour nous** : dans
+   un groupe, cc ne dit jamais « ok noté » ; quand un tour échoue, le fil le montre (« cc n'a pas
+   répondu : moteur arrêté », « délai dépassé »), au lieu d'un silence qu'on prend pour de la lenteur.
+   Et la garde inverse de `buzz-agent` (`REQUIRE_REPLY` : rappel si le tour finit sans avoir posté)
+   devient chez nous : « tu as été appelé et tu n'as posé ni réponse ni brouillon — dis pourquoi ».
+
+7. **La présence est une conclusion** (`agent-availability.md`) : « la disponibilité reflète la
+   présence conversationnelle sur le relais, pas la santé du processus » ; « une identité non
+   interrogée est *inconnue*, jamais implicitement hors ligne » ; le bureau « ne tient aucun canal
+   de gestion vers le processus distant ». C'est mot pour mot notre § « Actif est une conclusion,
+   jamais une lecture » (`AGENT.md`), et ça confirme le choix. **À ajouter** : le point de présence
+   sur la fiche de cc dans l'inbox, comme pour n'importe quel contact — en ligne, absent, inconnu.
+
+8. **Une CLI JSON pour les agents** (`buzz-cli`, « agent-first, JSON in / JSON out ») à côté du
+   serveur MCP. **Pour nous** (chantier 9) : `correspondance-mcp` et une commande `correspondance`
+   partagent le même cœur ; la CLI coûte un après-midi de plus et rend l'inbox scriptable par
+   n'importe quoi — un cron, un raccourci macOS, un agent qui ne parle pas MCP.
+
+Deux idées qu'on regarde sans les prendre : la fenêtre de canal calculée côté relais
+(`bridge-channel-window.md`, métadonnées de fil à l'ingestion, overlays signés jamais stockés) — c'est
+la bonne réponse à « qu'est-ce qui attend une réponse » à l'échelle, mais Synapse n'est pas Buzz et
+un sidecar sur le Relais suffira longtemps ; et la découverte d'agents possédés
+(`owned-agent-discovery.md`, « le propriétaire reste la provenance, pas l'auteur ») — utile le jour
+où l'agent d'un ami entre dans un groupe, pas avant.
+
 ## Ce qu'on ne fera pas
 
 - **Envoyer sans validation par défaut.** Le mode pilote est un choix explicite, par fil, visible.
@@ -183,3 +251,7 @@ après 5, « il sait que Julie est végétarienne » ; après 8, « il répond a
 - Franz 6, assistant intégré (rattrapage, transcription, triage, brouillons) : meetfranz.com, makerstack.co.
 - WhatsApp, brouillons IA à partir du fil : techcrunch.com, 2026-03-26.
 - OpenAI, intégration Apple Messages (lire, chercher, rédiger, envoyer) : 9to5mac.com, 2026-03.
+- Buzz (Block, Apache 2.0) : github.com/block/buzz — `crates/buzz-persona/PERSONA_PACK_SPEC.md`,
+  `crates/buzz-acp/README.md`, `crates/buzz-agent/README.md`, `docs/MCP_DRIVEN_HOOKS.md`,
+  `docs/agent-availability.md`, `docs/welcome-kickoff-silent-failures.md`, `docs/bridge-channel-window.md`,
+  `docs/owned-agent-discovery.md`, `docs/remote-agents.md`.
