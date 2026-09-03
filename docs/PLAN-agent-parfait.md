@@ -139,6 +139,51 @@ Ils sont indépendants sauf mention, et l'ordre recommandé est en fin de docume
   bannissement pour automatisation.
 - Dépend de 0 et de 2. C'est la fonctionnalité qui « vend » aux indépendants et aux vendeurs.
 
+### 8b. Configurer sans configurer : trois niveaux, un seul fichier (3–4 jours)
+
+Le but : simple pour quelqu'un qui n'a jamais vu un YAML, complet pour le pro qui branche son
+CRM. La règle : **la persona (chantier 8, format de Buzz) est le format de stockage, jamais
+l'interface.** Un fichier par fil, par réseau ou par défaut, versionné dans la room console, lu par
+le Mac et l'iPhone. Trois niveaux le présentent, chacun se suffit, et tous écrivent le même fichier.
+
+- **Niveau 1 — rien.** cc existe dès le Relais installé, a son fil, et ne fait rien ailleurs tant
+  qu'on ne l'invite pas. Le seul geste : « Inviter cc dans cette conversation ». Déjà là.
+
+- **Niveau 2 — une carte par conversation.** Dans la fiche du fil, une carte **Assistant** à trois
+  positions et une phrase :
+  - **Sur demande** : il répond quand on le nomme.
+  - **Propose** : il prépare une réponse à chaque message, vous validez (chantier 2).
+  - **Répond seul** : il envoie, dans le cadre écrit juste dessous (chantier 8). Le champ propose
+    des modèles — « vendeur Marketplace », « accueil client », « famille » — qui sont des skills
+    livrés avec l'app.
+  Trois positions et une phrase couvrent la plupart des cas, pro compris.
+
+- **Niveau 3 — le fichier, en formulaire.** Un bouton **Réglages avancés** ouvre un éditeur qui
+  retranscrit la persona section par section : *Identité* (nom, avatar, moteur, modèle), *Quand il
+  parle* (mention, mots-clés, tous les messages, horaires), *Ce qu'il sait faire* (skills cochés,
+  serveurs MCP ajoutés depuis le catalogue ou à la main), *Ce qu'il ne fait jamais* (outils
+  interdits, envoi sans validation, sujets), *Mémoire* (partagée entre fils ou non), *Journal*.
+  Un onglet **Fichier** montre le YAML et le corps du prompt, éditables ; le formulaire se met à
+  jour dans l'autre sens. Un champ inconnu du formulaire est conservé et affiché tel quel, jamais
+  perdu. Le pro qui a écrit son fichier ailleurs le colle ici.
+
+**Ce qui fait tenir l'ensemble** : aucune option sans défaut sain ; la carte du niveau 2 et le
+formulaire du niveau 3 sont deux vues du même fichier, donc on ne maintient qu'un modèle ; la
+validation est celle du schéma de persona, avec un message en français à côté du champ fautif, pas
+une erreur de parsing.
+
+**Portée** : une persona par fil hérite de celle du réseau, qui hérite de celle par défaut. « Au
+travail, tu es sobre, tu ne tutoies pas, tu ne parles jamais d'argent » se règle une fois pour
+Slack, et chaque canal peut l'affiner.
+
+**Slack, qui arrive.** Sur les réseaux personnels l'unité est la personne ; sur Slack c'est le canal,
+avec des dizaines de messages qui ne s'adressent pas à vous. Le bon défaut y est *Sur demande*, avec
+un déclencheur sur la mention de *vous* ou des mots-clés, pas de cc. *Répond seul* dans un canal
+d'entreprise engage l'employeur : cadre écrit obligatoire, journal lisible, marquage visible
+« répondu par l'assistant de meffysto ». Et en usage pro, c'est une app Slack officielle qui sera
+acceptée par un espace de travail, pas un compte utilisateur ponté par mautrix-slack — à trancher au
+moment du pont.
+
 ### 9. L'inbox comme outil : `correspondance-mcp` (2–3 jours)
 
 - **Vu** : depuis Claude Desktop, Zed ou une autre app : « qu'est-ce qui attend une réponse depuis
@@ -162,6 +207,8 @@ Ils sont indépendants sauf mention, et l'ordre recommandé est en fin de docume
 4. **3 Traduction** et **4 Vocaux** — petits, visibles, attendus par la cible.
 5. **6 Progressif** — confort, rend l'agent vivant.
 6. **7 Agir** puis **8 Pilote** — le rêve, mais seulement quand la lecture et la mémoire sont solides.
+   **8b Configuration** juste après : la carte à trois positions dès que le mode pilote existe, le
+   formulaire du niveau 3 quand une deuxième personne, ou Slack, en a besoin.
 7. **9 MCP** et **10 Un clic** — en parallèle, dès qu'une deuxième personne veut l'essayer.
 
 Environ 25 jours de travail pour l'ensemble, livrables un par un. Après 0+1+2 (une semaine), le
