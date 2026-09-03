@@ -64,7 +64,9 @@ struct ThreadView: View {
   private var thread: [ChatMessage] {
     if awaitsFirstFrame { return [] }
     let cap = launchTail.map { min($0, windowCount) } ?? windowCount
-    return Array(store.messages.suffix(cap))
+    // Une réponse proposée sans qu'on demande (`suggest`) ne vit pas dans le
+    // fil : elle se rend en bandeau au-dessus de la saisie (`SuggestionBanner`).
+    return Array(store.messages.suffix(cap)).filter { $0.agentProposal?.kind != .suggest }
   }
 
   /// Ce que la fenêtre laisse hors champ, au-dessus.
@@ -464,7 +466,8 @@ struct ThreadView: View {
               typeface: themes.typeface,
               onSend: { Task { await store.sendAgentProposal(message) } },
               onEdit: { store.editAgentProposal(message) },
-              onIgnore: { store.ignoreAgentProposal(message) }
+              onIgnore: { store.ignoreAgentProposal(message) },
+              onReply: { store.requestComposerFocus() }
             )
             .id(message.id)
           } else if let event = message.systemEventText {

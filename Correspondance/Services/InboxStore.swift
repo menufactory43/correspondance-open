@@ -215,6 +215,11 @@ final class InboxStore {
   let isDemo = DemoMode.isRequested
   /// Les fils iMessage inventés de la démonstration, par fil.
   var demoMessagesByID: [String: [ChatMessage]] = [:]
+  /// Un jeton qui change quand une carte demande le focus de la saisie
+  /// (« Répondre » sur un résumé). Le composer le guette.
+  var composerFocusToken = 0
+  /// Le moment du dernier « Résumer » : le bouton dort trente secondes après.
+  var summaryRequestedAt: Date?
   let matrix: MatrixBridgeService
   /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
   /// aussi longtemps que l'app : le tuer couperait le `/sync`.

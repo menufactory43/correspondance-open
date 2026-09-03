@@ -74,6 +74,18 @@ struct ComposerBar: View {
         )
         .padding(.top, 8)
       }
+      // La réponse que cc propose sans qu'on demande : un bandeau, pas une
+      // carte. Il s'efface dès qu'on écrit ou qu'un message arrive.
+      if let suggestion = store.pendingSuggestion, let proposal = suggestion.agentProposal, !isEditing {
+        SuggestionBanner(
+          proposal: proposal,
+          theme: theme,
+          typeface: themes.typeface,
+          onSend: { Task { await store.sendAgentProposal(suggestion) } },
+          onOpen: { store.editAgentProposal(suggestion) },
+          onDismiss: { store.ignoreAgentProposal(suggestion) }
+        )
+      }
 
       HStack(alignment: .bottom, spacing: 8) {
         ComposerPlusTray(
@@ -102,9 +114,24 @@ struct ComposerBar: View {
       if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
       pasteMonitor = nil
     }
-    .onChange(of: text) { _, _ in
+    .onChange(of: text) { old, new in
       if isTrayExpanded { isTrayExpanded = false }
       dictation.noteTextChanged()
+      // Se mettre à écrire, c'est décliner la proposition — sauf si c'est
+      // elle qui vient de descendre dans la saisie (« ouvrir »), auquel cas
+      // elle a déjà quitté le fil.
+      if old.isEmpty, !new.isEmpty, let suggestion = store.pendingSuggestion,
+         suggestion.agentProposal?.text != new {
+        store.ignoreAgentProposal(suggestion)
+      }
+    }
+    // Un message qui arrive périme la proposition d'avant.
+    .onChange(of: store.messages.count) { _, _ in
+      store.dismissStaleSuggestions()
+    }
+    // « Répondre » sur un résumé : la saisie prend le focus, vide.
+    .onChange(of: store.composerFocusToken) { _, _ in
+      isFocused = true
     }
   }
 
