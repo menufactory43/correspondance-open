@@ -25,10 +25,8 @@ extension RelayStore {
     }
     Task.detached(priority: .utility) {
       let index = Partage.index(conversations: rows) { conversation in
-        guard let mxc = conversation.remoteAvatarID,
-              let data = MatrixAvatarStore.existingData(forMXC: mxc)
-        else { return nil }
-        return boite.poserAvatar(data, cle: mxc)
+        guard let (cle, data) = Self.visage(de: conversation) else { return nil }
+        return boite.poserAvatar(data, cle: cle)
       }
       do {
         try boite.ecrire(index)
@@ -47,7 +45,7 @@ extension RelayStore {
   /// Le don sortant pour un fil — au rafraîchissement, et à chaque envoi.
   func donnerSuggestionDePartage(_ conversation: Conversation) {
     guard !isDemo, conversation.network != .agent else { return }
-    let avatar = conversation.remoteAvatarID.flatMap { MatrixAvatarStore.existingData(forMXC: $0) }
+    let avatar = Self.visage(de: conversation)?.data
     CommunicationNotification.donnerEnvoi(
       conversationID: conversation.id, title: conversation.title, network: conversation.network,
       isGroup: conversation.isGroup, avatar: avatar
@@ -90,5 +88,22 @@ extension RelayStore {
       for fichier in fichiers { addAttachment(fichier.path, conversationID: depot.conversationID) }
       await send(conversationID: depot.conversationID)
     }
+  }
+
+  /// La photo du fil telle que l'inbox la montre, depuis le cache seulement :
+  /// celle du portail, ou, pour un groupe qui n'en a pas — Instagram n'en
+  /// donne jamais —, la mosaïque de ses membres. La clé nomme la photo dans la
+  /// boîte du partage ; pour une mosaïque, c'est la liste des visages.
+  nonisolated static func visage(de conversation: Conversation) -> (cle: String, data: Data)? {
+    if let mxc = conversation.remoteAvatarID, let data = MatrixAvatarStore.existingData(forMXC: mxc) {
+      return (mxc, data)
+    }
+    let ids = Array(conversation.memberAvatarIDs.prefix(4))
+    guard ids.count >= 2 else { return nil }
+    let faces = ids.compactMap { MatrixAvatarStore.existingData(forMXC: $0) }.compactMap(PlatformImage.init(data:))
+    guard faces.count >= 2,
+          let data = AvatarMosaic.compose(faces, size: 138, separator: .platformWindowBackground)
+    else { return nil }
+    return ("mosaique:" + ids.joined(separator: "|"), data)
   }
 }
