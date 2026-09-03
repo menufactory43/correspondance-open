@@ -290,9 +290,9 @@ struct NewConversationSheet: View {
       guard let target, target == .whatsapp || target == .signal else { return nil }
       return Freeform(network: target, identifier: phone)
     }
-    // Un pseudo : Instagram ou Messenger, et seulement si on l'a choisi. Deviner
-    // qu'un mot est un pseudo Meta plutôt qu'un nom mal orthographié, c'est deviner.
-    if let network, network == .instagram || network == .messenger {
+    // Un pseudo : Instagram, Messenger ou X, et seulement si on l'a choisi. Deviner
+    // qu'un mot est un pseudo plutôt qu'un nom mal orthographié, c'est deviner.
+    if let network, network == .instagram || network == .messenger || network == .twitter {
       let bare = trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
       guard !bare.isEmpty, !bare.contains(" "), !bare.contains("@") else { return nil }
       return Freeform(network: network, identifier: bare)
@@ -350,7 +350,7 @@ struct NewConversationSheet: View {
         .foregroundStyle(theme.ink)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
-        .keyboardType(network == .instagram || network == .messenger ? .default : .namePhonePad)
+        .keyboardType(network == .instagram || network == .messenger || network == .twitter ? .default : .namePhonePad)
         .focused($isFocused)
         .submitLabel(.go)
         .onSubmit { if let composable { open(freeform: composable) } }
@@ -377,6 +377,7 @@ struct NewConversationSheet: View {
     case .signal: "Nom ou numéro Signal"
     case .instagram: "Nom d'utilisateur Instagram"
     case .messenger: "Nom ou identifiant Messenger"
+    case .twitter: "Pseudo X, sans l'arobase"
     default: "Nom ou numéro"
     }
   }

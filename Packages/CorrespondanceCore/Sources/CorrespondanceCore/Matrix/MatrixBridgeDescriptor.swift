@@ -115,6 +115,39 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: false
   )
 
+  /// X : les messages privés, par mautrix-twitter (v26.08, tag `v0.2608.0`).
+  ///
+  /// Le pont ne connaît que la session d'un navigateur — deux cookies de x.com,
+  /// `auth_token` et `ct0` — d'où la même fenêtre de connexion que les réseaux
+  /// Meta. Une étape de plus, propre à X : depuis que ses messages privés sont
+  /// chiffrés (« X Chat »), le pont demande après les cookies le **code PIN à
+  /// quatre chiffres** du compte, celui qui déverrouille les clés côté X. La
+  /// feuille de connexion le sait et le demande (`BridgeLoginStep.awaitingPasscode`).
+  ///
+  /// Le connecteur annonce deux flows, `cookies` et `password` : on nomme le
+  /// premier, sinon bridgev2 répond « Please specify a login flow ».
+  public static let twitter = MatrixBridgeDescriptor(
+    network: .twitter,
+    botLocalpart: "twitterbot",
+    commandPrefix: "!tw",
+    // Les ghosts portent l'identifiant numérique du compte X (`@twitter_44196397`),
+    // jamais le pseudo — qui peut changer.
+    ghostPrefix: "twitter_",
+    // `NetworkID` et `BeeperBridgeType` valent tous deux « twitter » chez ce
+    // pont ; on accepte aussi « x », sous lequel un déploiement pourrait le publier.
+    protocolIDs: ["twitter", "twittergo", "x"],
+    loginFlow: .webSession,
+    identifiersArePhoneNumbers: false,
+    // `displayname_template` vaut « {{ .DisplayName }} (Twitter) » par défaut ;
+    // notre gabarit de prod le passe en « (X) ». On nettoie les deux.
+    displayNameSuffixes: [" (X)", " (Twitter)"],
+    supportsPhonePairing: false,
+    webLoginFlowID: "cookies",
+    // Un groupe X quitté depuis le portail : pas vérifié sur un vrai compte,
+    // même réserve que pour Meta.
+    relaysGroupLeave: false
+  )
+
   /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
   /// Réglages › Appareils liés. Le pont n'expose que ce flow : pas de code
   /// d'appairage, et l'enregistrement en appareil primaire n'existe plus.
@@ -137,7 +170,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: true
   )
 
-  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .signal]
+  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .twitter, .signal]
 
   public static func descriptor(for network: MessageNetwork) -> MatrixBridgeDescriptor? {
     all.first { $0.network == network }
@@ -167,7 +200,8 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   ///
   /// `pm` est l'alias de `start-chat` dans bridgev2 : WhatsApp prend un numéro,
   /// Instagram et Messenger l'identifiant numérique Meta (les pseudos passent
-  /// d'abord par `search`).
+  /// d'abord par `search`), X le pseudo tel quel — son connecteur le résout
+  /// lui-même, et n'expose pas de `search`.
   public func startChatCommand(identifier: String) -> String { "pm \(identifier)" }
 
   public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, webLoginFlowID: String? = nil, relaysGroupLeave: Bool) {

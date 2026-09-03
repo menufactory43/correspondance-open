@@ -134,6 +134,14 @@ final class InboxStore {
   var bridgeLoginQRData: Data?
   var bridgeLoginPairingCode: String?
   var bridgeLoginStatusFR = "…"
+  /// X demande, après la session, le code PIN à quatre chiffres de X Chat : la
+  /// feuille montre alors un champ à la place de la fenêtre. `isSetup` quand le
+  /// compte n'en a pas encore et qu'on le crée ici ; `hint` quand le pont a
+  /// refusé l'essai précédent.
+  var bridgeLoginPasscodePrompt: (isSetup: Bool, hint: String?)?
+  /// Un import de session depuis un navigateur est en cours (la boîte du
+  /// Trousseau est peut-être à l'écran) : les boutons attendent.
+  var bridgeLoginImportBusy = false
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
@@ -1293,7 +1301,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent:
       guard isMatrixConnected else {
         lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
         return
@@ -1959,16 +1967,20 @@ final class InboxStore {
       + (etat.appareilVerifie ? "" : " Il peut quand même lire.")
   }
 
-  /// Ouvre la feuille de connexion d'un pont et lance la commande `login` auprès de son bot.
+  /// Ouvre la fenêtre de connexion d'un pont et lance la commande `login` auprès de son bot.
   /// Le flux dépend du pont : QR à scanner pour WhatsApp et Signal, fenêtre de connexion
-  /// intégrée pour Instagram et Messenger (dont la session part ensuite au bot).
+  /// intégrée pour Instagram, Messenger et X (dont la session part ensuite au bot).
   func presentBridgeLogin(network: MessageNetwork, phoneNumber: String? = nil) {
     guard let bridge = network.bridge else { return }
     bridgeLoginQRData = nil
     bridgeLoginPairingCode = nil
+    bridgeLoginPasscodePrompt = nil
     bridgeLoginNetwork = network
     bridgeLoginCommandSent = false
     pendingWebSessionPayload = nil
+    // Le réseau est posé AVANT d'ouvrir : la fenêtre se construit dessus, et se
+    // refermerait sur un réseau absent.
+    WindowOpener.shared.openBridgeLogin()
     let input: MatrixBridgeService.BridgeLoginInput
     switch bridge.loginFlow {
     case .qrCode:
@@ -2047,6 +2059,51 @@ final class InboxStore {
     }
   }
 
+  /// Lit la session du réseau dans un navigateur de la machine, et l'envoie au bot.
+  ///
+  /// Hors du fil principal : la boîte du Trousseau bloque le temps que
+  /// l'utilisateur réponde. Ce qui sort est la même charge utile que celle de la
+  /// fenêtre intégrée — `handleWebSessionCookies` ne fait pas la différence.
+  func importBrowserSession(from browser: InstalledBrowser, network: MessageNetwork) {
+    guard let profile = BridgeSessionCookies.Profile.of(network), !bridgeLoginImportBusy else { return }
+    bridgeLoginImportBusy = true
+    bridgeLoginStatusFR = "Lecture de la session dans \(browser.name)… Le Trousseau peut demander ton accord."
+    Task { @MainActor [weak self] in
+      defer { self?.bridgeLoginImportBusy = false }
+      let result = await Task.detached(priority: .userInitiated) {
+        Result { try BrowserSessionImporter.importSession(from: browser, profile: profile) }
+      }.value
+      guard let self else { return }
+      switch result {
+      case .success(let cookies):
+        self.handleWebSessionCookies(cookies, network: network)
+      case .failure(let error):
+        self.bridgeLoginStatusFR = error.localizedDescription
+      }
+    }
+  }
+
+  /// Envoie au bot le code PIN de X Chat, puis reprend la lecture de ses réponses.
+  /// Un mauvais code n'est pas la fin : le pont le dit et redemande, avec le
+  /// nombre d'essais qui restent — c'est `bridgeLoginPasscodePrompt.hint`.
+  func submitBridgeLoginPasscode(_ pin: String) {
+    guard let network = bridgeLoginNetwork else { return }
+    bridgeLoginStatusFR = "Vérification du code…"
+    bridgeLoginTask?.cancel()
+    bridgeLoginTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      do {
+        try await self.matrix.submitLoginPasscode(pin, network: network)
+      } catch is CancellationError {
+        return
+      } catch {
+        self.bridgeLoginStatusFR = error.localizedDescription
+        return
+      }
+      await self.pollBridgeLogin(network: network)
+    }
+  }
+
   /// Lecture des réponses du bot jusqu'au succès, à l'échec, ou au silence.
   /// Le bot répond en quelques secondes ; un QR WhatsApp tourne toutes les ~20 s.
   /// Sans la moindre réponse en 90 s, on arrête : pas de boucle silencieuse.
@@ -2076,7 +2133,13 @@ final class InboxStore {
           bridgeLoginStatusFR = "Saisis ce code dans \(network.labelFR), dans Appareils liés."
         case .awaitingCookies:
           bridgeLoginStatusFR = "Connecte-toi à \(network.labelFR) dans la fenêtre."
+        case .awaitingPasscode(let isSetup, let hint):
+          bridgeLoginPasscodePrompt = (isSetup, hint)
+          bridgeLoginStatusFR = isSetup
+            ? "Choisis un code PIN à quatre chiffres : il protège tes messages privés chiffrés sur X."
+            : "Le code PIN de X Chat — celui qui déverrouille tes messages privés dans l’app X."
         case .success(let detail):
+          bridgeLoginPasscodePrompt = nil
           bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
           startMatrixSync()
           // La fenêtre de connexion a fait son travail. On laisse le message de
@@ -2398,7 +2461,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -3309,7 +3372,7 @@ final class InboxStore {
           }
         }
       }
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent:
       try await matrix.send(
         conversationID: conversation.id,
         text: text,
@@ -3931,7 +3994,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent:
       let began = ContinuousClock.now
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {

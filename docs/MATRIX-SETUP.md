@@ -1,6 +1,6 @@
-# Matrix, WhatsApp, Instagram, Messenger & Signal — installation, usage, dépannage
+# Matrix, WhatsApp, Instagram, Messenger, X & Signal — installation, usage, dépannage
 
-Correspondance parle WhatsApp, Instagram, Messenger et Signal par des ponts : un homeserver
+Correspondance parle WhatsApp, Instagram, Messenger, X et Signal par des ponts : un homeserver
 **Synapse** privé et les bridges **mautrix**, tous sur le NUC, joints depuis le Mac par Tailscale.
 Seul iMessage reste natif et ne passe pas par là.
 
@@ -265,6 +265,7 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-mautrix-whatsapp` | `dock.mau.dev/mautrix/whatsapp:v26.08` | pont WhatsApp (tag **épinglé**) |
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
 | `correspondance-mautrix-messenger` | `dock.mau.dev/mautrix/meta:v26.08` | pont Messenger (tag **épinglé**, **sans** `ig-`) |
+| `correspondance-mautrix-twitter` | `dock.mau.dev/mautrix/twitter:v26.08` | pont X (tag **épinglé** ; le pont, son bot et ses ghosts gardent le nom `twitter`) |
 | `correspondance-mautrix-signal` | `dock.mau.dev/mautrix/signal:v26.08` | pont Signal (tag **épinglé**) |
 
 Depuis la v26.08, `mautrix-meta` ne fait plus que Messenger : Instagram est passé au binaire
@@ -521,6 +522,50 @@ chiffres, soit la longueur d'un E.164 maximal : le parseur refuse explicitement 
 (`MatrixSyncParser.networkMayCarryPhoneNumbers`), sans quoi un fil Messenger fusionnerait avec le
 contact qui porterait ce numéro.
 
+## 2 ter bis. Connecter X — la même fenêtre, puis le code PIN de X Chat
+
+`mautrix-twitter` (v26.08) ne connaît que la session d'un navigateur, comme les réseaux Meta.
+**Réglages › Comptes › X › Connecter…** ouvre la même feuille, sur `https://x.com/i/flow/login`
+— identifiant, mot de passe, 2FA. Deux cookies suffisent, et le pont n'en accepte pas d'autre :
+`auth_token` (la session) et `ct0` (le jeton CSRF). Ce sont les deux champs `Required` du flow
+`cookies` de `pkg/connector/login.go` ; il en manque un → « Missing some keys: [ct0] ».
+
+Le connecteur annonce **deux flows** (`cookies`, `password`) : l'app envoie donc `login cookies`
+(`MatrixBridgeDescriptor.twitter.webLoginFlowID`), sans quoi bridgev2 répond « Please specify a
+login flow ».
+
+**Une étape de plus, propre à X.** Depuis que les messages privés de X sont chiffrés (« X Chat »),
+les clés sont gardées chez X derrière un **code PIN à quatre chiffres**. Une fois les cookies
+acceptés, le bot ne dit pas « Logged in » : il demande le PIN — `Please enter your Passcode`
+(le compte en a un) ou `Please enter your Create your PIN code` (il n'en a pas, on le crée ici).
+La feuille remplace alors la fenêtre par un champ de quatre chiffres
+(`BridgeLoginStep.awaitingPasscode`) ; le code part au bot préfixé de `!tw`, et l'app rédige
+l'event aussitôt — bridgev2 ne rédige que les champs de type mot de passe, pas les codes 2FA.
+
+Un mauvais code n'est pas la fin : le pont répond « Invalid passcode. You have 2 guesses
+remaining. » et redemande ; la feuille montre le reproche au-dessus du champ. Passé le dernier
+essai, X Chat se **verrouille** (« Too many incorrect passcode attempts. X Chat is locked. ») et
+c'est dans l'app X qu'il faut le rouvrir. Au succès : « Successfully logged into X as @pseudo ».
+
+Le repli **« Coller des cookies… »** vaut ici aussi :
+
+```json
+{"auth_token":"…","ct0":"…"}
+```
+
+### Ouvrir un fil X
+
+Les ghosts portent l'**identifiant numérique** du compte (`@twitter_44196397`), jamais le pseudo.
+Mais `pm` prend le pseudo tel quel, sans arobase : le connecteur le résout lui-même
+(`ResolveIdentifier` cherche le compte dont le `screen_name` est exactement celui-là) et
+vérifie que la personne accepte les messages — sinon « not allowed to DM this Twitter user ».
+Pas de `search` chez ce pont (`Search: false` dans ses capacités) ; pour ajouter quelqu'un à un
+groupe, l'app passe par `resolve-identifier <pseudo>`, qui répond dans le même moule que `search`.
+
+Ce que le pont porte (`capabilities.go`) : correction dans les 15 minutes, suppression sans
+délai, réactions, réponses, nom et photo du groupe, invitation. **Pas de vocal** (aucun type
+audio dans sa table), pas de retrait d'un membre, pas de `create-group`.
+
 ## 2 quater. Connecter Signal — le QR, et ce qu'on laisse derrière
 
 `mautrix-signal` se lie comme **appareil secondaire**, exactement comme Signal Desktop.
@@ -699,6 +744,10 @@ Element ; hors salon de gestion, les préfixer de `!wa`) :
 **Commandes du bot Messenger** : les mêmes, dans le DM avec `@messengerbot`, préfixe **`!fb`** —
 à ceci près que `login` veut son flow : `login facebook`.
 
+**Commandes du bot X** : DM avec `@twitterbot`, préfixe **`!tw`**. `login cookies` (puis le PIN,
+en clair, préfixé), `cancel`, `logout`, `ping`, `pm <pseudo>`, `resolve-identifier <pseudo>`.
+Pas de `search`.
+
 **Commandes du bot Instagram** (DM avec `@instagrambot`, préfixe `!ig` hors salon de gestion) :
 
 | Commande | Effet |
@@ -732,6 +781,9 @@ reprend son état depuis Postgres, rien n'est perdu.
 | Instagram : aucun avatar dans l'inbox | attendu : Instagram n'expose pas de numéro, donc rien à rapprocher du carnet d'adresses. Les initiales font office |
 | Messenger : « Please specify a login flow » | le pont a quatre flows et l'app n'en a nommé aucun — vérifier `MatrixBridgeDescriptor.messenger.webLoginFlowID` (`facebook`) |
 | Messenger : « Missing cookies: [datr] » | `datr` n'a pas été récolté : se déconnecter de facebook.com dans la fenêtre, recharger la page d'accueil, puis se reconnecter |
+| X : « Please enter your Passcode » sans fin | le code envoyé n'est pas préfixé de `!tw` (notre DM n'est pas le salon de gestion aux yeux du bot) — l'app le fait ; à la main, taper `!tw 1234` |
+| X : « Too many incorrect passcode attempts. X Chat is locked. » | verrouillé côté X : le rouvrir dans l'app X (Réglages › Confidentialité › X Chat), puis `login cookies` à nouveau |
+| X : « Your X session has expired » | cookies périmés (déconnexion dans le navigateur, ou X qui a coupé la session) — `login cookies` à nouveau |
 | Messenger : le bot ne répond pas | tag d'image : `dock.mau.dev/mautrix/meta:v26.08` **sans** `ig-` (le `ig-` livrerait un second Instagram sur la base Messenger) |
 | `mautrix-meta` redémarre en boucle (`as_token was not accepted`) | Synapse n'a pas rechargé `meta-registration.yaml` : `docker-compose restart synapse` puis `docker-compose restart mautrix-meta` |
 

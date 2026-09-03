@@ -18,11 +18,32 @@ final class WindowOpener {
   /// Identifiants des scènes. Les mêmes chaînes qu'en face, dans `CorrespondanceApp`.
   static let inboxSceneID = "inbox"
   static let conversationSceneID = "conversation"
+  static let bridgeLoginSceneID = "bridge-login"
 
   private init() {}
 
+  /// L'inbox devant. Si une fenêtre d'inbox existe déjà, c'est **elle** qu'on
+  /// ramène : `WindowGroup` en ouvrirait une seconde à chaque `openWindow`, et
+  /// c'est ce qu'on voyait au succès d'une connexion — deux inbox côte à côte.
+  /// SwiftUI nomme ses fenêtres « <scène>-AppWindow-N » ; on prend la première
+  /// visible, sinon n'importe laquelle encore vivante (réduite dans le Dock).
   func openInbox() {
+    let inboxWindows = NSApp.windows.filter {
+      $0.identifier?.rawValue.hasPrefix(Self.inboxSceneID) == true && $0.level == .normal
+    }
+    if let window = inboxWindows.first(where: \.isVisible) ?? inboxWindows.first {
+      NSApplication.shared.activate(ignoringOtherApps: true)
+      if window.isMiniaturized { window.deminiaturize(nil) }
+      window.makeKeyAndOrderFront(nil)
+      return
+    }
     openWindow?(id: Self.inboxSceneID)
+  }
+
+  /// La fenêtre de connexion d'un pont : une seule (`Window`), rappelée devant
+  /// si elle existe déjà.
+  func openBridgeLogin() {
+    openWindow?(id: Self.bridgeLoginSceneID)
   }
 
   func openConversation(_ conversationID: String) {

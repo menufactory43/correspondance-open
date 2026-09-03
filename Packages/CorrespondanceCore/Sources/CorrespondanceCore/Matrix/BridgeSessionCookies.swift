@@ -3,12 +3,12 @@ import Foundation
 import FoundationNetworking
 #endif
 
-/// La session d'un réseau Meta telle que son pont l'attend, extraite d'un jeu de cookies.
+/// La session d'un réseau telle que son pont l'attend, extraite d'un jeu de cookies.
 ///
-/// Instagram et Messenger se connectent de la même façon — Meta n'offre rien d'autre que
-/// les cookies d'un navigateur — mais pas avec les mêmes clés ni sur le même domaine.
-/// D'où un seul type et deux profils : ajouter un troisième réseau Meta, ce serait un
-/// profil de plus, pas une deuxième copie de ce fichier.
+/// Instagram, Messenger et X se connectent de la même façon — ni Meta ni X n'offrent
+/// autre chose que les cookies d'un navigateur — mais pas avec les mêmes clés ni sur
+/// le même domaine. D'où un seul type et trois profils : un réseau de plus, c'est un
+/// profil de plus, pas une nouvelle copie de ce fichier.
 ///
 /// Isolé de WebKit exprès : la vue de connexion récolte des `HTTPCookie`, mais la
 /// question « cette session est-elle complète ? » et la mise en forme du JSON se
@@ -42,6 +42,31 @@ public struct BridgeSessionCookies: Equatable, Sendable {
       self.requiredNames = requiredNames
       self.optionalNames = optionalNames
       self.cookieDomain = cookieDomain
+    }
+
+    /// Le mode d'emploi du repli « coller la session », étape par étape, tel que
+    /// la feuille l'affiche. Écrit pour Brave et Chrome (mêmes outils, mêmes
+    /// noms) ; Safari est nommé là où il diffère. Le JSON d'exemple ne porte que
+    /// les clés obligatoires, dans l'ordre où le pont les lit.
+    public var manualCookieStepsFR: [String] {
+      let site = loginURL.host ?? cookieDomain
+      let names = requiredNames.sorted().map { "`\($0)`" }
+      let liste = names.count == 2
+        ? names.joined(separator: " et ")
+        : names.dropLast().joined(separator: ", ") + " et " + (names.last ?? "")
+      return [
+        "Connecte-toi sur \(site) dans ton navigateur (Brave, Chrome, Safari…).",
+        "Ouvre les outils de développement : ⌥⌘I, ou Affichage › Développeur › Outils de développement.",
+        "Onglet Application (s'il est caché, clique sur » dans la barre d'onglets). Dans Safari : onglet Stockage.",
+        "Colonne de gauche : Storage › Cookies › https://\(cookieDomain).",
+        "Dans le tableau, trouve les lignes \(liste). Double-clic sur la case Value pour la sélectionner en entier, puis copie.",
+        "Colle les valeurs dans le champ ci-dessous, dans le modèle proposé, puis Envoyer.",
+      ]
+    }
+
+    /// Le JSON à compléter : les clés obligatoires, valeurs vides.
+    public var manualCookieTemplate: String {
+      "{" + requiredNames.sorted().map { "\"\($0)\":\"…\"" }.joined(separator: ",") + "}"
     }
 
     /// Le domaine du cookie tombe-t-il sous celui du profil ? WebKit préfixe d'un point
@@ -83,11 +108,29 @@ public struct BridgeSessionCookies: Equatable, Sendable {
       cookieDomain: "facebook.com"
     )
 
+    /// X se connecte sur **x.com**, avec deux cookies et pas un de plus : `auth_token`
+    /// (la session) et `ct0` (le jeton CSRF, que le pont rejoue en en-tête). Ce sont
+    /// les deux champs `Required` du flow `cookies` de mautrix-twitter
+    /// (`pkg/connector/login.go`) ; le bot refuse tout le reste par « Missing some
+    /// keys » s'il en manque un, et ignore ce qu'il ne connaît pas.
+    ///
+    /// La page de connexion est `/i/flow/login`, celle que le pont lui-même nomme
+    /// comme « Login URL ». La session se pose sur `.x.com` ; twitter.com, que la
+    /// page peut encore traverser, n'a rien à y apporter.
+    public static let twitter = Profile(
+      network: .twitter,
+      loginURL: URL(string: "https://x.com/i/flow/login")!,
+      requiredNames: ["auth_token", "ct0"],
+      optionalNames: [],
+      cookieDomain: "x.com"
+    )
+
     /// Profil d'un réseau, ou `nil` s'il ne se connecte pas par session de navigateur.
     public static func of(_ network: MessageNetwork) -> Profile? {
       switch network {
       case .instagram: .instagram
       case .messenger: .messenger
+      case .twitter: .twitter
       case .iMessage, .signal, .whatsapp, .selfNote, .agent: nil
       }
     }

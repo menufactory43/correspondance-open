@@ -99,9 +99,9 @@ struct NewConversationSheet: View {
       guard filter == nil || filter == .iMessage else { return nil }
       return Freeform(identifier: value.lowercased(), networks: [.iMessage])
     }
-    // Un pseudo : Instagram ou Messenger, et seulement quand on l'a choisi —
+    // Un pseudo : Instagram, Messenger ou X, et seulement quand on l'a choisi —
     // deviner qu'un mot est un pseudo plutôt qu'un nom mal tapé, c'est deviner.
-    if let filter, filter == .instagram || filter == .messenger {
+    if let filter, filter == .instagram || filter == .messenger || filter == .twitter {
       let bare = value.hasPrefix("@") ? String(value.dropFirst()) : value
       guard !bare.isEmpty, !bare.contains(" "), !bare.contains("@") else { return nil }
       return Freeform(identifier: bare, networks: [filter])
@@ -198,6 +198,7 @@ struct NewConversationSheet: View {
     case .signal: "Nom ou numéro Signal"
     case .instagram: "Nom d’utilisateur Instagram"
     case .messenger: "Nom ou identifiant Messenger"
+    case .twitter: "Pseudo X, sans l’arobase"
     case .iMessage: "Nom, numéro ou e-mail"
     default: "Nom, numéro, e-mail…"
     }
@@ -508,6 +509,9 @@ private struct NetworkChip: View {
     case .whatsapp: Color(red: 0.15, green: 0.72, blue: 0.42)
     case .instagram: Color(red: 0.78, green: 0.23, blue: 0.55)
     case .messenger: Color(red: 0.35, green: 0.40, blue: 0.95)
+    // X est noir. Un noir pur ferait un trou dans la marge ; on prend l'encre
+    // du thème, qui reste noire sur papier et claire sur fond sombre.
+    case .twitter: theme.ink
     }
   }
 }

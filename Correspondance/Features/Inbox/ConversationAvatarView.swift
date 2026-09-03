@@ -115,6 +115,9 @@ struct ConversationAvatarView: View {
     // Le bleu-violet de Messenger, choisi assez loin du magenta d'Instagram pour
     // qu'on distingue les deux réseaux de Meta d'un coup d'œil dans l'inbox.
     case .messenger: Color(red: 0.35, green: 0.40, blue: 0.95)
+    // X est noir. Un noir pur ferait un trou dans la marge ; on prend l'encre
+    // du thème, qui reste noire sur papier et claire sur fond sombre.
+    case .twitter: theme.ink
     }
   }
 

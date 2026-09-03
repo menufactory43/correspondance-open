@@ -138,7 +138,7 @@ final class MessageEditTests: XCTestCase {
   func testLEnvoiDUneCorrectionSuitLaTableDesCapacites() {
     XCTAssertEqual(
       MessageNetwork.allCases.filter(\.supportsEditing),
-      [.signal, .whatsapp, .instagram, .messenger, .selfNote, .agent]
+      [.signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent]
     )
   }
 }

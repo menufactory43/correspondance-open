@@ -106,6 +106,17 @@ struct CorrespondanceApp: App {
     .windowResizability(.contentMinSize)
     .windowStyle(.hiddenTitleBar)
 
+    // La connexion d'un pont : une vraie fenêtre, pas une feuille à l'étroit
+    // dans Réglages — les formulaires de Meta et de X y respirent, et la
+    // fenêtre se redimensionne. `Window` : une seule, rappelée devant.
+    Window("Connexion", id: WindowOpener.bridgeLoginSceneID) {
+      BridgeLoginWindow()
+        .environment(store)
+        .environment(themes)
+    }
+    .defaultSize(width: 960, height: 780)
+    .windowResizability(.contentMinSize)
+
     Settings {
       SettingsView()
         .environment(store)

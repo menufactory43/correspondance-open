@@ -27,6 +27,8 @@ META_IMAGE_TAG="${META_IMAGE_TAG:-ig-v26.08}"
 # conteneur, une seconde base, un second bot. Les deux réseaux de Meta ne se
 # partagent plus rien depuis que chacun a son binaire.
 MESSENGER_IMAGE_TAG="${MESSENGER_IMAGE_TAG:-v26.08}"
+# X : mautrix-twitter, même cadence de versions.
+TWITTER_IMAGE_TAG="${TWITTER_IMAGE_TAG:-v26.08}"
 SIGNAL_IMAGE_TAG="${SIGNAL_IMAGE_TAG:-v26.08}"
 # Push iOS (Sygnal). Ces trois-là ne se génèrent pas : ils viennent du portail
 # Apple. On les passe en variables d'environnement à la première passe, ils
@@ -65,13 +67,13 @@ if [[ "${1:-}" != "--remote" ]]; then
     "$HERE/initdb" \
     "$SSH_HOST:~/${REMOTE_DIR}/"
   echo "→ Application sur le NUC"
-  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' PUSH_GATEWAY_HOST='${PUSH_GATEWAY_HOST}' PUSH_TUNNEL_TOKEN='${PUSH_TUNNEL_TOKEN}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
+  ssh "$SSH_HOST" "SERVER_NAME='${SERVER_NAME}' SYNAPSE_BIND_IP='${SYNAPSE_BIND_IP}' SYNAPSE_PUBLIC_IP='${SYNAPSE_PUBLIC_IP}' WHATSAPP_IMAGE_TAG='${WHATSAPP_IMAGE_TAG}' META_IMAGE_TAG='${META_IMAGE_TAG}' MESSENGER_IMAGE_TAG='${MESSENGER_IMAGE_TAG}' TWITTER_IMAGE_TAG='${TWITTER_IMAGE_TAG}' SIGNAL_IMAGE_TAG='${SIGNAL_IMAGE_TAG}' MATRIX_USER='${MATRIX_USER}' APNS_KEY_ID='${APNS_KEY_ID}' APNS_TEAM_ID='${APNS_TEAM_ID}' PUSH_GATEWAY_HOST='${PUSH_GATEWAY_HOST}' PUSH_TUNNEL_TOKEN='${PUSH_TUNNEL_TOKEN}' bash ~/${REMOTE_DIR}/bootstrap.sh --remote"
   exit 0
 fi
 
 # ---------------------------------------------------------------- phase distante
 cd "$HOME/$REMOTE_DIR"
-mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/mautrix-messenger data/mautrix-signal data/postgres data/sygnal secrets/apns
+mkdir -p data/synapse data/mautrix-whatsapp data/mautrix-meta data/mautrix-messenger data/mautrix-twitter data/mautrix-signal data/postgres data/sygnal secrets/apns
 chmod 700 secrets secrets/apns
 CREDS="$HOME/$REMOTE_DIR/CREDENTIALS.txt"
 
@@ -172,6 +174,7 @@ ensure_database() {
 ensure_database mautrix_whatsapp
 ensure_database mautrix_meta
 ensure_database mautrix_messenger
+ensure_database mautrix_twitter
 ensure_database mautrix_signal
 
 # 5) Config et registration de chaque pont — même mécanique pour les deux, d'où la fonction :
@@ -231,6 +234,8 @@ setup_bridge mautrix-meta dock.mau.dev/mautrix/meta "$META_IMAGE_TAG" \
 # binaire /usr/bin/mautrix-meta (`--version` → « mautrix-facebook v26.08 »).
 setup_bridge mautrix-messenger dock.mau.dev/mautrix/meta "$MESSENGER_IMAGE_TAG" \
   mautrix-messenger-overrides.yaml.tmpl messenger-registration.yaml mautrix-meta
+setup_bridge mautrix-twitter dock.mau.dev/mautrix/twitter "$TWITTER_IMAGE_TAG" \
+  mautrix-twitter-overrides.yaml.tmpl twitter-registration.yaml mautrix-twitter
 setup_bridge mautrix-signal dock.mau.dev/mautrix/signal "$SIGNAL_IMAGE_TAG" \
   mautrix-signal-overrides.yaml.tmpl signal-registration.yaml mautrix-signal
 
@@ -299,7 +304,7 @@ done
 # puis les ponts derrière lui (ils s'arrêtent net quand le jeton est refusé).
 NEED_SYNAPSE_RESTART=0
 [[ "$(registrations_fingerprint)" != "$REG_BEFORE" ]] && NEED_SYNAPSE_RESTART=1
-for svc in mautrix-whatsapp mautrix-meta mautrix-messenger mautrix-signal; do
+for svc in mautrix-whatsapp mautrix-meta mautrix-messenger mautrix-twitter mautrix-signal; do
   docker-compose logs --tail=30 "$svc" 2>/dev/null | grep -q "as_token was not accepted" && NEED_SYNAPSE_RESTART=1
 done
 if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
@@ -309,7 +314,7 @@ if [[ "$NEED_SYNAPSE_RESTART" == 1 ]]; then
     curl -fsS "http://127.0.0.1:8008/_matrix/client/versions" >/dev/null 2>&1 && break
     sleep 2
   done
-  docker-compose restart mautrix-whatsapp mautrix-meta mautrix-messenger mautrix-signal >/dev/null
+  docker-compose restart mautrix-whatsapp mautrix-meta mautrix-messenger mautrix-twitter mautrix-signal >/dev/null
 fi
 
 # 9) Utilisateur Matrix — créé une seule fois, mot de passe écrit dans CREDENTIALS.txt.
@@ -341,6 +346,7 @@ add_credentials_line() {
 add_credentials_line "bot_whatsapp" "@whatsappbot:${SERVER_NAME}"
 add_credentials_line "bot_instagram" "@instagrambot:${SERVER_NAME}"
 add_credentials_line "bot_messenger" "@messengerbot:${SERVER_NAME}"
+add_credentials_line "bot_twitter" "@twitterbot:${SERVER_NAME}"
 add_credentials_line "bot_signal" "@signalbot:${SERVER_NAME}"
 
 # 10) Sygnal répond-il ? Depuis le réseau Docker uniquement : rien n'est publié.
@@ -362,7 +368,7 @@ fi
 echo
 docker-compose ps
 echo
-echo "✓ Pile Matrix prête (WhatsApp + Instagram + Messenger + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
+echo "✓ Pile Matrix prête (WhatsApp + Instagram + Messenger + X + Signal). Identifiants : ${CREDS} (chmod 600, hors repo)."
 if [[ "$APNS_READY" == 1 ]]; then
   echo "✓ Push iOS : Sygnal armé pour com.correspondance.ios (production) et com.correspondance.ios.dev (sandbox)."
   if [[ -n "${PUSH_TUNNEL_TOKEN:-}" ]]; then

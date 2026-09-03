@@ -14,7 +14,7 @@ _Avoid_ : chat, thread, salon, room, fil (réservé à l'affichage des messages)
 Un élément d'une conversation : texte, pièce jointe, réaction ou événement de groupe.
 
 **Réseau** :
-Le service de messagerie d'origine d'une conversation (iMessage, Signal, WhatsApp, Instagram, Messenger).
+Le service de messagerie d'origine d'une conversation (iMessage, Signal, WhatsApp, Instagram, Messenger, X).
 _Avoid_ : plateforme, canal, intégration, protocole
 
 **Compte lié** :

@@ -26,7 +26,7 @@ struct SettingsAccountsPane: View {
       SettingsCard(
         title: "Par le Relais",
         footnote: "Chaque réseau se connecte comme sur un nouveau téléphone : un QR code pour WhatsApp "
-          + "et Signal, tes identifiants pour Instagram et Messenger. "
+          + "et Signal, tes identifiants pour Instagram, Messenger et X. "
           + "Signal ne montre que les messages reçus après la liaison."
       ) {
         ForEach(Array(MessageNetwork.matrixBridged.enumerated()), id: \.element.id) { index, network in

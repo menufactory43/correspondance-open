@@ -94,6 +94,7 @@ extension InboxStore {
     case .whatsapp: "Numéro au format international"
     case .instagram: "Pseudo ou identifiant Instagram"
     case .messenger: "Nom ou identifiant Messenger"
+    case .twitter: "Pseudo X"
     case .signal: "Identifiant Signal (UUID)"
     default: ""
     }

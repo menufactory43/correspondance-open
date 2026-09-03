@@ -44,6 +44,7 @@ verifier "prend Instagram en darwin-arm64" "mautrix-instagram-darwin-arm64" "$MA
 # Messenger, c'est le binaire `mautrix-meta` nu du même dépôt : le confondre avec
 # celui d'Instagram poserait deux fois le même réseau sous deux noms.
 verifier "prend Messenger en darwin-arm64" "mautrix-meta-darwin-arm64" "$MAC"
+verifier "prend X en darwin-arm64, de NOTRE publication" "$RELEASES_ATTENDU/mautrix-twitter-darwin-arm64" "$MAC"
 verifier "pose un agent launchd utilisateur" "Library/LaunchAgents" "$MAC"
 # Cinq processus sur Mac (le Relais et les quatre ponts), mais UN SEUL élément
 # d'arrière-plan : macOS notifie et fait approuver chaque agent launchd, et cinq
@@ -69,6 +70,7 @@ verifier "prend la release amont, statique, amd64" "conduwuit-linux-static-amd64
 verifier "prend les ponts amd64" "mautrix-signal-amd64" "$LX"
 verifier "prend Instagram en amd64" "mautrix-instagram-amd64" "$LX"
 verifier "prend Messenger en amd64" "mautrix-meta-amd64" "$LX"
+verifier "prend X en amd64" "mautrix-twitter-amd64" "$LX"
 verifier "pose une unité systemd utilisateur" "systemctl --user enable --now" "$LX"
 verifier "parle du linger" "enable-linger" "$LX"
 verifier "respecte --prefix" "$HOME/unclic" "$LX"
@@ -99,6 +101,7 @@ verifier "prend la release amont, statique, arm64" "conduwuit-linux-static-arm64
 verifier "prend les ponts arm64" "mautrix-whatsapp-arm64" "$LA"
 verifier "prend Instagram en arm64" "mautrix-instagram-arm64" "$LA"
 verifier "prend Messenger en arm64" "mautrix-meta-arm64" "$LA"
+verifier "prend X en arm64" "mautrix-twitter-arm64" "$LA"
 verifier_absent "ne prend pas le Messenger d'un autre hôte" "mautrix-meta-amd64" "$LA"
 verifier_absent "ne confond pas avec l'amd64" "conduwuit-linux-static-amd64" "$LA"
 verifier "prend l'archive tailcat arm64" "tailcat_0.4.0_linux_arm64.tar.gz" "$LA"
@@ -117,7 +120,7 @@ echo "Les options"
 PORT="$(bash "$INSTALL" --dry-run --hote macos-arm64 --port 8030 --server-name essai.local --user pierre 2>&1)"
 verifier "déplace le Relais avec --port" "127.0.0.1:8030" "$PORT"
 verifier "déplace les ponts avec lui" "29338 (WhatsApp)" "$PORT"
-verifier "déplace Instagram et Messenger aussi" "29350 (Instagram) et 29351 (Messenger)" "$PORT"
+verifier "déplace Instagram, Messenger et X aussi" "29350 (Instagram), 29351 (Messenger) et 29352 (X)" "$PORT"
 verifier "reprend --server-name et --user" "@pierre:essai.local" "$PORT"
 
 echo "Les refus"
@@ -164,11 +167,13 @@ verifier "ne retire pas une nouvelle clé tailcat" 'clé déjà là, conservée'
 verifier "redémarre tailcat pour qu'il réécrive son adresse" 'systemctl --user restart correspondance-tailcat' "$SRC"
 verifier "refuse d'installer si un sha256 diffère" "on n'installe rien" "$SRC"
 
-echo "Les quatre ponts, même traitement"
+echo "Les cinq ponts, même traitement"
 verifier "Instagram passe par la même fonction pont()" "pont instagram " "$SRC"
 verifier "Messenger passe par la même fonction pont()" "pont messenger " "$SRC"
 verifier "le préfixe de commande d'Instagram est celui de l'app" "'!ig' instagrambot" "$SRC"
 verifier "le préfixe de commande de Messenger est celui de l'app" "'!fb' messengerbot" "$SRC"
+verifier "X passe par la même fonction pont()" "pont twitter " "$SRC"
+verifier "le préfixe de commande de X est celui de l'app" "'!tw' twitterbot" "$SRC"
 # `pont()` écrit une seule fois la config : SQLite, allow+default, logging.writers.
 verifier "les ponts sont en SQLite" "sqlite3-fk-wal" "$SRC"
 verifier "les portails sont chiffrés par défaut" "default: true" "$SRC"
@@ -176,6 +181,7 @@ verifier "les ponts écrivent leur journal" "writers:" "$SRC"
 DESINSTALL_SRC="$(cat "$DESINSTALL")"
 verifier "le désinstalleur retire aussi Instagram" "mautrix-instagram" "$DESINSTALL_SRC"
 verifier "le désinstalleur retire aussi Messenger" "mautrix-messenger" "$DESINSTALL_SRC"
+verifier "le désinstalleur retire aussi X" "mautrix-twitter" "$DESINSTALL_SRC"
 verifier "le désinstalleur retire aussi le service tailcat" "for nom in relais tailcat" "$DESINSTALL_SRC"
 
 echo "Le mode machine (--json)"

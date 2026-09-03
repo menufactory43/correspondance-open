@@ -131,6 +131,21 @@ public actor MatrixBridgeService {
     didReconcileJoinedRooms = false
   }
 
+  // MARK: - Démonstration
+
+  /// Avale un payload `/sync` sans réseau ni base : c'est le mode démonstration,
+  /// qui montre exactement ce que le Relais montrerait — mêmes payloads, même
+  /// analyseur. À n'appeler que sur un service construit sans magasin
+  /// (`store: nil`) : rien de ce qui entre ici ne doit toucher la base réelle.
+  public func ingestDemo(_ response: MatrixSyncResponse, selfUserID: String) {
+    didHydrate = true
+    self.selfUserID = selfUserID
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    parser.apply(response, to: &rooms)
+    parser.applyConversationState(response, to: &relayState)
+    detectManagementRooms()
+  }
+
   // MARK: - Sync
 
   /// Reprend le curseur `next_batch` du cache et vérifie que la session tient encore.
@@ -1174,8 +1189,14 @@ public actor MatrixBridgeService {
     /// QR à scanner (PNG déjà téléchargé).
     case qrCode(Data)
     case pairingCode(String)
-    /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram, Messenger).
+    /// Le bot attend qu'on lui colle quelque chose (les cookies Instagram, Messenger, X).
     case awaitingCookies(String)
+    /// Le bot attend le code PIN à quatre chiffres de X Chat — celui qui
+    /// déverrouille les clés des messages privés chiffrés. `isSetup` : le compte
+    /// n'en a pas encore, et c'est ici qu'il se crée. `hint` : ce que le pont a
+    /// reproché à l'essai précédent (« Invalid passcode. You have 2 guesses
+    /// remaining. »), quand il y en a un.
+    case awaitingPasscode(isSetup: Bool, hint: String?)
     case success(String)
     case failure(String)
     case waiting
@@ -1230,7 +1251,7 @@ public actor MatrixBridgeService {
   /// le JSON est ignoré en silence. Le bot retire le préfixe avant de lire la suite.
   public func submitLoginCookies(_ raw: String, network: MessageNetwork) async throws {
     guard let bridge = network.bridge else { throw MatrixError.notConfigured }
-    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmed = Self.normalizedCookiePayload(raw)
     guard !trimmed.isEmpty else { throw MatrixError.decoding("cookies vides") }
     let payload = trimmed.hasPrefix(bridge.commandPrefix) ? trimmed : "\(bridge.commandPrefix) \(trimmed)"
     let roomID = try await ensureManagementRoom(for: network)
@@ -1242,6 +1263,42 @@ public actor MatrixBridgeService {
     if let eventID {
       _ = try? await client.redact(roomID: roomID, eventID: eventID)
     }
+  }
+
+  /// Un collage manuel, nettoyé : les valeurs d'un JSON perdent leurs blancs de
+  /// bord. Copier un cookie depuis le tableau des outils de développement de
+  /// Brave ou Chrome emporte souvent une espace finale — et X répond alors
+  /// « HTTP 401: Could not authenticate you », sans dire pourquoi. Tout ce qui
+  /// n'est pas un objet JSON de chaînes (une commande cURL, un PIN) passe tel
+  /// quel, seulement débarrassé des blancs autour.
+  public static func normalizedCookiePayload(_ raw: String) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.hasPrefix("{"),
+          let object = try? JSONSerialization.jsonObject(with: Data(trimmed.utf8)) as? [String: String]
+    else { return trimmed }
+    var cleaned: [String: String] = [:]
+    for (key, value) in object {
+      cleaned[key.trimmingCharacters(in: .whitespacesAndNewlines)] =
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: cleaned, options: [.sortedKeys]),
+          let text = String(data: data, encoding: .utf8)
+    else { return trimmed }
+    return text
+  }
+
+  /// Envoie au bot le code PIN de X Chat, en réponse à « Please enter your Passcode ».
+  ///
+  /// Même chemin que les cookies : préfixé, parce que notre DM n'est pas le salon de
+  /// gestion aux yeux du bot ; rédigé juste après, parce que bridgev2 ne rédige que
+  /// les champs de type mot de passe ou jeton, et qu'un code 2FA n'en est pas un
+  /// pour lui — le PIN resterait en clair dans la timeline.
+  public func submitLoginPasscode(_ raw: String, network: MessageNetwork) async throws {
+    let pin = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard pin.count == 4, pin.allSatisfy(\.isNumber) else {
+      throw MatrixError.decoding("le code PIN de X fait quatre chiffres")
+    }
+    try await submitLoginCookies(pin, network: network)
   }
 
   /// Le bot doit **rejoindre** le salon de gestion pour lire quoi que ce soit ; un
@@ -1274,7 +1331,18 @@ public actor MatrixBridgeService {
             MatrixIdentity.network(ofBot: sender) == network
       else { continue }
       let body = content.string(at: "body") ?? ""
-      if let step = Self.loginStep(inBotMessage: body) { return step }
+      if let step = Self.loginStep(inBotMessage: body) {
+        // Le pont dit d'abord ce qu'il reproche (« Invalid passcode… »), puis
+        // redemande (« Please enter your Passcode »). Le plus récent est la
+        // demande ; le reproche est le message d'avant, et c'est lui qu'on
+        // veut afficher — sans lui, l'utilisateur retaperait le même code.
+        if case .awaitingPasscode(let isSetup, nil) = step,
+           let previous = Self.passcodeHint(before: event.eventID, in: response.chunk, network: network)
+        {
+          return .awaitingPasscode(isSetup: isSetup, hint: previous)
+        }
+        return step
+      }
       if content.string(at: "msgtype") == "m.image", let mxc = content.string(at: "url") {
         let data = try await client.downloadMedia(mxcURI: mxc)
         return .qrCode(data)
@@ -1326,11 +1394,56 @@ public actor MatrixBridgeService {
       return .failure(body)
     }
     if let code = pairingCode(in: body) { return .pairingCode(code) }
+    if let passcode = passcodeStep(inBotMessage: body) { return passcode }
     // Invite de l'étape « cookies » : l'instruction du connecteur, puis l'URL de login.
     if lower.contains("enter a json object with your cookies") || lower.hasPrefix("login url:") {
       return .awaitingCookies(body)
     }
     return nil
+  }
+
+  /// L'étape PIN de mautrix-twitter, dans les mots de `makePINStep` (pkg/connector/login.go)
+  /// et de bridgev2, qui la présente en deux messages : les instructions du connecteur,
+  /// puis « Please enter your <champ> ». Le champ s'appelle « Passcode » quand le compte
+  /// a déjà un PIN, « Create your PIN code » quand il faut le créer.
+  private static func passcodeStep(inBotMessage body: String) -> BridgeLoginStep? {
+    let lower = body.lowercased()
+    if lower.contains("please enter your create your pin code")
+      || lower.contains("no pin code is registered yet")
+    {
+      return .awaitingPasscode(isSetup: true, hint: nil)
+    }
+    if lower.contains("invalid passcode") {
+      // La première ligne porte le reproche ; le reste est l'instruction répétée.
+      let hint = body.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init)
+      return .awaitingPasscode(isSetup: false, hint: hint ?? body)
+    }
+    if lower.contains("please enter your passcode")
+      || lower.contains("to retrieve your encrypted messages")
+    {
+      return .awaitingPasscode(isSetup: false, hint: nil)
+    }
+    return nil
+  }
+
+  /// Le reproche du pont sur le PIN précédent, s'il précède immédiatement `eventID`
+  /// dans une page lue du plus récent au plus ancien.
+  private static func passcodeHint(
+    before eventID: String?,
+    in chunk: [MatrixEvent],
+    network: MessageNetwork
+  ) -> String? {
+    guard let index = chunk.firstIndex(where: { $0.eventID == eventID }),
+          chunk.indices.contains(index + 1)
+    else { return nil }
+    let previous = chunk[index + 1]
+    guard previous.type == "m.room.message",
+          let sender = previous.sender,
+          MatrixIdentity.network(ofBot: sender) == network,
+          let body = previous.content?.string(at: "body"),
+          case .awaitingPasscode(_, let hint) = passcodeStep(inBotMessage: body) ?? .waiting
+    else { return nil }
+    return hint
   }
 
   /// Ouvre un fil vers un correspondant via la commande bot `pm` (alias de `start-chat`).
@@ -1349,6 +1462,13 @@ public actor MatrixBridgeService {
         throw MatrixError.decoding("numéro WhatsApp invalide")
       }
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: "+\(digits)"), to: network)
+    case .twitter:
+      // Le connecteur résout lui-même un pseudo (`ResolveIdentifier` cherche le
+      // compte dont le `screen_name` est exactement celui-là) : `pm <pseudo>`,
+      // sans arobase, et sans passer par `search` — que ce pont n'expose pas.
+      let handle = Self.twitterHandle(identifier)
+      guard !handle.isEmpty else { throw MatrixError.decoding("pseudo X vide") }
+      _ = try await sendBotCommand(bridge.startChatCommand(identifier: handle), to: network)
     default:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
@@ -1357,9 +1477,15 @@ public actor MatrixBridgeService {
       }
       let metaID = trimmed.allSatisfy(\.isNumber)
         ? trimmed
-        : try await resolveMetaID(username: trimmed, network: network)
+        : try await resolveRemoteID(username: trimmed, network: network)
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: metaID), to: network)
     }
+  }
+
+  /// Un pseudo X tel que le connecteur le compare : sans arobase ni blancs.
+  public static func twitterHandle(_ raw: String) -> String {
+    raw.trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
   }
 
   /// Ajoute un contact à un groupe : on invite son ghost dans le portail, le pont
@@ -1403,8 +1529,17 @@ public actor MatrixBridgeService {
       guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant \(network.labelFR) vide") }
       let metaID = trimmed.allSatisfy(\.isNumber)
         ? trimmed
-        : try await resolveMetaID(username: trimmed, network: network)
+        : try await resolveRemoteID(username: trimmed, network: network)
       localpart = bridge.ghostPrefix + metaID
+    case .twitter:
+      // Un ghost X porte l'identifiant numérique du compte ; un pseudo passe par
+      // `resolve-identifier`, dont la réponse est formatée comme celle de `search`.
+      let handle = Self.twitterHandle(identifier)
+      guard !handle.isEmpty else { throw MatrixError.decoding("pseudo X vide") }
+      let userID = handle.allSatisfy(\.isNumber)
+        ? handle
+        : try await resolveRemoteID(username: handle, network: network)
+      localpart = bridge.ghostPrefix + userID
     case .signal:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
       guard trimmed.contains("-"), trimmed.count >= 32 else {
@@ -1575,10 +1710,16 @@ public actor MatrixBridgeService {
 
   /// `search <pseudo>` puis lecture de la réponse du bot pour en tirer l'ID numérique.
   /// Les ghosts Meta sont des identifiants numériques : `pm <pseudo>` échouerait sec.
-  private func resolveMetaID(username: String, network: MessageNetwork) async throws -> String {
-    let commandEventID = try await sendBotCommand("search \(username)", to: network)
+  /// L'identifiant numérique d'un compte, à partir de son pseudo, demandé au bot.
+  ///
+  /// Meta passe par `search <pseudo>` ; mautrix-twitter n'expose pas `search`
+  /// (`Search: false` dans ses capacités) mais `resolve-identifier <pseudo>`, qui
+  /// répond « Found `id` / Nom » — le même format, lu par la même expression.
+  private func resolveRemoteID(username: String, network: MessageNetwork) async throws -> String {
+    let command = network == .twitter ? "resolve-identifier \(username)" : "search \(username)"
+    let commandEventID = try await sendBotCommand(command, to: network)
     let roomID = try await ensureManagementRoom(for: network)
-    // Le bot interroge Meta : quelques secondes au plus, sinon on renonce proprement.
+    // Le bot interroge le réseau : quelques secondes au plus, sinon on renonce proprement.
     for _ in 0..<10 {
       try? await Task.sleep(for: .seconds(1))
       let response = try await client.roomMessages(roomID: roomID, direction: "b", limit: 10)

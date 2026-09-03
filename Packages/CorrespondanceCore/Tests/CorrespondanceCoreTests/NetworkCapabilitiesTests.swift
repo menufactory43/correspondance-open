@@ -126,18 +126,20 @@ final class NetworkCapabilitiesTests: XCTestCase {
   }
 
   func testAjouterQuelquUnSuitLesPontsQuiOntUnGhostComposable() {
-    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .signal] {
+    for network in [MessageNetwork.whatsapp, .instagram, .messenger, .twitter, .signal] {
       XCTAssertTrue(network.supportsMemberInvite, "\(network.labelFR) devrait accepter l'ajout")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsMemberInvite)
   }
 
-  /// iMessage n'envoie pas de pièce jointe par notre chemin : pas de micro.
-  func testLeVocalEstOffertPartoutSaufSurIMessage() {
+  /// iMessage n'envoie pas de pièce jointe par notre chemin : pas de micro. X non
+  /// plus : son pont n'annonce aucun type audio dans sa table des fichiers.
+  func testLeVocalEstOffertPartoutSaufSurIMessageEtX() {
     for network in [MessageNetwork.whatsapp, .instagram, .messenger, .signal, .selfNote] {
       XCTAssertTrue(network.supportsVoiceMessages, "\(network.labelFR) devrait accepter le vocal")
     }
     XCTAssertFalse(MessageNetwork.iMessage.supportsVoiceMessages)
+    XCTAssertFalse(MessageNetwork.twitter.supportsVoiceMessages)
   }
 
   /// Créer un groupe passe par `create-group` (bridgev2) : WhatsApp et Signal

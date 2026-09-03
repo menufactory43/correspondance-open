@@ -51,10 +51,12 @@
 		3E3BEC97829822759EBD21F3 /* PartageVue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67680134E1735FD49A440D6B /* PartageVue.swift */; };
 		3E8E098FF4C24E0860AA776D /* IMessageAutomationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD0102675D287E0FEE9A64F /* IMessageAutomationTests.swift */; };
 		40276C56251E072B800E7657 /* LaunchGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE1035547A9E34370159CF87 /* LaunchGate.swift */; };
+		46388E619423FEFE377DE8F3 /* BridgeLoginWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 875396DAA284F465F40D8CBA /* BridgeLoginWindow.swift */; };
 		477CDE3955DE6CF9773E38FF /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B20CF559D458C18AD551AE1 /* ShareViewController.swift */; };
 		48B99E0231E1D4B751E16E2D /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = CD054E8FAA9E48EC5121F3DF /* Fonts */; };
 		4A52A4BDB65B6CDF95A9679C /* RelayStore+Group.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDFB226BB26FCAB3CCDBDCA /* RelayStore+Group.swift */; };
 		4CFBE18F2F0C8FE85D7BCF63 /* ThreadMentionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFECCF92D699474A01F7C668 /* ThreadMentionUITests.swift */; };
+		4EC0CDC118192164FD9DEBE6 /* BrowserSessionImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00BF33F3E86DAF9692B7AA43 /* BrowserSessionImporter.swift */; };
 		5152ABA560F184A04472AB55 /* CorrespondanceiOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F4051D4B4D35D826FCBC41 /* CorrespondanceiOSApp.swift */; };
 		5892E9181882ACCB886A08A0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6548D536BB3B22103519FF9A /* RootView.swift */; };
 		5A408F35C8B70589C946EF3A /* ConversationSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */; };
@@ -138,7 +140,6 @@
 		C4D95A115559AE2B7AB72BC2 /* ConversationRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7EF134955840058275C45E9 /* ConversationRowView.swift */; };
 		C53E407410DBAD81713A11C1 /* SettingsMatrixPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 287840DC7B2FE991C7876CAC /* SettingsMatrixPane.swift */; };
 		C59ECEB352DBD254606AA3E7 /* SettingsAgentsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42716AA9A69F8F25CBDF18CE /* SettingsAgentsPane.swift */; };
-		C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */; };
 		C69DF09E45B9B83557B8A1DE /* CorrespondancePartage.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3F5AF1BCF70DCD169174803E /* CorrespondancePartage.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA76B9F9792DFFD335C3F85C /* ContactBook.swift */; };
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
@@ -247,6 +248,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		00BF33F3E86DAF9692B7AA43 /* BrowserSessionImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionImporter.swift; sourceTree = "<group>"; };
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
 		0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActionsOverlay.swift; sourceTree = "<group>"; };
 		06853CC092F39EA6D7674973 /* QuickLookPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPanel.swift; sourceTree = "<group>"; };
@@ -270,7 +272,6 @@
 		1CDA330D98C7CB9DFFDF2F72 /* RelayStore+Partage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Partage.swift"; sourceTree = "<group>"; };
 		1CDFB226BB26FCAB3CCDBDCA /* RelayStore+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RelayStore+Group.swift"; sourceTree = "<group>"; };
 		1D655FFB4F256FEA2130AE99 /* ReachablePeople.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachablePeople.swift; sourceTree = "<group>"; };
-		1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginSheet.swift; sourceTree = "<group>"; };
 		1FC4572D06EDA67F5C867772 /* matrix-sync-signal.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-signal.json"; sourceTree = "<group>"; };
 		20A98DAB19FABC3B835D6C93 /* CommunicationNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunicationNotification.swift; sourceTree = "<group>"; };
 		225E93B93CBA37AE52390551 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
@@ -342,6 +343,7 @@
 		7FC472EC8CA01BA228483427 /* HoverZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverZone.swift; sourceTree = "<group>"; };
 		830BABBC09BD6D5973663E0A /* ConversationSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSessionTests.swift; sourceTree = "<group>"; };
 		8389AC7B1B1BBA8D7D6A7F0B /* ThreadScrollUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadScrollUITests.swift; sourceTree = "<group>"; };
+		875396DAA284F465F40D8CBA /* BridgeLoginWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginWindow.swift; sourceTree = "<group>"; };
 		8866BC7F1E02EB890C0CDEFD /* SendLaterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLaterSheet.swift; sourceTree = "<group>"; };
 		8F7EEB36CA4B0CF5799FC8E7 /* InboxStore+Detached.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Detached.swift"; sourceTree = "<group>"; };
 		8FCCC768619D417D8C2B6ACC /* InboxStore+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Group.swift"; sourceTree = "<group>"; };
@@ -696,7 +698,7 @@
 		82A1969C625E899DECA1D59A /* Settings */ = {
 			isa = PBXGroup;
 			children = (
-				1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */,
+				875396DAA284F465F40D8CBA /* BridgeLoginWindow.swift */,
 				112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */,
 				A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */,
 				42716AA9A69F8F25CBDF18CE /* SettingsAgentsPane.swift */,
@@ -846,6 +848,7 @@
 			children = (
 				E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */,
 				F06483EBCCB67289E3FC45E8 /* AgentProcessHost.swift */,
+				00BF33F3E86DAF9692B7AA43 /* BrowserSessionImporter.swift */,
 				D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */,
 				73A79E456473100B3AD95BDF /* ConversationAvatarStore.swift */,
 				F05230BF81C295B4DEAB342E /* ConversationSession.swift */,
@@ -1347,8 +1350,9 @@
 				FB906E79A0021105489C55C5 /* AgentLocalHost.swift in Sources */,
 				8FB4EE081AF166F768B70D08 /* AgentProcessHost.swift in Sources */,
 				95C1632021CDA9C0156E12ED /* AttachmentVideoView.swift in Sources */,
-				C5C7398D9B314931879C65BD /* BridgeLoginSheet.swift in Sources */,
+				46388E619423FEFE377DE8F3 /* BridgeLoginWindow.swift in Sources */,
 				D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */,
+				4EC0CDC118192164FD9DEBE6 /* BrowserSessionImporter.swift in Sources */,
 				B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */,
 				FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */,
 				F0239DA224BAF1643BADD2E3 /* ComposerDictation.swift in Sources */,

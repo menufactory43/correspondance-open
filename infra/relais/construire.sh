@@ -217,6 +217,7 @@ construire_ponts() {
   cloner https://github.com/mautrix/whatsapp.git "$MAUTRIX_TAG" mautrix-whatsapp
   cloner https://github.com/mautrix/signal.git   "$MAUTRIX_TAG" mautrix-signal
   cloner https://github.com/mautrix/meta.git     "$MAUTRIX_TAG" mautrix-meta
+  cloner https://github.com/mautrix/twitter.git  "$MAUTRIX_TAG" mautrix-twitter
   for cible in $CIBLES; do
     dire "— cible $cible"
     pont mautrix-whatsapp mautrix-whatsapp  "$cible" "mautrix-whatsapp-$cible"
@@ -225,6 +226,8 @@ construire_ponts() {
     # binaire ne fait plus qu'un réseau.
     pont mautrix-meta     mautrix-instagram "$cible" "mautrix-instagram-$cible"
     pont mautrix-meta     mautrix-meta      "$cible" "mautrix-meta-$cible"
+    # X : mautrix-twitter, du Go pur au-dessus de sqlite et webp comme les autres.
+    pont mautrix-twitter  mautrix-twitter   "$cible" "mautrix-twitter-$cible"
     pont_signal "$cible" "mautrix-signal-$cible"
   done
 }

@@ -194,6 +194,7 @@ final class MessengerSessionCookiesTests: XCTestCase {
       BridgeSessionCookies.Profile.of(.instagram)?.loginURL.absoluteString,
       "https://www.instagram.com/accounts/login/"
     )
+    XCTAssertEqual(BridgeSessionCookies.Profile.of(.twitter)?.network, .twitter)
     XCTAssertNil(BridgeSessionCookies.Profile.of(.whatsapp))
     XCTAssertNil(BridgeSessionCookies.Profile.of(.signal))
     XCTAssertNil(BridgeSessionCookies.Profile.of(.iMessage))

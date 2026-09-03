@@ -19,7 +19,7 @@ extension InboxStore {
     switch conversation.network {
     case .iMessage: return false
     // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
-    case .signal, .whatsapp, .instagram, .messenger, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .selfNote, .agent:
       // Et pas après l'heure : Signal ferme à 24 h, WhatsApp à 48 h. Passé là,
       // le pont refuse sans le dire et la bulle ne disparaîtrait que chez nous.
       return isMatrixConnected

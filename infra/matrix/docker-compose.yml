@@ -103,6 +103,24 @@ services:
     networks:
       - matrix
 
+  mautrix-twitter:
+    # X. Le pont garde son nom d'origine — image, binaire, bot `@twitterbot`,
+    # ghosts `twitter_…` — et c'est ce que l'app reconnaît ; `network.x: true`
+    # dans les overrides ne change que ce qui se lit (« X » au lieu de « Twitter »).
+    image: dock.mau.dev/mautrix/twitter:v26.08
+    container_name: correspondance-mautrix-twitter
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - postgres
+    environment:
+      UID: "1000"
+      GID: "1000"
+    volumes:
+      - ./data/mautrix-twitter:/data
+    networks:
+      - matrix
+
   mautrix-signal:
     # Tag épinglé comme les autres ponts. libsignal est compilé dans le binaire et
     # l'image embarque ffmpeg : ni signald, ni dépendance à installer à côté.

@@ -35,12 +35,6 @@ struct SettingsView: View {
     }
     .preferredColorScheme(theme.id.prefersDarkChrome ? .dark : .light)
     .tint(theme.accent)
-    .sheet(item: Binding(
-      get: { store.bridgeLoginNetwork },
-      set: { store.bridgeLoginNetwork = $0 }
-    )) { network in
-      BridgeLoginSheet(network: network)
-    }
     .task { await store.refreshMatrixStatus() }
   }
 

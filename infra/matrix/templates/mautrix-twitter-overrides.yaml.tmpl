@@ -1,0 +1,86 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-twitter
+# (`dock.mau.dev/mautrix/twitter:v26.08`). Fusion profonde (bootstrap.sh) : on ne fige
+# pas le config amont, seulement nos choix.
+#
+# Le pont s'appelle toujours « twitter » partout où le Relais le voit — id
+# d'appservice, bot, ghosts, `protocol.id` de l'état m.bridge — parce que c'est ce
+# que l'app reconnaît (MatrixBridgeDescriptor.twitter). `network.x: true` ne change
+# que ce qui se lit : « X » dans le salon de gestion et dans l'état de bridge.
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-twitter:29332
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  # 29330 Instagram, 29331 Messenger : X prend le suivant.
+  port: 29332
+  id: twitter
+  bot:
+    username: twitterbot
+    displayname: X bridge bot
+  username_template: twitter_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_twitter?sslmode=disable
+
+bridge:
+  command_prefix: '!tw'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Mode relais : ce qu'un utilisateur du Relais non connecté au réseau — l'agent
+# « cc » — dit dans un portail part via MON compte, préfixé de son nom. Rien ne
+# se relaie tout seul : il faut, par room, `!tw set-relay` (admin).
+  relay:
+    enabled: true
+    admin_only: true
+    message_formats:
+      m.text: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+      m.notice: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+
+# Historique initial : sans ça les salons arrivent vides côté Correspondance.
+backfill:
+  enabled: true
+  max_initial_messages: 50
+  max_catchup_messages: 500
+
+network:
+  # « X » plutôt que « Twitter » dans le salon de gestion et l'état de bridge.
+  x: true
+  # Le suffixe des ghosts. L'app retire « (X) » et « (Twitter) » indifféremment.
+  displayname_template: "{{ .DisplayName }} (X)"
+  # Combien de conversations le pont relit au démarrage (20 par défaut).
+  conversation_sync_limit: 50
+
+# Double puppeting : sans lui, les messages que j'envoie depuis l'app X du téléphone
+# remontent signés par mon propre ghost, et Correspondance les prend pour ceux d'un
+# correspondant. Le jeton est celui de `doublepuppet-registration.yaml`, côté Synapse.
+double_puppet:
+  servers: {}
+  allow_discovery: false
+  secrets:
+    __remplacer__: true
+    __SERVER_NAME__: "as_token:__DOUBLEPUPPET_AS_TOKEN__"
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

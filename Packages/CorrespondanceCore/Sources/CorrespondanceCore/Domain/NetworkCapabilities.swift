@@ -136,6 +136,19 @@ public struct NetworkCapabilities: Sendable, Hashable {
         addsMember: true,
         sendsVoiceMessages: true
       )
+    // X : lu dans `pkg/connector/capabilities.go` de mautrix-twitter v26.08
+    // (`fi.mau.twitter.capabilities.2026_01_08`) — `Edit` pleinement porté,
+    // dix corrections et quinze minutes ; `Delete` pleinement porté, sans
+    // délai ; le nom du groupe et l'invitation relayés, pas le retrait ; aucun
+    // type audio dans la table des fichiers, donc pas de vocal. Pas de
+    // `create-group` non plus : X n'ouvre un groupe que depuis son app.
+    case .twitter:
+      NetworkCapabilities(
+        editsSentMessages: true,
+        editWindow: 15 * 60,
+        renamesGroup: true,
+        addsMember: true
+      )
     case .selfNote:
       NetworkCapabilities(
         editsSentMessages: true,

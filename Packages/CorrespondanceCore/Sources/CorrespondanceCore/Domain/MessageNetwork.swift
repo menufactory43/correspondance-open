@@ -9,6 +9,10 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// son propre binaire (mautrix-meta, tag sans `ig-`) et son propre salon de
   /// gestion : côté app, c'est un réseau à part entière, pas une variante d'Instagram.
   case messenger
+  /// X, l'ex-Twitter : ses messages privés, par mautrix-twitter. Le pont garde
+  /// son nom d'origine partout où ça se voit dans le Relais (`@twitterbot`,
+  /// ghosts `twitter_…`, protocole `twitter`) ; l'utilisateur, lui, ne lit que « X ».
+  case twitter
   /// La note à soi : le seul fil qui ne vienne d'aucun réseau. Il vit dans le
   /// Relais, dans un salon dont on est le seul membre — de quoi se laisser un
   /// mot, une adresse, une photo, et le retrouver sur l'autre appareil.
@@ -28,6 +32,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .whatsapp: "WhatsApp"
     case .instagram: "Instagram"
     case .messenger: "Messenger"
+    case .twitter: "X"
     case .selfNote: "Note à soi"
     case .agent: "Agent"
     }
@@ -42,6 +47,9 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     // L'éclair de Messenger, au plus près de ce que SF Symbols sait dire d'un
     // réseau qu'Apple ne nomme pas. Disponible depuis macOS 11 / iOS 14.
     case .messenger: "bolt.horizontal.circle.fill"
+    // Une croix, en gras dans la pastille : ce qu'un logo de X a de plus
+    // reconnaissable, sans en copier le dessin.
+    case .twitter: "xmark"
     case .selfNote: "note.text"
     case .agent: "sparkles"
     }
