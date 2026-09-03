@@ -1073,9 +1073,34 @@ public actor MatrixClient {
       "data": .object([
         "url": .string(sygnalURL.absoluteString),
         "format": .string(Self.eventIDOnlyFormat),
+        "default_payload": Self.pusherDefaultPayload,
       ]),
     ])
   }
+
+  /// Le bloc `aps` que Sygnal recopie tel quel dans chaque push.
+  ///
+  /// En `event_id_only`, Synapse n'envoie ni `type` ni expéditeur — et Sygnal,
+  /// dans ce cas, ne construit **aucun** `aps` : ni alerte, ni son, ni
+  /// `mutable-content`. iOS jette alors le push sans le montrer (« NOT
+  /// delivering non-notifying push notification », vu dans le journal de
+  /// l'iPhone le 3 sept. 2026) et l'extension de service ne s'exécute jamais.
+  /// Le seul endroit où Sygnal accepte qu'on lui dicte l'`aps` est le
+  /// `default_payload` du pusher, qu'il fusionne dans la charge utile. C'est
+  /// ce qu'Element iOS fait depuis toujours, pour la même raison.
+  ///
+  /// `mutable-content: 1` fait tourner l'extension ; l'alerte est le repli que
+  /// le système affiche si elle ne répond pas dans les trente secondes.
+  static let pusherDefaultPayload: MatrixJSON = .object([
+    "aps": .object([
+      "mutable-content": .number(1),
+      "alert": .object([
+        "title": .string("Correspondance"),
+        "body": .string("Nouveau message"),
+      ]),
+      "sound": .string("default"),
+    ]),
+  ])
 
   /// Corps de suppression : le même couple (`app_id`, `pushkey`), `kind: null`.
   /// C'est ce que la déconnexion envoie — sans quoi le Relais continuerait de

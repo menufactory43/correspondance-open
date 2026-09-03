@@ -52,6 +52,28 @@ public enum PushNotification {
   public struct Presentation: Sendable, Hashable {
     public var title: String
     public var body: String
+    /// Qui écrit, tel qu'on l'affiche — sans le réseau. C'est le nom que la
+    /// notification de conversation (Intents) donne à la personne.
+    public var senderName: String?
+    /// Le fil, tel qu'on l'affiche — sans le réseau.
+    public var conversationTitle: String?
+    public var network: MessageNetwork?
+    /// Un groupe : la photo est celle du groupe, et le nom de l'auteur passe en
+    /// tête de la notification, comme dans WhatsApp.
+    public var isGroup = false
+    /// La photo à montrer à la place de l'icône de l'app : celle de l'auteur en
+    /// tête-à-tête, celle du groupe sinon. Un `mxc://`, pas encore téléchargé.
+    public var avatarMXC: String?
+    /// Un groupe sans photo à lui — Instagram n'en donne jamais — se raconte
+    /// par les visages de ses membres, en mosaïque comme sur le Mac et dans
+    /// l'inbox. Jusqu'à quatre `mxc://`, dans l'ordre de l'inbox.
+    public var memberAvatarMXCs: [String] = []
+    /// Quelques membres du groupe, par leur nom — les « destinataires » de
+    /// l'intention. C'est **là-dessus** qu'iOS décide qu'une notification est
+    /// celle d'un groupe : sans destinataires, il la classe en tête-à-tête et
+    /// ignore la photo du groupe (vu au journal le 3 sept. 2026 :
+    /// `recipientsArrayCount: 0` → `MessagingDirect`).
+    public var memberNames: [String] = []
 
     public init(title: String, body: String) {
       self.title = title
@@ -85,10 +107,14 @@ public enum PushNotification {
       .filter { !$0.isEmpty }
       .joined(separator: " · ")
     let body = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return Presentation(
+    var shown = Presentation(
       title: title.isEmpty ? fallbackTitle : title,
       body: body.isEmpty ? fallbackBody : body
     )
+    shown.senderName = who
+    shown.conversationTitle = conversationTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+    shown.network = network
+    return shown
   }
 
   // MARK: - Aller lire l'événement
@@ -120,74 +146,159 @@ public enum PushNotification {
     // par le conteneur d'App Group — c'est le seul endroit où l'extension et
     // l'app se rejoignent.
     let event: MatrixJSON
-    if brut.string(at: "type") == "m.room.encrypted" {
-      guard let clair = await client.dechiffrerEvenement(brut, salon: reference.roomID) else {
-        // **On le dit.** Un « Nouveau message » générique laisserait croire à
-        // un Relais injoignable ; ici le Relais a répondu, c'est la clé qui
-        // manque, et la seule chose à faire est d'ouvrir l'app.
-        let nom = await senderName(brut.string(at: "sender"), roomID: reference.roomID, client: client)
-        let titre = await roomName(reference.roomID, client: client)
-        let reseau = await network(ofRoom: reference.roomID, client: client)
-        return presentation(
-          senderName: nom, conversationTitle: titre, network: reseau,
-          text: messageChiffreNonLu)
-      }
+    var text: String
+    if brut.string(at: "type") == "m.room.encrypted",
+       let clair = await client.dechiffrerEvenement(brut, salon: reference.roomID) {
       event = clair
+      text = event.string(at: "content.body") ?? ""
+    } else if brut.string(at: "type") == "m.room.encrypted" {
+      // **On le dit.** Un « Nouveau message » générique laisserait croire à
+      // un Relais injoignable ; ici le Relais a répondu, c'est la clé qui
+      // manque, et la seule chose à faire est d'ouvrir l'app.
+      event = brut
+      text = messageChiffreNonLu
     } else {
       event = brut
+      text = event.string(at: "content.body") ?? ""
     }
-
-    var text = event.string(at: "content.body") ?? ""
     if event.string(at: "content.m.relates_to.m.in_reply_to.event_id") != nil {
       text = QuotedMessage.strippingReplyFallback(text)
     }
 
     let sender = event.string(at: "sender")
-    let name = await senderName(sender, roomID: reference.roomID, client: client)
-    let title = await roomName(reference.roomID, client: client)
-    let network = await network(ofRoom: reference.roomID, client: client)
+    let room = await RoomFacts.load(roomID: reference.roomID, sender: sender, client: client)
 
-    return presentation(
-      senderName: name,
-      conversationTitle: title,
-      network: network,
+    var shown = presentation(
+      senderName: room.senderName,
+      conversationTitle: room.name,
+      network: room.network,
       text: text
     )
-  }
-
-  /// Le `m.room.member` de l'auteur — et son nom, débarrassé du suffixe que
-  /// mautrix colle aux ghosts (« Alice Martin (WA) » → « Alice Martin »).
-  private static func senderName(
-    _ sender: String?,
-    roomID: String,
-    client: MatrixClient
-  ) async -> String? {
-    guard let sender else { return nil }
-    let member = try? await client.roomState(
-      roomID: roomID,
-      type: "m.room.member",
-      stateKey: sender
-    )
-    guard let raw = member?.string(at: "displayname"), !raw.isEmpty else { return nil }
-    return MatrixIdentity.stripBridgeSuffix(raw)
-  }
-
-  private static func roomName(_ roomID: String, client: MatrixClient) async -> String? {
-    guard let name = try? await client.roomState(roomID: roomID, type: "m.room.name"),
-          let raw = name.string(at: "name"), !raw.isEmpty
-    else { return nil }
-    return MatrixIdentity.stripBridgeSuffix(raw)
-  }
-
-  private static func network(ofRoom roomID: String, client: MatrixClient) async -> MessageNetwork? {
-    for type in MatrixSyncParser.bridgeStateTypes {
-      guard let state = try? await client.roomState(roomID: roomID, type: type),
-            let id = state.string(at: "protocol.id"),
-            let network = MessageNetwork.fromBridgeProtocol(id)
-      else { continue }
-      return network
+    shown.isGroup = room.isGroup
+    // En tête-à-tête, la photo de la personne ; en groupe, celle du groupe.
+    // Un groupe sans photo montre ses membres en mosaïque, à défaut l'auteur.
+    if room.isGroup {
+      shown.avatarMXC = room.avatarMXC
+      shown.memberAvatarMXCs = room.avatarMXC == nil ? room.memberAvatarMXCs : []
+      shown.memberNames = room.memberNames
+      if shown.avatarMXC == nil, shown.memberAvatarMXCs.count < 2 {
+        shown.avatarMXC = room.senderAvatarMXC
+      }
+    } else {
+      shown.avatarMXC = room.senderAvatarMXC ?? room.avatarMXC
     }
-    return nil
+    return shown
+  }
+
+  /// Ce que l'état du salon dit, lu en **une** requête (`GET /state`) : le
+  /// nom, la photo, le réseau, les membres. Avant, c'était cinq lectures
+  /// ciblées, et la question « est-ce un groupe ? » n'avait pas de réponse
+  /// sans les membres. La règle du groupe est celle de l'inbox
+  /// (`MatrixRoomModel.isGroup`) : le type annoncé par le pont quand il y en a
+  /// un — mautrix ne marque que les DM, un groupe Signal de trois cents
+  /// personnes n'a aucun type, vérifié le 3 sept. 2026 —, sinon plus de deux
+  /// humains dans le salon, bot du pont exclu.
+  struct RoomFacts {
+    var name: String?
+    var avatarMXC: String?
+    var network: MessageNetwork?
+    var isGroup = false
+    var senderName: String?
+    var senderAvatarMXC: String?
+    var memberAvatarMXCs: [String] = []
+    var memberNames: [String] = []
+
+    static func load(roomID: String, sender: String?, client: MatrixClient) async -> RoomFacts {
+      guard let events = try? await client.roomStateEvents(roomID: roomID) else {
+        return await fallback(roomID: roomID, sender: sender, client: client)
+      }
+      var facts = RoomFacts()
+      var roomType: String?
+      var humans: [(userID: String, name: String, avatar: String?)] = []
+      for event in events {
+        let content = event.content
+        switch event.type {
+        case "m.room.name":
+          if let raw = content?.string(at: "name"), !raw.isEmpty {
+            facts.name = MatrixIdentity.stripBridgeSuffix(raw)
+          }
+        case "m.room.avatar":
+          facts.avatarMXC = mxc(content?.string(at: "url"))
+        case "m.room.member":
+          guard content?.string(at: "membership") == "join",
+                let userID = event.stateKey, !MatrixIdentity.isBridgeBot(userID)
+          else { continue }
+          let name = content?.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix) ?? ""
+          let avatar = mxc(content?.string(at: "avatar_url"))
+          humans.append((userID, name, avatar))
+          if userID == sender {
+            facts.senderName = name.isEmpty ? nil : name
+            facts.senderAvatarMXC = avatar
+          }
+        case let type where MatrixSyncParser.bridgeStateTypes.contains(type):
+          if let id = content?.string(at: "protocol.id") {
+            facts.network = MessageNetwork.fromBridgeProtocol(id)
+          }
+          roomType = content?.string(at: "com.beeper.room_type.v2") ?? content?.string(at: "com.beeper.room_type")
+        default:
+          continue
+        }
+      }
+      switch roomType {
+      case "dm": facts.isGroup = false
+      case "group", "space": facts.isGroup = true
+      default: facts.isGroup = humans.count > 2
+      }
+      // Trois noms suffisent à dire « groupe » ; l'auteur n'y figure pas, il
+      // est déjà l'expéditeur.
+      facts.memberNames = humans
+        .filter { $0.userID != sender && !$0.name.isEmpty }
+        .map(\.name)
+        .sorted()
+        .prefix(3)
+        .map { $0 }
+      // Les mêmes visages, dans le même ordre que l'inbox (`memberAvatarMXCs`).
+      facts.memberAvatarMXCs = humans
+        .compactMap { entry -> (name: String, userID: String, mxc: String)? in
+          guard let mxc = entry.avatar else { return nil }
+          return (entry.name, entry.userID, mxc)
+        }
+        .sorted { ($0.name, $0.userID) < ($1.name, $1.userID) }
+        .prefix(4)
+        .map(\.mxc)
+      return facts
+    }
+
+    /// Le Relais n'a pas rendu l'état complet : on lit au moins le nom de
+    /// l'auteur, celui du salon et le réseau, comme avant.
+    private static func fallback(roomID: String, sender: String?, client: MatrixClient) async -> RoomFacts {
+      var facts = RoomFacts()
+      if let sender,
+         let member = try? await client.roomState(roomID: roomID, type: "m.room.member", stateKey: sender) {
+        if let raw = member.string(at: "displayname"), !raw.isEmpty {
+          facts.senderName = MatrixIdentity.stripBridgeSuffix(raw)
+        }
+        facts.senderAvatarMXC = mxc(member.string(at: "avatar_url"))
+      }
+      if let name = try? await client.roomState(roomID: roomID, type: "m.room.name"),
+         let raw = name.string(at: "name"), !raw.isEmpty {
+        facts.name = MatrixIdentity.stripBridgeSuffix(raw)
+      }
+      for type in MatrixSyncParser.bridgeStateTypes {
+        guard let state = try? await client.roomState(roomID: roomID, type: type),
+              let id = state.string(at: "protocol.id"),
+              let network = MessageNetwork.fromBridgeProtocol(id)
+        else { continue }
+        facts.network = network
+        break
+      }
+      return facts
+    }
+
+    private static func mxc(_ value: String?) -> String? {
+      guard let value, value.hasPrefix("mxc://") else { return nil }
+      return value
+    }
   }
 
   // MARK: - Le muet, deux fois plutôt qu'une

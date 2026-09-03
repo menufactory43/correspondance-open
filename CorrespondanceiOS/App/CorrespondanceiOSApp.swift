@@ -107,30 +107,55 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 /// Le push distant et la notification locale portent la même clé : l'un vient
 /// de l'extension (`room_id`), l'autre du magasin (`conversationID`). On lit
 /// les deux, faute de quoi la moitié des notifications n'ouvriraient rien.
+///
+/// **Les complétions se rendent sur le thread principal, et ce n'est pas un
+/// détail.** Le système appelle ce délégué hors du thread principal, et la
+/// variante `async` de `didReceive` rendait sa complétion sur la file
+/// coopérative ; UIKit, qui enchaîne dans le même appel sur la sauvegarde
+/// d'état de la scène, lève alors une assertion et tue le processus. C'était
+/// l'écran noir au tap sur une notification, app fermée (rapport de crash de
+/// l'iPhone, 3 sept. 2026 : `_updateSnapshotAndStateRestorationWithAction`
+/// sous `didReceive`). D'où les variantes à complétion, rappelées depuis le
+/// thread principal. La classe reste non isolée : le protocole passe des
+/// objets non `Sendable`, et une implémentation `@MainActor` ne compile pas.
 final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
   /// Le salon d'une notification touchée avant que le magasin ne le connaisse.
   @MainActor static var pendingRoomID: String?
+
+  /// Une complétion du système, que l'on promet de n'appeler qu'une fois, sur
+  /// le thread principal. Le SDK ne la déclare pas `@Sendable` ; la boîte est
+  /// ce qui la fait traverser vers le processus principal.
+  private struct Completion<Value>: @unchecked Sendable {
+    let run: (Value) -> Void
+  }
 
   /// App active, le push se tait : la notification locale, elle, sait quel
   /// fil est à l'écran, quel salon est muet, et regroupe les rafales. Le push
   /// n'a de raison d'être que quand l'app ne tourne pas.
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
-    willPresent notification: UNNotification
-  ) async -> UNNotificationPresentationOptions {
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
     let isRemote = notification.request.content.userInfo["room_id"] != nil
-    return isRemote ? [] : [.banner, .sound, .list]
+    let completion = Completion(run: completionHandler)
+    Task { @MainActor in
+      completion.run(isRemote ? [] : [.banner, .sound, .list])
+    }
   }
 
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
-    didReceive response: UNNotificationResponse
-  ) async {
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
     let info = response.notification.request.content.userInfo
     let direct = info[RelayStore.notificationConversationKey] as? String
     // Le push ne nomme qu'un salon ; le magasin, lui, parle en fils.
     let roomID = info["room_id"] as? String
-    await MainActor.run {
+    let completion = Completion<Void>(run: completionHandler)
+    Task { @MainActor in
+      defer { completion.run(()) }
       if let direct { AppDelegate.store?.openConversationFromNotification(direct); return }
       Self.pendingRoomID = roomID
       AppDelegate.store?.openPendingNotificationIfPossible()

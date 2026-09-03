@@ -1,4 +1,5 @@
 import CorrespondanceCore
+import OSLog
 import UserNotifications
 
 /// L'extension qui donne un visage aux notifications.
@@ -50,9 +51,15 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
       roomID: reference.roomID,
       mutedRoomIDs: SharedRelayState.mutedRoomIDs()
     ) else {
-      // Un contenu vide : le système n'affiche rien. Il n'y a pas d'autre façon
-      // d'annuler une notification déjà arrivée.
-      return contentHandler(UNNotificationContent())
+      // On ne peut pas la taire : sans l'entitlement de filtrage
+      // (`com.apple.developer.usernotifications.filtering`, accordé par Apple
+      // sur demande), un contenu vide fait afficher le repli du push tel quel,
+      // avec son son — vérifié le 3 sept. 2026. Alors on la rend discrète :
+      // pas de son, niveau passif, l'écran ne s'allume pas, et le repli
+      // générique plutôt que le texte d'un salon qu'on a voulu faire taire.
+      mutable.sound = nil
+      mutable.interruptionLevel = .passive
+      return contentHandler(mutable)
     }
 
     MatrixCredentialStore.accessGroup = SharedRelayState.keychainAccessGroup
@@ -61,13 +68,17 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     }
 
     Task { [self, reference, credentials] in
-      let shown = await Self.presentation(for: reference, credentials: credentials)
-      finish(with: shown, threadIdentifier: reference.roomID)
+      let (shown, avatar) = await Self.presentation(for: reference, credentials: credentials)
+      finish(with: shown, avatar: avatar, threadIdentifier: reference.roomID)
     }
   }
 
   /// Le passage du résultat au système, une fois et une seule.
-  private func finish(with shown: PushNotification.Presentation, threadIdentifier: String) {
+  private func finish(
+    with shown: PushNotification.Presentation,
+    avatar: Data?,
+    threadIdentifier: String
+  ) {
     guard let handler, let content else { return }
     content.title = shown.title
     content.body = shown.body
@@ -75,7 +86,20 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     // ensemble, comme dans Messages.
     content.threadIdentifier = threadIdentifier
     self.handler = nil
-    handler(content)
+    // La photo de la personne à la place de l'icône de l'app, quand on sait
+    // qui écrit. Le repli (« Correspondance · Nouveau message ») reste une
+    // notification ordinaire : aucune personne à montrer.
+    guard let sender = shown.senderName, !sender.isEmpty else { return handler(content) }
+    let identity = CommunicationNotification.Identity(
+      conversationID: threadIdentifier,
+      senderName: sender,
+      conversationTitle: shown.conversationTitle,
+      network: shown.network,
+      isGroup: shown.isGroup,
+      avatar: avatar,
+      memberNames: shown.memberNames
+    )
+    handler(CommunicationNotification.content(content, body: shown.body, identity: identity))
   }
 
   /// Trente secondes écoulées : on rend ce qu'on a. Le repli est déjà en place.
@@ -94,7 +118,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
   private static func presentation(
     for reference: PushNotification.EventReference,
     credentials: MatrixCredentials
-  ) async -> PushNotification.Presentation {
+  ) async -> (PushNotification.Presentation, avatar: Data?) {
     let client = MatrixClient(credentials: credentials)
     // **La machine crypto, sur le magasin partagé.** L'extension est un autre
     // processus : elle n'a ni `/sync` ni modèle, et le magasin de clés de l'app
@@ -108,6 +132,39 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     // bloquent : l'extension ne fait que **lire** des clés, jamais d'envoi,
     // c'est ce qui rend la cohabitation tenable.
     await MatrixChiffrement.brancher(sur: client)
-    return await PushNotification.resolve(reference, using: client)
+    let shown = await PushNotification.resolve(reference, using: client)
+    // La photo, dans le cache partagé de l'app si elle l'a déjà vue, sinon un
+    // téléchargement de plus — le dernier, et le seul dont on peut se passer.
+    var avatar: Data?
+    if let mxc = shown.avatarMXC {
+      avatar = await avatarData(mxc, client: client)
+    } else if shown.memberAvatarMXCs.count >= 2 {
+      // Un groupe sans photo : la mosaïque de ses membres, la même que
+      // l'inbox (`ConversationAvatar`) — Instagram n'expose jamais de photo
+      // de groupe, ce serait sinon l'icône de l'app à chaque fois.
+      var faces: [PlatformImage] = []
+      for mxc in shown.memberAvatarMXCs {
+        guard let data = await avatarData(mxc, client: client),
+              let face = PlatformImage(data: data)
+        else { continue }
+        faces.append(face)
+      }
+      if faces.count >= 2 {
+        avatar = AvatarMosaic.compose(faces, size: 138, separator: .platformWindowBackground)
+      }
+    }
+    log.notice(
+      "notification : groupe=\(shown.isGroup) réseau=\(shown.network?.rawValue ?? "-", privacy: .public) photo=\(avatar?.count ?? 0) octets visages=\(shown.memberAvatarMXCs.count) auteur=\(shown.senderName != nil)"
+    )
+    return (shown, avatar)
+  }
+
+  private static let log = Logger(subsystem: "com.correspondance.ios", category: "notification")
+
+  private static func avatarData(_ mxc: String, client: MatrixClient) async -> Data? {
+    if let cached = MatrixAvatarStore.existingData(forMXC: mxc) { return cached }
+    guard let data = try? await client.downloadMedia(mxcURI: mxc), !data.isEmpty else { return nil }
+    MatrixAvatarStore.store(data: data, forMXC: mxc)
+    return data
   }
 }

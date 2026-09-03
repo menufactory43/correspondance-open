@@ -79,11 +79,38 @@ extension RelayStore {
     content.sound = .default
     content.threadIdentifier = conversation.id
     content.userInfo = [RelayStore.notificationConversationKey: conversation.id]
-    // La MÊME identité pendant toute la rafale : la notification qui arrive
-    // remplace la précédente au lieu d'en empiler une deuxième.
-    UNUserNotificationCenter.current().add(
-      UNNotificationRequest(identifier: burst.key, content: content, trigger: nil)
-    )
+    Task {
+      // La photo du fil, comme dans l'inbox — et la même que celle que
+      // l'extension montre pour un push. Elle n'est pas attendue au-delà de
+      // ce que le cache et le Relais rendent : sans photo, les initiales du
+      // système font l'affaire.
+      let avatar = await avatarData(for: conversation)
+      let identity = CommunicationNotification.Identity(
+        conversationID: Self.relayRoomID(ofConversation: conversation.id) ?? conversation.id,
+        senderName: conversation.title,
+        conversationTitle: conversation.title,
+        network: conversation.network,
+        isGroup: conversation.isGroup,
+        avatar: avatar,
+        memberNames: Array(conversation.participantHandles.prefix(3))
+      )
+      let enriched = CommunicationNotification.content(content, body: shown.body, identity: identity)
+      // La MÊME identité pendant toute la rafale : la notification qui arrive
+      // remplace la précédente au lieu d'en empiler une deuxième.
+      try? await UNUserNotificationCenter.current().add(
+        UNNotificationRequest(identifier: burst.key, content: enriched, trigger: nil)
+      )
+    }
+  }
+
+  /// La photo d'un fil : celle déjà sur le disque, sinon celle du réseau.
+  private func avatarData(for conversation: Conversation) async -> Data? {
+    if let path = conversation.groupPhotoPath,
+       let data = try? Data(contentsOf: URL(fileURLWithPath: path)), !data.isEmpty {
+      return data
+    }
+    guard let mxc = conversation.remoteAvatarID, mxc.hasPrefix("mxc://") else { return nil }
+    return await matrix.avatarData(mxcURI: mxc)
   }
 
   /// La clé qui porte le fil dans une notification locale. `nonisolated` : le

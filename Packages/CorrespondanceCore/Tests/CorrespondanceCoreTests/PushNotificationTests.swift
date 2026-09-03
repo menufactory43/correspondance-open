@@ -25,6 +25,28 @@ final class PushNotificationTests: XCTestCase {
 
   // MARK: - Le texte
 
+  /// Ce que la notification de conversation lit : la personne sans le réseau,
+  /// le fil, le réseau à part. Le titre classique, lui, garde les deux.
+  func testPresentationKeepsWhoAndWhereApart() {
+    let shown = PushNotification.presentation(
+      senderName: " Alice Martin ",
+      conversationTitle: "Alice",
+      network: .signal,
+      text: "Salut"
+    )
+    XCTAssertEqual(shown.senderName, "Alice Martin")
+    XCTAssertEqual(shown.conversationTitle, "Alice")
+    XCTAssertEqual(shown.network, .signal)
+    XCTAssertFalse(shown.isGroup)
+    XCTAssertNil(shown.avatarMXC)
+
+    // Sans auteur — un DM bridgé n'en donne pas toujours — le fil tient lieu
+    // de personne, et c'est lui que la notification montre.
+    let anonymous = PushNotification.presentation(
+      senderName: nil, conversationTitle: "Julie", network: .whatsapp, text: "Ok")
+    XCTAssertEqual(anonymous.senderName, "Julie")
+  }
+
   func testPresentationNamesThePersonAndTheNetwork() {
     let shown = PushNotification.presentation(
       senderName: "Alice Martin",

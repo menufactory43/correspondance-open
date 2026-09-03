@@ -308,6 +308,11 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         CFBundleName: Correspondance
         CFBundleDisplayName: Correspondance
+        # Notifications de conversation : la photo de la personne à la place de
+        # l'icône de l'app (cf. CorrespondanceiOS/Notifications). Sans cette
+        # clé, `updating(from:)` rend la notification inchangée, sans un mot.
+        NSUserActivityTypes:
+          - INSendMessageIntent
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
@@ -370,6 +375,9 @@ targets:
       - path: CorrespondanceiOSNotificationService
         excludes:
           - Info.plist
+      # Partagé avec l'app : la notification locale et le push distant doivent
+      # dessiner la même personne de la même façon.
+      - path: CorrespondanceiOS/Notifications/CommunicationNotification.swift
     dependencies:
       - package: CorrespondanceCore
         product: CorrespondanceCore

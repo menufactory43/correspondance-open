@@ -104,12 +104,14 @@
 		99C0A65DFAF67448BB51DF38 /* MessageAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55E7D2668BC52D3E86BDF68F /* MessageAvatarView.swift */; };
 		9B74B7C1829C1880CD610B64 /* imessage-macos26.db in Resources */ = {isa = PBXBuildFile; fileRef = 0B9D6DE5228216D69A2C2A5E /* imessage-macos26.db */; };
 		9C0BCDAAB919FC4CF2FEE160 /* MergeContactSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0850E1EAEDC823688546AB /* MergeContactSheet.swift */; };
+		9C4F7330E672C25F483A5CF0 /* CommunicationNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A98DAB19FABC3B835D6C93 /* CommunicationNotification.swift */; };
 		9DE1C25B859BECA488321758 /* InboxStore+Deletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9585B172DB07B6FA0FAA21B4 /* InboxStore+Deletion.swift */; };
 		9F551F70EDA9A4422F7EBE00 /* IMessageChatDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506F88E2AE66198A71648EB5 /* IMessageChatDatabaseTests.swift */; };
 		9F89566B2CF8355D9B1FDE01 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4416D0B9EBE11AE72CF12470 /* GlobalHotKey.swift */; };
 		A171B8935A5FDF5CB8909CC5 /* SettingsChiffrementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD009EF0F180EBDC397C89AF /* SettingsChiffrementCards.swift */; };
 		A66DACB11C868FD9A88A4A45 /* IMessageWatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */; };
 		A7E4683BE328EF7B138AD137 /* QuickReplyPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200371D508DA6447F58B59 /* QuickReplyPanel.swift */; };
+		A983C83A6CFC4414071754C1 /* CommunicationNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A98DAB19FABC3B835D6C93 /* CommunicationNotification.swift */; };
 		AA6BA0E7020906B49E8D0389 /* ThreadGesturesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */; };
 		AACF21AE1C0A6B7B3AE16915 /* SenderAvatarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A93560DDDE2CBBC3BD5EE8 /* SenderAvatarStore.swift */; };
 		AB527CABCA3E052EF550AB15 /* CorrespondanceiOSNotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5732A09EE027D6071E350EB6 /* CorrespondanceiOSNotificationService.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -231,6 +233,7 @@
 		1D655FFB4F256FEA2130AE99 /* ReachablePeople.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachablePeople.swift; sourceTree = "<group>"; };
 		1EE4E1CF90F182520A937996 /* BridgeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeLoginSheet.swift; sourceTree = "<group>"; };
 		1FC4572D06EDA67F5C867772 /* matrix-sync-signal.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-signal.json"; sourceTree = "<group>"; };
+		20A98DAB19FABC3B835D6C93 /* CommunicationNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunicationNotification.swift; sourceTree = "<group>"; };
 		225E93B93CBA37AE52390551 /* NewConversationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewConversationSheet.swift; sourceTree = "<group>"; };
 		23837F1D855E68AE07BEE387 /* IMessageWatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageWatcherTests.swift; sourceTree = "<group>"; };
 		24200371D508DA6447F58B59 /* QuickReplyPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReplyPanel.swift; sourceTree = "<group>"; };
@@ -409,6 +412,7 @@
 				622D2162DD0DBE2FC9244D6C /* Demo */,
 				D46C056F6B42F908D48CF911 /* Design */,
 				834091FB511A21E88D27F81C /* Features */,
+				B7AD4254F57756C87A02BEA5 /* Notifications */,
 				A16BFFB516C474AB4D00BB6A /* Store */,
 				D7EE88352A330EB051B836D4 /* Assets.xcassets */,
 				4399BA71FE841C551BCA82A8 /* CorrespondanceiOS.entitlements */,
@@ -727,6 +731,14 @@
 				BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */,
 			);
 			path = Focus;
+			sourceTree = "<group>";
+		};
+		B7AD4254F57756C87A02BEA5 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				20A98DAB19FABC3B835D6C93 /* CommunicationNotification.swift */,
+			);
+			path = Notifications;
 			sourceTree = "<group>";
 		};
 		BDF5B0CD8E1B14A77DA01D26 /* Features */ = {
@@ -1098,6 +1110,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A983C83A6CFC4414071754C1 /* CommunicationNotification.swift in Sources */,
 				660C9A9C36AE32F91EF157CD /* NotificationService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1108,6 +1121,7 @@
 			files = (
 				E2296A5D41724BA640CAA65A /* CameraCapture.swift in Sources */,
 				0CE71C35D265ED0C1CD59F9B /* ChiffrementSections.swift in Sources */,
+				9C4F7330E672C25F483A5CF0 /* CommunicationNotification.swift in Sources */,
 				C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */,
 				15E4C012BB79A18497E1C846 /* ConversationAvatar.swift in Sources */,
 				66CD3CC0DFBB21B5236788CE /* ConversationRow.swift in Sources */,

@@ -7,8 +7,11 @@
 #   BUMP=0 scripts/release-ios.sh         # garde le numéro de build du projet
 #
 # Ce qu'il faut sur la machine :
-#   - Xcode connecté au compte de l'équipe AKMNXGVVGX (Réglages › Comptes) :
-#     l'export App Store Connect signe avec les profils de distribution ;
+#   - la clé d'API d'équipe « Aede » (~/.appstoreconnect/private_keys) : c'est
+#     elle qui provisionne l'archive et l'export, pas le compte Apple d'Xcode —
+#     ce compte ne voit pas toujours l'équipe (accord en attente chez l'Account
+#     Holder, 3 sept. 2026). ASC_KEY_ID / ASC_KEY_PATH / ASC_ISSUER_ID pour
+#     en changer ; sans fichier de clé, repli sur le compte Xcode ;
 #   - `asc` (brew install rork/tap/asc) avec un profil qui voit l'app
 #     com.correspondance.ios — `asc auth doctor` le dit.
 #
@@ -36,6 +39,12 @@ IPA="$EXPORT/Correspondance.ipa"
 
 etape() { printf '\n▸ %s\n' "$*"; }
 
+ASC_KEY_ID="${ASC_KEY_ID:-P2DPLW2SRN}"
+ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8}"
+ASC_ISSUER_ID="${ASC_ISSUER_ID:-fb365280-db5a-48bb-84b3-98ae481c1235}"
+AUTH=()
+[ -f "$ASC_KEY_PATH" ] && AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+
 BUILD="$(grep -m1 'CURRENT_PROJECT_VERSION' project.yml | sed -E 's/.*"([^"]+)".*/\1/')"
 if [ "$BUMP" = "1" ]; then
   BUILD=$((BUILD + 1))
@@ -55,7 +64,7 @@ mkdir -p "$OUT"
 CORRESPONDANCE_CRYPTO=1 xcodebuild archive \
   -project Correspondance.xcodeproj -scheme "$SCHEME" -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
-  -derivedDataPath "$DD" -allowProvisioningUpdates \
+  -derivedDataPath "$DD" -allowProvisioningUpdates "${AUTH[@]}" DEVELOPMENT_TEAM="$TEAM" \
   | grep -E 'error:|ARCHIVE (SUCCEEDED|FAILED)' || true
 [ -d "$ARCHIVE" ] || { echo "✗ pas d'archive"; exit 1; }
 EMBARQUE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$ARCHIVE/Products/Applications/Correspondance.app/Info.plist")"
@@ -77,7 +86,7 @@ cat > "$OPTIONS" <<EOF
 </plist>
 EOF
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT" \
-  -exportOptionsPlist "$OPTIONS" -allowProvisioningUpdates \
+  -exportOptionsPlist "$OPTIONS" -allowProvisioningUpdates "${AUTH[@]}" \
   | grep -E 'error:|EXPORT (SUCCEEDED|FAILED)' || true
 [ -f "$IPA" ] || { echo "✗ pas d'IPA exporté"; exit 1; }
 

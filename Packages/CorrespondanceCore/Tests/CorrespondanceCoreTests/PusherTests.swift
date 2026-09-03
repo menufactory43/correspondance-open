@@ -38,6 +38,16 @@ final class PusherTests: XCTestCase {
     XCTAssertEqual(data["url"] as? String, "http://sygnal:5000/_matrix/push/v1/notify")
     // Le push ne porte pas le texte : il réveille, l'appareil lit (décision 7).
     XCTAssertEqual(data["format"] as? String, "event_id_only")
+    // Sans `aps` dicté ici, Sygnal n'en met aucun en `event_id_only`, et
+    // l'iPhone jette le push sans rien montrer. `mutable-content` est ce qui
+    // réveille l'extension ; l'alerte, ce qui s'affiche si elle se tait.
+    let defaults = try XCTUnwrap(data["default_payload"] as? [String: Any])
+    let aps = try XCTUnwrap(defaults["aps"] as? [String: Any])
+    XCTAssertEqual(aps["mutable-content"] as? Int, 1)
+    XCTAssertEqual(aps["sound"] as? String, "default")
+    let alert = try XCTUnwrap(aps["alert"] as? [String: Any])
+    XCTAssertEqual(alert["title"] as? String, "Correspondance")
+    XCTAssertEqual(alert["body"] as? String, "Nouveau message")
   }
 
   /// `kind: null`, et pas un pusher absent : c'est ainsi que la spécification

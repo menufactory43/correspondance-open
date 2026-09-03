@@ -29,10 +29,32 @@ echo "  $DEVICE"
 
 etape "Build Debug, chiffrement compris"
 xcodegen generate >/dev/null
+# La signature passe par une clé d'API d'équipe App Store Connect plutôt que par
+# le compte Apple d'Xcode : ce compte-là ne voit pas toujours l'équipe (accord
+# de programme en attente chez l'Account Holder, et Xcode barre alors
+# « Certificates, Identifiers & Profiles » — vécu le 3 sept. 2026). La clé,
+# elle, provisionne toujours, capacités nouvelles comprises. Clé « Aede » de
+# l'équipe, la même qu'`asc` ; l'issuer est celui de l'équipe, pas un secret.
+ASC_KEY_ID="${ASC_KEY_ID:-P2DPLW2SRN}"
+ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8}"
+ASC_ISSUER_ID="${ASC_ISSUER_ID:-fb365280-db5a-48bb-84b3-98ae481c1235}"
+AUTH=()
+if [ -f "$ASC_KEY_PATH" ]; then
+  AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+else
+  echo "  (pas de clé $ASC_KEY_PATH : signature par le compte Xcode)"
+fi
+set +e
 CORRESPONDANCE_CRYPTO=1 xcodebuild build \
   -project Correspondance.xcodeproj -scheme "$SCHEME" -configuration Debug \
   -destination "id=$DEVICE" -derivedDataPath "$DD" -allowProvisioningUpdates \
-  | grep -E 'error:|BUILD (SUCCEEDED|FAILED)' || true
+  "${AUTH[@]}" DEVELOPMENT_TEAM=AKMNXGVVGX \
+  | grep -E 'error:|BUILD (SUCCEEDED|FAILED)'
+BUILD_STATUS="${PIPESTATUS[0]}"
+set -e
+# Une build ratée laisse l'app PRÉCÉDENTE dans DerivedData : sans cette garde,
+# le script installait tranquillement l'ancienne et disait « lancée ».
+[ "$BUILD_STATUS" -eq 0 ] || { echo "✗ build échouée — rien d'installé"; exit 1; }
 APP="$DD/Build/Products/Debug-iphoneos/Correspondance.app"
 [ -d "$APP" ] || { echo "✗ pas d'app construite"; exit 1; }
 
