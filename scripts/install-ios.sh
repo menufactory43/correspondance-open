@@ -48,7 +48,7 @@ set +e
 CORRESPONDANCE_CRYPTO=1 xcodebuild build \
   -project Correspondance.xcodeproj -scheme "$SCHEME" -configuration Debug \
   -destination "id=$DEVICE" -derivedDataPath "$DD" -allowProvisioningUpdates \
-  "${AUTH[@]}" DEVELOPMENT_TEAM=AKMNXGVVGX \
+  ${AUTH[@]+"${AUTH[@]}"} DEVELOPMENT_TEAM=AKMNXGVVGX \
   | grep -E 'error:|BUILD (SUCCEEDED|FAILED)'
 BUILD_STATUS="${PIPESTATUS[0]}"
 set -e
