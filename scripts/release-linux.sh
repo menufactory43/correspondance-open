@@ -57,6 +57,12 @@ mkdir -p "$STAGE/bin" "$STAGE/share/correspondance" "$STAGE/share/applications" 
 cp -f "$BIN" "$STAGE/bin/correspondance"
 if [ -x "$TC/llvm-strip" ]; then "$TC/llvm-strip" "$STAGE/bin/correspondance"; fi
 chmod 755 "$STAGE/bin/correspondance"
+# Le mandataire Tailcat, embarqué comme dans l'app Mac (Contents/Helpers/tailcat) :
+# construit par infra/relais/construire.sh --quoi tailcat. Absent, l'archive se
+# fait quand même, et l'app dira que Tailcat n'est pas là.
+TAILCAT="${CORRESPONDANCE_PUBLICATION:-$HOME/unclic-publication}/tailcat-linux-amd64"
+if [ -f "$TAILCAT" ]; then cp -f "$TAILCAT" "$STAGE/bin/tailcat"; chmod 755 "$STAGE/bin/tailcat"; echo "   tailcat embarqué ($(du -h "$TAILCAT" | cut -f1))"
+else echo "   warning: $TAILCAT absent — pas de chemin Tailcat dans cette archive (bash infra/relais/construire.sh --quoi tailcat)"; fi
 cp -R linux/ui "$STAGE/share/correspondance/ui"
 mkdir -p "$STAGE/share/correspondance/fonts"
 cp -f Correspondance/Resources/Fonts/*.ttf Correspondance/Resources/Fonts/LICENSE-* Correspondance/Resources/Fonts/NOTICE-* "$STAGE/share/correspondance/fonts/"

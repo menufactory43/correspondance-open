@@ -348,7 +348,7 @@
       <div class="scopes">${st.scopes.map((s) => `<button data-scope="${s.id}" class="${st.scope === s.id ? "on" : ""}">${esc(s.label)}</button>`).join("")}</div>
       ${S.showFilters ? `<div class="filters">${st.filters.map((f) => `<button data-filter="${f.id}" class="${st.filter === f.id ? "on" : ""}">${esc(f.label)}</button>`).join("")}</div>` : ""}
       <div class="list" id="list">${list}</div>
-      <div class="foot"><span>${esc(st.device)}${st.syncError ? " · hors ligne" : ""}</span>${st.readArchivableCount ? `<button data-act="archiveAllRead">Archiver tout ce qui est lu (${st.readArchivableCount})</button>` : ""}</div>
+      <div class="foot"><span>${esc(st.device)}${st.tailcat ? " · via Tailcat" : ""}${st.syncError ? " · hors ligne" : ""}</span>${st.readArchivableCount ? `<button data-act="archiveAllRead">Archiver tout ce qui est lu (${st.readArchivableCount})</button>` : ""}</div>
     </aside>`;
   }
   function renderAvatar(c, cls) {

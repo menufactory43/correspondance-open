@@ -38,7 +38,7 @@ final class RelayStore {
   /// Dernière erreur montrable, en français. `nil` = rien à dire.
   var connectionError: String?
   /// Le `/sync` a échoué mais la session tient : bandeau discret, pas d'écran d'erreur.
-  private(set) var syncError: String?
+  var syncError: String?
   private(set) var isSyncing = false
 
   let matrix: MatrixBridgeService
@@ -115,6 +115,11 @@ final class RelayStore {
   /// trente messages au lancement n'est pas trente arrivées.
   var isNotificationPrimed = false
 
+  /// Le mandataire Tailcat, quand le code d'appairage en portait un, et son
+  /// jeton — gardé pour rouvrir le chemin au prochain lancement.
+  var tailcat: TailcatProxy?
+  var tailcatJeton: String?
+
   /// Le navigateur est-il visible ? Il le dit (`visibilitychange`) ; tant
   /// qu'il l'est, un message qu'on regarde arriver ne sonne pas.
   var isWindowVisible = true
@@ -149,6 +154,7 @@ final class RelayStore {
       conversations = mergedRows(await matrix.conversations())
       session = .connected
     }
+    await rouvrirTailcatSiBesoin()
     switch await matrix.checkSession() {
     case .invalid:
       session = .disconnected
@@ -217,6 +223,7 @@ final class RelayStore {
   /// après, le Relais ne nous écouterait plus, et continuerait de réveiller un
   /// téléphone qui n'a plus de session.
   func signOut() async {
+    fermerTailcat()
     syncTask?.cancel()
     syncTask = nil
     for task in relayDraftTasks.values { task.cancel() }

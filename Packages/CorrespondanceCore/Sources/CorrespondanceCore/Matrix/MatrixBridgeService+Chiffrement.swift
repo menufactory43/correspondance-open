@@ -80,6 +80,20 @@ extension MatrixBridgeService {
   public func utiliserMandataireSOCKS(port: Int?) async {
     #if os(macOS)
       await client.utiliserMandataire(port.map(MandataireSOCKS.dictionnaire(port:)))
+    #elseif os(Linux)
+      // Sous Linux, URLSession est libcurl, et swift-corelibs-foundation ne
+      // traduit pas `connectionProxyDictionary`. libcurl lit en revanche
+      // `all_proxy` dans l'environnement à chaque requête : c'est par là que
+      // tout le trafic — Matrix, médias, avatars — prend le chemin Tailcat.
+      // `no_proxy` garde le local en direct (le serveur de l'interface).
+      if let port {
+        setenv("all_proxy", "socks5h://127.0.0.1:\(port)", 1)
+        setenv("ALL_PROXY", "socks5h://127.0.0.1:\(port)", 1)
+        setenv("no_proxy", "127.0.0.1,localhost", 1)
+      } else {
+        unsetenv("all_proxy")
+        unsetenv("ALL_PROXY")
+      }
     #else
       // iOS n'a pas de mandataire SOCKS dans CFNetwork (cf. TailcatProxy.swift).
       _ = port

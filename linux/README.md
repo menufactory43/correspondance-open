@@ -29,8 +29,10 @@ Relais affiche (`correspondance://relais/…`), ou l'adresse + identifiant + mot
 passe. La session est gardée dans `~/.local/share/Correspondance/secrets.json` (droits
 `0600`) — c'est le Trousseau de Linux.
 
-Il faut être sur le réseau du Relais : Tailscale, ou l'adresse locale. Le chemin
-Tailcat (WireGuard sans compte) n'est pas encore porté ici.
+Si le code porte un jeton Tailcat, l'app ouvre ce chemin (WireGuard sans compte,
+à travers n'importe quel NAT) avec le `bin/tailcat` embarqué, avant même le
+`/login` — comme le Mac. Sinon il faut être sur le réseau du Relais : Tailscale, ou
+l'adresse locale.
 
 ## Ce qui n'y est pas (encore)
 

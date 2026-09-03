@@ -32,6 +32,8 @@ final class API {
   /// Réponse récente d'un `/api/avatar` : les photos ne se relisent pas à
   /// chaque rafraîchissement de la liste.
   private var avatarCache: [String: Data] = [:]
+  /// Par où la dernière connexion est passée : l'écran le dit une fois.
+  @MainActor static var derniereNote: String?
 
   init(store: RelayStore, uiDirectory: URL, fontsDirectory: URL) {
     self.store = store
@@ -151,7 +153,10 @@ final class API {
         guard !pairing.isExpired() else {
           return .json(["error": "Ce code d'appairage a expiré — l'installeur du Relais en donne un neuf."], status: 400)
         }
-        Task { await store.connect(homeserver: pairing.homeserver.absoluteString, user: pairing.userID, password: pairing.password) }
+        Task { @MainActor in
+          let note = await store.connecterParLeCode(pairing)
+          Self.derniereNote = note
+        }
         return .json(["ok": true, "chemin": pairing.chemin.titreFR, "empreinte": pairing.fingerprintWords()])
       }
       let homeserver = body["homeserver"] as? String ?? ""
@@ -328,6 +333,8 @@ final class API {
       "undoSendDelays": UndoSendDelay.allCases.map { ["seconds": $0.rawValue, "label": $0.labelFR] },
       "forwarding": store.forwardingMessage.map { ["id": $0.id, "conversationID": $0.conversationID, "text": $0.sidebarPreviewText] } as Any,
       "device": Platform.deviceDisplayName,
+      "tailcat": store.tailcat?.estActif == true,
+      "note": Self.derniereNote as Any,
     ]
   }
 

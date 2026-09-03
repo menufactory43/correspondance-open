@@ -119,6 +119,11 @@ construire_tailcat() {
     || mourir "tailcat-darwin-arm64 : la construction a échoué"
   t1=$(chrono)
   chmod 755 "$SORTIE/tailcat-darwin-arm64"
+  # Et le même pour l'app Linux (scripts/release-linux.sh l'embarque en bin/tailcat).
+  ( cd "$d" && GOFLAGS=-trimpath GOOS=linux GOARCH=amd64 CGO_ENABLED=0 \
+      go build -o "$SORTIE/tailcat-linux-amd64" ./cmd/tailcat ) \
+    || mourir "tailcat-linux-amd64 : la construction a échoué"
+  chmod 755 "$SORTIE/tailcat-linux-amd64"
   dire "tailcat-darwin-arm64 : $(duree "$t0" "$t1"), $(somme "$SORTIE/tailcat-darwin-arm64")"
   mesure tailcat-darwin-arm64 "$(duree "$t0" "$t1")" \
     "$(wc -c < "$SORTIE/tailcat-darwin-arm64" | tr -d ' ')" "$(somme "$SORTIE/tailcat-darwin-arm64")"

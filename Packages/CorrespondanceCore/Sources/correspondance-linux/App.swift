@@ -43,6 +43,12 @@ struct CorrespondanceLinux {
       exit(1)
     }
 
+    // Le mandataire Tailcat embarqué : `bin/tailcat`, à côté de nous. Le cœur
+    // le cherche par `CORRESPONDANCE_TAILCAT` avant tout autre chemin.
+    if ProcessInfo.processInfo.environment["CORRESPONDANCE_TAILCAT"] == nil {
+      let voisin = URL(fileURLWithPath: Self.executablePath()).deletingLastPathComponent().appendingPathComponent("tailcat").path
+      if FileManager.default.isExecutableFile(atPath: voisin) { setenv("CORRESPONDANCE_TAILCAT", voisin, 1) }
+    }
     let store = await MainActor.run { RelayStore() }
     let api = await MainActor.run { API(store: store, uiDirectory: uiDirectory, fontsDirectory: fontsDirectory) }
     let server = HTTPServer(port: port) { request in await api.handle(request) }

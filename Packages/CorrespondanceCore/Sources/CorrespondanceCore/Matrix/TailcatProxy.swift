@@ -21,7 +21,7 @@ import Foundation
 // D'où la garde : sur iOS, ce fichier n'existe pas, et l'app y joint le Relais
 // comme avant. Écrit ici plutôt que dans une note, parce que c'est le compilateur
 // qui l'a appris.
-#if os(macOS)
+#if os(macOS) || os(Linux)
 
 /// Le mandataire SOCKS que `tailcat` ouvre pour joindre le Relais **sans
 /// tunnel ssh et sans Tailscale**.
@@ -251,6 +251,7 @@ public enum TailcatErreur: LocalizedError {
   }
 }
 
+#if os(macOS)
 /// La configuration d'`URLSession` qui fait passer tout le trafic Matrix par
 /// le mandataire.
 ///
@@ -285,4 +286,5 @@ public enum MandataireSOCKS {
   }
 }
 
+#endif
 #endif
