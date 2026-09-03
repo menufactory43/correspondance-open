@@ -79,6 +79,9 @@ let package = Package(
         .executable(name: "correspondance-agent", targets: ["correspondance-agent"]),
         // L'inbox comme outil : un serveur MCP que Claude Desktop ou Zed lancent.
         .executable(name: "correspondance-mcp", targets: ["correspondance-mcp"]),
+        // L'app pour Linux : le même cœur, servi à un navigateur (voir
+        // Sources/correspondance-linux/README.md).
+        .executable(name: "correspondance-linux", targets: ["correspondance-linux"]),
     ],
     dependencies: dependancesDuPaquet,
     targets: ciblesDuPaquet
@@ -108,9 +111,28 @@ var ciblesDuPaquet: [Target] {
         // Le chiffrement entre ici **par le drapeau seulement** : sans lui,
         // `CorrespondanceCore` ne connaît pas la cible crypto et le `#if
         // canImport` de MatrixChiffrement.swift efface le branchement.
+        // SQLite entre par le système sur Apple (`import SQLite3`) ; sous
+        // Linux, le SDK statique n'en a pas, on lie l'amalgamation vendue.
         .target(
             name: "CorrespondanceCore",
             dependencies: ["CorrespondanceMatrixClient"] + moteurCrypto
+                + [.target(name: "CSQLite", condition: .when(platforms: [.linux]))]
+        ),
+        // L'amalgamation SQLite (domaine public), pour la construction Linux
+        // seulement : la condition ci-dessus l'écarte du graphe sur Apple.
+        .target(
+            name: "CSQLite",
+            cSettings: [
+                .define("SQLITE_THREADSAFE", to: "1"),
+                .define("SQLITE_ENABLE_FTS5"),
+                .define("SQLITE_OMIT_LOAD_EXTENSION"),
+            ]
+        ),
+        // L'app Linux : le magasin de l'iPhone porté au-dessus de Core, un
+        // serveur HTTP local, et l'interface dans le navigateur.
+        .executableTarget(
+            name: "correspondance-linux",
+            dependencies: ["CorrespondanceCore"] + moteurCrypto
         ),
         .target(name: "CorrespondanceUI", dependencies: ["CorrespondanceCore"]),
         // L'agent « cc » : un client Matrix ordinaire qui parle à Claude Code.

@@ -1,3 +1,5 @@
+// Sous Linux, le Trousseau est remplacé par un fichier à 0600 (Platform/LinuxSecrets.swift).
+#if canImport(Security)
 import Foundation
 import Security
 
@@ -80,3 +82,5 @@ public enum MatrixCredentialStore {
     }
   }
 }
+
+#endif

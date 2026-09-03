@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Correspondance
+Comment=Une inbox pour toutes vos messageries, avec des agents IA dedans
+Exec=correspondance
+Icon=correspondance
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=messages;whatsapp;signal;instagram;messenger;inbox;
+StartupNotify=false

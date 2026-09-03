@@ -1,5 +1,9 @@
 import Foundation
+#if canImport(SQLite3)
 import SQLite3
+#else
+import CSQLite
+#endif
 
 /// Ce que SQLite peut refuser, dit en français et avec la requête fautive.
 public enum SQLiteError: LocalizedError, Sendable, Equatable {

@@ -1,8 +1,31 @@
 {
   "cleanUrls": true,
   "redirects": [
-    { "source": "/mac", "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/mac-latest/Correspondance.dmg", "permanent": false },
-    { "source": "/ios", "destination": "https://testflight.apple.com/join/pv7HR2YT", "permanent": false }
+    {
+      "source": "/mac",
+      "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/mac-latest/Correspondance.dmg",
+      "permanent": false
+    },
+    {
+      "source": "/linux",
+      "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/linux-latest/Correspondance-linux-x86_64.tar.gz",
+      "permanent": false
+    },
+    {
+      "source": "/ios",
+      "destination": "https://testflight.apple.com/join/pv7HR2YT",
+      "permanent": false
+    }
   ],
-  "headers": [{ "source": "/img/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] }]
+  "headers": [
+    {
+      "source": "/img/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ]
 }

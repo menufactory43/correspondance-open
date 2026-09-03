@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// La session d'un réseau Meta telle que son pont l'attend, extraite d'un jeu de cookies.
 ///

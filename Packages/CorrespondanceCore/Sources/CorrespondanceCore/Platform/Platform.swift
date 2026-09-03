@@ -1,3 +1,4 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -167,3 +168,46 @@ public enum Platform {
     #endif
   }
 }
+
+#else
+import Foundation
+
+// La même façade, côté Linux : pas d'AppKit ni d'UIKit, mais les quelques
+// gestes que le cœur demande à la plateforme existent quand même — nommer
+// l'appareil, ouvrir une adresse, copier du texte.
+public enum Platform {
+  /// « Correspondance (Linux) » : c'est ainsi que le Relais liste cette session.
+  public static var deviceDisplayName: String { "Correspondance (Linux)" }
+
+  /// Ouvre une URL dans l'app qui la revendique — `xdg-open`, comme tout le
+  /// bureau Linux.
+  @discardableResult
+  public static func open(_ url: URL) -> Bool {
+    lancer("/usr/bin/env", ["xdg-open", url.absoluteString])
+  }
+
+  /// Met du texte dans le presse-papiers : Wayland d'abord, X11 sinon.
+  public static func copyToPasteboard(_ string: String) {
+    if lancer("/usr/bin/env", ["wl-copy"], stdin: string) { return }
+    _ = lancer("/usr/bin/env", ["xclip", "-selection", "clipboard"], stdin: string)
+  }
+
+  @discardableResult
+  private static func lancer(_ path: String, _ arguments: [String], stdin: String? = nil) -> Bool {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: path)
+    process.arguments = arguments
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    let pipe = Pipe()
+    if stdin != nil { process.standardInput = pipe }
+    do { try process.run() } catch { return false }
+    if let stdin {
+      pipe.fileHandleForWriting.write(Data(stdin.utf8))
+      try? pipe.fileHandleForWriting.close()
+    }
+    process.waitUntilExit()
+    return process.terminationStatus == 0
+  }
+}
+#endif

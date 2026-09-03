@@ -1,3 +1,5 @@
+// Sous Linux, le Trousseau est remplacé par un fichier à 0600 (Platform/LinuxSecrets.swift).
+#if canImport(Security)
 import Foundation
 import Security
 
@@ -70,3 +72,5 @@ public enum AgentSecretStore {
     return String(bytes.map { alphabet[Int($0) % alphabet.count] })
   }
 }
+
+#endif

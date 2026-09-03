@@ -1,3 +1,5 @@
+// Sous Linux, pas d'AVFoundation : pas de message vocal enregistré depuis l'app.
+#if canImport(AVFoundation)
 import AVFoundation
 import AudioToolbox
 
@@ -209,3 +211,5 @@ private extension Data {
     Swift.withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
   }
 }
+
+#endif

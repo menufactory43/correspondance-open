@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import CorrespondanceMatrixClient
 
 /// Ce que les deux écrans du chiffrement ont besoin de savoir faire.

@@ -1,3 +1,5 @@
+// Sous Linux, pas d'AVFoundation : pas de message vocal enregistré depuis l'app.
+#if canImport(AVFoundation)
 import AVFoundation
 import Foundation
 
@@ -219,3 +221,5 @@ public final class VoiceRecorder {
     return directory.appendingPathComponent("\(UUID().uuidString).m4a")
   }
 }
+
+#endif

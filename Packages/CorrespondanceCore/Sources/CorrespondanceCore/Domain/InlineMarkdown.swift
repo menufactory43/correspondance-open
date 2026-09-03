@@ -13,6 +13,11 @@ public enum InlineMarkdown {
   /// (ou si Foundation refuse de le lire).
   public static func attributed(_ text: String) -> AttributedString? {
     guard hasMarker(text) else { return nil }
+    #if !canImport(Darwin)
+    // swift-foundation ne porte pas encore le lecteur Markdown : le texte
+    // s'affiche tel quel, marqueurs compris, plutôt que pas du tout.
+    return nil
+    #else
     return try? AttributedString(
       markdown: text,
       options: .init(
@@ -21,6 +26,7 @@ public enum InlineMarkdown {
         failurePolicy: .returnPartiallyParsedIfPossible
       )
     )
+    #endif
   }
 
   /// Un marqueur PAIRÉ, pas un caractère isolé. Sans cette exigence, une

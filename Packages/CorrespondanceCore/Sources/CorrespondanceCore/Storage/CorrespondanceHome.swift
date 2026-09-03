@@ -122,6 +122,7 @@ public enum CorrespondanceHome {
     groupePossible: Bool = Self.groupePossibleSurCettePlateforme,
     fileManager: FileManager = .default
   ) -> URL {
+    #if canImport(Darwin)
     guard groupePossible,
           let conteneur = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
     else { return directory(environment: environment, fileManager: fileManager) }
@@ -129,6 +130,9 @@ public enum CorrespondanceHome {
       folderName(environment: environment), isDirectory: true)
     try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
+    #else
+    return directory(environment: environment, fileManager: fileManager)
+    #endif
   }
 
   /// Le groupe d'app est-il vraiment là ? L'écran des réglages doit pouvoir le
@@ -138,7 +142,11 @@ public enum CorrespondanceHome {
     groupePossible: Bool = Self.groupePossibleSurCettePlateforme,
     fileManager: FileManager = .default
   ) -> Bool {
+    #if canImport(Darwin)
     groupePossible && fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup) != nil
+    #else
+    false
+    #endif
   }
 
   /// Le partage par conteneur n'a de sens que là où une extension existe et où

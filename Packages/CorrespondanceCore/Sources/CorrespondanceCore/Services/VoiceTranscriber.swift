@@ -1,3 +1,5 @@
+// Sous Linux, pas de Speech : pas de transcription locale.
+#if canImport(Speech)
 import Foundation
 import Speech
 
@@ -159,3 +161,5 @@ private final class Collecteur: NSObject, SFSpeechRecognitionTaskDelegate, @unch
     pending.resume(returning: texte)
   }
 }
+
+#endif

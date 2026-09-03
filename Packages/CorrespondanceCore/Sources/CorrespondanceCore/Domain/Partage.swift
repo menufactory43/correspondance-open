@@ -227,9 +227,13 @@ public struct PartageBoite: Sendable {
     appGroup: String = SharedRelayState.appGroupDuPartage,
     fileManager: FileManager = .default
   ) -> PartageBoite? {
+    #if canImport(Darwin)
     guard let conteneur = fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroup)
     else { return nil }
     return PartageBoite(base: conteneur.appendingPathComponent(Partage.dossier, isDirectory: true))
+    #else
+    return nil
+    #endif
   }
 
   public var avatars: URL { base.appendingPathComponent("avatars", isDirectory: true) }

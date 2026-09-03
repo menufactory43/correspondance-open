@@ -75,6 +75,17 @@ ses vraies conversations. Pour tout effacer : supprimer `…/Correspondance-essa
 La marche à suivre complète (Relais d'essai, appairage, agent, MCP) est dans
 `docs/MATRIX-SETUP.md` § « Essayer de bout en bout ».
 
+## Linux
+
+Le même cœur, en binaire statique `x86_64`, l'interface servie au navigateur sur `127.0.0.1` :
+`linux/README.md`. Construire et publier depuis ce Mac : `scripts/release-linux.sh` puis
+`scripts/publish-linux.sh` (release `linux-latest`, lien `/linux` du site). L'essayer ici même :
+
+```bash
+cd Packages/CorrespondanceCore
+CORRESPONDANCE_HOME=essai swift run correspondance-linux --ui ../../linux/ui
+```
+
 ## Dictée
 
 Le micro du composer passe par **[Dictus](https://www.getdictus.com)** (libre, MIT, transcription 100 % locale) s'il est installé dans `/Applications` — Correspondance le pilote par sa CLI (`--toggle-transcription` / `--cancel`), Dictus colle le texte dans le champ. Désactivable dans Réglages → Dictée ; sans Dictus, la reconnaissance vocale d'Apple prend le relais.

@@ -1,3 +1,5 @@
+// Sous Linux, pas d'ImageIO : les vignettes sont laissées au navigateur.
+#if canImport(CoreGraphics)
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -191,3 +193,5 @@ private final class ThumbnailWorker: @unchecked Sendable {
     }
   }
 }
+
+#endif

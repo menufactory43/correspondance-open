@@ -1,3 +1,5 @@
+// Sous Linux, pas de CoreGraphics : la mosaïque des visages est dessinée par l'interface web.
+#if canImport(CoreGraphics)
 import CoreGraphics
 import Foundation
 
@@ -114,3 +116,5 @@ public struct AvatarMosaic {
     context.restoreGState()
   }
 }
+
+#endif

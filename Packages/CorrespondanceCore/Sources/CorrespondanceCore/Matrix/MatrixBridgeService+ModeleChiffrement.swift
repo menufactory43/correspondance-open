@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Security)
 import Security
+#endif
 import CorrespondanceMatrixClient
 
 /// Le service réel, vu par les deux écrans.
@@ -39,6 +41,7 @@ public struct ChiffrementParLeRelais: ChiffrementDuCompte {
   }
 }
 
+#if canImport(Security)
 /// La phrase gardée au Trousseau de **cet** appareil, pour que « Revoir » ne
 /// soit pas un bouton qui ment.
 ///
@@ -85,3 +88,4 @@ public struct MagasinDePhraseAuTrousseau: MagasinDePhrase {
 
   public func effacer(compte: String) { SecItemDelete(requete(compte) as CFDictionary) }
 }
+#endif
