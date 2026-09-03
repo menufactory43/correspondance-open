@@ -133,6 +133,7 @@
 		B29C767B7919B5E7524CE9E1 /* ForwardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ED6F4C2276CC3788BBBE29D /* ForwardSheet.swift */; };
 		B39F061A8E3390505CDAF7D1 /* ComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */; };
 		B844FE3D594D5B5ADC44DAAA /* NewConversationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1A61053C6C8879E5CD44D7 /* NewConversationSheet.swift */; };
+		BADFB3E3EDF2595E20929513 /* TranslationCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E21AE127D32D04A39998921E /* TranslationCard.swift */; };
 		BDB95DEEA193251CCCFDFCDB /* matrix-sync-instagram.json in Resources */ = {isa = PBXBuildFile; fileRef = 97E4D1011F1094F623C1783C /* matrix-sync-instagram.json */; };
 		BE5B24C271A4934F61BEC35B /* MentionMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F807FD24E1467416CB81E90 /* MentionMenu.swift */; };
 		C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */; };
@@ -182,6 +183,7 @@
 		F9AA629EAEFC09261041C322 /* RelayStore+Partage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDA330D98C7CB9DFFDF2F72 /* RelayStore+Partage.swift */; };
 		FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBED963D2D0FDDC25F5A0072 /* FocusView.swift */; };
 		FB906E79A0021105489C55C5 /* AgentLocalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */; };
+		FC8F991A2960F90E352640E7 /* OutgoingTranslationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC5ADCF20EA7E86419DB0AD7 /* OutgoingTranslationPanel.swift */; };
 		FCE643583479D6F0FCEF5118 /* ComposerControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F765AC3695AED34BF7336EE /* ComposerControls.swift */; };
 		FD8EC31FFB2B69ED94D39CC6 /* IMessageGroupDetectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */; };
 		FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14C444A549BA3C7D7093F38E /* ThemePickerView.swift */; };
@@ -406,11 +408,13 @@
 		D7B2E9E2F0A27FB32E8A9C84 /* ContactDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactDirectory.swift; sourceTree = "<group>"; };
 		D7EE88352A330EB051B836D4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DE05DF5AB0829B0A55A79DD4 /* IMessageSummaryInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSummaryInfo.swift; sourceTree = "<group>"; };
+		E21AE127D32D04A39998921E /* TranslationCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationCard.swift; sourceTree = "<group>"; };
 		E637F86CB35FBFE62AD7A64C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E696093D4D571FE8BD9F43B2 /* DemoMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMode.swift; sourceTree = "<group>"; };
 		E8E3CBB0CC7A870540C63709 /* AgentLocalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLocalHost.swift; sourceTree = "<group>"; };
 		E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-whatsapp.json"; sourceTree = "<group>"; };
 		E9B5F5874770558B125F18B0 /* ReactionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactionTests.swift; sourceTree = "<group>"; };
+		EC5ADCF20EA7E86419DB0AD7 /* OutgoingTranslationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutgoingTranslationPanel.swift; sourceTree = "<group>"; };
 		EC9204E0947294308F58D53C /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
 		ECED9025AA8FF631D0B21DD6 /* RelayLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayLoginView.swift; sourceTree = "<group>"; };
 		EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InFlightBubbleTests.swift; sourceTree = "<group>"; };
@@ -555,6 +559,7 @@
 				2F765AC3695AED34BF7336EE /* ComposerControls.swift */,
 				67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */,
 				3F807FD24E1467416CB81E90 /* MentionMenu.swift */,
+				EC5ADCF20EA7E86419DB0AD7 /* OutgoingTranslationPanel.swift */,
 			);
 			path = Composer;
 			sourceTree = "<group>";
@@ -660,6 +665,7 @@
 				1D655FFB4F256FEA2130AE99 /* ReachablePeople.swift */,
 				4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */,
 				9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */,
+				E21AE127D32D04A39998921E /* TranslationCard.swift */,
 			);
 			path = Inbox;
 			sourceTree = "<group>";
@@ -1432,6 +1438,7 @@
 				14A724352377171678A4CFC3 /* NewConversationSheet.swift in Sources */,
 				72C453A5065BFAAE4ECBE3EC /* NewGroupSheet.swift in Sources */,
 				0EAD345EE1F2C59E43472CF1 /* NotificationService.swift in Sources */,
+				FC8F991A2960F90E352640E7 /* OutgoingTranslationPanel.swift in Sources */,
 				003EBAD13023436D77C15471 /* PermissionBanner.swift in Sources */,
 				C1F2AF05BA71706404C0E330 /* QuickLookPanel.swift in Sources */,
 				A7E4683BE328EF7B138AD137 /* QuickReplyPanel.swift in Sources */,
@@ -1457,6 +1464,7 @@
 				FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */,
 				8520F818A51D69AE23716712 /* ThreadView.swift in Sources */,
 				8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */,
+				BADFB3E3EDF2595E20929513 /* TranslationCard.swift in Sources */,
 				3372974184DEB33DB4BEA601 /* WindowBackground.swift in Sources */,
 				F37B4F0B546D0CD0EB82F27C /* WindowChrome.swift in Sources */,
 			);
