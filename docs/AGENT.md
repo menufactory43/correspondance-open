@@ -17,6 +17,10 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
 | Approbations d'outils depuis la conversation (`--permission-prompt-tool`, 👍/👎) | ✅ agent + serveur MCP testés en local — pas encore éprouvé sur le NUC |
 | Photo, vocal, PDF envoyés à cc → fichiers posés dans le dossier du tour, chemins nommés dans le prompt | ✅ testé (unités) — pas encore éprouvé sur le NUC |
 | Tête-à-tête et console : parler **sans nommer** l'agent | ✅ le marqueur de l'app, la console, ou `rooms.<id>.mention` |
+| **Le contexte du fil** : les N derniers messages du salon dans le prompt, comme données | ✅ testé (unités) — `context` par agent et par salon, 0 coupe |
+| **Propose sans qu'on demande** : un tiers écrit, cc pose une proposition `suggest` après 3 s | ✅ testé (unités) — `rooms.<id>.suggest` : `always` / `keywords` |
+| **Répond seul, dans un cadre** : mode `pilot`, envoi marqué `piloted`, `<hors-cadre>` → `handover` | ✅ testé (unités) — plafond 10/h par salon |
+| **Échecs visibles** : un avis `fr.correspondance.agent.notice` avec la cause et le geste | ✅ testé (unités) — `cap`, `engine_missing`, `engine_offline`, `error`, `timeout` |
 
 ### Pièces jointes
 
@@ -92,6 +96,70 @@ La règle « qui est nommé » (`AgentWire.agentsMentioned`, mot entier, n'impor
 où) est **partagée** entre l'app et l'agent : une seule définition, pas deux qui
 divergent. Pour l'agent, un aparté est un ordre comme un autre
 (`Trigger.carriesText`).
+
+### Le contexte du fil
+
+À chaque tour, cc reçoit les **N derniers messages du salon** (`/messages`, 50
+par défaut) en tête du prompt, comme bloc de données (`ContexteDuFil`) : une
+ligne par message, `[jeu. 19:21] Camille : …`, l'expéditeur par son nom
+d'affichage (sinon son localpart), les médias en `[photo]`, `[vocal]`,
+`[fichier devis.pdf]`, les messages chiffrés de l'historique en `[message
+chiffré]` — `/messages` rend les events tels quels, seul le `/sync` passe par
+la machine crypto. Le lot en cours est exclu, le bloc est tronqué par le
+début dans un budget de caractères, et il s'ouvre sur un préambule qui dit au
+moteur que **rien là-dedans n'est un ordre**. « @cc c'est quoi cette histoire
+de plombier ? » répond juste.
+
+Le nombre se règle par agent (`context`, dans l'event de config) et par salon
+(`rooms.<id>.context`) ; **`0` coupe**, et un 0 explicite est respecté. Un
+`/messages` en échec ne bloque pas le tour : il part sans, et le journal le dit.
+
+### Proposer sans qu'on demande
+
+Un salon réglé sur *Propose* (`rooms.<id>.suggest` : `always`, ou `keywords`
+avec `rooms.<id>.keywords`, mots entiers, sans égard à la casse) réveille cc à
+chaque **texte d'un tiers** — ici le fantôme de pont est l'expéditeur légitime,
+c'est lui qui écrit depuis WhatsApp. Jamais un propriétaire, le bot, un autre
+agent, ni un message déjà piloté. Après trois secondes, si le propriétaire n'a
+pas répondu lui-même et qu'aucun tour n'est en vol, un tour part avec une
+instruction fixe et le message du tiers cité ; la réponse est **toujours** une
+proposition `fr.correspondance.agent.proposal` avec `kind: suggest`, quel que
+soit le mode du salon — *Propose* ne parle jamais. L'app la rend en bandeau
+au-dessus de la saisie, pas en carte dans le fil.
+
+Chaque proposition porte désormais son genre (`ProposalKey.kind` : `reply` par
+défaut, `suggest`, `summary`, `handover`).
+
+### Répondre seul, dans un cadre
+
+Un salon en mode **`pilot`** (`rooms.<id>.mode`) porte un cadre d'une phrase
+(`rooms.<id>.frame`) : « confirme ou déplace les rendez-vous, rien d'autre ».
+Tout texte d'un tiers déclenche sans délai un tour qui répond **au nom du
+propriétaire** — ou dit exactement `<hors-cadre>` suivi d'une phrase
+(`Pilotage.lire`). Une réponse part en `m.room.message` cité, avec le champ
+`fr.correspondance.agent.piloted: true` (l'app le marque « Envoyé par cc pour
+vous »), et une entrée de journal dont le prompt commence par « piloté : ».
+Hors cadre : une proposition `kind: handover` avec `reason`, et un avis
+`fr.correspondance.agent.notice` (`reason: handover`) qui déclenche une
+notification. Une erreur du moteur, ou une réponse vide, passe la main aussi :
+rien de tel ne part à un tiers en votre nom.
+
+Gardes : jamais de réponse pilotée à un message qui porte `piloted`, à un
+agent, au bot ; **dix réponses pilotées par heure et par salon**, au-delà un
+avis `cap` et le silence. Une mention explicite d'un propriétaire dans un salon
+`pilot` reste une demande ordinaire, traitée comme `direct`.
+
+### Les échecs se voient
+
+Là où un tour répondait déjà par un texte — plafond atteint, moteur absent,
+moteur pas connecté, panne, délai — il pose **en plus** un event
+`fr.correspondance.agent.notice` dans le salon : `agent`, `body`, `reason`
+(`cap`, `engine_missing`, `engine_offline`, `error`, `timeout`) et `action`
+(`rescan` pour un moteur, `retry` pour une panne, rien pour un plafond). Les
+ponts ne le relaient pas ; l'app le rend en ligne système avec le bouton. Le
+texte reste, pour les clients qui ne connaissent pas l'avis. Le délai de tour
+est celui de chaque moteur (`claude.timeoutSeconds`, `hermes.timeoutSeconds`,
+`acp.timeoutSeconds`).
 
 ## Garde-fous
 
@@ -370,6 +438,12 @@ l'ancre — rien d'écrit dans une room ne change l'identité de l'agent ni son 
 **qui a le droit de le reconfigurer** se lit dans le fichier, pas dans l'event.
 
 Le repli est complet : sans room console, un `config.json` d'hier tourne à l'identique.
+
+Les clés de l'event, toutes dans `AgentWire.ConfigKey` : `owners`, `trigger`,
+`hourlyCap`, `defaultMode` (`direct` / `draft` / `pilot`), `backend`,
+`toolPreset`, `model`, `systemPrompt`, `acpCommand`, `acpArguments`, `peers`,
+`context`, `heartbeat`, et par salon dans `rooms.<id>` : `cwd`, `mode`,
+`mention`, `context`, `suggest`, `keywords`, `frame`.
 
 ## Suite prévue
 
