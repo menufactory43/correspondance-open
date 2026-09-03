@@ -790,6 +790,11 @@ final class RelayStore {
     scheduleRelayDraftPush(conversationID: conversationID, text: "")
 
     let localID = UUID().uuidString
+    // Ce fil devient une suggestion de partage : c'est l'envoi qui compte
+    // le plus pour la rangée des visages de la feuille.
+    if let conversation = conversations.first(where: { $0.id == conversationID }) {
+      donnerSuggestionDePartage(conversation)
+    }
     showOptimistically(text: text, paths: paths, in: target, localID: localID)
     lastSent = SentMark(conversationID: conversationID, localID: localID, serial: (lastSent?.serial ?? 0) + 1)
 

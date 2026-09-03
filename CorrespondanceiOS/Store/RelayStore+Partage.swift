@@ -18,6 +18,11 @@ extension RelayStore {
   func ecrireIndexDuPartage() {
     guard !isDemo, let boite = PartageBoite.partagee() else { return }
     let rows = conversations
+    // Les dix fils les plus récents deviennent des suggestions de partage :
+    // la rangée des visages en haut de la feuille, avant tout message.
+    for row in index(rows).prefix(10) {
+      donnerSuggestionDePartage(row)
+    }
     Task.detached(priority: .utility) {
       let index = Partage.index(conversations: rows) { conversation in
         guard let mxc = conversation.remoteAvatarID,
@@ -32,6 +37,21 @@ extension RelayStore {
         Self.journal.error("index du partage non écrit : \(error.localizedDescription, privacy: .public)")
       }
     }
+  }
+
+  private func index(_ rows: [Conversation]) -> [Conversation] {
+    rows.filter { !$0.isArchived && !$0.hasPlaceholderTitle }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  /// Le don sortant pour un fil — au rafraîchissement, et à chaque envoi.
+  func donnerSuggestionDePartage(_ conversation: Conversation) {
+    guard !isDemo, conversation.network != .agent else { return }
+    let avatar = conversation.remoteAvatarID.flatMap { MatrixAvatarStore.existingData(forMXC: $0) }
+    CommunicationNotification.donnerEnvoi(
+      conversationID: conversation.id, title: conversation.title, network: conversation.network,
+      isGroup: conversation.isGroup, avatar: avatar
+    )
   }
 
   /// Ce que l'extension a déposé part maintenant, un dépôt après l'autre, et

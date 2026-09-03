@@ -105,6 +105,46 @@ enum CommunicationNotification {
     return intent
   }
 
+  /// Le don **sortant** : « j'écris à cette personne ». C'est celui que la
+  /// rangée des visages de la feuille de partage lit — un don entrant dit qui
+  /// m'a écrit, pas à qui j'envoie. Les messageries le font à chaque envoi ;
+  /// on le fait aussi pour les fils récents à chaque rafraîchissement, pour
+  /// que la rangée existe avant le premier message.
+  static func donnerEnvoi(
+    conversationID: String, title: String, network: MessageNetwork, isGroup: Bool, avatar: Data?
+  ) {
+    let image = avatar.map { INImage(imageData: $0) }
+    let destinataire = INPerson(
+      personHandle: INPersonHandle(value: conversationID, type: .unknown),
+      nameComponents: nil,
+      displayName: displayName(title, network: network, showsNetwork: true),
+      image: image,
+      contactIdentifier: nil,
+      customIdentifier: conversationID,
+      isMe: false,
+      suggestionType: .instantMessageAddress
+    )
+    let groupe = isGroup
+      ? INSpeakableString(spokenPhrase: displayName(title, network: network, showsNetwork: true))
+      : nil
+    let intent = INSendMessageIntent(
+      recipients: [destinataire],
+      outgoingMessageType: .outgoingMessageText,
+      content: nil,
+      speakableGroupName: groupe,
+      conversationIdentifier: conversationID,
+      serviceName: network.labelFR,
+      sender: nil,
+      attachments: nil
+    )
+    if isGroup, let image {
+      intent.setImage(image, forParameterNamed: \.speakableGroupName)
+    }
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .outgoing
+    interaction.donate(completion: nil)
+  }
+
   /// Le don est ce qui fait apparaître le fil dans les suggestions de partage
   /// et permet à Siri de le nommer. Il n'est pas requis pour la photo, mais
   /// c'est ce que font les messageries, et ça ne coûte rien.
