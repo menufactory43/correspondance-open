@@ -30,12 +30,20 @@ enum DemoMode {
   private static let papa = "imessage:demo-papa"
   private static let rando = "imessage:demo-rando"
   private static let theo = "imessage:demo-theo"
+  /// Le fil en portugais : ce qui vaut un « Traduire » sous la bulle (lot 3).
+  private static let julia = "imessage:demo-julia"
 
   static func iMessageConversations(now: Date = .now) -> [Conversation] {
     [
       Conversation(
         id: camille, network: .iMessage, address: "+33600000011", title: "Camille",
         preview: "On dit 19 h 30 devant le cinéma ?", lastMessageAt: now.addingTimeInterval(-6 * 60),
+        unreadCount: 2, isArchived: false, transportKey: "demo", isGroup: false
+      ),
+      Conversation(
+        id: julia, network: .iMessage, address: "+5511900000014", title: "Júlia",
+        preview: "A gente se vê no domingo? Minha mãe também vem, ela não come carne.",
+        lastMessageAt: now.addingTimeInterval(-14 * 60),
         unreadCount: 2, isArchived: false, transportKey: "demo", isGroup: false
       ),
       Conversation(
@@ -75,6 +83,11 @@ enum DemoMode {
         m("c3", camille, "Carrément.", 40, me: false, sender: "Camille",
           reactions: [MessageReaction(emoji: "❤️", senders: ["Moi"], isMine: true)]),
         m("c4", camille, "On dit 19 h 30 devant le cinéma ?", 6, me: false, sender: "Camille"),
+      ],
+      julia: [
+        m("j1", julia, "Oi meffysto! Tudo bem?", 22, me: false, sender: "Júlia"),
+        m("j2", julia, "Oui ! Et toi ? On se voit toujours ce week-end ?", 18, me: true),
+        m("j3", julia, "A gente se vê no domingo? Minha mãe também vem, ela não come carne.", 14, me: false, sender: "Júlia"),
       ],
       rando: [
         m("r1", rando, "Dimanche, départ 8 h du parking de la gare ?", 180, me: false, sender: "Nadia"),
