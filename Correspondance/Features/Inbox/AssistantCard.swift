@@ -107,6 +107,8 @@ struct AssistantSection: View {
           }
         }
         .pickerStyle(.segmented)
+        .controlSize(.small)
+        .frame(maxWidth: .infinity)
         .labelsHidden()
         .disabled(isWriting)
         // Le segment « Répond seul » se teinte en rouge quand il est choisi.
