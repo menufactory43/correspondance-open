@@ -1095,6 +1095,19 @@ final class RelayStore {
   func react(conversationID: String, messageID: String, emoji: String) async {
     guard !isDemo, let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
     else { return }
+    // 🤖 📌 🌐 avec un agent dans le fil : un ordre, pas une réaction. Rien
+    // ne part au réseau — un aparté qui cite la bulle (le texte nomme
+    // l'agent, le pont en fait un `AgentWire.asideType`).
+    if let reserved = AgentReaction.reserved(emoji),
+       let agent = await matrix.asideAgents(conversationID: target).first
+    {
+      try? await matrix.send(
+        conversationID: target, text: "@\(agent) \(reserved.instructionFR)", attachmentPaths: [],
+        localID: UUID().uuidString, replyToMessageID: messageID
+      )
+      await loadMessages(conversationID: conversationID, backfill: false)
+      return
+    }
     try? await matrix.toggleReaction(conversationID: target, messageID: messageID, emoji: emoji)
     await loadMessages(conversationID: conversationID, backfill: false)
   }
@@ -1209,7 +1222,7 @@ final class RelayStore {
   }
 
   /// Les six réactions rapides — les mêmes que sur le Mac.
-  static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+  static let quickReactions = QuickReactions.base
 
   // MARK: - Gestes sur une ligne
 

@@ -40,6 +40,9 @@ extension InboxStore {
       }
     }
     session.asideAgents = agents
+    // Le sélecteur de réactions lit une liste statique : on lui dit ici si
+    // les trois réservées à cc y ont leur place.
+    if session === primarySession { Self.agentPresentInSelection = !agents.isEmpty }
   }
 
   private func mentionCandidates(

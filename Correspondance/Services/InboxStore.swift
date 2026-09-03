@@ -1099,8 +1099,12 @@ final class InboxStore {
 
   // MARK: - Réactions
 
-  /// Palette courte : de quoi accuser réception sans ouvrir un catalogue d'emoji.
-  static let quickReactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"]
+  /// Palette courte : de quoi accuser réception sans ouvrir un catalogue
+  /// d'emoji — et les trois réservées à cc (🤖 📌 🌐) quand un agent est dans
+  /// le fil ouvert. `MessageBubbleView` lit cette liste telle quelle, sans
+  /// contexte : d'où l'état statique, tenu par la session (`+Mentions`).
+  static var quickReactions: [String] { QuickReactions.palette(agentPresent: agentPresentInSelection) }
+  static var agentPresentInSelection = false
 
   /// Message visé par une action du fil : la bulle sélectionnée, sinon la dernière.
   var actionableMessage: ChatMessage? { primarySession?.actionableMessage }
@@ -1326,6 +1330,14 @@ final class InboxStore {
           // visée — pas sur celui où l'on écrit en ce moment.
           let conversation = conversation(ofMessage: message)
     else { return }
+
+    // 🤖 📌 🌐 avec un agent dans le fil : un ordre, pas une réaction. Rien ne
+    // part au réseau — un aparté qui cite la bulle, que le correspondant ne
+    // voit pas. Sans agent, l'emoji est un emoji.
+    if let reserved = AgentReaction.reserved(emoji), let agent = agentsInSelectedConversation.first {
+      await sendAside(reserved.instructionFR, to: agent, inReplyTo: messageID)
+      return
+    }
 
     switch conversation.network {
     case .iMessage:
