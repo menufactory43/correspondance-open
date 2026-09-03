@@ -244,6 +244,21 @@ struct ContentView: View {
 
   @ViewBuilder
   private var primaryButtons: some View {
+    // « Résumer » : quand le fil a assez de non-lus et qu'un agent y est. Un
+    // aparté part à cc ; le résumé revient en carte, visible par soi seul.
+    // Le bouton dort trente secondes après — le temps d'un tour.
+    if store.offersSummary {
+      Button("Résumer", systemImage: "list.bullet.rectangle") {
+        Task { await store.requestSummary() }
+      }
+      .disabled(store.isSummaryCoolingDown)
+      .help(
+        store.isSummaryCoolingDown
+          ? "cc prépare le résumé…"
+          : "Demander à cc un résumé des \(store.selectedConversation?.unreadCount ?? 0) messages non lus"
+      )
+    }
+
     if store.selectedConversation != nil {
       Button("Archiver", systemImage: "archivebox") {
         Task { await store.archiveSelected() }
