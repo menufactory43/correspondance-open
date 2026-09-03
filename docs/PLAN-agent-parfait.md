@@ -1,0 +1,185 @@
+# Plan — L'agent parfait : ce qu'il manque pour tenir les promesses
+
+> État de départ (2026-09-03) : cc répond quand on le nomme, propose un brouillon devant un tiers,
+> lit une photo ou un PDF qu'on lui envoie, tourne 24/7 sur le Relais. **Il ne rejoue jamais
+> l'historique** (`docs/AGENT.md` § Garde-fous) et ne voit que les messages qui lui sont adressés.
+> Conséquence : il ne sait ni résumer un fil, ni traduire ce qu'on reçoit, ni retrouver un montant,
+> ni proposer une réponse sans qu'on le lui demande. Le site a été ramené à ça le même jour.
+
+## Ce que font les autres, et où est notre place
+
+| Produit | Ce qu'il fait ou annonce | Ce qu'il n'a pas |
+|---|---|---|
+| **Beeper** (Automattic) | Feuille de route « BeepMate » : résumé des non-lus, classement urgent / pas urgent, réponses automatiques, traitement local ou cloud au choix ; ouverture des données de chat à Claude ou ChatGPT sur autorisation. Résumé et traduction déjà en bêta. | Pas d'agent qui *agit* (outils, fichiers, machine). Les messages passent par leurs serveurs sauf en mode local. |
+| **Franz 6** | Assistant intégré : rattrapage multi-apps, triage, transcription des vocaux, extraction d'actions, brouillons. Local ou cloud UE zéro rétention. | Des webviews, pas des clients natifs : pas d'inbox unifiée réelle, pas d'iPhone. |
+| **Rambox** | Assistant Gemini : brouillons, résumés, recherche. | Idem, agrégateur de webviews. |
+| **WhatsApp / Apple** | Réponses suggérées à partir du contexte du fil (Writing Help, Apple Intelligence). | Un réseau à la fois. Rien qui traverse Signal, iMessage et Instagram. |
+| **OpenAI × Apple Messages** | ChatGPT lit, cherche, rédige et envoie dans iMessage sur Mac. | iMessage seulement. Pas chez vous. |
+| **Ferdium** | Rien. Franz 5 gelé. | |
+
+Tout le monde converge vers le même trio : **résumer, proposer une réponse, traduire.** C'est
+la table de base. Personne ne fait la suite : un assistant qui est **un contact**, qui **agit**
+(fichiers, calendrier, machine, outils), qui a **une mémoire des personnes** à travers cinq
+réseaux, et qui **tourne chez l'utilisateur** avec son abonnement. C'est là qu'on est seuls, et
+c'est là qu'on doit aller — mais pas avant d'avoir la table de base, sinon on se compare mal.
+
+## Le principe qui commande tout : lire avant de parler
+
+Presque tout ce qui manque tient à une seule chose : l'agent ne voit pas le fil. Donner à un tour
+le contexte de la room (les N derniers messages, via `/messages` Matrix, ou la base locale de
+l'app pour iMessage) débloque le résumé, la traduction, la recherche, la réponse proposée, la
+mémoire. C'est le chantier 0, et tout le reste s'y appuie.
+
+Le risque qu'il ouvre est connu (`AGENT.md` § Garde-fous) : le fil contient du texte écrit par
+d'autres, et l'agent a `Bash`. Les parades restent les mêmes — dossier borné par room, journal
+des tours, jamais d'envoi sans le propriétaire — et une de plus : **le contexte est marqué comme
+donnée**, encadré et attribué (« Camille a écrit : … »), jamais fondu au prompt.
+
+## Les chantiers
+
+Chaque chantier est décrit par ce que l'utilisateur voit, ce qu'il faut construire, et sa taille.
+Ils sont indépendants sauf mention, et l'ordre recommandé est en fin de document.
+
+### 0. Le contexte du fil (2–3 jours) — fondation
+
+- **Vu** : rien de nouveau à l'écran. Mais « @cc c'est quoi cette histoire de plombier ? » répond juste.
+- **À construire** : à chaque tour, `correspondance-agent` charge les N derniers messages de la room
+  (défaut 50, borné en tokens), les attribue et les horodate, et les place dans le prompt comme
+  bloc de données. Pièces jointes : nom et type seulement, téléchargement à la demande. Pour les
+  rooms chiffrées (chantier E de `PLAN-relais-agents.md`), le déchiffrement est celui de l'agent.
+- **Réglage** : `rooms.<id>.context` (0 pour couper, par défaut 50) dans la room console.
+
+### 1. Rattrapage et résumé (2 jours)
+
+- **Vu** : un bouton **Résumer** en tête de fil quand il y a plus de ~15 non-lus. Dans l'inbox,
+  **« Qu'est-ce que j'ai raté ? »** : une carte, tous réseaux confondus, qui liste ce qui attend
+  une réponse et ce qui est juste du bruit. Résultat visible par soi seul (même event que les
+  brouillons, `fr.correspondance.agent.proposal`, kind `summary`).
+- **À construire** : un tour spécial déclenché par l'app, pas par un message — l'agent reçoit une
+  instruction et le contexte, répond dans un event privé. Pour l'inbox entière : l'agent parcourt
+  les rooms non lues du propriétaire (il est déjà membre de celles où on l'a invité ; pour les
+  autres, voir chantier 9).
+- C'est la parité Beeper / Franz. Dépend de 0.
+
+### 2. La réponse proposée sans qu'on la demande (2–3 jours)
+
+- **Vu** : dans un fil où on a **activé** l'assistant (opt-in par conversation, éteint par défaut),
+  chaque message entrant fait apparaître un brouillon discret sous la zone de saisie. Un geste
+  pour l'envoyer, un pour l'ouvrir et le corriger, rien pour l'ignorer. Sur iPhone, dans la
+  notification : « Répondre avec cc ».
+- **À construire** : le mode existe (brouillon devant un tiers). Ce qui manque : le déclenchement
+  sur message entrant sans mention, un délai d'attente (ne pas proposer pendant qu'on tape), le
+  rendu compact, et une politique par room (`rooms.<id>.suggest: off | ask | always`).
+- **Ce qui nous distingue** de WhatsApp et d'Apple : le même assistant sur les cinq réseaux, qui
+  connaît la personne (chantier 5) et peut vérifier quelque chose avant de proposer (calendrier,
+  fichier, web). Dépend de 0.
+
+### 3. Traduction (2 jours)
+
+- **Vu** : une bulle en langue étrangère porte un petit **Traduire** ; une fois choisi pour un fil,
+  tout ce qui arrive est traduit en dessous, en gris. À l'envoi : « Traduire en anglais avant
+  d'envoyer », avec l'original visible pour vérifier.
+- **À construire** : un tour sans mémoire, court, avec l'instruction et le texte. Détection de langue
+  côté app (`NLLanguageRecognizer`), cache par event pour ne pas retraduire. Sur iPhone, Apple
+  Translation on-device en premier choix quand la paire est disponible, l'agent sinon.
+- Indépendant de 0.
+
+### 4. Vocaux transcrits (1–2 jours)
+
+- **Vu** : sous chaque message vocal reçu, le texte. Recherchable.
+- **À construire** : `SFSpeechRecognizer` sur l'appareil (Mac et iPhone), fallback Whisper sur le
+  Relais si le propriétaire l'active. Stocké comme event privé lié au vocal. Franz le fait ; les
+  35–50 ans reçoivent beaucoup de vocaux qu'ils n'ont pas envie d'écouter en réunion.
+- Indépendant.
+
+### 5. Mémoire par correspondant (3 jours) — le vrai différenciateur
+
+- **Vu** : « Camille est végétarienne depuis mars », « Noé, c'est le plombier, devis en attente »,
+  « la belle-famille préfère l'anglais ». L'assistant s'en sert dans ses brouillons sans qu'on le
+  répète. Une fiche par personne, lisible et éditable dans l'app (onglet **Ce que cc sait**), avec
+  un bouton **Oublier**.
+- **À construire** : `PLAN-agents.md` Q7 le décrit déjà — un fichier de mémoire par correspondant,
+  event d'état dans la room console, injecté dans le prompt système du tour. Ajouter : l'écriture
+  (l'agent propose une note, elle n'est retenue qu'après un tour ; ou le propriétaire écrit lui-même),
+  la fusion avec les fils fusionnés (`MergedContact`), et l'affichage.
+- Dépend de 0 pour être alimentée automatiquement ; utile seule dès l'écriture manuelle.
+
+### 6. Réponse progressive et travaux longs (2 jours)
+
+- **Vu** : la réponse s'écrit sous nos yeux au lieu de tomber d'un bloc après vingt secondes. Une
+  tâche longue (« trie les photos du dossier ») affiche un état, et l'agent revient quand c'est fini.
+- **À construire** : déjà prévu (`AGENT.md` § Suite prévue, 6) : `ACP.swift` lit les
+  `agent_message_chunk`, il manque le chemin des morceaux dans `AgentBackend.run` et l'édition
+  du message Matrix au fil de l'eau (`m.replace`).
+- Indépendant.
+
+### 7. Agir dans le monde : calendrier, rappels, fichiers (3–4 jours)
+
+- **Vu** : « @cc mets le dîner de samedi dans le calendrier » → il propose l'événement, 👍 et c'est
+  fait. « Rappelle-moi jeudi de relancer Noé si le devis n'est pas arrivé » → jeudi, un message de cc
+  dans le fil de Noé, visible par vous seul, avec la réponse déjà prête. « Envoie-moi le PDF du
+  devis » → il le retrouve dans le fil et le pose dans la conversation.
+- **À construire** : des outils MCP côté app ou côté Relais — `calendar.create` (EventKit, sur
+  l'hôte « Ce Mac » ou via iPhone), `reminder.schedule` (un tour planifié par l'agent, stocké dans la
+  room console, exécuté par le service 24/7), `thread.attachments` (liste et téléchargement). Le
+  👍/👎 depuis la conversation existe (`--permission-prompt-tool`), il manque son rendu dans l'app.
+- Dépend de 0 pour retrouver dans le fil ; les rappels et le calendrier sont indépendants.
+
+### 8. Le mode pilote, par fil (2 jours)
+
+- **Vu** : pour une conversation choisie — le fil Marketplace d'une annonce, la boîte Instagram du
+  commerce — l'assistant **répond seul**, dans un cadre écrit en une phrase (« dis que c'est
+  disponible, propose samedi matin ou dimanche, ne baisse pas le prix, passe-moi la main si on parle
+  de livraison »). Chaque réponse envoyée est marquée dans le fil et journalisée. Un interrupteur
+  visible, rouge, par fil.
+- **À construire** : le mode relais existe déjà sur WhatsApp (`!wa set-relay`, réponse préfixée
+  « 🤖 cc : »). Il manque : l'UI par fil, le cadre stocké dans la room console, la règle de
+  passage de main (l'agent répond « je préviens meffysto » et pose un brouillon), et la garde
+  anti-boucle si l'interlocuteur est lui-même un bot. Sur les réseaux Meta, avertir du risque de
+  bannissement pour automatisation.
+- Dépend de 0 et de 2. C'est la fonctionnalité qui « vend » aux indépendants et aux vendeurs.
+
+### 9. L'inbox comme outil : `correspondance-mcp` (2–3 jours)
+
+- **Vu** : depuis Claude Desktop, Zed ou une autre app : « qu'est-ce qui attend une réponse depuis
+  deux jours ? », « prépare une réponse à Camille » → le brouillon apparaît dans Correspondance.
+- **À construire** : `PLAN-relais-agents.md` § M le décrit : binaire local stdio, session du
+  Trousseau, outils de lecture, `draft_reply`, `send_message` derrière liste blanche, contenu marqué
+  non fiable, pas d'envoi dans le tour d'une lecture.
+- Donne aussi à cc l'accès aux rooms où il n'est pas invité, pour le chantier 1.
+
+### 10. Avoir cc en un clic (déjà planifié, prérequis pour tout tiers)
+
+`PLAN-agents.md` phases 1–3 : la config depuis la room console, l'hôte « Ce Mac » via
+`SMAppService`, l'hôte distant assisté. Sans ça, l'agent parfait n'existe que sur le NUC de meffysto.
+
+## Ordre recommandé
+
+1. **0 Contexte** — sans lui rien n'est vrai.
+2. **1 Résumé** et **2 Réponse proposée** — la table de base, en deux semaines on est au niveau
+   annoncé par Beeper, avec cinq réseaux et chez soi.
+3. **5 Mémoire** — ce que personne n'a, et ce qui rend 2 bon plutôt que générique.
+4. **3 Traduction** et **4 Vocaux** — petits, visibles, attendus par la cible.
+5. **6 Progressif** — confort, rend l'agent vivant.
+6. **7 Agir** puis **8 Pilote** — le rêve, mais seulement quand la lecture et la mémoire sont solides.
+7. **9 MCP** et **10 Un clic** — en parallèle, dès qu'une deuxième personne veut l'essayer.
+
+Environ 25 jours de travail pour l'ensemble, livrables un par un. Après 0+1+2 (une semaine), le
+site peut à nouveau écrire « résume le groupe famille » et « propose une réponse à l'acheteur » ;
+après 5, « il sait que Julie est végétarienne » ; après 8, « il répond aux acheteurs pour vous ».
+
+## Ce qu'on ne fera pas
+
+- **Envoyer sans validation par défaut.** Le mode pilote est un choix explicite, par fil, visible.
+- **Lire tout le temps.** Le contexte est chargé à un tour, pas surveillé en continu ; la réponse
+  proposée est opt-in par fil ; « Qu'est-ce que j'ai raté » est un geste, pas un fond.
+- **Un cloud à nous.** Tout ce qui précède tourne sur le Relais ou l'appareil, avec l'abonnement
+  du propriétaire. C'est la ligne qui nous sépare de Beeper, Franz et Meta, et c'est celle du site.
+
+## Sources
+
+- Beeper, relance et feuille de route IA (BeepMate, résumés, classement, ouverture à Claude/ChatGPT) :
+  blog.tmcnet.com, « Beeper Relaunches with On-Device Messaging… », 2026.
+- Franz 6, assistant intégré (rattrapage, transcription, triage, brouillons) : meetfranz.com, makerstack.co.
+- WhatsApp, brouillons IA à partir du fil : techcrunch.com, 2026-03-26.
+- OpenAI, intégration Apple Messages (lire, chercher, rédiger, envoyer) : 9to5mac.com, 2026-03.
