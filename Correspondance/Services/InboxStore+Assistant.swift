@@ -135,9 +135,16 @@ extension InboxStore {
 
   func requestSummary() async {
     guard offersSummary, !isSummaryCoolingDown else { return }
-    summaryRequestedAt = .now
+    let at = Date.now
+    summaryRequestedAt = at
     await sendAside(
       "résume les messages non lus de cette conversation : ce qui attend une réponse d'abord, puis le reste en une ligne"
     )
+    // Le réveil du bouton : l'écran ne se redessine pas tout seul à l'échéance.
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(Self.summaryCooldown))
+      guard let self, self.summaryRequestedAt == at else { return }
+      self.summaryRequestedAt = nil
+    }
   }
 }

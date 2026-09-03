@@ -29,6 +29,7 @@ public struct MatrixSyncParser: Sendable {
         applyReaction(event, to: &model)
         applyPoll(event, roomID: roomID, to: &model)
         applyAgentProposal(event, to: &model)
+        applyAgentNotice(event, to: &model)
         applyRedaction(event, to: &model)
       }
       for event in (room.ephemeral?.events ?? []) {
@@ -122,6 +123,7 @@ public struct MatrixSyncParser: Sendable {
       applyReaction(event, to: &model)
       applyPoll(event, roomID: roomID, to: &model)
       applyAgentProposal(event, to: &model)
+      applyAgentNotice(event, to: &model)
       applyRedaction(event, to: &model)
     }
     resolveQuotes(in: &model)
@@ -419,6 +421,47 @@ public struct MatrixSyncParser: Sendable {
     model.markWritten(eventID)
   }
 
+  /// Un avis de l'agent sur lui-même (`AgentWire.noticeType`) : une ligne
+  /// système, de personne, qui ne remonte pas le fil dans la file — comme une
+  /// proposition. Le texte va aussi dans `systemEventText`, pour que l'inbox,
+  /// l'iPhone et tout ce qui ne connaît pas l'avis le traitent en événement.
+  private func applyAgentNotice(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard event.type == AgentNotice.eventType,
+          let eventID = event.eventID,
+          let content = event.content,
+          let notice = Self.agentNotice(in: content, sender: event.sender)
+    else { return }
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      isFromMe: false,
+      senderID: event.sender,
+      senderName: notice.agent,
+      systemEventText: notice.body,
+      agentNotice: notice
+    )
+    model.markWritten(eventID)
+  }
+
+  /// Le corps d'un avis : `{ "agent", "body", "reason", "action" }`.
+  public static func agentNotice(in content: MatrixJSON, sender: String?) -> AgentNotice? {
+    guard let body = content.string(at: AgentWire.NoticeKey.body), !body.isEmpty else { return nil }
+    let declared = content.string(at: AgentWire.NoticeKey.agent)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let agent = (declared?.isEmpty == false)
+      ? declared!
+      : sender.map { MatrixIdentity.localpart(of: $0) } ?? ""
+    return AgentNotice(
+      agent: agent,
+      body: body,
+      reason: content.string(at: AgentWire.NoticeKey.reason),
+      action: content.string(at: AgentWire.NoticeKey.action).flatMap(AgentNotice.Action.init(rawValue:))
+    )
+  }
+
   /// Le corps d'une proposition : `{ "body", "agent", "m.relates_to" }`.
   /// À défaut de champ `agent`, le localpart de l'expéditeur fait le nom.
   public static func agentProposal(in content: MatrixJSON, sender: String?) -> AgentProposal? {
@@ -567,7 +610,10 @@ public struct MatrixSyncParser: Sendable {
       attachments: attachments,
       replyTo: replyTo,
       linkPreview: linkPreview,
-      agentAside: aside
+      agentAside: aside,
+      // Envoyé par l'agent en mon nom (mode « répond seul ») : la bulle est
+      // la mienne, et le fil le dit sous elle.
+      isPiloted: content[AgentWire.pilotedKey]?.boolValue == true
     )
     guard message.hasVisibleBody else { return }
     // Une modification arrivée avant sa cible s'applique à sa naissance — si

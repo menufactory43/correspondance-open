@@ -470,9 +470,41 @@ struct ThreadView: View {
               onReply: { store.requestComposerFocus() }
             )
             .id(message.id)
+          } else if let notice = message.agentNotice {
+            // L'avis de cc sur lui-même : une pastille, et le geste qu'il propose.
+            AgentNoticePill(
+              notice: notice,
+              theme: theme,
+              typeface: themes.typeface,
+              onAction: notice.action.map { action in
+                {
+                  Task {
+                    switch action {
+                    case .rescan: await store.rescanAgent(named: notice.agent)
+                    case .retry: await store.retryLastAside()
+                    }
+                  }
+                }
+              }
+            )
+            .id(message.id)
           } else if let event = message.systemEventText {
             ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
               .id(message.id)
+          } else if message.isFromMe, message.isPiloted {
+            // Envoyé par cc en mon nom : la bulle est la mienne, la ligne
+            // dessous le dit — en rouge, parce que c'est le mode qui engage.
+            VStack(alignment: .trailing, spacing: 2) {
+              bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
+                .equatable()
+              PilotedFootnote(
+                agent: store.agentsInSelectedConversation.first ?? MatrixIdentity.agentName,
+                sentAt: message.sentAt,
+                theme: theme,
+                typeface: themes.typeface
+              )
+            }
+            .id(message.id)
           } else {
             // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
             // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.
