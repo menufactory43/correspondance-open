@@ -35,6 +35,74 @@ d'autres, et l'agent a `Bash`. Les parades restent les mêmes — dossier borné
 des tours, jamais d'envoi sans le propriétaire — et une de plus : **le contexte est marqué comme
 donnée**, encadré et attribué (« Camille a écrit : … »), jamais fondu au prompt.
 
+## Vérification d'architecture : un seul assistant, deux moteurs
+
+Beeper range ses fonctions IA en trois cartes : *Langues de traduction*, *Transcription vocale*
+(Whisper d'OpenAI, « enverra des clips audio à OpenAI via nos serveurs »), *Mentions IA* (« enverra
+les 20 messages les plus récents »). Chacune derrière un abonnement Plus. C'est la bonne liste et la
+bonne honnêteté ; ce n'est pas la bonne forme pour nous, et voici pourquoi.
+
+**Deux natures de travail, qu'il ne faut pas confondre.**
+
+| | Réflexes | Tours |
+|---|---|---|
+| Exemples | traduire ce qui arrive, transcrire un vocal, détecter la langue | résumer, proposer une réponse, répondre seul, agir, se souvenir |
+| Quand | à chaque message, sans qu'on demande | quand on le nomme, qu'on réagit, qu'un déclencheur sonne |
+| Délai acceptable | < 1 s | 5–30 s |
+| Où | sur l'appareil (Apple Translation, `SFSpeechRecognizer`), Relais en option (whisper.cpp) | le moteur de l'agent, sur le Relais ou « Ce Mac », avec l'abonnement |
+| Coût | nul | l'abonnement du propriétaire |
+| Jugement | aucun, résultat prévisible | tout |
+
+Faire passer un réflexe par un tour d'agent (traduire chaque bulle en appelant Claude) serait lent,
+coûteux en quota, et imprévisible. Faire un tour avec un réflexe (résumer avec un modèle local
+minuscule) donnerait de la bouillie. Les chantiers 3 et 4 sont donc bien des réflexes côté app, les
+autres des tours : le plan est cohérent, on le garde.
+
+**Mais un seul nom, une seule fiche.** Pour l'utilisateur, tout ça c'est cc. On ne présente pas
+« Traduction » à côté d'« Assistant » comme deux produits ; on présente **un assistant qui a des
+réflexes et qui réfléchit quand on lui parle**. Concrètement, la fiche de cc (niveau 2, racine de
+l'héritage du chantier 8b) ressemble à ça :
+
+```
+cc                                                   ● en ligne · Ce Mac
+
+Réflexes
+  Traduire ce qui arrive            [ Portugais, Anglais ▾ ]    Sur cet appareil
+  Traduire ce que j'envoie           ○                            Sur cet appareil
+  Transcrire les vocaux              ●                            Sur cet appareil
+                                                                  ↳ ou sur votre Relais (whisper), pour la recherche
+
+Quand on lui parle
+  Contexte donné à cc                [ 50 derniers messages ▾ ]  Via votre Relais → Anthropic, avec votre abonnement
+  Dans les conversations             Sur demande ▾  (par défaut ; chaque fil peut changer)
+  Point du matin                     ○  8h00                       Visible par vous seul
+
+Ce qu'il sait de vos contacts       12 fiches ›                   Sur votre Relais, chiffré
+Réglages avancés                    ›                             Le fichier, en formulaire
+```
+
+Chaque ligne porte **où vont les données** — sur cet appareil, sur votre Relais, chez Anthropic via
+votre abonnement. C'est la ligne de Beeper (« enverra … via nos serveurs ») retournée à notre
+avantage : rien ne passe par nous, et on le dit à l'endroit exact où on décide.
+
+**Ce que ça règle pour les cas d'usage.**
+- *Grand public, famille* : réflexes allumés, cc sur demande. Rien à comprendre.
+- *Vendeur, indépendant* : la carte du fil passe en *Propose* ou *Répond seul* avec un modèle.
+- *Pro, Slack* : persona par réseau, formulaire du niveau 3, MCP vers ses outils.
+- *« Un Grok, un bot à qui parler »* : le fil de cc, déjà là ; le contexte du chantier 0 le rend utile.
+- *« Comme Beeper »* : traduction, transcription, mentions avec contexte — les trois y sont, sans
+  abonnement Plus et sans passer par des serveurs à nous.
+
+**Ce qu'on ne fait pas, délibérément** : plusieurs agents-produits (« Traducteur », « Résumeur »,
+« Vendeur ») comme identités séparées. Buzz le fait parce qu'une équipe de développeurs veut des
+rôles ; une personne veut *un* assistant qu'elle règle. Les personas restent des réglages de cc,
+pas des contacts. Le multi-moteur (hermes, claude) demeure, en réglages avancés.
+
+**Deux limites à écrire noir sur blanc** : iMessage n'existe que sur le Mac, donc les tours qui
+lisent un fil iMessage exigent que le Mac soit allumé, ou qu'il ait poussé le fil au Relais ; et les
+réflexes sur l'appareil ne bénéficient pas à la recherche tant que le Relais ne les a pas faits une
+fois — d'où l'option whisper sur le Relais, éteinte par défaut.
+
 ## Les chantiers
 
 Chaque chantier est décrit par ce que l'utilisateur voit, ce qu'il faut construire, et sa taille.
