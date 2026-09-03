@@ -40,6 +40,10 @@ public actor Agent {
   /// Les membres connus de chaque room — pour savoir si on est en tête-à-tête
   /// avec les propriétaires (réponse directe) ou devant des humains (brouillon).
   private var members: [String: Set<String>] = [:]
+  /// Les noms d'affichage par room (MXID → nom), pour attribuer les lignes du
+  /// contexte du fil. Remplis par les `m.room.member` du `/sync`, complétés
+  /// par une lecture de l'état la première fois qu'une room en a besoin.
+  private var displayNames: [String: [String: String]] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
   /// Ce qui est arrivé pendant qu'un tour était en vol. À la fin du tour, tout
@@ -47,10 +51,20 @@ public actor Agent {
   /// bulle pour dire qu'on attend : ça remplirait la file au lieu de la vider,
   /// et ça perdait la demande.
   private var enAttente: [String: [AgentRequest]] = [:]
+  /// Quand un propriétaire a écrit pour la dernière fois dans chaque salon —
+  /// c'est ce qui fait taire une suggestion : s'il a répondu lui-même pendant
+  /// les trois secondes d'attente, l'agent n'a rien à proposer.
+  private var derniereActiviteProprietaire: [String: Date] = [:]
+  /// Le délai avant qu'une suggestion parte : le temps de laisser le
+  /// propriétaire répondre lui-même.
+  var delaiDeSuggestion: Duration = .seconds(3)
   /// Les tours consommés par atelier dans l'heure — un budget de salon, en plus
   /// du plafond de l'agent : deux agents qui se répondent brûleraient une
   /// fenêtre d'abonnement en une nuit.
   private var atelierBudgets: [String: HourlyCap] = [:]
+  /// Les réponses pilotées de l'heure, par salon (`Pilotage.plafondParHeure`) :
+  /// un cadre mal écrit ne parle pas au nom du propriétaire sans fin.
+  private var pilotCaps: [String: HourlyCap] = [:]
   /// Les demandes de permission posées dans une room, en attente d'un 👍 —
   /// clef : l'event de la question ; valeur : où écrire la décision.
   private var pendingPermissions: [String: PendingPermission] = [:]
@@ -250,6 +264,9 @@ public actor Agent {
     // les rooms en tête-à-tête (la note à soi en tête) — l'app le lit dans les
     // réglages, sans SSH. La présence Matrix est éteinte sur le Relais, exprès.
     Task { await self.publishStatus() }
+    // Le point du matin, s'il est réglé : une tâche qui dort jusqu'à l'heure.
+    let battement = Task { await self.battementDeCoeur() }
+    defer { battement.cancel() }
 
     while !Task.isCancelled {
       do {
@@ -266,15 +283,21 @@ public actor Agent {
           for event in room.timeline?.events ?? [] {
             guard event.sender != credentials.userID else { continue }
             if resolvePermission(from: event) { continue }
+            noteActiviteProprietaire(event, in: roomID)
             if isAtelier(roomID) {
               if let request = atelierRequest(from: event, roomID: roomID) { dispatch(request) }
               continue
             }
-            guard let request = Trigger.request(
+            if let request = Trigger.request(
               from: event, roomID: roomID, config: live, notBefore: notBefore,
               requiresTrigger: requiresTrigger(in: roomID)
-            ) else { continue }
-            dispatch(request)
+            ) {
+              dispatch(request)
+            } else if let suggestion = Trigger.suggestion(from: event, roomID: roomID, config: live, notBefore: notBefore) {
+              // Personne n'a parlé à l'agent, mais un tiers a écrit dans un
+              // salon réglé sur *Propose* ou *Répond seul*.
+              dispatch(suggestion)
+            }
           }
         }
         state.nextBatch = response.nextBatch
@@ -285,6 +308,65 @@ public actor Agent {
         backoff = min(backoff * 2, 60)
       }
     }
+  }
+
+  // MARK: - Le point du matin
+
+  /// Dort jusqu'à la prochaine heure réglée (`heartbeat`), fait le point, et
+  /// recommence. Relit la config à chaque réveil : l'heure peut changer depuis
+  /// l'app sans redémarrage, et une minute de retard ne se voit pas.
+  private func battementDeCoeur() async {
+    while !Task.isCancelled {
+      guard let heure = live.heartbeat, let prochaine = Heartbeat.prochaineOccurrence(de: heure, apres: Date()) else {
+        try? await Task.sleep(for: .seconds(60))
+        continue
+      }
+      let attente = prochaine.timeIntervalSinceNow
+      // Par tranches d'une minute : si l'heure change entre-temps, on la suit.
+      try? await Task.sleep(for: .seconds(min(60, max(0, attente))))
+      if Task.isCancelled { return }
+      guard Date() >= prochaine, live.heartbeat == heure else { continue }
+      await pointDuMatin()
+      // Ne pas resonner dans la même minute.
+      try? await Task.sleep(for: .seconds(61))
+    }
+  }
+
+  /// Le point : les salons où le dernier mot n'est pas au propriétaire, lus
+  /// par `/messages`, et un tour `summary` dans **le tête-à-tête de l'agent**
+  /// — le premier fil marqué par l'app dont il est l'hôte. Sans fil, pas de
+  /// point : on n'invente pas un endroit où le poster.
+  private func pointDuMatin() async {
+    guard let cible = teteATeteRooms.sorted().first(where: { host(of: $0) == live.botUserID }) else {
+      log("point du matin : pas de tête-à-tête à mon nom, je ne le fais pas")
+      return
+    }
+    guard let joined = try? await client.joinedRooms() else {
+      log("point du matin : le Relais n'a pas répondu")
+      return
+    }
+    var salons: [Heartbeat.Salon] = []
+    for roomID in joined where roomID != cible && roomID != consoleRoomID {
+      guard let messages = try? await client.roomMessages(roomID: roomID, limit: Heartbeat.messagesParRoom) else { continue }
+      salons.append(Heartbeat.Salon(roomID: roomID, nom: roomNames[roomID], events: messages.chunk))
+    }
+    let prompt = Heartbeat.prompt(salons: salons, owners: Set(live.owners), moi: live.botUserID, noms: displayNames)
+    guard !prompt.isEmpty else {
+      log("point du matin : rien n'attend de réponse")
+      return
+    }
+    log("point du matin : \(salons.count) salon(s) lus, tour dans \(cible)")
+    dispatch(AgentRequest(
+      roomID: cible, eventID: "", sender: live.botUserID, prompt: prompt,
+      sentAt: Date(), kind: .summary
+    ))
+  }
+
+  /// Un propriétaire qui écrit dans un salon : on retient quand. C'est ce qui
+  /// abandonne une suggestion en attente — il a répondu lui-même.
+  private func noteActiviteProprietaire(_ event: MatrixEvent, in roomID: String) {
+    guard event.type == "m.room.message", let sender = event.sender, live.owners.contains(sender) else { return }
+    derniereActiviteProprietaire[roomID] = max(derniereActiviteProprietaire[roomID] ?? .distantPast, event.sentAt)
   }
 
   /// Un `m.room.encrypted` qui traverse le `/sync` sans avoir été déchiffré,
@@ -417,6 +499,13 @@ public actor Agent {
         let membership = event.content?.string(at: "membership")
         if membership == "join" || membership == "invite" { set.insert(user) } else { set.remove(user) }
         members[roomID] = set
+        // Un membre qui bouge porte son nom : on le garde, pour le contexte du
+        // fil — sans relire tout l'état à chaque tour.
+        if let nom = event.content?.string(at: "displayname"), !nom.isEmpty {
+          displayNames[roomID, default: [:]][user] = nom
+        } else if membership != "join" && membership != "invite" {
+          displayNames[roomID]?[user] = nil
+        }
       }
     }
   }
@@ -619,6 +708,27 @@ public actor Agent {
   }
 
   private func handle(_ arrivee: AgentRequest) async {
+    // Une suggestion ne fait pas la queue : si un tour est en vol, elle est
+    // abandonnée — personne ne l'a demandée, et elle serait fusionnée à un
+    // ordre qu'elle n'est pas. Pareil pour un tour piloté.
+    if arrivee.kind == .suggest || arrivee.kind == .pilot, busyRooms.contains(arrivee.roomID) {
+      log("[\(arrivee.roomID)] \(arrivee.kind.rawValue) abandonné : un tour est en vol")
+      return
+    }
+    if arrivee.kind == .suggest {
+      // Trois secondes : le temps que le propriétaire réponde lui-même. S'il
+      // l'a fait, l'agent se tait — une proposition sous une réponse déjà
+      // envoyée serait du bruit.
+      try? await Task.sleep(for: delaiDeSuggestion)
+      if Trigger.suggestionDepassee(arrivee, derniereActiviteProprietaire: derniereActiviteProprietaire[arrivee.roomID]) {
+        log("[\(arrivee.roomID)] suggestion abandonnée : le propriétaire a répondu")
+        return
+      }
+      if busyRooms.contains(arrivee.roomID) {
+        log("[\(arrivee.roomID)] suggestion abandonnée : un tour est en vol")
+        return
+      }
+    }
     // Un tour est déjà en vol ici : la demande attend, et elle partira avec les
     // autres. Aucune bulle — le « écrit… » dit déjà qu'on travaille, et une
     // bulle de refus remplissait la file en perdant la demande.
@@ -650,8 +760,26 @@ public actor Agent {
 
     guard cap.admit() else {
       let wait = Int((cap.nextSlot() ?? 0) / 60) + 1
-      await reply("Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min.", to: request)
+      let message = "Plafond horaire atteint (\(live.hourlyCap) demandes). Réessaie dans \(wait) min."
+      await reply(message, to: request)
+      // Le texte reste pour les clients qui ne connaissent pas l'avis ; l'avis
+      // est ce que l'app rend en ligne système, avec la cause.
+      await avis(message, reason: "cap", in: request.roomID)
       return
+    }
+
+    // Un tour piloté a son propre plafond, par salon : au-delà, on ne répond
+    // plus seul — on le dit au propriétaire, et on ne dit rien au tiers.
+    if request.kind == .pilot {
+      var reserve = pilotCaps[request.roomID] ?? HourlyCap(limit: Pilotage.plafondParHeure)
+      let admis = reserve.admit()
+      pilotCaps[request.roomID] = reserve
+      guard admis else {
+        log("[\(request.roomID)] plafond des réponses pilotées atteint (\(Pilotage.plafondParHeure)/h) — je passe la main")
+        await avis("Plafond des réponses en votre nom atteint (\(Pilotage.plafondParHeure) par heure) : je ne réponds plus seul ici pour l'instant.",
+                   reason: "cap", in: request.roomID)
+        return
+      }
     }
 
     if !lot.dropped.isEmpty {
@@ -709,6 +837,7 @@ public actor Agent {
       let message = EngineScan.absenceFR(engine: moteur, host: EngineScan.hostName)
       log("[\(request.roomID)] moteur \(moteur) absent — on le dit plutôt que de se taire")
       await reply(message, to: request)
+      await avis(message, reason: "engine_missing", action: "rescan", in: request.roomID)
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
       return
     }
@@ -719,6 +848,7 @@ public actor Agent {
       let message = EngineScan.nonConnecteFR(engine: moteur, host: EngineScan.hostName)
       log("[\(request.roomID)] moteur \(moteur) installé mais pas connecté — on le dit")
       await reply(message, to: request)
+      await avis(message, reason: "engine_offline", action: "rescan", in: request.roomID)
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: [], tokens: nil)
       return
     }
@@ -741,11 +871,19 @@ public actor Agent {
         download: { [client] mxc in try await client.downloadMedia(mxcURI: mxc) }
       )
       for ligne in lignes { log("[\(request.roomID)] pièce jointe \(ligne.dropFirst(2))") }
-      let prompt = AgentAttachmentDrop.promptSection(lignes) + atelierPreamble(for: request.roomID) + texte
+      // Le fil d'abord, comme bloc de données ; puis ce qu'on demande. Un
+      // échec de `/messages` ne bloque pas le tour : mieux vaut répondre sans
+      // mémoire que ne pas répondre.
+      let contexte = await contexteDuFil(for: request.roomID, exclure: Set(requests.map(\.eventID)))
+      let prompt = contexte + AgentAttachmentDrop.promptSection(lignes) + atelierPreamble(for: request.roomID) + texte
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
         try? persist()
+      }
+      if request.kind == .pilot {
+        await pilote(turn, for: request, startedTurn: startedTurn)
+        return
       }
       let text = turn.text.isEmpty ? "(Claude n'a rien répondu.)" : turn.text
       await reply(text, to: request)
@@ -753,8 +891,110 @@ public actor Agent {
       await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
     } catch {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
-      await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
+      let message = "Je n'ai pas pu répondre : \(error.localizedDescription)"
+      await reply(message, to: request)
+      // Un délai dépassé se distingue d'une panne : le geste est le même
+      // (réessayer), mais l'app peut dire « trop long » plutôt que « cassé ».
+      // Le délai lui-même est celui du moteur (`claude.timeoutSeconds`,
+      // `hermes.timeoutSeconds`, `acp.timeoutSeconds`) : c'est là qu'il se règle.
+      let raison: String = if case AgentBackendError.timedOut = error { "timeout" } else { "error" }
+      await avis(message, reason: raison, action: "retry", in: request.roomID)
     }
+  }
+
+  /// La sortie d'un tour piloté : la réponse part **au nom du propriétaire**,
+  /// marquée `pilotedKey` et journalisée « piloté » ; ou, hors cadre, l'agent
+  /// passe la main — proposition `handover` avec la raison, et un avis qui
+  /// déclenche une notification. Une erreur du moteur passe la main aussi :
+  /// on n'envoie jamais un message d'erreur à un tiers en votre nom.
+  private func pilote(_ turn: AgentTurn, for request: AgentRequest, startedTurn: Date) async {
+    let verdict: Pilotage.Verdict = turn.isError
+      ? .horsCadre(raison: "le moteur a répondu en erreur")
+      : Pilotage.lire(turn.text)
+    switch verdict {
+    case .reponse(let texte):
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: "m.room.message",
+          content: AgentEvents.pilotedText(texte, inReplyTo: request.eventID)
+        )
+        log("[\(request.roomID)] ← piloté, \(texte.count) caractères, en votre nom")
+      } catch {
+        log("[\(request.roomID)] envoi piloté impossible : \(error.localizedDescription)")
+      }
+      var journalise = request
+      journalise.prompt = "piloté : " + request.prompt
+      await journal(journalise, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
+    case .horsCadre(let raison):
+      log("[\(request.roomID)] hors cadre — je passe la main : \(raison)")
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: AgentEvents.proposalType,
+          content: AgentEvents.proposal(
+            text: "", agent: config.user, inReplyTo: request.eventID,
+            kind: AgentWire.ProposalKind.handover, reason: raison
+          )
+        )
+      } catch {
+        log("[\(request.roomID)] passation impossible : \(error.localizedDescription)")
+      }
+      await avis("Un message sort du cadre, je n'ai pas répondu : \(raison)", reason: "handover", in: request.roomID)
+      await journal(request, seconds: Date().timeIntervalSince(startedTurn), tools: turn.tools, tokens: turn.tokens)
+    }
+  }
+
+  /// Ce que l'agent dit de lui-même à ses propriétaires, dans le salon
+  /// (`AgentWire.noticeType`) : les ponts ne le relaient pas, l'app le rend
+  /// en ligne système avec le geste. Une panne qui ne se voit pas passe pour
+  /// de la lenteur — et un tour piloté qui passe la main sans le dire laisse
+  /// un tiers sans réponse.
+  private func avis(_ body: String, reason: String, action: String? = nil, in roomID: String) async {
+    do {
+      try await client.sendEvent(
+        roomID: roomID, type: AgentWire.noticeType,
+        content: AgentEvents.notice(agent: config.user, body: body, reason: reason, action: action)
+      )
+    } catch {
+      log("[\(roomID)] avis impostable (\(reason)) : \(error.localizedDescription)")
+    }
+  }
+
+  /// Combien de messages du fil ce salon donne au moteur : ce que la room dit,
+  /// sinon le défaut de l'agent. `0` coupe.
+  func contexte(for roomID: String) -> Int {
+    max(0, live.rooms[roomID]?.context ?? live.context)
+  }
+
+  /// Le bloc de contexte d'un tour : les N derniers messages du salon, lus par
+  /// `/messages`, attribués par leur nom d'affichage. Vide si le salon n'en
+  /// veut pas, ou si le Relais n'a pas répondu — et alors on le dit au journal.
+  ///
+  /// Les `m.room.encrypted` restent des `[message chiffré]` : `/messages` rend
+  /// les events tels quels, et le déchiffrement de l'historique par la machine
+  /// crypto n'est pas branché ici — seul le `/sync` passe par elle.
+  private func contexteDuFil(for roomID: String, exclure: Set<String>) async -> String {
+    let nombre = contexte(for: roomID)
+    guard nombre > 0 else { return "" }
+    let events: [MatrixEvent]
+    do {
+      // `exclure` sort du lot ce qu'on est en train de traiter : on demande
+      // donc un peu plus que N, pour que le fil garde sa longueur.
+      events = try await client.roomMessages(roomID: roomID, limit: nombre + exclure.count).chunk
+    } catch {
+      log("[\(roomID)] contexte du fil indisponible : \(error.localizedDescription) — le tour part sans")
+      return ""
+    }
+    if displayNames[roomID] == nil, let etats = try? await client.roomStateEvents(roomID: roomID) {
+      displayNames[roomID] = ContexteDuFil.noms(dans: etats)
+    }
+    let section = ContexteDuFil.section(
+      events: events, moi: live.botUserID, noms: displayNames[roomID] ?? [:],
+      exclure: exclure
+    )
+    if !section.isEmpty {
+      log("[\(roomID)] contexte : \(events.count) event(s) du fil, \(section.count) caractères")
+    }
+    return section
   }
 
   /// Ce que le moteur doit savoir des autres agents du salon : qu'ils sont
@@ -937,6 +1177,31 @@ public actor Agent {
 
   /// La réponse va là où l'ordre a été donné, dans la forme que la room impose.
   private func reply(_ text: String, to request: AgentRequest) async {
+    // Le genre du tour passe avant le mode du salon : ce que personne n'a
+    // demandé ne parle jamais. Une suggestion est une proposition `suggest`,
+    // quel que soit le mode ; le point du matin, une proposition `summary` ;
+    // et ce qu'un tour piloté n'a pas pu envoyer seul — une erreur, un
+    // plafond — passe la main (`handover`) plutôt que de partir au tiers.
+    let genre: String? = switch request.kind {
+    case .suggest: AgentWire.ProposalKind.suggest
+    case .summary: AgentWire.ProposalKind.summary
+    case .pilot: AgentWire.ProposalKind.handover
+    case .reply: nil
+    }
+    if let genre {
+      do {
+        try await client.sendEvent(
+          roomID: request.roomID, type: AgentEvents.proposalType,
+          content: AgentEvents.proposal(
+            text: text, agent: config.user, inReplyTo: request.eventID, kind: genre,
+            reason: request.kind == .pilot ? text : nil
+          )
+        )
+      } catch {
+        log("[\(request.roomID)] envoi impossible : \(error.localizedDescription)")
+      }
+      return
+    }
     let mode = await mode(for: request.roomID)
     do {
       // Dans un atelier, le tour se déroule dans un thread : seul le résultat
@@ -950,7 +1215,7 @@ public actor Agent {
         return
       }
       switch mode {
-      case .direct:
+      case .direct, .pilot:
         // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un
         // portail en relais c'est le pont qui signe (`message_formats`) — en
         // préfixer un ici doublerait la signature chez le correspondant.

@@ -47,6 +47,14 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   /// Le budget de tours par heure et par atelier, en plus du plafond de l'agent.
   public var atelierBudget: Int = 20
 
+  /// Combien de messages du fil l'agent reçoit à chaque tour, attribués et
+  /// horodatés, comme bloc de données (`ContexteDuFil`). `0` coupe : il ne
+  /// voit que ce qu'on lui adresse. Une room peut dire autrement (`RoomBinding.context`).
+  public var context: Int = 50
+
+  /// L'heure du point du matin (`"08:00"`), ou `nil` : pas de point.
+  public var heartbeat: String?
+
   public init(homeserver: URL, user: String, password: String, owners: [String]) {
     self.homeserver = homeserver
     self.user = user
@@ -58,7 +66,7 @@ public struct AgentConfig: Codable, Sendable, Equatable {
   // `config.json` de quatre lignes doit suffire.
   private enum CodingKeys: String, CodingKey {
     case homeserver, user, password, owners, trigger, hourlyCap, defaultMode, backend, claude, hermes, acp, rooms
-    case peers, atelierBudget
+    case peers, atelierBudget, context, heartbeat
   }
 
   public init(from decoder: Decoder) throws {
@@ -77,6 +85,8 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     rooms = try c.decodeIfPresent([String: RoomBinding].self, forKey: .rooms) ?? [:]
     peers = try c.decodeIfPresent([String].self, forKey: .peers) ?? []
     atelierBudget = try c.decodeIfPresent(Int.self, forKey: .atelierBudget) ?? 20
+    context = try c.decodeIfPresent(Int.self, forKey: .context) ?? 50
+    heartbeat = try c.decodeIfPresent(String.self, forKey: .heartbeat)
   }
 
   /// Le Matrix ID complet du bot, déduit du `server_name` d'un propriétaire.
@@ -236,6 +246,12 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     /// L'agent propose : un event `fr.correspondance.agent.proposal` que les
     /// ponts ignorent. Seul Correspondance le voit, et c'est le propriétaire qui envoie.
     case draft
+    /// L'agent **répond seul**, au nom du propriétaire, dans le cadre du salon
+    /// (`RoomBinding.frame`) : chaque envoi porte `AgentWire.pilotedKey` et se
+    /// journalise ; hors cadre, il pose un brouillon `handover` et prévient.
+    /// Une mention explicite du propriétaire, dans un tel salon, se comporte
+    /// comme `direct`.
+    case pilot
   }
 
   public struct RoomBinding: Codable, Sendable, Equatable {
@@ -248,11 +264,30 @@ public struct AgentConfig: Codable, Sendable, Equatable {
     /// propriétaire une demande — c'est un choix, pas un défaut : dans une
     /// note à soi ou un fil bridgé, ce serait insupportable.
     public var mention: Bool?
+    /// Le nombre de messages du fil donnés au moteur ici ; `nil` : le défaut
+    /// de l'agent (`AgentConfig.context`). `0` coupe.
+    public var context: Int?
+    /// `off` (défaut) | `always` | `keywords` : l'agent propose-t-il une
+    /// réponse à chaque message d'un tiers, sans qu'on le nomme ? Toujours en
+    /// brouillon, quel que soit le mode du salon. Cf. `AgentWire.Suggest`.
+    public var suggest: String?
+    /// Les mots qui réveillent l'agent quand `suggest` vaut `keywords`.
+    public var keywords: [String]?
+    /// Le cadre du mode `pilot` : une phrase, ce que l'agent a le droit de
+    /// faire seul ici. Hors cadre, il passe la main (proposition `handover`).
+    public var frame: String?
 
-    public init(cwd: String? = nil, mode: RoomMode? = nil, mention: Bool? = nil) {
+    public init(
+      cwd: String? = nil, mode: RoomMode? = nil, mention: Bool? = nil,
+      context: Int? = nil, suggest: String? = nil, keywords: [String]? = nil, frame: String? = nil
+    ) {
       self.cwd = cwd
       self.mode = mode
       self.mention = mention
+      self.context = context
+      self.suggest = suggest
+      self.keywords = keywords
+      self.frame = frame
     }
   }
 

@@ -16,6 +16,24 @@ public struct AgentRequest: Sendable, Equatable {
   /// Ce tour vient d'un autre agent, chargé par un propriétaire : la réponse
   /// portera le drapeau `AgentWire.delegatedKey`, et personne n'y répondra.
   public var delegated: Bool
+  /// Pourquoi ce tour existe — et donc où va sa réponse.
+  public var kind: Kind
+
+  /// Les genres de tour. Le genre décide de la sortie, pas le mode du salon :
+  /// une suggestion ne parle jamais, un tour piloté parle au nom du propriétaire.
+  public enum Kind: String, Sendable {
+    /// On a parlé à l'agent : la réponse suit le mode du salon.
+    case reply
+    /// Un tiers a écrit, et le salon est réglé sur *Propose* : la réponse est
+    /// **toujours** une proposition (`ProposalKind.suggest`), après 3 s sans
+    /// que le propriétaire n'ait répondu lui-même.
+    case suggest
+    /// Un tiers a écrit, et le salon est en `pilot` : l'agent répond seul, dans
+    /// le cadre, ou passe la main (`<hors-cadre>` → proposition `handover`).
+    case pilot
+    /// Le point du matin : une proposition `summary` dans le fil de l'agent.
+    case summary
+  }
 
   public init(
     roomID: String,
@@ -24,7 +42,8 @@ public struct AgentRequest: Sendable, Equatable {
     prompt: String,
     sentAt: Date,
     attachments: [AgentAttachment] = [],
-    delegated: Bool = false
+    delegated: Bool = false,
+    kind: Kind = .reply
   ) {
     self.roomID = roomID
     self.eventID = eventID
@@ -33,6 +52,7 @@ public struct AgentRequest: Sendable, Equatable {
     self.sentAt = sentAt
     self.attachments = attachments
     self.delegated = delegated
+    self.kind = kind
   }
 }
 
@@ -157,6 +177,110 @@ public enum Trigger {
   /// les ponts ne le relaient pas. Pour l'agent, les deux sont des ordres.
   public static func carriesText(_ event: MatrixEvent) -> Bool {
     event.type == "m.room.message" || event.type == AgentWire.asideType
+  }
+
+  // MARK: - Proposer sans qu'on demande, répondre seul
+
+  /// L'instruction d'une suggestion. Fixe : ce que le tiers a écrit vient
+  /// **après**, cité, comme une donnée.
+  public static let promptDeSuggestion =
+    "Propose, en une ou deux phrases, la réponse que le propriétaire enverrait à ce dernier message, "
+      + "dans son ton. Réponds uniquement par le texte à envoyer."
+
+  /// Ce qu'un tour piloté répond quand le message sort du cadre — suivi d'une
+  /// phrase qui dit pourquoi. `Pilotage.lire` relit ce protocole.
+  public static let horsCadre = "<hors-cadre>"
+
+  /// L'instruction d'un tour piloté : répondre dans le cadre, ou dire
+  /// exactement `<hors-cadre>` et pourquoi.
+  public static func promptDePilotage(frame: String?) -> String {
+    let cadre = frame?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let cadreDit = cadre.isEmpty ? "aucun cadre n'a été donné : tout message est hors cadre" : cadre
+    return "Tu réponds au nom du propriétaire, dans ce cadre, et seulement dans ce cadre : « \(cadreDit) ». "
+      + "Si le message sort du cadre, réponds exactement `\(horsCadre)` suivi d'une phrase qui dit pourquoi. "
+      + "Sinon réponds uniquement par le texte à envoyer."
+  }
+
+  /// Un message **d'un tiers** qui déclenche un tour sans qu'on nomme l'agent :
+  /// dans un salon réglé sur *Propose* (`suggest: always`, ou `keywords` et un
+  /// des mots est dans le corps), une suggestion ; dans un salon en `pilot`,
+  /// un tour piloté. `nil` partout ailleurs.
+  ///
+  /// Le tiers, ici, c'est **le fantôme de pont** : c'est lui qui écrit depuis
+  /// WhatsApp, et c'est à lui qu'on répond. Ce qu'on ne prend jamais pour un
+  /// tiers : un propriétaire (il parle à quelqu'un, pas à l'agent), l'agent
+  /// lui-même, un autre agent (`peers`) — et un message déjà piloté, d'où
+  /// qu'il vienne : deux agents en `pilot` se répondraient sans fin.
+  public static func suggestion(
+    from event: MatrixEvent,
+    roomID: String,
+    config: AgentConfig,
+    notBefore: Date
+  ) -> AgentRequest? {
+    guard event.type == "m.room.message",
+          let eventID = event.eventID,
+          let sender = event.sender,
+          event.sentAt >= notBefore,
+          !config.owners.contains(sender),
+          sender != config.botUserID,
+          !config.peers.contains(sender),
+          !AgentEvents.isPiloted(event.content),
+          let binding = config.rooms[roomID]
+    else { return nil }
+    let msgtype = event.content?.string(at: "msgtype") ?? "m.text"
+    guard msgtype == "m.text" else { return nil }
+    let body = (event.content?.string(at: "m.new_content.body")
+      ?? stripReplyFallback(event.content?.string(at: "body") ?? ""))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !body.isEmpty else { return nil }
+
+    let kind: AgentRequest.Kind
+    let instruction: String
+    if binding.mode == .pilot {
+      kind = .pilot
+      instruction = promptDePilotage(frame: binding.frame)
+    } else {
+      switch binding.suggest {
+      case AgentWire.Suggest.always:
+        kind = .suggest
+      case AgentWire.Suggest.keywords:
+        guard containsKeyword(body, among: binding.keywords ?? []) else { return nil }
+        kind = .suggest
+      default:
+        return nil
+      }
+      instruction = promptDeSuggestion
+    }
+    let prompt = instruction + "\n\nDernier message, de \(sender) : « \(body) »"
+    return AgentRequest(
+      roomID: roomID, eventID: eventID, sender: sender, prompt: prompt,
+      sentAt: event.sentAt, kind: kind
+    )
+  }
+
+  /// Un des mots est-il dans le corps — **mot entier**, sans égard à la casse ?
+  /// « devis » compte dans « ton devis est prêt », pas dans « devise ».
+  public static func containsKeyword(_ body: String, among keywords: [String]) -> Bool {
+    let mots = tokens(body)
+    guard !mots.isEmpty else { return false }
+    let texte = " " + mots.joined(separator: " ") + " "
+    return keywords.contains { mot in
+      let cle = tokens(mot).joined(separator: " ")
+      return !cle.isEmpty && texte.contains(" " + cle + " ")
+    }
+  }
+
+  private static func tokens(_ texte: String) -> [String] {
+    texte.lowercased()
+      .split { !($0.isLetter || $0.isNumber) }
+      .map(String.init)
+  }
+
+  /// Une suggestion est **dépassée** si le propriétaire a écrit dans le salon
+  /// depuis le message du tiers : il a répondu lui-même, l'agent se tait.
+  public static func suggestionDepassee(_ request: AgentRequest, derniereActiviteProprietaire: Date?) -> Bool {
+    guard let derniere = derniereActiviteProprietaire else { return false }
+    return derniere > request.sentAt
   }
 
   /// Le repli `> <@qui> …` que les clients posent avant une réponse citée.
