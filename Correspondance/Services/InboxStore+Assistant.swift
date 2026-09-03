@@ -122,7 +122,7 @@ extension InboxStore {
   /// agent à qui le demander ?
   var offersSummary: Bool {
     guard let conversation = selectedConversation,
-          conversation.unreadCount >= Self.summaryThreshold
+          max(conversation.unreadCount, unreadAtSelection) >= Self.summaryThreshold
     else { return false }
     return !agentsInSelectedConversation.isEmpty
   }

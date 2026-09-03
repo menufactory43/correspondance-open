@@ -111,8 +111,13 @@ public actor TextTranslator {
   }
 
   /// La langue de l'appareil — celle dans laquelle on lit ici.
+  ///
+  /// `Locale.preferredLanguages`, pas `Locale.current` : ce dernier se plie
+  /// aux localisations que l'app déclare, et une app sans `fr` répond « en »
+  /// sur un Mac réglé en français — d'où « Traduire » sous du français.
   public nonisolated static var deviceLanguage: String {
-    Locale.current.language.languageCode?.identifier ?? "fr"
+    let prefere = Locale.preferredLanguages.first.flatMap { Locale(identifier: $0).language.languageCode?.identifier }
+    return prefere ?? Locale.current.language.languageCode?.identifier ?? "fr"
   }
 
   /// La langue d'un texte quand elle n'est **pas** celle de l'appareil : ce

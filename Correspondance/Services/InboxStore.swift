@@ -220,6 +220,10 @@ final class InboxStore {
   var composerFocusToken = 0
   /// Le moment du dernier « Résumer » : le bouton dort trente secondes après.
   var summaryRequestedAt: Date?
+  /// Les non-lus du fil **au moment où on l'a ouvert** : ouvrir un fil le
+  /// marque lu, et un bouton qui se cache à l'instant où il devient utile ne
+  /// sert à personne. Remis à zéro à chaque sélection.
+  var unreadAtSelection: Int = 0
   let matrix: MatrixBridgeService
   /// Le mandataire Tailcat, quand le code d'appairage en portait un. Il vit
   /// aussi longtemps que l'app : le tuer couperait le `/sync`.
@@ -2631,6 +2635,7 @@ final class InboxStore {
     persistDraftsNow()
     selectedConversationID = id
     selectionIsUserMade = id != nil
+    unreadAtSelection = id.flatMap { cible in conversations.first { $0.id == cible }?.unreadCount } ?? 0
     primarySession?.selectedMessageID = nil
     primarySession?.replyingToMessageID = nil
     sendLaterConfig = nil
