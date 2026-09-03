@@ -1,0 +1,496 @@
+{
+ "next_batch": "s90310_1111_3333",
+ "rooms": {
+  "join": {
+   "!vente-karim:correspondance.local": {
+    "state": {
+     "events": [
+      {
+       "type": "m.bridge",
+       "state_key": "fi.mau.messenger://messenger/100012345",
+       "sender": "@messengerbot:correspondance.local",
+       "event_id": "$state-bridge-vente-karim",
+       "origin_server_ts": 1756600000000,
+       "content": {
+        "bridgebot": "@messengerbot:correspondance.local",
+        "protocol": {
+         "id": "messenger",
+         "displayname": "Messenger"
+        },
+        "channel": {
+         "id": "100012345",
+         "displayname": "Karim Benali"
+        },
+        "com.beeper.room_type": "dm"
+       }
+      },
+      {
+       "type": "m.room.name",
+       "state_key": "",
+       "sender": "@messengerbot:correspondance.local",
+       "event_id": "$state-name-vente-karim",
+       "origin_server_ts": 1756600000001,
+       "content": {
+        "name": "Karim · Vélo 16\""
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@meffysto:correspondance.local",
+       "sender": "@meffysto:correspondance.local",
+       "event_id": "$state-member-vente-karim-meffysto",
+       "origin_server_ts": 1756600000002,
+       "content": {
+        "membership": "join",
+        "displayname": "meffysto"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@messenger_100012345:correspondance.local",
+       "sender": "@messenger_100012345:correspondance.local",
+       "event_id": "$state-member-vente-karim-messenger_100012345",
+       "origin_server_ts": 1756600000003,
+       "content": {
+        "membership": "join",
+        "displayname": "Karim Benali"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@messengerbot:correspondance.local",
+       "sender": "@messengerbot:correspondance.local",
+       "event_id": "$state-member-vente-karim-messengerbot",
+       "origin_server_ts": 1756600000004,
+       "content": {
+        "membership": "join",
+        "displayname": "Messenger bridge bot"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@cc:correspondance.local",
+       "sender": "@cc:correspondance.local",
+       "event_id": "$state-member-vente-karim-cc",
+       "origin_server_ts": 1756600000005,
+       "content": {
+        "membership": "join",
+        "displayname": "cc"
+       }
+      }
+     ]
+    },
+    "timeline": {
+     "events": [
+      {
+       "type": "m.room.message",
+       "event_id": "$karim-1",
+       "sender": "@messenger_100012345:correspondance.local",
+       "origin_server_ts": 1756600100000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Bonjour, le vélo 16\" est toujours disponible ?"
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$moi-pilote-1",
+       "sender": "@meffysto:correspondance.local",
+       "origin_server_ts": 1756600130000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Bonjour Karim ! Oui, toujours disponible, au prix annoncé — 60 €. Je peux vous le remettre en main propre ce week-end si ça vous arrange.",
+        "fr.correspondance.agent.piloted": true
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$karim-2",
+       "sender": "@messenger_100012345:correspondance.local",
+       "origin_server_ts": 1756600400000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Super. Vous pourriez me le livrer ? Et 45 € ça irait ?"
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.proposal",
+       "event_id": "$prop-handover-karim",
+       "sender": "@cc:correspondance.local",
+       "origin_server_ts": 1756600410000,
+       "content": {
+        "body": "Je ne livre pas, mais je peux vous le garder jusqu'à dimanche. Pour le prix, 55 € serait mon dernier mot.",
+        "agent": "cc",
+        "kind": "handover",
+        "reason": "Karim parle de livraison et de baisser le prix — c'est hors du cadre.",
+        "m.relates_to": {
+         "m.in_reply_to": {
+          "event_id": "$karim-2"
+         }
+        }
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.notice",
+       "event_id": "$notice-karim",
+       "sender": "@cc:correspondance.local",
+       "origin_server_ts": 1756600420000,
+       "content": {
+        "agent": "cc",
+        "body": "Mon moteur ne répond plus depuis deux minutes.",
+        "reason": "engine_offline",
+        "action": "rescan"
+       }
+      }
+     ]
+    },
+    "unread_notifications": {
+     "notification_count": 1
+    }
+   },
+   "!appart-lea:correspondance.local": {
+    "state": {
+     "events": [
+      {
+       "type": "m.bridge",
+       "state_key": "fi.mau.whatsapp://whatsapp/33698765432@s.whatsapp.net",
+       "sender": "@whatsappbot:correspondance.local",
+       "event_id": "$state-bridge-appart-lea",
+       "origin_server_ts": 1756600000000,
+       "content": {
+        "bridgebot": "@whatsappbot:correspondance.local",
+        "protocol": {
+         "id": "whatsapp",
+         "displayname": "WhatsApp"
+        },
+        "channel": {
+         "id": "33698765432@s.whatsapp.net",
+         "displayname": "Léa Fontaine"
+        }
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@meffysto:correspondance.local",
+       "sender": "@meffysto:correspondance.local",
+       "event_id": "$state-member-appart-lea-meffysto",
+       "origin_server_ts": 1756600000002,
+       "content": {
+        "membership": "join",
+        "displayname": "meffysto"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsapp_lid-33698765432:correspondance.local",
+       "sender": "@whatsapp_lid-33698765432:correspondance.local",
+       "event_id": "$state-member-appart-lea-whatsapp_lid-33698765432",
+       "origin_server_ts": 1756600000003,
+       "content": {
+        "membership": "join",
+        "displayname": "Léa Fontaine"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsappbot:correspondance.local",
+       "sender": "@whatsappbot:correspondance.local",
+       "event_id": "$state-member-appart-lea-whatsappbot",
+       "origin_server_ts": 1756600000004,
+       "content": {
+        "membership": "join",
+        "displayname": "WhatsApp bridge bot"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@cc:correspondance.local",
+       "sender": "@cc:correspondance.local",
+       "event_id": "$state-member-appart-lea-cc",
+       "origin_server_ts": 1756600000005,
+       "content": {
+        "membership": "join",
+        "displayname": "cc"
+       }
+      }
+     ]
+    },
+    "timeline": {
+     "events": [
+      {
+       "type": "m.room.message",
+       "event_id": "$lea-1",
+       "sender": "@whatsapp_lid-33698765432:correspondance.local",
+       "origin_server_ts": 1756600200000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Bonjour ! J'ai vu l'annonce du studio sur Leboncoin. Il est toujours disponible ?"
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.aside",
+       "event_id": "$aside-lea",
+       "sender": "@meffysto:correspondance.local",
+       "origin_server_ts": 1756600210000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "@cc propose une réponse à ce message",
+        "agents": [
+         "cc"
+        ],
+        "m.relates_to": {
+         "m.in_reply_to": {
+          "event_id": "$lea-1"
+         }
+        }
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.proposal",
+       "event_id": "$prop-reply-lea",
+       "sender": "@cc:correspondance.local",
+       "origin_server_ts": 1756600220000,
+       "content": {
+        "body": "Bonjour Léa, oui, le studio est toujours disponible. Vous cherchez pour quand ?",
+        "agent": "cc",
+        "kind": "reply",
+        "m.relates_to": {
+         "m.in_reply_to": {
+          "event_id": "$lea-1"
+         }
+        }
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$moi-lea-1",
+       "sender": "@meffysto:correspondance.local",
+       "origin_server_ts": 1756600300000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Bonjour Léa, oui, le studio est toujours disponible. Vous cherchez pour quand ?"
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$lea-2",
+       "sender": "@whatsapp_lid-33698765432:correspondance.local",
+       "origin_server_ts": 1756600500000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Pour le 1er octobre. Une visite jeudi en fin de journée, ce serait possible ?"
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.proposal",
+       "event_id": "$prop-suggest-lea",
+       "sender": "@cc:correspondance.local",
+       "origin_server_ts": 1756600503000,
+       "content": {
+        "body": "Jeudi 18 h, ça vous irait ? Je vous envoie l'adresse exacte dans la journée.",
+        "agent": "cc",
+        "kind": "suggest",
+        "m.relates_to": {
+         "m.in_reply_to": {
+          "event_id": "$lea-2"
+         }
+        }
+       }
+      }
+     ]
+    },
+    "unread_notifications": {
+     "notification_count": 1
+    }
+   },
+   "!copro-lilas:correspondance.local": {
+    "state": {
+     "events": [
+      {
+       "type": "m.bridge",
+       "state_key": "fi.mau.whatsapp://whatsapp/120363999999999@g.us",
+       "sender": "@whatsappbot:correspondance.local",
+       "event_id": "$state-bridge-copro-lilas",
+       "origin_server_ts": 1756600000000,
+       "content": {
+        "bridgebot": "@whatsappbot:correspondance.local",
+        "protocol": {
+         "id": "whatsapp",
+         "displayname": "WhatsApp"
+        },
+        "channel": {
+         "id": "120363999999999@g.us",
+         "displayname": "Copro · Rue des Lilas"
+        }
+       }
+      },
+      {
+       "type": "m.room.name",
+       "state_key": "",
+       "sender": "@whatsappbot:correspondance.local",
+       "event_id": "$state-name-copro-lilas",
+       "origin_server_ts": 1756600000001,
+       "content": {
+        "name": "Copro · Rue des Lilas"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@meffysto:correspondance.local",
+       "sender": "@meffysto:correspondance.local",
+       "event_id": "$state-member-copro-lilas-meffysto",
+       "origin_server_ts": 1756600000002,
+       "content": {
+        "membership": "join",
+        "displayname": "meffysto"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsapp_lid-33611111111:correspondance.local",
+       "sender": "@whatsapp_lid-33611111111:correspondance.local",
+       "event_id": "$state-member-copro-lilas-whatsapp_lid-33611111111",
+       "origin_server_ts": 1756600000003,
+       "content": {
+        "membership": "join",
+        "displayname": "Mme Roux"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsapp_lid-33622222222:correspondance.local",
+       "sender": "@whatsapp_lid-33622222222:correspondance.local",
+       "event_id": "$state-member-copro-lilas-whatsapp_lid-33622222222",
+       "origin_server_ts": 1756600000004,
+       "content": {
+        "membership": "join",
+        "displayname": "Sami"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsapp_lid-33633333333:correspondance.local",
+       "sender": "@whatsapp_lid-33633333333:correspondance.local",
+       "event_id": "$state-member-copro-lilas-whatsapp_lid-33633333333",
+       "origin_server_ts": 1756600000005,
+       "content": {
+        "membership": "join",
+        "displayname": "Inès"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@whatsappbot:correspondance.local",
+       "sender": "@whatsappbot:correspondance.local",
+       "event_id": "$state-member-copro-lilas-whatsappbot",
+       "origin_server_ts": 1756600000006,
+       "content": {
+        "membership": "join",
+        "displayname": "WhatsApp bridge bot"
+       }
+      },
+      {
+       "type": "m.room.member",
+       "state_key": "@cc:correspondance.local",
+       "sender": "@cc:correspondance.local",
+       "event_id": "$state-member-copro-lilas-cc",
+       "origin_server_ts": 1756600000007,
+       "content": {
+        "membership": "join",
+        "displayname": "cc"
+       }
+      }
+     ]
+    },
+    "timeline": {
+     "events": [
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-0",
+       "sender": "@meffysto:correspondance.local",
+       "origin_server_ts": 1756600050000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Bonjour à tous, le devis de l'ascenseur est arrivé ?"
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-1",
+       "sender": "@whatsapp_lid-33611111111:correspondance.local",
+       "origin_server_ts": 1756600600000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Oui, 3 200 € pour la révision complète. Je vous le transfère ce soir."
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-2",
+       "sender": "@whatsapp_lid-33622222222:correspondance.local",
+       "origin_server_ts": 1756600620000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Le local vélo est repeint, merci Inès pour la peinture !"
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-3",
+       "sender": "@whatsapp_lid-33633333333:correspondance.local",
+       "origin_server_ts": 1756600640000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Avec plaisir 🙂 Il reste un pot si quelqu'un veut refaire la porte de la cave."
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-4",
+       "sender": "@whatsapp_lid-33611111111:correspondance.local",
+       "origin_server_ts": 1756600660000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "meffysto, vous venez à l'AG jeudi ? Il faut un quorum pour voter l'ascenseur."
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-5",
+       "sender": "@whatsapp_lid-33622222222:correspondance.local",
+       "origin_server_ts": 1756600680000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Quelqu'un aurait une perceuse à prêter ce week-end ?"
+       }
+      },
+      {
+       "type": "m.room.message",
+       "event_id": "$copro-6",
+       "sender": "@whatsapp_lid-33633333333:correspondance.local",
+       "origin_server_ts": 1756600700000,
+       "content": {
+        "msgtype": "m.text",
+        "body": "Moi, passe quand tu veux Sami."
+       }
+      },
+      {
+       "type": "fr.correspondance.agent.proposal",
+       "event_id": "$prop-summary-copro",
+       "sender": "@cc:correspondance.local",
+       "origin_server_ts": 1756600710000,
+       "content": {
+        "body": "**À répondre** : Mme Roux demande si tu viens à l'AG jeudi — il faut le quorum pour voter l'ascenseur.\n**Le reste** : devis ascenseur reçu (3 200 €), le local vélo est repeint, Sami cherche une perceuse et Inès en prête une.",
+        "agent": "cc",
+        "kind": "summary"
+       }
+      }
+     ]
+    },
+    "unread_notifications": {
+     "notification_count": 6
+    }
+   }
+  }
+ }
+}
