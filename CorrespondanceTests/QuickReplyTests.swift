@@ -177,6 +177,7 @@ final class QuickReplyModelTests: XCTestCase {
     let rail = store.networkFilter
     addTeardownBlock { store.networkFilter = rail }
     store.networkFilter = nil
+    store.clearMergedContactsForTesting()
     store.conversations = [
       conversation(id: "sig:1", title: "Élise", unread: 0, minutesAgo: 1),
       conversation(id: "sig:2", title: "Paul", unread: 2, minutesAgo: 30),

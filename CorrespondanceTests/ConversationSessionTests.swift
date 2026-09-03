@@ -142,7 +142,7 @@ final class ConversationSessionTests: XCTestCase {
 
     XCTAssertEqual(
       store.lastErrorMessage,
-      "Données démo — accorde l’accès disque pour envoyer via Messages."
+      "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages."
     )
     // Le brouillon refusé reste dans SA session, et l'inbox n'a rien vu passer.
     XCTAssertEqual(detachee.draftText, "Je descends.")

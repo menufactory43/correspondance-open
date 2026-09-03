@@ -106,6 +106,23 @@ public struct TranslationLine: View {
 
 /// Ce qu'une bulle reçue porte quand sa langue n'est pas celle de l'appareil.
 ///
+/// Les bulles dont on a demandé la traduction, par identifiant de message.
+///
+/// Hors de la vue exprès : un clic dans le fil fait bouger le magasin
+/// (lecture confirmée, non-lus effacés), le fil se redessine, et un `@State`
+/// posé dans la bulle repartait à zéro avant d'avoir affiché quoi que ce soit —
+/// la transcription vocale n'avait pas ce défaut parce qu'elle relit son cache
+/// à chaque apparition. Ici, l'intention de lire vit le temps de la session.
+@MainActor
+public final class TranslationReveal: ObservableObject {
+  public static let shared = TranslationReveal()
+  @Published public var revealed: Set<String> = []
+  public init() {}
+  public func toggle(_ messageID: String, on: Bool) {
+    if on { revealed.insert(messageID) } else { revealed.remove(messageID) }
+  }
+}
+
 /// Trois états, tous locaux : un bouton « Traduire » ; la ligne, quand on l'a
 /// demandée ; la ligne d'emblée quand le fil a « Traduire ce qui arrive ». Le
 /// réglage arrive par `@AppStorage` sur la clé du fil : changer le sélecteur
@@ -120,7 +137,8 @@ public struct IncomingTranslationSlot: View {
   public var font: Font
 
   @AppStorage private var autoTarget: String
-  @State private var revealed = false
+  @ObservedObject private var reveal = TranslationReveal.shared
+  private var revealed: Bool { reveal.revealed.contains(messageID) }
 
   public init(
     messageID: String,
@@ -155,22 +173,38 @@ public struct IncomingTranslationSlot: View {
             theme: theme, typeface: typeface, font: font
           )
           if automatic == nil {
-            Button("Masquer") { revealed = false }
-              .buttonStyle(.plain)
+            Text("Masquer")
               .font(Typography.meta(typeface))
               .foregroundStyle(theme.accent)
               .padding(.horizontal, 12)
+              .padding(.vertical, 2)
+              .contentShape(Rectangle())
+              .onTapGesture { reveal.toggle(messageID, on: false) }
+              .accessibilityAddTraits(.isButton)
               .accessibilityLabel("Masquer la traduction")
           }
         }
       } else {
-        Button("Traduire") { revealed = true }
-          .buttonStyle(.plain)
-          .font(Typography.meta(typeface))
+        // Un geste, pas un `Button` : sous ce conteneur (menu contextuel,
+        // forme de contenu, aide au survol), le bouton `.plain` ne recevait
+        // jamais son clic sur le Mac — vérifié en vrai, trace à l'appui —
+        // alors que le tap, lui, passe.
+        Button {
+          reveal.toggle(messageID, on: true)
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "character.bubble")
+              .font(.system(size: 11, weight: .medium))
+            Text("Traduire")
+              .font(Typography.meta(typeface))
+          }
           .foregroundStyle(theme.accent)
           .padding(.horizontal, 12)
-          .help("Traduire ce message sur cet appareil — rien ne part sur le réseau")
-          .accessibilityLabel("Traduire ce message")
+          .frame(height: 22)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Traduire ce message")
       }
     }
   }

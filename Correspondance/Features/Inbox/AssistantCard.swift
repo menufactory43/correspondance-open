@@ -80,6 +80,10 @@ struct AssistantSection: View {
   }
 
   var body: some View {
+    // Le `.task` vit sur une pile toujours présente : posé sur un
+    // `Color.clear` de hauteur nulle, il ne partait jamais, et la carte ne
+    // savait donc jamais que cc était là (vu dans la vraie Note à soi).
+    VStack(alignment: .leading, spacing: 0) {
     if let agent {
       Divider()
       VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -168,12 +172,9 @@ struct AssistantSection: View {
           }
         }
       }
-      .task(id: conversation.id) { await load() }
-    } else {
-      // Rien tant qu'on ne sait pas : la fiche ne montre pas une carte vide.
-      Color.clear.frame(height: 0)
-        .task(id: conversation.id) { await load() }
     }
+    }
+    .task(id: conversation.id) { await load() }
   }
 
   /// Qui est là, et de quelle voix — relu depuis le Relais.
@@ -181,8 +182,11 @@ struct AssistantSection: View {
     guard conversation.network.livesOnRelay else { agent = nil; return }
     let voices = await store.agentVoicesInSelectedConversation()
     guard let voice = voices.first else { agent = nil; return }
-    let binding = await store.agentRoomBinding(agent: voice.agent) ?? AgentConsoleConfig.RoomBinding()
+    // L'agent d'abord, la carte se montre ; le réglage du salon, relu sur le
+    // Relais, arrive ensuite — une lecture lente ne doit pas cacher la carte.
     agent = voice.agent
+    posture = Posture.from(mode: voice.mode, suggest: nil)
+    let binding = await store.agentRoomBinding(agent: voice.agent) ?? AgentConsoleConfig.RoomBinding()
     posture = Posture.from(mode: voice.mode, suggest: binding.suggest)
     frame = binding.frame ?? ""
   }

@@ -41,7 +41,7 @@ extension InboxStore {
   /// Les agents présents dans le fil ouvert, par leur nom court. Vide hors
   /// d'un fil bridgé : c'est ce qui décide si un geste devient un ordre à cc.
   var agentsInSelectedConversation: [String] {
-    primarySession?.asideAgents ?? []
+    primarySession?.presentAgents ?? []
   }
 
   /// Envoie un aparté à `agent` dans le fil ouvert — un ordre que le

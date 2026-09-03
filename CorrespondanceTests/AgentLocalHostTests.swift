@@ -150,7 +150,7 @@ final class AgentLocalHostTests: XCTestCase {
       ),
       .introuvable
     )
-    XCTAssertTrue(AgentLocalHost.aideIntrouvable.contains("est absent"), "on constate")
+    XCTAssertTrue(AgentLocalHost.aideIntrouvable.contains("n’embarque pas l’agent"), "on constate")
     XCTAssertTrue(AgentLocalHost.aideIntrouvable.contains("autre machine"), "et on donne une issue")
   }
 

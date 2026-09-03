@@ -521,6 +521,28 @@ struct ThreadView: View {
               )
             }
             .id(message.id)
+          } else if !message.isFromMe, !message.isRetracted, message.attachments.isEmpty,
+                    let source = TextTranslator.foreignLanguage(of: message.text) {
+            // Une bulle reçue dans une autre langue que celle du Mac : le
+            // « Traduire » vit ICI, sous la bulle, pas dedans — dans la bulle,
+            // sous son menu contextuel et sa forme de contenu, ni un bouton ni
+            // un geste ne recevaient le clic (vérifié à l'écran, trace à
+            // l'appui). La ligne traduite s'affiche d'emblée quand le fil le
+            // demande. Sur cet appareil, sans réseau : cf. `TextTranslator`.
+            VStack(alignment: .leading, spacing: 2) {
+              bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
+                .equatable()
+              IncomingTranslationSlot(
+                messageID: message.id,
+                text: message.text,
+                source: source,
+                conversationID: message.conversationID,
+                theme: theme,
+                typeface: themes.typeface,
+                font: Typography.bubble(themes.typeface, scale: themes.textScale)
+              )
+            }
+            .id(message.id)
           } else {
             // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
             // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.

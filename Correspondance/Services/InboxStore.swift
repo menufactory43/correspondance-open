@@ -201,6 +201,15 @@ final class InboxStore {
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
+
+  /// Pour les tests : la file d'un test ne doit pas dépendre des fusions que
+  /// l'utilisateur de cette machine a faites — `MergedContactStore.load()` les
+  /// lit à l'init, et une fusion réelle ajoutait une ligne virtuelle à une
+  /// file de trois fils inventés.
+  func clearMergedContactsForTesting() {
+    mergedContacts = []
+    mergedMemberCache = [:]
+  }
   /// Propositions de fusion déjà refusées, pour qu'elles ne reviennent plus.
   private(set) var dismissedMergePairs: Set<String> = []
   /// Les fils membres, retirés de `conversations` mais gardés sous la main :

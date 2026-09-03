@@ -168,24 +168,6 @@ struct MessageBubbleView: View {
         // Le débord se réserve, sinon la suite passerait par-dessus.
         .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 
-        // Une bulle reçue dans une autre langue que celle du Mac porte
-        // « Traduire » — ou sa traduction d'emblée si le fil le demande. Sur
-        // cet appareil, sans réseau : cf. `TextTranslator`.
-        #if canImport(Translation)
-        if !message.isFromMe, showsTextBubble, !message.isRetracted,
-           let source = TextTranslator.foreignLanguage(of: displayText) {
-          IncomingTranslationSlot(
-            messageID: message.id,
-            text: displayText,
-            source: source,
-            conversationID: message.conversationID,
-            theme: theme,
-            typeface: typeface,
-            font: Typography.bubble(typeface, scale: textScale)
-          )
-        }
-        #endif
-
         if let onCancelPending {
           Button("Annuler", action: onCancelPending)
             .buttonStyle(.plain)
@@ -305,8 +287,25 @@ struct MessageBubbleView: View {
   /// C'est ce qui a remplacé la sélection au clic : un état qui pilotait ⌘R
   /// devait se voir, et se voir dérangeait. Ici, aucun état ne survit au
   /// geste — les actions paraissent sous le curseur, le temps d'agir.
+  /// La langue d'une bulle reçue quand elle n'est pas celle du Mac : ce qui
+  /// vaut un « Traduire » au survol et dans le menu. Sur cet appareil.
+  private var translatableSource: String? {
+    guard !message.isFromMe, !message.isRetracted, message.attachments.isEmpty else { return nil }
+    return TextTranslator.foreignLanguage(of: displayText)
+  }
+
   private var hoverActions: some View {
     HStack(spacing: 8) {
+      if translatableSource != nil {
+        Button {
+          TranslationReveal.shared.toggle(message.id, on: true)
+        } label: {
+          Image(systemName: "character.bubble")
+        }
+        .buttonStyle(.plain)
+        .help("Traduire sur cet appareil")
+        .accessibilityLabel("Traduire le message")
+      }
       if onReact != nil {
         Button {
           isPickingReaction.toggle()
@@ -468,6 +467,10 @@ struct MessageBubbleView: View {
     if full {
       if let onReply {
         Button("Répondre en citant") { onReply() }
+        Divider()
+      }
+      if translatableSource != nil {
+        Button("Traduire sur cet appareil") { TranslationReveal.shared.toggle(message.id, on: true) }
         Divider()
       }
       if onReact != nil {

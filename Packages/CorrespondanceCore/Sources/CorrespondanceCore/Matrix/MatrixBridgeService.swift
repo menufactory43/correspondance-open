@@ -520,7 +520,10 @@ public actor MatrixBridgeService {
   /// Cet agent est-il déjà membre (ou invité) de ce fil ?
   public func hasAgent(conversationID: String, agent: String = MatrixIdentity.agentName) -> Bool {
     hydrateIfNeeded()
-    guard let model = rooms.values.first(where: { $0.conversationID == conversationID }) else { return false }
+    // Par le résolveur, pas par `conversationID` du modèle : la note à soi et
+    // le fil d'un agent portent un identifiant construit à la volée, et cc y
+    // passait pour absent — la carte Assistant ne s'y montrait jamais.
+    guard let roomID = roomID(forConversation: conversationID), let model = rooms[roomID] else { return false }
     let userID = MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)
     return model.members[userID]?.isActive == true
   }
@@ -827,6 +830,16 @@ public actor MatrixBridgeService {
     guard let model = rooms.values.first(where: { $0.conversationID == conversationID }),
           let network = model.network, network.isMatrixBridged
     else { return [] }
+    return model.agentNames(selfUserID: selfUserID)
+  }
+
+  /// Les agents **présents** dans un fil du Relais, aparté ou pas : dans la
+  /// note à soi et le tête-à-tête d'un agent aussi. C'est ce qui décide que la
+  /// carte Assistant, les réactions réservées et Résumer ont leur place —
+  /// `asideAgents` ne dit, lui, que si un message doit partir en aparté.
+  public func agentsPresent(conversationID: String) -> [String] {
+    hydrateIfNeeded()
+    guard let roomID = roomID(forConversation: conversationID), let model = rooms[roomID] else { return [] }
     return model.agentNames(selfUserID: selfUserID)
   }
 

@@ -40,9 +40,18 @@ extension InboxStore {
       }
     }
     session.asideAgents = agents
+    // Les agents présents, aparté ou non : la note à soi et le fil d'un agent
+    // n'ont pas d'aparté (cc y répond à tout), mais cc y est bien.
+    var presents: [String] = []
+    for conversation in members where conversation.network.livesOnRelay {
+      for agent in await matrix.agentsPresent(conversationID: conversation.id) where !presents.contains(agent) {
+        presents.append(agent)
+      }
+    }
+    session.presentAgents = presents
     // Le sélecteur de réactions lit une liste statique : on lui dit ici si
     // les trois réservées à cc y ont leur place.
-    if session === primarySession { Self.agentPresentInSelection = !agents.isEmpty }
+    if session === primarySession { Self.agentPresentInSelection = !presents.isEmpty }
   }
 
   private func mentionCandidates(

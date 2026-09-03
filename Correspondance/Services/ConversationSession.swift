@@ -50,6 +50,8 @@ final class ConversationSession {
   /// dit qu'on peut les nommer, et que ce sera un aparté. Vide hors des fils
   /// bridgés, où il n'y a personne à qui cacher quoi que ce soit.
   var asideAgents: [String] = []
+  /// Les agents présents dans le fil, aparté ou non — note à soi comprise.
+  var presentAgents: [String] = []
 
   /// Le magasin garde ses sessions ; une session ne fait que lui rendre son
   /// brouillon. La référence est faible pour que la boucle ne se referme pas.
