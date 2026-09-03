@@ -146,4 +146,25 @@ final class AgentRemoteConfigTests: XCTestCase {
     let relu = AgentRemoteConfig(content: remote.content())
     XCTAssertEqual(relu?.acpArguments, ["agent", "stdio"])
   }
+
+  /// Le contexte du fil vient du Relais, et **« 0 coupe »** : un zéro explicite
+  /// est un choix — l'agent ne voit plus que ce qu'on lui adresse — pas une
+  /// absence que le fichier devrait combler.
+  func testLeContexteDuFilPasseEtZeroCoupe() {
+    XCTAssertEqual(fichier.context, 50, "le défaut")
+    var remote = AgentRemoteConfig(agent: "cc")
+    XCTAssertEqual(fichier.applying(remote).context, 50, "rien dit : rien ne bouge")
+    remote.context = 0
+    XCTAssertEqual(fichier.applying(remote).context, 0, "0 coupe")
+    remote.context = 20
+    XCTAssertEqual(fichier.applying(remote).context, 20)
+    remote.context = -3
+    XCTAssertEqual(fichier.applying(remote).context, 50, "un nombre qui ne veut rien dire est ignoré")
+
+    // Et par salon, à travers l'event.
+    remote.rooms = ["!r:s": AgentConfig.RoomBinding(context: 0)]
+    let relu = AgentRemoteConfig(content: remote.content())
+    XCTAssertEqual(relu?.context, -3)
+    XCTAssertEqual(relu?.rooms?["!r:s"]?.context, 0, "le 0 d'un salon survit à l'aller-retour")
+  }
 }

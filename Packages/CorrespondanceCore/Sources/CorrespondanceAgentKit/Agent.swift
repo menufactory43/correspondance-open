@@ -40,6 +40,10 @@ public actor Agent {
   /// Les membres connus de chaque room — pour savoir si on est en tête-à-tête
   /// avec les propriétaires (réponse directe) ou devant des humains (brouillon).
   private var members: [String: Set<String>] = [:]
+  /// Les noms d'affichage par room (MXID → nom), pour attribuer les lignes du
+  /// contexte du fil. Remplis par les `m.room.member` du `/sync`, complétés
+  /// par une lecture de l'état la première fois qu'une room en a besoin.
+  private var displayNames: [String: [String: String]] = [:]
   /// Une seule demande à la fois par room : la suivante attend son tour.
   private var busyRooms: Set<String> = []
   /// Ce qui est arrivé pendant qu'un tour était en vol. À la fin du tour, tout
@@ -417,6 +421,13 @@ public actor Agent {
         let membership = event.content?.string(at: "membership")
         if membership == "join" || membership == "invite" { set.insert(user) } else { set.remove(user) }
         members[roomID] = set
+        // Un membre qui bouge porte son nom : on le garde, pour le contexte du
+        // fil — sans relire tout l'état à chaque tour.
+        if let nom = event.content?.string(at: "displayname"), !nom.isEmpty {
+          displayNames[roomID, default: [:]][user] = nom
+        } else if membership != "join" && membership != "invite" {
+          displayNames[roomID]?[user] = nil
+        }
       }
     }
   }
@@ -741,7 +752,11 @@ public actor Agent {
         download: { [client] mxc in try await client.downloadMedia(mxcURI: mxc) }
       )
       for ligne in lignes { log("[\(request.roomID)] pièce jointe \(ligne.dropFirst(2))") }
-      let prompt = AgentAttachmentDrop.promptSection(lignes) + atelierPreamble(for: request.roomID) + texte
+      // Le fil d'abord, comme bloc de données ; puis ce qu'on demande. Un
+      // échec de `/messages` ne bloque pas le tour : mieux vaut répondre sans
+      // mémoire que ne pas répondre.
+      let contexte = await contexteDuFil(for: request.roomID, exclure: Set(requests.map(\.eventID)))
+      let prompt = contexte + AgentAttachmentDrop.promptSection(lignes) + atelierPreamble(for: request.roomID) + texte
       let turn = try await backend.run(prompt: prompt, cwd: cwd, sessionID: state.claudeSessions[request.roomID], permissionSpool: spool)
       if let session = turn.sessionID {
         state.claudeSessions[request.roomID] = session
@@ -755,6 +770,44 @@ public actor Agent {
       log("[\(request.roomID)] échec : \(error.localizedDescription)")
       await reply("Je n'ai pas pu répondre : \(error.localizedDescription)", to: request)
     }
+  }
+
+  /// Combien de messages du fil ce salon donne au moteur : ce que la room dit,
+  /// sinon le défaut de l'agent. `0` coupe.
+  func contexte(for roomID: String) -> Int {
+    max(0, live.rooms[roomID]?.context ?? live.context)
+  }
+
+  /// Le bloc de contexte d'un tour : les N derniers messages du salon, lus par
+  /// `/messages`, attribués par leur nom d'affichage. Vide si le salon n'en
+  /// veut pas, ou si le Relais n'a pas répondu — et alors on le dit au journal.
+  ///
+  /// Les `m.room.encrypted` restent des `[message chiffré]` : `/messages` rend
+  /// les events tels quels, et le déchiffrement de l'historique par la machine
+  /// crypto n'est pas branché ici — seul le `/sync` passe par elle.
+  private func contexteDuFil(for roomID: String, exclure: Set<String>) async -> String {
+    let nombre = contexte(for: roomID)
+    guard nombre > 0 else { return "" }
+    let events: [MatrixEvent]
+    do {
+      // `exclure` sort du lot ce qu'on est en train de traiter : on demande
+      // donc un peu plus que N, pour que le fil garde sa longueur.
+      events = try await client.roomMessages(roomID: roomID, limit: nombre + exclure.count).chunk
+    } catch {
+      log("[\(roomID)] contexte du fil indisponible : \(error.localizedDescription) — le tour part sans")
+      return ""
+    }
+    if displayNames[roomID] == nil, let etats = try? await client.roomStateEvents(roomID: roomID) {
+      displayNames[roomID] = ContexteDuFil.noms(dans: etats)
+    }
+    let section = ContexteDuFil.section(
+      events: events, moi: live.botUserID, noms: displayNames[roomID] ?? [:],
+      exclure: exclure
+    )
+    if !section.isEmpty {
+      log("[\(roomID)] contexte : \(events.count) event(s) du fil, \(section.count) caractères")
+    }
+    return section
   }
 
   /// Ce que le moteur doit savoir des autres agents du salon : qu'ils sont
@@ -950,7 +1003,7 @@ public actor Agent {
         return
       }
       switch mode {
-      case .direct:
+      case .direct, .pilot:
         // Pas de préfixe : côté Relais l'expéditeur est déjà « cc », et sur un
         // portail en relais c'est le pont qui signe (`message_formats`) — en
         // préfixer un ici doublerait la signature chez le correspondant.

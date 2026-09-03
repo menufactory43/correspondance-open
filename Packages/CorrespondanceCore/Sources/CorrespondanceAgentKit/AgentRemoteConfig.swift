@@ -44,6 +44,11 @@ public struct AgentRemoteConfig: Sendable, Equatable {
   /// agents partagent un salon : c'est ce qui arme la mention obligatoire et la
   /// non-relance mutuelle (`Atelier`).
   public var peers: [String]?
+  /// Le nombre de messages du fil donnés au moteur, par défaut. `0` coupe,
+  /// et un `0` explicite est respecté — ce n'est pas « rien dit ».
+  public var context: Int?
+  /// L'heure du point du matin (`"08:00"`). Une chaîne vide efface.
+  public var heartbeat: String?
 
   public init(agent: String, version: Int = AgentRemoteConfig.currentVersion) {
     self.agent = agent
@@ -72,12 +77,18 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
     acpArguments = content[AgentWire.ConfigKey.acpArguments]?.arrayValue?.compactMap(\.stringValue)
     peers = content[AgentWire.ConfigKey.peers]?.arrayValue?.compactMap(\.stringValue)
+    context = content[AgentWire.ConfigKey.context]?.intValue
+    heartbeat = content[AgentWire.ConfigKey.heartbeat]?.stringValue
     if let object = content[AgentWire.ConfigKey.rooms]?.objectValue {
       rooms = object.reduce(into: [String: AgentConfig.RoomBinding]()) { result, entry in
         result[entry.key] = AgentConfig.RoomBinding(
           cwd: entry.value[AgentWire.ConfigKey.roomCwd]?.stringValue,
           mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentConfig.RoomMode.init(rawValue:)),
-          mention: entry.value[AgentWire.ConfigKey.roomMention]?.boolValue
+          mention: entry.value[AgentWire.ConfigKey.roomMention]?.boolValue,
+          context: entry.value[AgentWire.ConfigKey.roomContext]?.intValue,
+          suggest: entry.value[AgentWire.ConfigKey.roomSuggest]?.stringValue,
+          keywords: entry.value[AgentWire.ConfigKey.roomKeywords]?.arrayValue?.compactMap(\.stringValue),
+          frame: entry.value[AgentWire.ConfigKey.roomFrame]?.stringValue
         )
       }
     }
@@ -100,12 +111,18 @@ public struct AgentRemoteConfig: Sendable, Equatable {
     if let acpCommand { fields[AgentWire.ConfigKey.acpCommand] = .string(acpCommand) }
     if let acpArguments { fields[AgentWire.ConfigKey.acpArguments] = .array(acpArguments.map(MatrixJSON.string)) }
     if let peers { fields[AgentWire.ConfigKey.peers] = .array(peers.map(MatrixJSON.string)) }
+    if let context { fields[AgentWire.ConfigKey.context] = .integer(context) }
+    if let heartbeat { fields[AgentWire.ConfigKey.heartbeat] = .string(heartbeat) }
     if let rooms {
       fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
         var entry: [String: MatrixJSON] = [:]
         if let cwd = binding.cwd { entry[AgentWire.ConfigKey.roomCwd] = .string(cwd) }
         if let mode = binding.mode { entry[AgentWire.ConfigKey.roomMode] = .string(mode.rawValue) }
         if let mention = binding.mention { entry[AgentWire.ConfigKey.roomMention] = .bool(mention) }
+        if let context = binding.context { entry[AgentWire.ConfigKey.roomContext] = .integer(context) }
+        if let suggest = binding.suggest { entry[AgentWire.ConfigKey.roomSuggest] = .string(suggest) }
+        if let keywords = binding.keywords { entry[AgentWire.ConfigKey.roomKeywords] = .array(keywords.map(MatrixJSON.string)) }
+        if let frame = binding.frame { entry[AgentWire.ConfigKey.roomFrame] = .string(frame) }
         return .object(entry)
       })
     }
@@ -140,6 +157,10 @@ extension AgentConfig {
       config.claude.systemPrompt = prompt
     }
     if let peers = remote.peers { config.peers = peers }
+    // « 0 coupe » : un zéro explicite est un choix, pas une absence. Seul un
+    // nombre négatif — qui ne veut rien dire — est ignoré.
+    if let context = remote.context, context >= 0 { config.context = context }
+    if let heartbeat = remote.heartbeat { config.heartbeat = heartbeat.isEmpty ? nil : heartbeat }
     if let command = remote.acpCommand, !command.isEmpty {
       config.acp.command = command
       // Les arguments suivent la commande : sans eux, `goose` ouvre son
@@ -161,6 +182,8 @@ extension AgentConfig {
     remote.backend = backend
     remote.toolPreset = Presets.name(of: claude.allowedTools)
     remote.rooms = rooms
+    remote.context = context
+    remote.heartbeat = heartbeat
     if backend == .acp {
       remote.acpCommand = acp.command
       remote.acpArguments = acp.arguments
