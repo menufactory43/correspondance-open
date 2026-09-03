@@ -21,6 +21,7 @@ lance le `claude` de la machine — l'abonnement, jamais de clé API.
 | **Propose sans qu'on demande** : un tiers écrit, cc pose une proposition `suggest` après 3 s | ✅ testé (unités) — `rooms.<id>.suggest` : `always` / `keywords` |
 | **Répond seul, dans un cadre** : mode `pilot`, envoi marqué `piloted`, `<hors-cadre>` → `handover` | ✅ testé (unités) — plafond 10/h par salon |
 | **Échecs visibles** : un avis `fr.correspondance.agent.notice` avec la cause et le geste | ✅ testé (unités) — `cap`, `engine_missing`, `engine_offline`, `error`, `timeout` |
+| **Le point du matin** : à l'heure réglée (`heartbeat`), une proposition `summary` dans le fil de cc | ✅ testé (unités : l'heure, le tri des salons) — pas encore éprouvé sur le NUC |
 
 ### Pièces jointes
 
@@ -148,6 +149,17 @@ Gardes : jamais de réponse pilotée à un message qui porte `piloted`, à un
 agent, au bot ; **dix réponses pilotées par heure et par salon**, au-delà un
 avis `cap` et le silence. Une mention explicite d'un propriétaire dans un salon
 `pilot` reste une demande ordinaire, traitée comme `direct`.
+
+### Le point du matin
+
+`heartbeat` (« 08:00 », dans l'event de config) : à cette heure, sans message
+entrant, cc relit par `/messages` les vingt derniers messages de chaque salon
+joint, garde ceux où **le dernier mot n'est ni au propriétaire ni à lui** (dix
+au plus, les plus récents d'abord), et lance un tour `summary` dans **son
+tête-à-tête** — le premier fil marqué par l'app dont il est l'hôte ; sans fil,
+pas de point. La réponse est une proposition `kind: summary`, sans citation.
+Pas de cron : le service tourne déjà, une tâche dort jusqu'à l'heure et relit
+la config à chaque réveil (`Heartbeat.prochaineOccurrence`, pur, testé).
 
 ### Les échecs se voient
 

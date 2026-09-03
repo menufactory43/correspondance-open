@@ -264,6 +264,9 @@ public actor Agent {
     // les rooms en tête-à-tête (la note à soi en tête) — l'app le lit dans les
     // réglages, sans SSH. La présence Matrix est éteinte sur le Relais, exprès.
     Task { await self.publishStatus() }
+    // Le point du matin, s'il est réglé : une tâche qui dort jusqu'à l'heure.
+    let battement = Task { await self.battementDeCoeur() }
+    defer { battement.cancel() }
 
     while !Task.isCancelled {
       do {
@@ -305,6 +308,58 @@ public actor Agent {
         backoff = min(backoff * 2, 60)
       }
     }
+  }
+
+  // MARK: - Le point du matin
+
+  /// Dort jusqu'à la prochaine heure réglée (`heartbeat`), fait le point, et
+  /// recommence. Relit la config à chaque réveil : l'heure peut changer depuis
+  /// l'app sans redémarrage, et une minute de retard ne se voit pas.
+  private func battementDeCoeur() async {
+    while !Task.isCancelled {
+      guard let heure = live.heartbeat, let prochaine = Heartbeat.prochaineOccurrence(de: heure, apres: Date()) else {
+        try? await Task.sleep(for: .seconds(60))
+        continue
+      }
+      let attente = prochaine.timeIntervalSinceNow
+      // Par tranches d'une minute : si l'heure change entre-temps, on la suit.
+      try? await Task.sleep(for: .seconds(min(60, max(0, attente))))
+      if Task.isCancelled { return }
+      guard Date() >= prochaine, live.heartbeat == heure else { continue }
+      await pointDuMatin()
+      // Ne pas resonner dans la même minute.
+      try? await Task.sleep(for: .seconds(61))
+    }
+  }
+
+  /// Le point : les salons où le dernier mot n'est pas au propriétaire, lus
+  /// par `/messages`, et un tour `summary` dans **le tête-à-tête de l'agent**
+  /// — le premier fil marqué par l'app dont il est l'hôte. Sans fil, pas de
+  /// point : on n'invente pas un endroit où le poster.
+  private func pointDuMatin() async {
+    guard let cible = teteATeteRooms.sorted().first(where: { host(of: $0) == live.botUserID }) else {
+      log("point du matin : pas de tête-à-tête à mon nom, je ne le fais pas")
+      return
+    }
+    guard let joined = try? await client.joinedRooms() else {
+      log("point du matin : le Relais n'a pas répondu")
+      return
+    }
+    var salons: [Heartbeat.Salon] = []
+    for roomID in joined where roomID != cible && roomID != consoleRoomID {
+      guard let messages = try? await client.roomMessages(roomID: roomID, limit: Heartbeat.messagesParRoom) else { continue }
+      salons.append(Heartbeat.Salon(roomID: roomID, nom: roomNames[roomID], events: messages.chunk))
+    }
+    let prompt = Heartbeat.prompt(salons: salons, owners: Set(live.owners), moi: live.botUserID, noms: displayNames)
+    guard !prompt.isEmpty else {
+      log("point du matin : rien n'attend de réponse")
+      return
+    }
+    log("point du matin : \(salons.count) salon(s) lus, tour dans \(cible)")
+    dispatch(AgentRequest(
+      roomID: cible, eventID: "", sender: live.botUserID, prompt: prompt,
+      sentAt: Date(), kind: .summary
+    ))
   }
 
   /// Un propriétaire qui écrit dans un salon : on retient quand. C'est ce qui

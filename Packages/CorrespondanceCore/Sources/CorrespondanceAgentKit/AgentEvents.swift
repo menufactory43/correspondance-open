@@ -65,10 +65,11 @@ public enum AgentEvents {
       "body": .string(text),
       "agent": .string(agent),
       AgentWire.ProposalKey.kind: .string(kind),
-      "m.relates_to": .object([
-        "m.in_reply_to": .object(["event_id": .string(eventID)])
-      ]),
     ]
+    // Le point du matin ne répond à rien : pas de citation vers un event vide.
+    if !eventID.isEmpty {
+      fields["m.relates_to"] = .object(["m.in_reply_to": .object(["event_id": .string(eventID)])])
+    }
     if let reason, !reason.isEmpty { fields[AgentWire.ProposalKey.reason] = .string(reason) }
     return .object(fields)
   }
