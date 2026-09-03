@@ -30,6 +30,11 @@ public struct AgentConsoleConfig: Sendable, Equatable {
   /// atelier — mention obligatoire, et un agent ne relance pas un agent. Sans
   /// eux, deux agents dans une même room se répondraient l'un l'autre.
   public var peers: [String]?
+  /// Le nombre de messages du fil donnés à l'agent à chaque tour, sauf
+  /// réglage du salon. `nil` : le défaut de l'agent (50). `0` coupe.
+  public var context: Int?
+  /// L'heure du point du matin, `"08:00"`. `nil` : pas de point du matin.
+  public var heartbeat: String?
   /// Liaisons conversation → dossier de travail et mode.
   public var rooms: [String: RoomBinding]
 
@@ -38,10 +43,29 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     /// conversation, ce qui est le défaut et le garde-fou.
     public var cwd: String?
     public var mode: AgentSettings.Mode?
+    /// Faut-il nommer l'agent ici ? `nil` : la règle par défaut (oui, sauf
+    /// dans un salon à lui). Lu et réécrit tel quel : une écriture de l'app
+    /// n'efface pas ce que l'agent savait.
+    public var mention: Bool?
+    /// Le contexte donné à l'agent dans ce salon. `nil` : le défaut du compte.
+    public var context: Int?
+    /// `AgentWire.Suggest` : `off` (défaut), `always`, `keywords`.
+    public var suggest: String?
+    public var keywords: [String]?
+    /// Le cadre du mode « répond seul ».
+    public var frame: String?
 
-    public init(cwd: String? = nil, mode: AgentSettings.Mode? = nil) {
+    public init(
+      cwd: String? = nil, mode: AgentSettings.Mode? = nil, mention: Bool? = nil,
+      context: Int? = nil, suggest: String? = nil, keywords: [String]? = nil, frame: String? = nil
+    ) {
       self.cwd = cwd
       self.mode = mode
+      self.mention = mention
+      self.context = context
+      self.suggest = suggest
+      self.keywords = keywords
+      self.frame = frame
     }
   }
 
@@ -68,10 +92,17 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     acpCommand = content[AgentWire.ConfigKey.acpCommand]?.stringValue
     acpArguments = content[AgentWire.ConfigKey.acpArguments]?.arrayValue?.compactMap(\.stringValue)
     peers = content[AgentWire.ConfigKey.peers]?.arrayValue?.compactMap(\.stringValue)
+    context = content[AgentWire.ConfigKey.context]?.intValue
+    heartbeat = content[AgentWire.ConfigKey.heartbeat]?.stringValue
     rooms = (content[AgentWire.ConfigKey.rooms]?.objectValue ?? [:]).reduce(into: [:]) { result, entry in
       result[entry.key] = RoomBinding(
         cwd: entry.value[AgentWire.ConfigKey.roomCwd]?.stringValue,
-        mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentSettings.Mode.init(rawValue:))
+        mode: entry.value[AgentWire.ConfigKey.roomMode]?.stringValue.flatMap(AgentSettings.Mode.init(rawValue:)),
+        mention: entry.value[AgentWire.ConfigKey.roomMention]?.boolValue,
+        context: entry.value[AgentWire.ConfigKey.roomContext]?.intValue,
+        suggest: entry.value[AgentWire.ConfigKey.roomSuggest]?.stringValue,
+        keywords: entry.value[AgentWire.ConfigKey.roomKeywords]?.arrayValue?.compactMap(\.stringValue),
+        frame: entry.value[AgentWire.ConfigKey.roomFrame]?.stringValue
       )
     }
   }
@@ -94,11 +125,20 @@ public struct AgentConsoleConfig: Sendable, Equatable {
     if let peers, !peers.isEmpty {
       fields[AgentWire.ConfigKey.peers] = .array(peers.map(MatrixJSON.string))
     }
+    if let context { fields[AgentWire.ConfigKey.context] = .number(Double(context)) }
+    if let heartbeat, !heartbeat.isEmpty { fields[AgentWire.ConfigKey.heartbeat] = .string(heartbeat) }
     if !rooms.isEmpty {
       fields[AgentWire.ConfigKey.rooms] = .object(rooms.mapValues { binding in
         var entry: [String: MatrixJSON] = [:]
         if let cwd = binding.cwd { entry[AgentWire.ConfigKey.roomCwd] = .string(cwd) }
         if let mode = binding.mode { entry[AgentWire.ConfigKey.roomMode] = .string(mode.rawValue) }
+        if let mention = binding.mention { entry[AgentWire.ConfigKey.roomMention] = .bool(mention) }
+        if let context = binding.context { entry[AgentWire.ConfigKey.roomContext] = .number(Double(context)) }
+        if let suggest = binding.suggest { entry[AgentWire.ConfigKey.roomSuggest] = .string(suggest) }
+        if let keywords = binding.keywords, !keywords.isEmpty {
+          entry[AgentWire.ConfigKey.roomKeywords] = .array(keywords.map(MatrixJSON.string))
+        }
+        if let frame = binding.frame, !frame.isEmpty { entry[AgentWire.ConfigKey.roomFrame] = .string(frame) }
         return .object(entry)
       })
     }

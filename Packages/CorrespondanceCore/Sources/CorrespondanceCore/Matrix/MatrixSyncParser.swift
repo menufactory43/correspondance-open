@@ -430,7 +430,9 @@ public struct MatrixSyncParser: Sendable {
     return AgentProposal(
       agent: agent,
       text: body,
-      inReplyToEventID: content.string(at: "m.relates_to.m.in_reply_to.event_id")
+      inReplyToEventID: content.string(at: "m.relates_to.m.in_reply_to.event_id"),
+      kind: content.string(at: AgentWire.ProposalKey.kind).flatMap(AgentProposal.Kind.init(rawValue:)) ?? .reply,
+      reason: content.string(at: AgentWire.ProposalKey.reason)
     )
   }
 

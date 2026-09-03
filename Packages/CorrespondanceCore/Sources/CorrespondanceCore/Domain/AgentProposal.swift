@@ -22,17 +22,35 @@ public struct AgentProposal: Hashable, Codable, Sendable {
   public var text: String
   /// Le message auquel l'agent répond — l'ordre qui l'a déclenché.
   public var inReplyToEventID: String?
+  /// Ce qu'est cette proposition (`AgentWire.ProposalKind`) : un brouillon
+  /// demandé (`reply`, le défaut), une réponse proposée sans qu'on demande
+  /// (`suggest`, rendue en bandeau au-dessus de la saisie), un résumé
+  /// (`summary`), ou l'agent qui passe la main (`handover`).
+  public var kind: Kind
+  /// Pour `handover` : pourquoi l'agent n'a pas répondu seul.
+  public var reason: String?
 
-  public init(agent: String, text: String, inReplyToEventID: String? = nil) {
+  public enum Kind: String, Hashable, Codable, Sendable {
+    case reply, suggest, summary, handover
+  }
+
+  public init(agent: String, text: String, inReplyToEventID: String? = nil, kind: Kind = .reply, reason: String? = nil) {
     self.agent = agent
     self.text = text
     self.inReplyToEventID = inReplyToEventID
+    self.kind = kind
+    self.reason = reason
   }
 
   /// « ✏️ cc propose » — l'en-tête de la carte, sur les deux plateformes.
   public var headerFR: String {
     let name = agent.trimmingCharacters(in: .whitespacesAndNewlines)
-    return name.isEmpty ? "L'agent propose" : "\(name) propose"
+    let qui = name.isEmpty ? "L'agent" : name
+    switch kind {
+    case .reply, .suggest: return "\(qui) propose"
+    case .summary: return "Résumé de \(qui)"
+    case .handover: return "\(qui) te passe la main"
+    }
   }
 
   /// Une proposition sans texte n'a rien à proposer.

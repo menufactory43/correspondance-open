@@ -51,6 +51,48 @@ public enum AgentWire {
   /// plus `agents` : les noms des agents nommés, pour que le fil dise avec qui
   /// l'aparté a eu lieu.
   public static let asideType = "fr.correspondance.agent.aside"
+  /// Ce que l'agent dit **de lui-même**, à ses propriétaires seuls : un tour
+  /// qui a échoué et pourquoi, un délai dépassé, un moteur absent. Les ponts
+  /// ne le relaient pas ; l'app le rend en ligne système, avec la cause et un
+  /// geste (`action`). Une panne qui ne se voit pas passe pour de la lenteur.
+  public static let noticeType = "fr.correspondance.agent.notice"
+  /// Un message envoyé **par l'agent au nom du propriétaire**, en mode
+  /// « répond seul » : posé sur l'event `m.room.message`, pour que l'app le
+  /// marque (« Envoyé par cc pour vous ») et que l'agent ne se réponde pas.
+  public static let pilotedKey = "fr.correspondance.agent.piloted"
+
+  public enum NoticeKey {
+    public static let agent = "agent"
+    public static let body = "body"
+    /// `engine_missing`, `engine_offline`, `timeout`, `error`, `handover`.
+    public static let reason = "reason"
+    /// Le geste proposé : `rescan` (relancer), `retry` (réessayer), ou rien.
+    public static let action = "action"
+  }
+
+  /// Les clés d'une proposition, au-delà de `body` et `agent`.
+  public enum ProposalKey {
+    /// `reply` (défaut, un brouillon demandé), `suggest` (proposé sans qu'on
+    /// demande, rendu en bandeau au-dessus de la saisie), `summary` (un résumé
+    /// ou le point du matin), `handover` (l'agent passe la main : hors cadre).
+    public static let kind = "kind"
+    /// Pour `handover` : pourquoi l'agent n'a pas répondu seul.
+    public static let reason = "reason"
+  }
+
+  public enum ProposalKind {
+    public static let reply = "reply"
+    public static let suggest = "suggest"
+    public static let summary = "summary"
+    public static let handover = "handover"
+  }
+
+  /// Les valeurs de `rooms.<id>.suggest`.
+  public enum Suggest {
+    public static let off = "off"
+    public static let always = "always"
+    public static let keywords = "keywords"
+  }
 
   public enum ConversationKey {
     public static let kind = "kind"
@@ -160,6 +202,29 @@ public enum AgentWire {
     /// « Faut-il m'appeler par mon nom dans ce salon ? » `false` : tout message
     /// d'un propriétaire est une demande.
     public static let roomMention = "mention"
+    /// Le nombre de messages du fil donnés à l'agent à chaque tour, par
+    /// défaut (`context`, au premier niveau) ou par salon (`rooms.<id>.context`).
+    /// `0` coupe : l'agent ne voit que ce qui lui est adressé.
+    public static let context = "context"
+    public static let roomContext = "context"
+    /// `off` | `always` | `keywords` : l'agent propose-t-il une réponse à chaque
+    /// message d'un tiers, sans qu'on le nomme ? Toujours en brouillon.
+    public static let roomSuggest = "suggest"
+    /// Les mots qui réveillent l'agent quand `suggest` vaut `keywords`.
+    public static let roomKeywords = "keywords"
+    /// Le cadre du mode `pilot` : une phrase, ce que l'agent a le droit de
+    /// faire seul dans ce salon. Hors cadre, il passe la main.
+    public static let roomFrame = "frame"
+    /// L'heure du point du matin (`"08:00"`), ou absent.
+    public static let heartbeat = "heartbeat"
+  }
+
+  /// Les valeurs de `mode` (`defaultMode`, `rooms.<id>.mode`).
+  public enum Mode {
+    public static let direct = "direct"
+    public static let draft = "draft"
+    /// L'agent répond seul, dans le cadre du salon, en marquant ses messages.
+    public static let pilot = "pilot"
   }
 
   /// Les clés de `fr.correspondance.agent.status`, au-delà du texte lisible.

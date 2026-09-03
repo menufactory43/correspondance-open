@@ -15,6 +15,10 @@ public struct AgentSettings: Hashable, Codable, Sendable {
     /// L'agent propose : un brouillon que je suis seul à voir, et que j'envoie
     /// — ou pas.
     case draft
+    /// L'agent **répond seul**, en mon nom, dans le cadre écrit pour ce fil
+    /// (`RoomBinding.frame`). Chaque envoi est marqué ; hors cadre, il passe
+    /// la main par un brouillon. Jamais un défaut de compte : un fil, un choix.
+    case pilot
 
     public var id: String { rawValue }
 
@@ -22,6 +26,7 @@ public struct AgentSettings: Hashable, Codable, Sendable {
       switch self {
       case .direct: "À voix haute"
       case .draft: "Brouillon à valider"
+      case .pilot: "Répond seul"
       }
     }
 
@@ -29,8 +34,13 @@ public struct AgentSettings: Hashable, Codable, Sendable {
       switch self {
       case .direct: "cc répond dans la conversation, et le correspondant le lit."
       case .draft: "cc propose ; rien ne part avant que tu l'aies envoyé."
+      case .pilot: "cc envoie lui-même, dans le cadre ci-dessous. Chaque réponse est marquée. Hors cadre, il te passe la main."
       }
     }
+
+    /// Les modes qu'un **compte** peut avoir par défaut. « Répond seul » ne
+    /// se choisit que fil par fil, avec un cadre.
+    public static let accountDefaults: [Mode] = [.draft, .direct]
   }
 
   /// Le mode des conversations où d'autres humains lisent. En tête-à-tête avec
