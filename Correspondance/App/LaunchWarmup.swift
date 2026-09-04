@@ -17,6 +17,12 @@ enum LaunchWarmup {
       // Une URL et un numéro : les deux familles de règles que compilent les bulles.
       _ = TextLinks.detect(in: "https://exemple.fr · 06 12 34 56 78")
     }
+    Task.detached(priority: .utility) {
+      // Le modèle de reconnaissance de langue (CoreNLP) se charge à la première
+      // demande : ~60 ms, qui tombaient sur le fil principal à la première
+      // bulle reçue. Chargé ici, il est prêt quand le fil monte.
+      _ = TextTranslator.language(of: "Le modèle se charge une fois, ici, hors du fil principal.")
+    }
     Task.detached(priority: .userInitiated) {
       let face = ThemePreferences.storedTypeface()
       for name in [face.postScriptRegular, face.postScriptItalic] where !name.isEmpty {

@@ -104,6 +104,7 @@
 		87C73BA02A60E838C154E1EE /* QuickReplyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE57CFC1008D29FACCA01061 /* QuickReplyView.swift */; };
 		8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69827D334B0A62C8E003293 /* TopScrollFade.swift */; };
 		8838960EDD24130CAA38F648 /* DemoRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E28665C56283D03F52E170 /* DemoRelay.swift */; };
+		88A9BAE032563620626DA4DA /* ThreadPrewarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA38091BB1D3F12B8A266D3 /* ThreadPrewarm.swift */; };
 		89B82803BEB2BD559E0DF200 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = D4BBB32A1F72A0BF26586539 /* CorrespondanceCore */; };
 		8CE15690F8A69B4D6A577D11 /* SelectTextSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41162D81426258DB5EB6C027 /* SelectTextSheet.swift */; };
 		8EA83084ABDBE7CE01DCF535 /* CorrespondanceUI in Frameworks */ = {isa = PBXBuildFile; productRef = A1388660CF1198DE116A1477 /* CorrespondanceUI */; };
@@ -377,6 +378,7 @@
 		9C41963F5AA875508D844FF1 /* IMessageSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageSender.swift; sourceTree = "<group>"; };
 		9C6F0FFC5820E4E17A42F1AF /* InboxStore+Relay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InboxStore+Relay.swift"; sourceTree = "<group>"; };
 		9C7267837591C8566C627056 /* CorrespondanceCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CorrespondanceCore; path = Packages/CorrespondanceCore; sourceTree = SOURCE_ROOT; };
+		9CA38091BB1D3F12B8A266D3 /* ThreadPrewarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadPrewarm.swift; sourceTree = "<group>"; };
 		9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadView.swift; sourceTree = "<group>"; };
 		9EA8F1CF8DC543061AE69B1F /* CameraCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCapture.swift; sourceTree = "<group>"; };
 		A1517D91065CD3D975BAE16E /* SettingsWindowSizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowSizer.swift; sourceTree = "<group>"; };
@@ -679,6 +681,7 @@
 				70003B06F876183A6C85B0DE /* PermissionBanner.swift */,
 				1D655FFB4F256FEA2130AE99 /* ReachablePeople.swift */,
 				4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */,
+				9CA38091BB1D3F12B8A266D3 /* ThreadPrewarm.swift */,
 				9E52F5CB37B1CC9D0AF0D06B /* ThreadView.swift */,
 				E21AE127D32D04A39998921E /* TranslationCard.swift */,
 			);
@@ -1484,6 +1487,7 @@
 				3460B4B440278E418038A06E /* SettingsWindowSizer.swift in Sources */,
 				54B63ADE3D89DFC875BB492B /* SuggestionBanner.swift in Sources */,
 				FE593FE6941523AD5BC9D1CF /* ThemePickerView.swift in Sources */,
+				88A9BAE032563620626DA4DA /* ThreadPrewarm.swift in Sources */,
 				8520F818A51D69AE23716712 /* ThreadView.swift in Sources */,
 				8803873CEACC8E58A37EB58B /* TopScrollFade.swift in Sources */,
 				BADFB3E3EDF2595E20929513 /* TranslationCard.swift in Sources */,

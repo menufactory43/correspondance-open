@@ -399,6 +399,9 @@ struct ThreadView: View {
       .onAppear { pinToBottom(proxy) }
       .task {
         guard awaitsFirstFrame else { return }
+        // Langue et liens des bulles se calculent sur un autre cœur pendant
+        // qu'AppKit monte la fenêtre : le fil les trouve prêts.
+        ThreadPrewarm.schedule(store.messages)
         await LaunchGate.firstWindowOnScreen()
         awaitsFirstFrame = false
         LaunchTrace.mark("thread-begin")
@@ -536,7 +539,11 @@ struct ThreadView: View {
                 messageID: message.id,
                 text: message.text,
                 source: source,
-                conversationID: message.conversationID,
+                // Le fil ouvert, pas `message.conversationID` : dans la note à
+                // soi et le fil d'un agent, la bulle porte l'identifiant brut du
+                // salon quand la fiche écrit le réglage sous le sien — « Français »
+                // choisi, et la bulle anglaise restait à « Traduire ».
+                conversationID: store.selectedConversationID ?? message.conversationID,
                 theme: theme,
                 typeface: themes.typeface,
                 font: Typography.bubble(themes.typeface, scale: themes.textScale)
@@ -678,6 +685,7 @@ struct ThreadView: View {
 
   private func pinToBottom(_ proxy: ScrollViewProxy) {
     proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+    ThreadPrewarm.schedule(store.messages)
     DispatchQueue.main.async {
       // Pas de second `scrollTo(id)` ici : il s'arrête 14 pt trop haut et, joué
       // après coup, il défaisait le recalage au bord réel que
@@ -697,8 +705,22 @@ struct ThreadView: View {
         // suit reprogrammera la sienne.
         let count = store.messages.count
         pendingExpansionCount = count
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(80)) {
+        Task { @MainActor in
+          try? await Task.sleep(for: .milliseconds(80))
+          // Les mémos de langue et de liens des bulles à venir, s'ils sont
+          // encore en route — un temps borné, jamais au prix du fil.
+          await ThreadPrewarm.ready(within: .milliseconds(250))
           guard pendingExpansionCount == count, store.messages.count == count else { return }
+          // Par PALIERS d'une frame, pas d'un bloc : cent trente bulles d'un
+          // coup gelaient le fil principal ~500 ms — fenêtre à l'écran, mais
+          // sourde au premier clic et au premier défilement. Chaque palier
+          // reste sous le budget d'une frame ou deux ; le bas tient entre eux
+          // (`keepScrolledToBottom`), rien ne bouge à l'écran.
+          while let tail = launchTail, tail < windowCount, tail < count {
+            launchTail = min(tail + ThreadMetrics.expansionStep, windowCount)
+            try? await Task.sleep(for: .milliseconds(16))
+            guard pendingExpansionCount == count, store.messages.count == count else { return }
+          }
           pendingExpansionCount = nil
           launchTail = nil
           DispatchQueue.main.async {
@@ -737,6 +759,10 @@ enum ThreadMetrics {
   /// fenêtre haute de bulles courtes (≈ 40 pt chacune), assez peu pour que
   /// la passe reste brève : 15 → 30 messages coûtaient ~50 ms de plus.
   static let launchTailCount = 20
+  /// Ce que chaque palier ajoute au-dessus de la queue, une frame après
+  /// l'autre, jusqu'à `windowCount`. Quarante bulles : ~100 ms de montage,
+  /// le fil principal respire entre deux.
+  static let expansionStep = 40
   /// La fenêtre d'affichage du fil : ce qui est monté d'un coup. Au-delà,
   /// « Voir les messages précédents ». Cent cinquante : trois fois le plus
   /// gros fil sain mesuré, un tiers du fil qui ramait.

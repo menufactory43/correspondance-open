@@ -121,3 +121,31 @@ premier layout ~75, barre ~35, `NSThemeFrame` ~55) ; le fil ~60 après la
 fenêtre. Le plancher observé d'une app SwiftUI à `NavigationSplitView` sur
 cette machine est ~470 ms à `didFinish` — un rebond de Dock, pas un demi.
 
+
+## Septembre 2026 (suite) — défilement et montage du fil
+
+Mesuré au `sample` (1 ms) sur un groupe Signal de 300 messages, geste
+trackpad synthétique de 8 s (phases began/changed/ended, `scratchpad/scroll`).
+
+- **Défilement saccadé** : fil principal occupé à 93 % pendant le geste, dont
+  ~55 % à REMESURER tout le contenu du `ScrollView` à chaque frame (cache de
+  `ScrollViewLayoutComputer` manqué → cent cinquante rangées, alignement
+  `.bubbleBottom` compris, trois fois par frame : rendu, `NSHostingView.minSize`,
+  alignement des overlays). Cause : `.scrollPosition($position)` sur un
+  `@State` dans `KeepScrolledToBottom` — SwiftUI y écrit à chaque frame, et
+  chaque écriture invalidait le graphe. Réparé par une boîte hors graphe
+  (`ScrollPositionBox`). Seconde cause, plus petite : les bulles allumaient
+  leur rangée de survol en passant sous le curseur immobile (menu AppKit,
+  popover, animation) — coupé pendant le geste (`ThreadScrolling`). Après :
+  44 % d'occupation, le reste est le test de survol de SwiftUI à chaque frame
+  (~8 %, incompressible sans toucher aux `.onHover`/`.help` des bulles).
+- **Lancement, montage du fil** (`thread` → `thread-full`, ~680 ms sur le fil
+  principal, fenêtre visible mais gelée) : 146 ms de `NLLanguageRecognizer`
+  (bouton Traduire, dont 60 ms de chargement du modèle CoreNLP) et 78 ms de
+  `NSDataDetector`, tous deux par bulle, sur le fil principal. Désormais
+  préchauffés sur un autre cœur dès que les messages sont connus
+  (`ThreadPrewarm`, `LinkedText.prewarm`, modèle CoreNLP dans `LaunchWarmup`),
+  et le reste du fil monte par paliers de 40 bulles, une frame entre deux,
+  au lieu d'un bloc. Ce qui reste : ~3 ms par bulle de construction SwiftUI
+  (corps, ~15 modificateurs, `Text` attribué) — à mesurer modificateur par
+  modificateur sur 130 rangées, pas sur la queue de 20.

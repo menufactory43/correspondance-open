@@ -271,18 +271,26 @@ extension InboxStore {
   /// Rend la voix effective, ou `nil` si rien n'est parti : l'écran ne montre
   /// jamais un réglage qui n'a pas quitté l'app.
   func setAgentVoice(_ mode: AgentSettings.Mode, agent: String) async -> AgentSettings.Mode? {
+    await setAgentPosture(mode, suggest: nil, agent: agent)
+  }
+
+  /// La voix **et** `suggest` d'un coup, en une seule écriture de la console.
+  /// C'est ce que la carte Assistant pose : « Sur demande » et « Propose »
+  /// sont brouillon + `off` / brouillon + `always`. Deux écritures à la suite
+  /// relisaient la console entre les deux, et une relecture lente ramenait la
+  /// voix d'avant — le segment « revenait » sous le clic.
+  func setAgentPosture(
+    _ mode: AgentSettings.Mode, suggest: String?, agent: String
+  ) async -> AgentSettings.Mode? {
     guard let conversation = selectedConversation,
           let roomID = await matrix.roomID(ofConversation: conversation.id)
     else { return nil }
     // On part de ce que le Relais porte, jamais d'une config de départ : c'est
     // la config entière qui s'écrit, et ce qu'on n'a pas relu, on l'efface.
-    var console = await loadAgentConsole(agent: agent)
-    if console == nil { console = await activateAgentConsole(agent: agent) }
-    guard let console, let config = console.config else {
-      lastErrorMessage = "la console de \(agent) n'est pas joignable — le réglage n'est pas parti"
-      return nil
-    }
-    guard await writeAgentConsoleConfig(config.settingVoice(mode, in: roomID), in: console.roomID) else {
+    guard let (consoleRoomID, config) = await agentConfigForWriting(agent) else { return nil }
+    var next = config.settingVoice(mode, in: roomID)
+    if let suggest { next = next.settingSuggest(suggest, in: roomID) }
+    guard await writeAgentConsoleConfig(next, in: consoleRoomID) else {
       lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
       return nil
     }
@@ -318,14 +326,28 @@ extension InboxStore {
     return voix.contains { $0.agent != apres.agent && $0.mode.parleAuCorrespondant }
   }
 
-  /// Ce que la console de `agent` règle pour le fil ouvert : mode, suggest,
-  /// cadre. La carte Assistant part de là. `nil` : pas de fil au Relais.
-  func agentRoomBinding(agent: String) async -> AgentConsoleConfig.RoomBinding? {
-    guard let conversation = selectedConversation,
+  /// Ce que la carte Assistant affiche pour le fil ouvert : l'agent présent,
+  /// sa voix ici et le réglage du salon — en **une** lecture des consoles.
+  /// `nil` : pas de fil au Relais, ou aucun agent dedans.
+  /// Un réglage par agent PRÉSENT, dans l'ordre des noms : deux agents dans
+  /// un salon ont chacun leur console, leur posture et leur cadre — la carte
+  /// ne montrait que le premier (« cc » passait devant « hermes »).
+  func assistantSettingsInSelectedConversation() async -> [AssistantSettings] {
+    guard let conversation = selectedConversation, conversation.network.livesOnRelay,
           let roomID = await matrix.roomID(ofConversation: conversation.id)
-    else { return nil }
-    let config = ((try? await matrix.agentConfigs()) ?? []).first { $0.agent == agent }
-    return config?.binding(in: roomID) ?? AgentConsoleConfig.RoomBinding()
+    else { return [] }
+    let configs = (try? await matrix.agentConfigs()) ?? []
+    let connus = agentDirectory.isEmpty ? [agentName] : agentDirectory
+    var reglages: [AssistantSettings] = []
+    for nom in connus.sorted() where await matrix.hasAgent(conversationID: conversation.id, agent: nom) {
+      let config = configs.first { $0.agent == nom }
+      reglages.append(AssistantSettings(
+        agent: nom,
+        mode: config?.voice(in: roomID) ?? .draft,
+        binding: config?.binding(in: roomID) ?? AgentConsoleConfig.RoomBinding()
+      ))
+    }
+    return reglages
   }
 
   /// Pose `suggest` (`AgentWire.Suggest` : `off`, `always`, `keywords`) pour
@@ -351,17 +373,24 @@ extension InboxStore {
     guard let conversation = selectedConversation,
           let roomID = await matrix.roomID(ofConversation: conversation.id)
     else { return false }
-    var console = await loadAgentConsole(agent: agent)
-    if console == nil { console = await activateAgentConsole(agent: agent) }
-    guard let console, let config = console.config else {
-      lastErrorMessage = "la console de \(agent) n'est pas joignable — le réglage n'est pas parti"
-      return false
-    }
-    guard await writeAgentConsoleConfig(change(config, roomID), in: console.roomID) else {
+    guard let (consoleRoomID, config) = await agentConfigForWriting(agent) else { return false }
+    guard await writeAgentConsoleConfig(change(config, roomID), in: consoleRoomID) else {
       lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
       return false
     }
     return true
+  }
+
+  /// La config d'un agent telle que le Relais la porte à l'instant, et sa
+  /// console — créée si elle manque. Un seul GET d'état : relire le journal
+  /// pour poser un réglage prenait des secondes.
+  private func agentConfigForWriting(_ agent: String) async -> (String, AgentConsoleConfig)? {
+    if let lu = try? await matrix.readAgentConfig(agent: agent) { return (lu.roomID, lu.config) }
+    if let console = await activateAgentConsole(agent: agent), let config = console.config {
+      return (console.roomID, config)
+    }
+    lastErrorMessage = "la console de \(agent) n'est pas joignable — le réglage n'est pas parti"
+    return nil
   }
 
   /// Ouvre le tête-à-tête avec un agent — le fil existant, ou un salon neuf
@@ -406,6 +435,14 @@ extension InboxStore {
       return false
     }
   }
+}
+
+/// Ce que la carte Assistant d'un fil montre : l'agent présent, sa voix ici,
+/// et le réglage du salon (proposition spontanée, cadre du « répond seul »).
+struct AssistantSettings: Equatable, Sendable {
+  let agent: String
+  let mode: AgentSettings.Mode
+  let binding: AgentConsoleConfig.RoomBinding
 }
 
 /// La voix d'un agent dans une conversation — ce que le tiroir « + » affiche

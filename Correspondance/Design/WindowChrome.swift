@@ -155,11 +155,21 @@ private struct KeepScrolledToBottom: ViewModifier {
   /// (barre d'outils, marges) et s'arrête donc toujours un peu trop haut ;
   /// `scrollTo(edge:)` vise le bord réel du contenu — celui que
   /// `defaultScrollAnchor(.bottom)` atteint au premier affichage.
-  @State private var position = ScrollPosition()
+  ///
+  /// Une boîte, pas un `@State ScrollPosition` : SwiftUI ÉCRIT dans ce binding
+  /// à chaque frame du défilement, et chaque écriture dans un `@State` d'ici
+  /// invalidait le fil entier — les cent cinquante rangées d'un groupe
+  /// remesurées trois fois par frame (rendu, taille minimale de l'hôte,
+  /// alignement des overlays), 93 % du fil principal, des frames sautées.
+  /// Mesuré au `sample` sur un groupe Signal. La boîte absorbe les écritures
+  /// sans rien invalider ; `scrollRequest` fait relire la position quand
+  /// c'est NOUS qui demandons un défilement.
+  @State private var position = ScrollPositionBox()
+  @State private var scrollRequest = 0
 
   func body(content: Content) -> some View {
     content
-      .scrollPosition($position)
+      .scrollPosition(position.binding(request: scrollRequest))
       .onScrollGeometryChange(for: ScrollBottomProbe.self) { geometry in
         // Le viewport est plus haut que `containerSize` : la bande sous la barre
         // d'outils (inset haut) en fait partie. Sans elle, le vrai bas paraît
@@ -177,10 +187,15 @@ private struct KeepScrolledToBottom: ViewModifier {
         lastAttempt = new
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { position.scrollTo(edge: .bottom) }
+        withTransaction(transaction) {
+          position.value.scrollTo(edge: .bottom)
+          scrollRequest &+= 1
+        }
       }
       .onScrollPhaseChange { _, newPhase, context in
         isReaderScrolling = newPhase == .tracking || newPhase == .interacting || newPhase == .decelerating
+        // Les bulles lisent ce drapeau : pas de rangée de survol pendant le geste.
+        ThreadScrolling.isActive = isReaderScrolling
         guard newPhase == .idle else { return }
         let geometry = context.geometry
         let visibleBottom = geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top
@@ -188,6 +203,30 @@ private struct KeepScrolledToBottom: ViewModifier {
         isNearBottom = visibleBottom >= contentBottom - threshold
       }
   }
+}
+
+/// La position de défilement tenue HORS du graphe de vues — cf. `KeepScrolledToBottom`.
+@available(macOS 15.0, *)
+@MainActor
+private final class ScrollPositionBox {
+  var value = ScrollPosition()
+
+  /// `request` n'est pas lu : il est là pour que le corps du modificateur
+  /// dépende de `scrollRequest`, et relise donc la position après un `scrollTo`.
+  func binding(request: Int) -> Binding<ScrollPosition> {
+    Binding(get: { self.value }, set: { self.value = $0 })
+  }
+}
+
+/// Le fil est en train de défiler sous le doigt (ou en décélération). Les
+/// bulles s'en servent pour ne pas allumer leur rangée de survol quand c'est
+/// le contenu qui passe sous un curseur immobile : chaque allumage (un menu
+/// AppKit, un popover, une animation de 120 ms) invalidait la mise en page de
+/// tout le fil, et un groupe aux messages courts en faisait passer dix par
+/// seconde. Messages et Signal n'allument rien non plus pendant le geste.
+@MainActor
+enum ThreadScrolling {
+  static var isActive = false
 }
 
 private struct ScrollBottomProbe: Equatable {

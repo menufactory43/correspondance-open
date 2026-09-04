@@ -32,24 +32,27 @@ struct TranslationCard: View {
       Text("Traduction")
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(.secondary)
-      row("Traduire ce qui arrive", selection: $incoming)
-      row("Traduire ce que j'envoie", selection: $outgoing)
+      // La langue choisie est celle dans laquelle on **lit** ou on **envoie**,
+      // pas celle qu'on attend : « Anglais » sur ce qui arrive laissait les
+      // bulles anglaises telles quelles, et on cherchait pourquoi.
+      row("Ce qui arrive", detail: "Lu, sur cet appareil, en", none: "Sans traduction", selection: $incoming)
+      row("Ce que j'envoie", detail: "Traduit avant l'envoi en", none: "Sans traduction", selection: $outgoing)
     }
   }
 
-  private func row(_ title: String, selection: Binding<String>) -> some View {
+  private func row(_ title: String, detail: String, none: String, selection: Binding<String>) -> some View {
     HStack(alignment: .center, spacing: 8) {
       VStack(alignment: .leading, spacing: 1) {
         Text(title)
           .font(.system(size: 12, weight: .medium))
           .foregroundStyle(theme.ink)
-        Text("Sur cet appareil")
+        Text(detail)
           .font(.system(size: 11))
           .foregroundStyle(.secondary)
       }
       Spacer(minLength: 8)
       Picker(title, selection: selection) {
-        Text("Non").tag("")
+        Text(none).tag("")
         Divider()
         ForEach(TranslationPreferences.Language.allCases) { language in
           Text(language.titleFR).tag(language.rawValue)

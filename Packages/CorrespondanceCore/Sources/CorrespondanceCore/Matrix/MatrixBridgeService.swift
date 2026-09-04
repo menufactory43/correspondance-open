@@ -55,6 +55,11 @@ public actor MatrixBridgeService {
   private var dirtyRoomIDs: Set<String> = []
   /// La réconciliation avec `/joined_rooms` n'a lieu qu'une fois par lancement.
   private var didReconcileJoinedRooms = false
+  /// Les consoles d'agents déjà trouvées, par nom d'agent. Les chercher,
+  /// c'est un GET d'état par salon joint : la fiche d'un fil mettait des
+  /// secondes à dire ce que cc y fait. `nil` : jamais balayé. Interne, pour
+  /// l'extension console.
+  var agentConsoleRoomCache: [String: String]?
 
   /// Ce qu'un fil charge à l'ouverture ; au-delà, on remonte à la demande.
   public static let historyPageSize = LocalStore.defaultPageSize
@@ -571,9 +576,34 @@ public actor MatrixBridgeService {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
     guard let network = rooms[roomID]?.network, let bridge = network.bridge else { return false }
+    // Rien à dire au pont si le relais est déjà dans cet état : passer de
+    // « Sur demande » à « Propose » (deux brouillons) lui envoyait un
+    // `unset-relay` de trop, et Signal répondait « This portal doesn't have
+    // a relay set » dans le fil.
+    if let known = portalRelayState(roomID: roomID), known == enabled { return true }
     let command = "\(bridge.commandPrefix) \(enabled ? "set-relay" : "unset-relay")"
     _ = try await client.sendText(roomID: roomID, body: command, transactionID: UUID().uuidString)
+    relaySetByUs[roomID] = (enabled, Date())
     return true
+  }
+
+  /// Ce qu'on a demandé au pont nous-mêmes, et quand : la réponse du pont
+  /// n'arrive qu'au `/sync` suivant, et deux clics rapprochés ne doivent pas
+  /// lui redemander la même chose.
+  private var relaySetByUs: [String: (enabled: Bool, at: Date)] = [:]
+
+  /// L'état du relais d'un portail, tel qu'on le sait : notre dernière
+  /// commande si elle est plus récente que le dernier avis du pont, sinon ce
+  /// que le pont a dit en dernier dans le salon. `nil` : personne ne sait.
+  func portalRelayState(roomID: String) -> Bool? {
+    let lastNotice = rooms[roomID]?.messagesByID.values
+      .filter { $0.senderID.map(MatrixIdentity.isBridgeBot) == true }
+      .compactMap { message in
+        message.systemEventText.flatMap(MatrixBridgeNotice.relayState(ofSystemText:)).map { ($0, message.sentAt) }
+      }
+      .max { $0.1 < $1.1 }
+    if let ours = relaySetByUs[roomID], lastNotice.map({ ours.at > $0.1 }) ?? true { return ours.enabled }
+    return lastNotice?.0
   }
 
   /// Les fils que le pont annonce comme des demandes — vide tant qu'aucun

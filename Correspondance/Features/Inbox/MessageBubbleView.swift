@@ -220,6 +220,9 @@ struct MessageBubbleView: View {
     // vide éteignait la rangée qu'on allait cliquer.
     .contentShape(Rectangle())
     .onHover { hovering in
+      // Pendant un défilement, c'est le contenu qui passe sous le curseur, pas
+      // le curseur qui vise une bulle : on n'allume rien. Éteindre, toujours.
+      if hovering, ThreadScrolling.isActive { return }
       if hovering { onHoverBegan?() }
       if reduceMotion {
         isHovered = hovering

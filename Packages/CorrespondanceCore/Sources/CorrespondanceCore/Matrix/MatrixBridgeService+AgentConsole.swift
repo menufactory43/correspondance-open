@@ -68,7 +68,8 @@ extension MatrixBridgeService {
   /// La console de cet agent, si elle existe déjà. On la reconnaît à son event
   /// d'état de config — pas à son nom, qu'un humain peut changer.
   public func findAgentConsole(agent: String) async throws -> String? {
-    try await agentConsoleRooms().first { $0.agent == agent }?.roomID
+    if let roomID = agentConsoleRoomCache?[agent] { return roomID }
+    return try await agentConsoleRooms(refresh: true).first { $0.agent == agent }?.roomID
   }
 
   /// **L'annuaire des agents** : toutes les rooms jointes qui portent un event
@@ -78,7 +79,14 @@ extension MatrixBridgeService {
   /// distants. Un drapeau posé par l'app ne prouve rien : l'agent du NUC n'a
   /// jamais été activé depuis ce Mac, et il existe. La console, elle, est une
   /// pièce sur le Relais, écrite par un propriétaire.
-  public func agentConsoleRooms() async throws -> [(agent: String, roomID: String)] {
+  ///
+  /// Le balayage coûte un GET par salon joint : il n'a lieu qu'une fois, puis
+  /// à la demande (`refresh:`) — l'écran des réglages, qui veut voir un agent
+  /// né ailleurs. Une console créée ici entre dans le cache aussitôt.
+  public func agentConsoleRooms(refresh: Bool = false) async throws -> [(agent: String, roomID: String)] {
+    if !refresh, let cache = agentConsoleRoomCache {
+      return cache.map { (agent: $0.key, roomID: $0.value) }.sorted { $0.agent < $1.agent }
+    }
     var trouvees: [(agent: String, roomID: String)] = []
     for roomID in try await client.joinedRooms() {
       guard let content = try? await client.roomState(roomID: roomID, type: AgentWire.configType),
@@ -86,7 +94,17 @@ extension MatrixBridgeService {
       else { continue }
       trouvees.append((agent: remote.agent, roomID: roomID))
     }
+    agentConsoleRoomCache = Dictionary(trouvees.map { ($0.agent, $0.roomID) }, uniquingKeysWith: { first, _ in first })
     return trouvees.sorted { $0.agent < $1.agent }
+  }
+
+  /// La configuration d'**un** agent, et sa console : un seul GET d'état,
+  /// sans status ni journal. C'est ce qu'un réglage relit avant d'écrire.
+  public func readAgentConfig(agent: String) async throws -> (roomID: String, config: AgentConsoleConfig)? {
+    guard let roomID = try await findAgentConsole(agent: agent) else { return nil }
+    let content = try await client.roomState(roomID: roomID, type: AgentWire.configType)
+    guard let config = AgentConsoleConfig(content: content) else { return nil }
+    return (roomID, config)
   }
 
   /// L'annuaire avec la configuration de chacun, et **rien d'autre** : ni
@@ -111,7 +129,7 @@ extension MatrixBridgeService {
   /// réglages qui l'appelle, pas le fil.
   public func listAgentConsoles(journalLimit: Int = 30) async throws -> [AgentConsole] {
     var consoles: [AgentConsole] = []
-    for entry in try await agentConsoleRooms() {
+    for entry in try await agentConsoleRooms(refresh: true) {
       guard let console = try? await readAgentConsole(
         agent: entry.agent, roomID: entry.roomID, journalLimit: journalLimit
       ) else { continue }
@@ -137,6 +155,7 @@ extension MatrixBridgeService {
       invite: [MatrixIdentity.agentUserID(named: agent, sameServerAs: selfUserID)]
     )
     try await writeAgentConfig(config, in: roomID)
+    agentConsoleRoomCache?[agent] = roomID
     return roomID
   }
 

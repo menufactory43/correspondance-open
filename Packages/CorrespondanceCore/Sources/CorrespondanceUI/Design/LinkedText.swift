@@ -69,6 +69,22 @@ public struct LinkedText: View {
   /// composer : on garde les plages trouvées, indexées par le texte lui-même.
   @MainActor private static var memo: [String: [TextLinks.Detected]] = [:]
 
+  /// Préchauffe le mémo pour des textes à venir, la détection faite HORS du
+  /// fil principal (`NSDataDetector` est immuable, donc sûr entre threads).
+  /// Le fil monte cent cinquante bulles d'un coup ; sans ceci, chacune payait
+  /// son détecteur sur le fil principal, ~80 ms en tout, mesurés au lancement.
+  public nonisolated static func prewarm(_ texts: [String]) async {
+    let missing = await MainActor.run { texts.filter { memo[$0] == nil } }
+    guard !missing.isEmpty else { return }
+    let found = missing.map { ($0, TextLinks.detect(in: $0)) }
+    await MainActor.run {
+      for (text, links) in found {
+        if memo.count > 2_000 { memo.removeAll(keepingCapacity: true) }
+        memo[text] = links
+      }
+    }
+  }
+
   @MainActor
   private static func detected(in text: String) -> [TextLinks.Detected] {
     if let hit = memo[text] { return hit }

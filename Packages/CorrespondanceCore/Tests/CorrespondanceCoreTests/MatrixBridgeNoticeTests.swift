@@ -28,6 +28,15 @@ final class MatrixBridgeNoticeTests: XCTestCase {
     XCTAssertEqual(MatrixBridgeNotice.systemText(for: "Stopped relaying messages for users who haven't logged in"), "Relais du pont éteint : cc propose des brouillons, visibles de toi seul.")
   }
 
+  func testUnRelaisDejaEteintSeDitEnFrancais() {
+    XCTAssertEqual(MatrixBridgeNotice.systemText(for: "This portal doesn't have a relay set."), MatrixBridgeNotice.relayOffText)
+    XCTAssertEqual(MatrixBridgeNotice.relayState(in: "This portal doesn't have a relay set."), false)
+    XCTAssertEqual(MatrixBridgeNotice.relayState(in: "Messages … will now be relayed through +33"), true)
+    XCTAssertNil(MatrixBridgeNotice.relayState(in: "Something else happened"))
+    XCTAssertEqual(MatrixBridgeNotice.relayState(ofSystemText: MatrixBridgeNotice.relayOnText), true)
+    XCTAssertNil(MatrixBridgeNotice.relayState(ofSystemText: "Pont : autre chose"))
+  }
+
   func testUneCommandeAuPontEstReconnue() {
     XCTAssertTrue(MatrixBridgeNotice.isBridgeCommand("!wa set-relay", network: .whatsapp))
     XCTAssertTrue(MatrixBridgeNotice.isBridgeCommand("!signal unset-relay", network: .signal))
