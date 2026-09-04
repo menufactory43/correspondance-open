@@ -1077,11 +1077,18 @@ public actor MatrixBridgeService {
   /// un accusé perdu ne doit pas faire échouer l'ouverture d'une conversation.
   public func markRead(conversationID: String) async {
     guard let roomID = roomID(forConversation: conversationID),
-          let last = rooms[roomID]?.sortedMessages.last,
-          // Marquer nos propres messages n'apprend rien à personne.
-          !last.isFromMe
+          let last = rooms[roomID]?.sortedMessages.last
     else { return }
+    // L'accusé se pose sur le DERNIER événement, le nôtre compris : c'est lui
+    // qui remet le compteur du serveur à zéro. Ne l'envoyer que sur un message
+    // reçu laissait un fil « 2 non lus » pour toujours dès qu'on avait répondu
+    // depuis l'autre appareil — l'iPhone ne posait plus d'accusé, le Relais
+    // recomptait les deux à chaque `/sync`.
     try? await client.sendReadReceipt(roomID: roomID, eventID: last.id)
+    // Et le modèle local suit tout de suite : le serveur ne renvoie
+    // `unread_notifications` qu'au prochain `/sync` qui touche ce salon, et
+    // d'ici là `conversations()` aurait continué d'annoncer l'ancien compte.
+    rooms[roomID]?.unreadCount = 0
   }
 
   /// Quitte le salon d'un fil, et l'oublie côté cache : quitter le portail d'un

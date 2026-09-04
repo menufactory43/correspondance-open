@@ -6,6 +6,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 UDID="${1:-C6ED30D4-2046-45F4-9815-51E6905FEFF4}"
 xcodegen generate >/dev/null
-xcodebuild -project Correspondance.xcodeproj -scheme 'Correspondance iOS' -configuration Debug \
+CORRESPONDANCE_CRYPTO=1 xcodebuild -project Correspondance.xcodeproj -scheme 'Correspondance iOS' -configuration Debug \
   -destination "platform=iOS Simulator,id=$UDID" -derivedDataPath /tmp/dd-ios test 2>&1 \
   | grep -E "Test Case .* (passed|failed)|error:|Executed .* tests|TEST (SUCCEEDED|FAILED)"

@@ -18,6 +18,10 @@ struct ThreadView: View {
   /// Ce que le fil considère comme déjà posé. Tout ce qui arrive après se
   /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
   @State private var settledMessageID: String?
+  /// Ce qui a déjà pris l'encre, par empreinte : la bulle optimiste et la
+  /// copie du Relais qui la remplace sous son vrai identifiant ne jouent
+  /// qu'une fois. Une classe, pas un @State : le corps y écrit sans redessiner.
+  private let inkLedger = MessageArrivalLedger()
   /// Au lancement, le fil attend que la fenêtre soit peinte : construire cent
   /// bulles avant la première frame, c'est le rebond de trop dans le Dock. Il
   /// est de toute façon invisible tant qu'il n'est pas ancré en bas — il
@@ -423,6 +427,7 @@ struct ThreadView: View {
         windowCount = ThreadMetrics.windowCount
         animatesArrivals = false
         settledMessageID = store.messages.last?.id
+        inkLedger.reset()
         isNearBottom = true
         pinToBottom(proxy)
       }
@@ -635,12 +640,18 @@ struct ThreadView: View {
   /// dans le corps de la vue : la ligne connaît donc son sort dès sa naissance,
   /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
   private func isFresh(_ message: ChatMessage) -> Bool {
-    animatesArrivals
-      && store.didSettleInitialMatrixSync
-      && message.id == store.messages.last?.id
-      && message.id != settledMessageID
-      // Un message d'hier découvert en ouvrant le fil est déjà vu : posé, pas tracé.
-      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
+    guard animatesArrivals,
+          store.didSettleInitialMatrixSync,
+          message.id == store.messages.last?.id,
+          message.id != settledMessageID,
+          // Un message d'hier découvert en ouvrant le fil est déjà vu : posé, pas tracé.
+          MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt),
+          // Mon envoi a joué en bulle optimiste : sa copie du Relais, sous un
+          // autre identifiant, paraît posée au lieu de se ré-encrer.
+          !inkLedger.hasInked(message)
+    else { return false }
+    inkLedger.remember(message)
+    return true
   }
 
   private func noteArrival(increased: Bool) {

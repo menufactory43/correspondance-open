@@ -115,7 +115,10 @@ struct MessageBubbleView: View {
               theme: theme,
               typeface: typeface,
               width: Self.mediaWidth,
-              cornerRadius: 12
+              cornerRadius: 12,
+              // La vidéo du reel est le seul média du message : Quick Look,
+              // comme pour une vidéo ordinaire.
+              onPlayMedia: albumMedia.isEmpty ? nil : { openMedia(at: 0) }
             )
           } else if let poll = message.poll {
             PollView(

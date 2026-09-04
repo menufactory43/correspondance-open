@@ -142,7 +142,10 @@ struct MessageBubble: View {
             theme: theme,
             typeface: typeface,
             width: Self.mediaWidth,
-            cornerRadius: 16
+            cornerRadius: 16,
+            // La vidéo du reel est le seul média du message : elle ouvre la
+            // visionneuse du fil, comme une vidéo ordinaire.
+            onPlayMedia: albumMedia.isEmpty ? nil : { opened = OpenedMedia(0) }
           )
         } else if let poll = message.poll {
           PollView(

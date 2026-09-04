@@ -5,8 +5,12 @@ import SwiftUI
 /// légende, l'adresse écrite deux fois, le reel en pièce jointe — tient ici en
 /// une seule chose cliquable : la vignette, le compte, ce qu'il a écrit.
 ///
-/// Le reel ne se joue PAS ici : un reel vit sur Instagram, avec son son, ses
-/// commentaires et sa suite. La carte y mène, elle ne le remplace pas.
+/// Deux gestes, pas un. Le pont livre la vidéo du reel avec le message : la
+/// toucher la JOUE ici, dans la visionneuse du fil, sans passer par Instagram
+/// — c'est `onPlayMedia`, que la bulle branche sur son lecteur. Le pied de la
+/// carte (le compte, la légende, « Ouvrir dans Instagram ») mène au post là
+/// où il vit, avec son son, ses commentaires et sa suite. Sans vidéo locale
+/// ni lecteur branché, toute la carte ouvre Instagram, comme avant.
 /// Mêmes jetons que `LinkPreviewCard` — papier, liseré, encres du thème.
 public struct SharedPostCard: View {
   public let post: SharedPost
@@ -14,6 +18,8 @@ public struct SharedPostCard: View {
   public var typeface: WritingTypeface = .quattro
   public var width: CGFloat = 300
   public var cornerRadius: CGFloat = 12
+  /// Lire la vidéo du post en place. `nil` = pas de lecteur, la carte ouvre Instagram.
+  public var onPlayMedia: (() -> Void)?
 
   @Environment(\.openURL) private var openURL
   /// La proportion réelle de l'affiche, apprise de la vignette. Le 4/5 n'est
@@ -26,21 +32,29 @@ public struct SharedPostCard: View {
     theme: WritingTheme,
     typeface: WritingTypeface = .quattro,
     width: CGFloat = 300,
-    cornerRadius: CGFloat = 12
+    cornerRadius: CGFloat = 12,
+    onPlayMedia: (() -> Void)? = nil
   ) {
     self.post = post
     self.theme = theme
     self.typeface = typeface
     self.width = width
     self.cornerRadius = cornerRadius
+    self.onPlayMedia = onPlayMedia
+  }
+
+  /// La vidéo est là, sur le disque, et quelqu'un sait la jouer.
+  private var playsInPlace: Bool {
+    guard let media = post.media, media.isVideo, media.resolvedFileURL != nil else { return false }
+    return onPlayMedia != nil
   }
 
   public var body: some View {
-    Button {
-      openURL(post.url)
-    } label: {
-      VStack(alignment: .leading, spacing: 0) {
-        if let media = post.media {
+    VStack(alignment: .leading, spacing: 0) {
+      if let media = post.media {
+        Button {
+          if playsInPlace { onPlayMedia?() } else { openURL(post.url) }
+        } label: {
           MediaTileImage(
             url: media.resolvedFileURL,
             isVideo: media.isVideo,
@@ -63,8 +77,16 @@ public struct SharedPostCard: View {
           .overlay(alignment: .bottom) {
             Rectangle().fill(theme.edge).frame(height: 1)
           }
+          .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(playsInPlace ? "Vidéo du post" : accessibilityLabel)
+        .accessibilityHint(playsInPlace ? "Lit la vidéo ici" : "Ouvre la publication dans Instagram")
+      }
 
+      Button {
+        openURL(post.url)
+      } label: {
         VStack(alignment: .leading, spacing: 2) {
           if let author = post.author {
             Text(author)
@@ -80,26 +102,28 @@ public struct SharedPostCard: View {
               .lineLimit(3)
               .multilineTextAlignment(.leading)
           }
-          Text("instagram.com")
+          // Quand la vidéo se joue ici, le pied dit clairement ce qu'il
+          // fait, lui : c'est le seul chemin vers Instagram qui reste.
+          Text(playsInPlace ? "Ouvrir dans Instagram" : "instagram.com")
             .font(Typography.meta(typeface))
-            .foregroundStyle(theme.inkTertiary)
+            .foregroundStyle(playsInPlace ? theme.accent : theme.inkTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Spacing.xs)
         .padding(.vertical, 7)
+        .contentShape(Rectangle())
       }
-      .frame(width: width, alignment: .leading)
-      .background(theme.paper)
-      .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-          .strokeBorder(theme.edge, lineWidth: 1)
-      )
+      .buttonStyle(.plain)
+      .accessibilityLabel(accessibilityLabel)
+      .accessibilityHint("Ouvre la publication dans Instagram")
     }
-    .buttonStyle(.plain)
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(accessibilityLabel)
-    .accessibilityHint("Ouvre la publication dans Instagram")
+    .frame(width: width, alignment: .leading)
+    .background(theme.paper)
+    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .strokeBorder(theme.edge, lineWidth: 1)
+    )
   }
 
   /// Une affiche ne mange pas tout le fil : au-delà, on la borne.

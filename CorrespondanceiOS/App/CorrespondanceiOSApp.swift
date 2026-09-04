@@ -45,6 +45,9 @@ struct CorrespondanceiOSApp: App {
         // muet, salon chiffré) part au réveil de l'app — et une extension
         // iPhone ne peut pas nous réveiller, c'est donc ici que ça se joue.
         .onChange(of: scenePhase) { _, phase in
+          // En arrière-plan, le push prend le relais des notifications locales ;
+          // le rattrapage du retour ne doit pas les rejouer.
+          if phase == .background { store.notificationsWillResumeFromBackground() }
           guard phase == .active else { return }
           Task { await store.viderLaBoiteDuPartage() }
         }

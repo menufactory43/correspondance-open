@@ -59,6 +59,16 @@ extension RelayStore {
     }
   }
 
+  /// L'app passe en arrière-plan : iOS la suspend, le `/sync` s'arrête, et
+  /// c'est le push qui prévient. Au retour, la première passe rattrape des
+  /// heures d'un coup — sans ça, chaque fil avancé posait une notification
+  /// locale, doublon du push déjà reçu (et lu, souvent, sur le Mac) : une
+  /// rafale de bannières à l'ouverture. On repose la ligne de flottaison,
+  /// comme au lancement : ce rattrapage n'annonce rien, la suite si.
+  func notificationsWillResumeFromBackground() {
+    isNotificationPrimed = false
+  }
+
   /// Ce fil est-il sous les yeux ? Un message qu'on regarde arriver n'a pas
   /// besoin d'une bannière par-dessus lui.
   private func isOnScreen(_ conversationID: String) -> Bool {

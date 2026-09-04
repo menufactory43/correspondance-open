@@ -296,6 +296,7 @@ final class RelayStore {
       let fresh = try await matrix.syncOnce()
       syncError = nil
       conversations = mergedRows(fresh)
+      reassertReadOnScreen()
       networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
       await adoptRelayState()
       // Après l'adoption : l'état du Relais dit ce qui est muet, et un fil
@@ -665,6 +666,18 @@ final class RelayStore {
   /// identifiant local. Elles quittent la table quand le Relais a répondu —
   /// dans un sens ou dans l'autre — ou quand on annule l'envoi.
   private var inFlightBubbles: [String: ChatMessage] = [:]
+
+  /// Le fil qu'on a sous les yeux est lu, quoi qu'en dise le `/sync` qui vient
+  /// de réécrire la liste : l'accusé de lecture voyage, le compte du serveur
+  /// arrive parfois avant lui, et le « 2 » revenait sur la ligne qu'on venait
+  /// d'ouvrir. Le Mac fait pareil à chaque passe (`isAttended`). En incognito,
+  /// rien : lire sans le dire, c'est garder le compteur.
+  private func reassertReadOnScreen() {
+    guard !isIncognito else { return }
+    for id in Set([selectedConversationID, focusConversationID].compactMap { $0 }) {
+      markLocallyRead(id)
+    }
+  }
 
   /// Le compteur de non-lus s'éteint à l'écran tout de suite ; le Relais suivra
   /// avec son accusé de lecture, au rythme du réseau.

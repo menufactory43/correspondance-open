@@ -219,6 +219,10 @@ struct ThreadInfoSheet: View {
       } label: {
         actionLabel("Plus", systemImage: "ellipsis")
       }
+      .buttonStyle(.plain)
+      // Le même cadre que les deux boutons à côté : sans lui, le menu prend
+      // la taille de son étiquette et « Plus » paraissait plus petit.
+      .frame(maxWidth: .infinity)
       .accessibilityLabel("Plus d'actions")
     }
   }

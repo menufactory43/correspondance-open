@@ -4,6 +4,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 xcodegen generate >/dev/null
+# Le drapeau CORRESPONDANCE_CRYPTO=1 est levé, comme dans demo-mac.sh et les
+# scripts de release : on teste ce qu'on livre. Et le manifeste lit le drapeau
+# à l'évaluation — une construction sans lui après une construction avec lui
+# laisse des caches (SourcePackages, ModuleCache, .build) qui réclament encore
+# MatrixSDKCryptoFFI, et tout échoue sur « unable to resolve module dependency ».
+# Une seule valeur partout, et le problème ne se pose pas. Si ça arrive quand
+# même : `scripts/nettoyer-builds.sh --tout`.
+export CORRESPONDANCE_CRYPTO=1
 # Les tests de CorrespondanceCore / CorrespondanceUI vivent dans le paquet : Xcode
 # ne sait pas les mettre dans le scheme de l'app, `swift test` s'en charge.
 swift test --package-path Packages/CorrespondanceCore 2>&1 | grep -E "error:|Executed .* tests, with"

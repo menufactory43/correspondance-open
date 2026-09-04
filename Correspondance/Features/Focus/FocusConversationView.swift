@@ -148,6 +148,9 @@ struct FocusTranscriptView: View {
   /// Ce que la page considère comme déjà posé. Tout ce qui arrive après se
   /// trace ; ce qui est là depuis toujours paraît sans cérémonie.
   @State private var settledMessageID: String?
+  /// Ce qui a déjà joué le geste, par empreinte : la bulle optimiste et la
+  /// copie du Relais qui la remplace ne jouent qu'une fois.
+  private let inkLedger = MessageArrivalLedger()
   /// Suppression demandée au clic droit, en attente de confirmation.
   @State private var pendingDeletion: PendingDeletion?
   /// Au lancement, la page reste blanche jusqu'à ce que la fenêtre soit peinte :
@@ -185,12 +188,18 @@ struct FocusTranscriptView: View {
   /// dans le corps de la vue : la ligne connaît donc son sort dès sa naissance,
   /// et sa valeur initiale suffit à lancer le geste — pas de rattrapage.
   private func isFresh(_ message: ChatMessage) -> Bool {
-    animatesArrivals
-      && store.didSettleInitialMatrixSync
-      && message.id == thread.last?.id
-      && message.id != settledMessageID
-      // Un message d'hier découvert en ouvrant la page est déjà vu : posé, pas tracé.
-      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
+    guard animatesArrivals,
+          store.didSettleInitialMatrixSync,
+          message.id == thread.last?.id,
+          message.id != settledMessageID,
+          // Un message d'hier découvert en ouvrant la page est déjà vu : posé, pas tracé.
+          MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt),
+          // Mon envoi a joué en bulle optimiste : sa copie du Relais, sous un
+          // autre identifiant, paraît posée au lieu de rejouer le geste.
+          !inkLedger.hasInked(message)
+    else { return false }
+    inkLedger.remember(message)
+    return true
   }
 
   private func noteArrival(increased: Bool) {
@@ -374,6 +383,7 @@ struct FocusTranscriptView: View {
         isShowingThread = false
         animatesArrivals = false
         settledMessageID = thread.last?.id
+        inkLedger.reset()
         isNearBottom = true
         pinToBottom(proxy)
       }

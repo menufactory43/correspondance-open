@@ -2257,32 +2257,41 @@ final class InboxStore {
 
   /// Relit les comptes de tous les ponts, en parallèle. Un pont muet ne retient
   /// pas les autres : chacun a sa ligne, son erreur.
+  ///
+  /// Chaque tâche fille écrit **elle-même** sa ligne dans le magasin, et ne rend
+  /// rien au groupe. Écrite en tuple `(réseau, résultat)` rendu par le groupe,
+  /// la build Release archivée recevait six lectures étiquetées `.iMessage` —
+  /// le réseau perdu en route, le dictionnaire avec une seule clé, et Réglages
+  /// sur « Lecture des comptes… » pour toujours alors que la Debug marchait. Le
+  /// même code en `struct` passait en Release locale et pas en archive : on ne
+  /// fait plus transiter la valeur du tout.
   func refreshBridgeAccounts() async {
     guard isMatrixConnected, !isDemo else { return }
     bridgeAccountsBusy = true
     defer { bridgeAccountsBusy = false }
     let networks = MessageNetwork.matrixBridged.filter { $0.bridge?.provisioningPort != nil }
     let matrix = self.matrix
-    let results = await withTaskGroup(of: (MessageNetwork, Result<[BridgeAccount], Error>).self) { group in
+    await withTaskGroup(of: Void.self) { group in
       for network in networks {
-        group.addTask {
-          do { return (network, .success(try await matrix.bridgeAccounts(network: network))) }
-          catch { return (network, .failure(error)) }
+        group.addTask { [network] in
+          do {
+            let accounts = try await matrix.bridgeAccounts(network: network)
+            await self.recordBridgeAccounts(accounts, network: network)
+          } catch {
+            await self.recordBridgeAccountsError(error, network: network)
+          }
         }
       }
-      var collected: [(MessageNetwork, Result<[BridgeAccount], Error>)] = []
-      for await item in group { collected.append(item) }
-      return collected
     }
-    for (network, result) in results {
-      switch result {
-      case .success(let accounts):
-        bridgeAccounts[network] = accounts
-        bridgeAccountsErrors[network] = nil
-      case .failure(let error):
-        bridgeAccountsErrors[network] = Self.provisioningErrorFR(error)
-      }
-    }
+  }
+
+  private func recordBridgeAccounts(_ accounts: [BridgeAccount], network: MessageNetwork) {
+    bridgeAccounts[network] = accounts
+    bridgeAccountsErrors[network] = nil
+  }
+
+  private func recordBridgeAccountsError(_ error: Error, network: MessageNetwork) {
+    bridgeAccountsErrors[network] = Self.provisioningErrorFR(error)
   }
 
   /// Déconnecte un compte, puis relit la liste — c'est le pont qui a le dernier mot.

@@ -50,6 +50,9 @@ struct ThreadView: View {
   /// Le dernier message dont l'encre a fini de prendre : le défilement peut
   /// refaire naître sa rangée, elle ne se retracera pas.
   @State private var settledMessageID: String?
+  /// Ce qui a déjà pris l'encre, par empreinte : la bulle optimiste et la
+  /// copie du Relais qui la remplace ne jouent qu'une fois.
+  private let inkLedger = MessageArrivalLedger()
   /// Ce qui est arrivé pendant qu'on lisait plus haut.
   @State private var missedCount = 0
   /// Les gens du fil, relus à son ouverture : le champ en fait le menu « @ »,
@@ -155,6 +158,7 @@ struct ThreadView: View {
       }
       .task(id: conversationID) {
         openedAt = Date()
+        inkLedger.reset()
         await store.open(conversationID: conversationID)
       }
       .task(id: conversationID) { members = await store.members(conversationID) }
@@ -507,10 +511,16 @@ struct ThreadView: View {
   /// après l'ouverture du fil, et pas depuis assez longtemps pour être déjà vu.
   /// Ce qu'on trouve en ouvrant une conversation paraît sans cérémonie.
   private func isFresh(_ message: ChatMessage) -> Bool {
-    message.id == messages.last?.id
-      && message.id != settledMessageID
-      && message.sentAt > openedAt
-      && MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt)
+    guard message.id == messages.last?.id,
+          message.id != settledMessageID,
+          message.sentAt > openedAt,
+          MessageArrivalPolicy.isNewArrival(sentAt: message.sentAt),
+          // Mon envoi a joué en bulle optimiste : sa copie du Relais, sous un
+          // autre identifiant, paraît posée au lieu de se ré-encrer.
+          !inkLedger.hasInked(message)
+    else { return false }
+    inkLedger.remember(message)
+    return true
   }
 
   /// Une page de plus au-dessus, sans perdre sa page : on vise l'ancien

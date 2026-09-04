@@ -59,7 +59,10 @@ struct SettingsAccountsPane: View {
         .disabled(store.bridgeAccountsBusy)
       }
     }
-    .task { await store.refreshBridgeAccounts() }
+    // `id:` sur l'état de connexion : le volet s'ouvre souvent avant que le
+    // Relais ait répondu, la lecture s'arrêtait à la garde, et « Lecture des
+    // comptes… » restait affiché pour toujours. La connexion venue, on relit.
+    .task(id: store.isMatrixConnected) { await store.refreshBridgeAccounts() }
   }
 
   /// La ligne d'état d'un réseau : ses comptes et leur état, ou pourquoi on ne
