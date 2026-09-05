@@ -80,7 +80,6 @@ struct ThreadView: View {
   /// Le clavier est levé : le composer se pose dessus, sans la marge de
   /// l'indicateur d'accueil sous lui.
   @State private var isKeyboardUp = false
-
   /// En compact, le fil prend l'écran et la barre d'onglets s'efface.
   private var hidesTabBar: Bool { showsHeader && sizeClass == .compact }
 

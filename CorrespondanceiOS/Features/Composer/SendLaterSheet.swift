@@ -26,9 +26,22 @@ struct SendLaterSheet: View {
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
 
+  /// Il y a quelque chose à programmer : un brouillon, une pièce jointe, ou
+  /// un message déjà programmé qu'on déplace.
+  private var hasSomethingToSend: Bool {
+    rescheduling != nil || store.canSend(conversationID)
+  }
+
   var body: some View {
     NavigationStack {
       List {
+        if !hasSomethingToSend {
+          Section {
+            Label("Écris d'abord le message, ou joins une photo : c'est lui qui partira plus tard.", systemImage: "pencil.line")
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkSecondary)
+          }
+        }
         Section {
           ForEach(SendLaterTime.suggestions()) { suggestion in
             Button {
@@ -45,6 +58,7 @@ struct SendLaterSheet: View {
               .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(!hasSomethingToSend)
           }
         } header: {
           Text("Quand ?")
@@ -66,7 +80,7 @@ struct SendLaterSheet: View {
               systemImage: "clock.badge.checkmark"
             )
           }
-          .disabled(customDate <= Date())
+          .disabled(customDate <= Date() || !hasSomethingToSend)
         }
 
         if rescheduling == nil {
@@ -106,7 +120,7 @@ struct SendLaterSheet: View {
     if let rescheduling {
       store.reschedule(rescheduling, at: date)
     } else {
-      store.scheduleDraft(conversationID: conversationID, at: date, onlyIfNoReply: onlyIfNoReply)
+      Task { await store.scheduleDraft(conversationID: conversationID, at: date, onlyIfNoReply: onlyIfNoReply) }
     }
     dismiss()
   }

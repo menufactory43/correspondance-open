@@ -58,7 +58,8 @@ public struct MediaViewer: View {
   @ViewBuilder
   private func page(_ attachment: MessageAttachment) -> some View {
     if let url = attachment.resolvedFileURL, attachment.isVideo {
-      StableVideoPlayer(url: url)
+      // On a tapé pour la voir : elle part sans qu'on ait à retaper.
+      StableVideoPlayer(url: url, autoplays: true)
     } else if let url = attachment.resolvedFileURL {
       ZoomableImage(url: url, scale: $scale)
         .accessibilityLabel(attachment.filename ?? "Photo")
@@ -164,14 +165,22 @@ private struct ZoomableImage: View {
 /// fichier et son décodeur.
 public struct StableVideoPlayer: View {
   public let url: URL
+  /// Démarre seul en paraissant — pour la visionneuse, où l'on vient de taper.
+  public var autoplays: Bool = false
   @State private var player: AVPlayer?
 
-  public init(url: URL) { self.url = url }
+  public init(url: URL, autoplays: Bool = false) {
+    self.url = url
+    self.autoplays = autoplays
+  }
 
   public var body: some View {
     VideoPlayer(player: player)
       .task(id: url) {
-        if player == nil { player = AVPlayer(url: url) }
+        if player == nil {
+          player = AVPlayer(url: url)
+          if autoplays { player?.play() }
+        }
       }
   }
 }

@@ -379,14 +379,17 @@ struct MessageBubble: View {
       .onTapGesture { opened = OpenedMedia(0) }
       .accessibilityAddTraits(.isButton)
     } else if let url = repaired.resolvedFileURL, repaired.isVideo {
-      StableVideoPlayer(url: url)
-        .frame(width: Self.mediaWidth, height: 220)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-          RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .strokeBorder(theme.edge.opacity(0.5), lineWidth: 1)
-        )
+      // Une vidéo seule ne se joue pas dans la bulle : sa première image, un
+      // bouton de lecture, et une tape l'ouvre en plein écran — comme une
+      // photo, comme dans Signal.
+      VideoPosterTile(url: url, maxWidth: Self.mediaWidth, maxHeight: 420, theme: theme)
+        .onTapGesture {
+          let rank = visibleAttachments.firstIndex { $0.id == repaired.id } ?? 0
+          opened = OpenedMedia(rank)
+        }
         .accessibilityLabel(repaired.filename ?? "Vidéo")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Ouvre la vidéo en plein écran")
     } else if repaired.isImage {
       unavailable(repaired, systemImage: "photo")
     } else {
@@ -503,5 +506,61 @@ struct MessageBubble: View {
       copy.localPath = path
     }
     return copy
+  }
+}
+
+
+/// La première image d'une vidéo, et le triangle qui dit qu'elle se joue.
+/// Elle prend la place d'une photo de même proportion : une vidéo verticale
+/// est haute, une horizontale est large — pas une boîte fixe à côté des photos.
+private struct VideoPosterTile: View {
+  let url: URL
+  let maxWidth: CGFloat
+  let maxHeight: CGFloat
+  let theme: WritingTheme
+
+  @State private var poster: PlatformImage?
+
+  init(url: URL, maxWidth: CGFloat, maxHeight: CGFloat, theme: WritingTheme) {
+    self.url = url
+    self.maxWidth = maxWidth
+    self.maxHeight = maxHeight
+    self.theme = theme
+    _poster = State(initialValue: MediaThumbnails.cached(for: url, isVideo: true))
+  }
+
+  /// La boîte : la proportion de la première image, sinon celle d'une vidéo
+  /// de téléphone tenue à l'horizontale le temps qu'elle arrive.
+  private var fitted: CGSize {
+    let size = poster.map { CGSize(width: $0.size.width, height: $0.size.height) } ?? CGSize(width: 4, height: 3)
+    let scale = min(maxWidth / size.width, maxHeight / size.height)
+    return CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+  }
+
+  var body: some View {
+    ZStack {
+      if let poster {
+        Image(platformImage: poster)
+          .resizable()
+          .aspectRatio(contentMode: .fill)
+      } else {
+        theme.bubbleIn
+      }
+      Image(systemName: "play.fill")
+        .font(.system(size: 22, weight: .bold))
+        .foregroundStyle(.white)
+        .padding(18)
+        .background(.black.opacity(0.45), in: Circle())
+    }
+    .frame(width: fitted.width, height: fitted.height)
+    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 16, style: .continuous)
+        .strokeBorder(theme.edge.opacity(0.5), lineWidth: 1)
+    )
+    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .task(id: url) {
+      if poster == nil { poster = await MediaThumbnails.thumbnail(for: url, isVideo: true) }
+    }
   }
 }

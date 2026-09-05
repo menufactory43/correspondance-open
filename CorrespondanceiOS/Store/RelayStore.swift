@@ -329,14 +329,39 @@ final class RelayStore {
   /// la fusion se décide sur le Mac, et arrive ici par l'account data du Relais.
   private func mergedRows(_ list: [Conversation]) -> [Conversation] {
     guard !mergedContacts.isEmpty else { return list }
+    // Les membres quittent la liste au profit de la ligne virtuelle : on les
+    // garde de côté, sinon plus rien ne sait sur quel réseau la ligne écrit.
+    let wanted = Set(mergedContacts.flatMap(\.memberIDs))
+    for conversation in list where wanted.contains(conversation.id) {
+      mergedMemberCache[conversation.id] = conversation
+    }
     return MergedContact.apply(to: list, merged: mergedContacts)
   }
 
+  /// Les fils membres, tels qu'ils étaient avant de se replier sous leur ligne
+  /// de fusion. `conversations` ne les contient plus une fois la ligne posée.
+  private var mergedMemberCache: [String: Conversation] = [:]
+
   /// Les fils réunis sous une ligne de fusion — l'iPhone en a besoin pour leur
-  /// état (une ligne fusionnée n'a pas de salon à elle).
+  /// état (une ligne fusionnée n'a pas de salon à elle), du plus récent au
+  /// plus ancien.
   func memberConversations(of mergedID: String) -> [Conversation] {
     guard let contact = mergedContacts.first(where: { $0.id == mergedID }) else { return [] }
-    return contact.memberIDs.compactMap { id in conversations.first { $0.id == id } }
+    return contact.memberIDs
+      .compactMap { id in conversations.first { $0.id == id } ?? mergedMemberCache[id] }
+      .sorted { $0.lastMessageAt > $1.lastMessageAt }
+  }
+
+  /// Le membre où écrire : le dernier utilisé s'il est bien là, le chat par
+  /// défaut sinon, et à défaut le plus récent — un membre choisi sur le Mac
+  /// peut ne pas exister sur l'iPhone (iMessage local, salon pas encore rejoint).
+  func activeMember(of mergedID: String) -> Conversation? {
+    guard let contact = mergedContacts.first(where: { $0.id == mergedID }) else { return nil }
+    let members = memberConversations(of: mergedID)
+    guard let activeID = contact.activeMemberID(among: Set(members.map(\.id))) else {
+      return members.first
+    }
+    return members.first { $0.id == activeID } ?? members.first
   }
 
   /// Les identifiants qui portent réellement un salon pour ce fil : lui-même,
@@ -718,10 +743,37 @@ final class RelayStore {
     guard !list.contains(path) else { return }
     list.append(path)
     pendingAttachments[conversationID] = list
+    // Une vidéo `.mov` se montre tout de suite dans la bande, et se convertit
+    // en MP4 derrière : c'est le MP4 qui partira (cf. `settledAttachments`).
+    guard VideoTranscoder.needsTranscoding(path), transcodes[path] == nil else { return }
+    transcodes[path] = Task { @MainActor [weak self] in
+      let converted = await VideoTranscoder.mp4(from: path)
+      guard let self else { return converted }
+      self.transcodes.removeValue(forKey: path)
+      if let converted, var current = self.pendingAttachments[conversationID],
+         let index = current.firstIndex(of: path)
+      {
+        current[index] = converted
+        self.pendingAttachments[conversationID] = current
+      }
+      return converted
+    }
   }
 
   func removeAttachment(_ path: String, conversationID: String) {
     pendingAttachments[conversationID] = attachments(conversationID).filter { $0 != path }
+  }
+
+  /// Les conversions vidéo en cours, par chemin d'origine.
+  private var transcodes: [String: Task<String?, Never>] = [:]
+
+  /// Les pièces jointes prêtes à partir : on attend les conversions en route
+  /// plutôt que d'envoyer le `.mov` que le pont refuserait.
+  func settledAttachments(_ conversationID: String) async -> [String] {
+    for path in attachments(conversationID) {
+      if let task = transcodes[path] { _ = await task.value }
+    }
+    return attachments(conversationID)
   }
 
   func replyTarget(_ conversationID: String) -> ChatMessage? {
@@ -788,8 +840,7 @@ final class RelayStore {
   /// message pour une ligne de fusion.
   func sendingNetwork(_ conversationID: String) -> MessageNetwork? {
     if MergedContact.isMergedID(conversationID) {
-      return memberConversations(of: conversationID)
-        .max { $0.lastMessageAt < $1.lastMessageAt }?.network
+      return activeMember(of: conversationID)?.network
     }
     return conversation(conversationID)?.network
   }
@@ -802,13 +853,12 @@ final class RelayStore {
       return
     }
     guard canSend(conversationID), !isSending(conversationID) else { return }
-    let text = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
-    let paths = attachments(conversationID)
-    let replyID = replyTargets[conversationID]
-    guard let target = sendingTarget(conversationID) else { return }
-
     sendingConversationIDs.insert(conversationID)
     defer { sendingConversationIDs.remove(conversationID) }
+    let paths = await settledAttachments(conversationID)
+    let text = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
+    let replyID = replyTargets[conversationID]
+    guard let target = sendingTarget(conversationID, replyID: replyID) else { return }
 
     // Répondre, c'est avouer qu'on a lu : l'incognito s'efface pour ce fil.
     if isIncognito { await markRead(conversationID: conversationID) }
@@ -1018,16 +1068,21 @@ final class RelayStore {
   }
 
   /// Le fil qui portera l'envoi : lui-même, ou le membre actif d'une fusion.
-  private func sendingTarget(_ conversationID: String) -> String? {
+  /// Citer, c'est répondre là où la bulle a été dite : sur une ligne de
+  /// fusion, la citation impose son réseau.
+  private func sendingTarget(_ conversationID: String, replyID: String? = nil) -> String? {
     guard MergedContact.isMergedID(conversationID) else { return conversationID }
-    let contact = mergedContacts.first { $0.id == conversationID }
-    if let last = contact?.lastUsedConversationID { return last }
-    return contact?.defaultConversationID
+    if let replyID,
+       let quoted = visibleMessages(conversationID).first(where: { $0.id == replyID }),
+       memberConversations(of: conversationID).contains(where: { $0.id == quoted.conversationID })
+    {
+      return quoted.conversationID
+    }
+    return activeMember(of: conversationID)?.id
   }
 
   private func showOptimistically(text: String, paths: [String], in target: String, localID: String) {
-    guard let conversation = conversation(target) ?? conversations.first(where: { $0.id == target })
-    else { return }
+    guard let conversation = conversation(target) ?? mergedMemberCache[target] else { return }
     let optimistic = ChatMessage(
       id: localID,
       conversationID: target,

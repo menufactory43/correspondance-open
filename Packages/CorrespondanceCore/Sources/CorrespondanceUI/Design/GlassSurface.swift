@@ -13,23 +13,30 @@ public struct GlassSurface: ViewModifier {
 
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
+  @Environment(\.glassSurfacePrefersOpaque) private var prefersOpaqueByContext
 
   private var shape: RoundedRectangle {
     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
   }
 
   private var prefersOpaque: Bool {
-    reduceTransparency || contrast == .increased
+    reduceTransparency || contrast == .increased || prefersOpaqueByContext
+  }
+
+  // Le contenu reste le MÊME quel que soit le fond : deux branches (`if` verre
+  // / surface pleine) recréaient la vue à chaque bascule, et un champ de texte
+  // y perdait son focus — le clavier montait puis repartait aussitôt.
+  public func body(content: Content) -> some View {
+    content.background { backdrop }
   }
 
   @ViewBuilder
-  public func body(content: Content) -> some View {
+  private var backdrop: some View {
     if #available(macOS 26.0, iOS 26.0, *), !prefersOpaque {
-      content
-        .glassEffect(glass, in: shape)
+      Color.clear.glassEffect(glass, in: shape)
     } else {
-      content
-        .background(prefersOpaque ? fallbackFill : fallbackFill.opacity(0.92), in: shape)
+      shape
+        .fill(prefersOpaque ? fallbackFill : fallbackFill.opacity(0.92))
         .overlay(
           shape.strokeBorder(
             border.opacity(contrast == .increased ? 1 : 0.6),
@@ -72,5 +79,19 @@ public extension View {
       border: border,
       isInteractive: isInteractive
     ))
+  }
+}
+
+/// Demande aux surfaces de verre de se rendre opaques, le temps d'un
+/// mouvement que le verre système ne sait pas suivre : la couche de
+/// `glassEffect` ne suit pas un `offset` animé, elle le rattrape après coup.
+public struct GlassSurfacePrefersOpaqueKey: EnvironmentKey {
+  public static let defaultValue = false
+}
+
+public extension EnvironmentValues {
+  var glassSurfacePrefersOpaque: Bool {
+    get { self[GlassSurfacePrefersOpaqueKey.self] }
+    set { self[GlassSurfacePrefersOpaqueKey.self] = newValue }
   }
 }

@@ -19,9 +19,9 @@ extension RelayStore {
     conversationID: String,
     at date: Date,
     onlyIfNoReply: Bool
-  ) {
+  ) async {
     let text = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
-    let paths = attachments(conversationID)
+    let paths = await settledAttachments(conversationID)
     guard !text.isEmpty || !paths.isEmpty else { return }
 
     scheduled.append(

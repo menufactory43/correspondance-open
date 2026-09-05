@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
 
 /// Le composer du fil.
 ///
-/// **+** à gauche (Photos / Caméra / Fichier), le champ « Répondre sur
+/// **+** à gauche — il ouvre la pellicule sous le composer (`MediaTray`, posée
+/// par la vue du fil), le champ « Répondre sur
 /// {Réseau} » au centre, le micro à droite : on le MAINTIENT pour parler, on
 /// relâche pour envoyer, on glisse à gauche pour renoncer et vers le haut pour
 /// poser le doigt (cf. `VoiceHoldGesture`). Une tape courte ne fait rien :
@@ -39,10 +40,20 @@ struct ThreadComposer: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @FocusState private var isFocused: Bool
 
-  @State private var photoItems: [PhotosPickerItem] = []
-  @State private var isImportingFile = false
-  @State private var isTakingPhoto = false
+  /// Le plateau de la pellicule est là, à la place du clavier. C'est un
+  /// `inputView` (`MediaTrayInputHost`) : le système l'échange avec le
+  /// clavier, et le fil qui défile le range comme lui.
+  @State private var isTrayOpen = false
+  /// La hauteur du dernier clavier vu, bord d'écran compris : celle que le
+  /// plateau prend pour le remplacer sans que rien ne bouge.
+  @State private var keyboardHeight: CGFloat = 336
+  /// La pellicule, gardée le temps du fil : ses vignettes déjà rendues.
+  @State private var recentLibrary = RecentLibrary()
   @State private var isPickingSendLater = false
+  @State private var isPickingPhotos = false
+  @State private var photoItems: [PhotosPickerItem] = []
+  @State private var isTakingPhoto = false
+  @State private var isImportingFile = false
   /// Ce que la main doit sentir, et le compte qui le déclenche. UN SEUL canal
   /// pour tout le composer : deux `sensoryFeedback` dont l'état bascule dans
   /// la même passe (verrouiller lève le doigt ET pose le verrou) s'annulent
@@ -163,19 +174,58 @@ struct ThreadComposer: View {
     .padding(.horizontal, Spacing.sm)
     .padding(.top, 8)
     .padding(.bottom, 8)
+    // Le plateau, en tant qu'input view : une vue sans taille, qui prend le
+    // focus à la place du champ quand `isTrayOpen` passe à vrai.
+    .background {
+      MediaTrayInputHost(isActive: $isTrayOpen, height: keyboardHeight) {
+        MediaTray(
+          conversationID: conversationID,
+          library: recentLibrary,
+          onPhotos: { isPickingPhotos = true },
+          onCamera: { isTakingPhoto = true },
+          onFile: { isImportingFile = true },
+          onSendLater: { isPickingSendLater = true }
+        )
+        .environment(store)
+        .environment(themes)
+      }
+      .frame(width: 0, height: 0)
+      .accessibilityHidden(true)
+    }
+    // La hauteur du vrai clavier, pour que le plateau la prenne. Pas celle
+    // du plateau lui-même, qui se déclare aussi en clavier.
+    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+      guard !isTrayOpen,
+            let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+            frame.height > 150
+      else { return }
+      keyboardHeight = frame.height
+    }
     // Le seul canal d'haptique du composer, posé sur une vue qui ne change
     // jamais d'identité : le micro, lui, se transforme sous le doigt.
     .sensoryFeedback(trigger: hapticTick) { _, _ in hapticKind.feedback }
+    .photosPicker(isPresented: $isPickingPhotos, selection: $photoItems, maxSelectionCount: 5, matching: .any(of: [.images, .videos]))
     .onChange(of: photoItems) { _, items in
       guard !items.isEmpty else { return }
-      Task { await importPhotos(items) }
+      Task {
+        await AttachmentImport.photos(items, into: store, conversationID: conversationID)
+        photoItems = []
+      }
     }
     .fileImporter(
       isPresented: $isImportingFile,
       allowedContentTypes: [.item],
       allowsMultipleSelection: true
     ) { result in
-      if case .success(let urls) = result { importFiles(urls) }
+      if case .success(let urls) = result {
+        AttachmentImport.files(urls, into: store, conversationID: conversationID)
+      }
+    }
+    .fullScreenCover(isPresented: $isTakingPhoto) {
+      CameraCapture { url in
+        if let url { store.addAttachment(url.path, conversationID: conversationID) }
+      }
+      .ignoresSafeArea()
     }
     .sheet(isPresented: $isPickingSendLater) {
       SendLaterSheet(conversationID: conversationID)
@@ -187,45 +237,48 @@ struct ThreadComposer: View {
       guard store.isDemo, DemoRelay.requestedScreen == .plusTard else { return }
       isPickingSendLater = true
     }
-    .fullScreenCover(isPresented: $isTakingPhoto) {
-      CameraCapture { url in
-        if let url { store.addAttachment(url.path, conversationID: conversationID) }
-      }
-      .ignoresSafeArea()
-    }
   }
 
   // MARK: - Le +
 
   private var plusTray: some View {
-    Menu {
-      PhotosPicker(selection: $photoItems, maxSelectionCount: 5, matching: .any(of: [.images, .videos])) {
-        Label("Photos", systemImage: "photo.on.rectangle")
+    Button {
+      haptic(.held)
+      if isTrayOpen {
+        // La croix rend le clavier : le champ reprend le focus, le système
+        // remplace le plateau par le clavier dans le même mouvement.
+        isFocused = true
+      } else {
+        // Le plateau prend le focus ; si le clavier était là, le système
+        // les échange, sinon le plateau monte comme un clavier.
+        isTrayOpen = true
       }
-      Button { isTakingPhoto = true } label: { Label("Caméra", systemImage: "camera") }
-      Button { isImportingFile = true } label: { Label("Fichier", systemImage: "folder") }
-      Divider()
-      Button {
-        isPickingSendLater = true
-      } label: {
-        Label("Envoyer plus tard", systemImage: "clock")
-      }
-      .disabled(!store.canSend(conversationID))
     } label: {
       Image(systemName: "plus")
         .font(.system(size: 17, weight: .medium))
-        .foregroundStyle(theme.inkSecondary)
+        .foregroundStyle(isTrayOpen ? theme.accent : theme.inkSecondary)
+        // Ouvert, le + tourne en croix : c'est lui qui referme.
+        .rotationEffect(.degrees(isTrayOpen ? 45 : 0))
+        .animation(reduceMotion ? nil : ThreadTrayMotion.animation, value: isTrayOpen)
         .frame(width: 34, height: 34)
-        // Verre non interactif, comme le chevron : la variante interactive
-        // avale les touches hors barre d'outils.
-        .glassSurface(cornerRadius: 17, fallbackFill: theme.paperSecondary, border: theme.edge)
+        // Le verre vit DERRIÈRE, hors du test de touche : posé en modificateur
+        // sur l'étiquette d'un `Button`, `glassEffect` avalait la tape et le
+        // « + » ne répondait plus à rien. C'est le rond entier qui se touche.
+        .background {
+          Color.clear
+            .glassSurface(cornerRadius: 17, fallbackFill: theme.paperSecondary, border: theme.edge)
+            .allowsHitTesting(false)
+        }
+        .contentShape(Circle())
         // Aussi haut que la pilule sur une ligne (40) : posé au bas de la
         // rangée, le rond de 34 tombait trois points sous le centre du champ.
         // Quand la pilule grandit — citation, plusieurs lignes — il reste
         // centré sur sa dernière ligne.
         .frame(height: 40)
     }
-    .accessibilityLabel("Joindre une photo, une prise de vue ou un fichier")
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("composer.plus")
+    .accessibilityLabel(isTrayOpen ? "Fermer le plateau des médias" : "Joindre une photo, une vidéo ou un fichier")
   }
 
   // MARK: - Le champ
@@ -254,9 +307,11 @@ struct ThreadComposer: View {
   /// Le champ et son bouton, sur une seule ligne.
   private var bubbleRow: some View {
     HStack(alignment: .bottom, spacing: 6) {
-      if isRecordingBubble {
-        recordingField
-      } else {
+      // Le champ reste TOUJOURS dans la hiérarchie : le retirer pendant
+      // l'enregistrement lui faisait perdre le focus, et le clavier (ou le
+      // plateau) se repliait dès qu'on tenait le micro. La bande du micro se
+      // pose par-dessus, le champ s'efface sans partir.
+      ZStack(alignment: .leading) {
         TextField(
           "",
           text: text,
@@ -283,6 +338,13 @@ struct ThreadComposer: View {
         }
         .padding(.leading, 4)
         .padding(.vertical, 6)
+        .opacity(isRecordingBubble ? 0 : 1)
+        .allowsHitTesting(!isRecordingBubble)
+        .accessibilityHidden(isRecordingBubble)
+
+        if isRecordingBubble {
+          recordingField
+        }
       }
 
       trailingControl
@@ -386,7 +448,8 @@ struct ThreadComposer: View {
           isLocked = false
           store.isHoldingMic = true
           holdStartedAt = Date()
-          isFocused = false
+          // Le clavier (ou le plateau) reste où il est : tenir le micro ne
+          // fait pas bouger la vue, on parle et on relâche.
           haptic(.held)
           Task { await store.recorder.start() }
         }
@@ -706,30 +769,10 @@ struct ThreadComposer: View {
     .frame(height: 78)
   }
 
-  // MARK: - Import
+}
 
-  private func importPhotos(_ items: [PhotosPickerItem]) async {
-    for item in items {
-      guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-      let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
-      let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent("\(UUID().uuidString).\(ext)")
-      guard (try? data.write(to: url)) != nil else { continue }
-      store.addAttachment(url.path, conversationID: conversationID)
-    }
-    photoItems = []
-  }
-
-  /// Un fichier choisi hors du bac à sable arrive sous portée de sécurité :
-  /// on le recopie dans le temporaire, sinon l'envoi le trouverait illisible.
-  private func importFiles(_ urls: [URL]) {
-    for source in urls {
-      let scoped = source.startAccessingSecurityScopedResource()
-      defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-      let destination = FileManager.default.temporaryDirectory
-        .appendingPathComponent("\(UUID().uuidString)-\(source.lastPathComponent)")
-      guard (try? FileManager.default.copyItem(at: source, to: destination)) != nil else { continue }
-      store.addAttachment(destination.path, conversationID: conversationID)
-    }
-  }
+/// Le mouvement du plateau des médias — un seul, partagé par le plateau, le
+/// composer qui se soulève et le « + » qui tourne.
+enum ThreadTrayMotion {
+  static let animation: Animation = .snappy(duration: 0.28)
 }
