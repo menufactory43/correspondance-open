@@ -66,6 +66,10 @@ final class RelayStore {
   /// Relais ; ceci n'en est que la copie affichée.
   private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
   var mergedContacts: [MergedContact] = []
+  /// Les fusions proposées puis refusées — la même paire ne revient pas
+  /// s'offrir à chaque `/sync`. Comme les fusions, l'ensemble vit dans
+  /// l'account data du Relais, partagé avec le Mac.
+  var dismissedMergePairs: Set<String> = []
   /// Les messages qui attendent leur heure (`RelayStore+Scheduled`).
   var scheduled: [ScheduledMessage] = ScheduledMessageStore.load()
 
@@ -139,10 +143,11 @@ final class RelayStore {
     if demo {
       session = .connected
       let catalogue = DemoRelay.catalogue()
-      conversations = catalogue.conversations
       messages = catalogue.messages
       typingLabels = catalogue.typingLabels
       state = catalogue.state
+      mergedContacts = catalogue.merged
+      conversations = mergedRows(catalogue.conversations)
     }
   }
 
@@ -169,6 +174,12 @@ final class RelayStore {
       conversations = mergedRows(await matrix.conversations())
     }
     isRestoring = false
+    // Le carnet, s'il est déjà ouvert : les numéros deviennent des noms sans
+    // attendre qu'on ouvre une fiche. En fond — l'inbox ne l'attend pas.
+    Task { @MainActor [weak self] in
+      await ContactBook.shared.warm()
+      self?.refoldMergedRows()
+    }
     switch await matrix.checkSession() {
     case .invalid:
       session = .disconnected
@@ -388,10 +399,12 @@ final class RelayStore {
     }
   }
 
-  /// Les lignes de fusion sont LUES : une personne reconnue sur deux réseaux
-  /// n'a qu'une ligne. On ne fusionne pas depuis l'iPhone en v1 (décision 10) —
-  /// la fusion se décide sur le Mac, et arrive ici par l'account data du Relais.
+  /// Une personne reconnue sur deux réseaux n'a qu'une ligne. Les fusions se
+  /// décident ici comme sur le Mac (fiche du fil › « Fusionner avec… ») et
+  /// voyagent par l'account data du Relais : l'un et l'autre lisent la même liste.
   private func mergedRows(_ list: [Conversation]) -> [Conversation] {
+    var list = list
+    Self.enrichTitlesFromContacts(&list)
     guard !mergedContacts.isEmpty else { return list }
     // Les membres quittent la liste au profit de la ligne virtuelle : on les
     // garde de côté, sinon plus rien ne sait sur quel réseau la ligne écrit.
@@ -400,6 +413,24 @@ final class RelayStore {
       mergedMemberCache[conversation.id] = conversation
     }
     return MergedContact.apply(to: list, merged: mergedContacts)
+  }
+
+  /// Un tête-à-tête que le pont ne titre que par un numéro prend le nom du
+  /// carnet de l'iPhone, comme le Mac le fait avec Contacts. Rien n'est
+  /// demandé ici : la table est celle déjà lue (`ContactBook.warm`, ou la
+  /// première fiche de groupe ouverte) ; tant qu'elle est vide, le numéro reste.
+  static func enrichTitlesFromContacts(_ list: inout [Conversation]) {
+    for index in list.indices {
+      let conversation = list[index]
+      guard !conversation.isGroup, conversation.network.identifiesByPhone,
+            !MergedContact.isMergedID(conversation.id)
+      else { continue }
+      let titleIsNumber = PhoneNormalizer.identityKey(for: conversation.title)?.hasPrefix("tel:") == true
+      guard conversation.hasPlaceholderTitle || titleIsNumber else { continue }
+      let candidates = [conversation.title, conversation.address] + conversation.participantHandles
+      guard let name = candidates.lazy.compactMap({ ContactBook.cachedName(forPhone: $0) }).first else { continue }
+      list[index].preferTitle(name)
+    }
   }
 
   /// Les fils membres, tels qu'ils étaient avant de se replier sous leur ligne
@@ -428,12 +459,172 @@ final class RelayStore {
     return members.first { $0.id == activeID } ?? members.first
   }
 
+  /// La ligne visible pour un identifiant : la fusionnée si le fil y est replié.
+  func displayRowID(for conversationID: String) -> String {
+    mergedContacts.first { $0.memberIDs.contains(conversationID) }?.id ?? conversationID
+  }
+
   /// Les identifiants qui portent réellement un salon pour ce fil : lui-même,
   /// ou ses membres s'il s'agit d'une ligne de fusion.
   func relayTargets(of conversationID: String) -> [String] {
     guard MergedContact.isMergedID(conversationID) else { return [conversationID] }
     let members = mergedContacts.first { $0.id == conversationID }?.memberIDs ?? []
     return members.isEmpty ? [] : members
+  }
+
+  // MARK: - Fusionner, séparer
+
+  func isMerged(_ id: String) -> Bool {
+    MergedContact.isMergedID(id) && mergedContacts.contains { $0.id == id }
+  }
+
+  func mergedContact(for id: String) -> MergedContact? {
+    mergedContacts.first { $0.id == id }
+  }
+
+  /// Fusions possibles pour ce fil : même numéro ou même nom, réseaux différents.
+  func mergeCandidates(for conversation: Conversation) -> [Conversation]? {
+    guard !isMerged(conversation.id), !conversation.isGroup else { return nil }
+    let groups = MergeCandidates.detect(in: conversations, dismissedPairs: dismissedMergePairs)
+    return groups.first { group in group.contains { $0.id == conversation.id } }
+  }
+
+  /// Réunit des fils sous un seul contact, et ouvre la ligne qui en résulte.
+  func merge(
+    _ toMerge: [Conversation],
+    title: String,
+    avatarConversationID: String?,
+    defaultConversationID: String
+  ) {
+    let members = toMerge.filter { !$0.isGroup && !MergedContact.isMergedID($0.id) }
+    guard members.count >= 2 else { return }
+    let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let contact = MergedContact(
+      title: cleanTitle.isEmpty ? (members.first?.title ?? "Contact") : cleanTitle,
+      memberIDs: members.map(\.id),
+      avatarConversationID: avatarConversationID,
+      defaultConversationID: members.contains { $0.id == defaultConversationID }
+        ? defaultConversationID
+        : members[0].id
+    )
+    for member in members { mergedMemberCache[member.id] = member }
+    mergedContacts.append(contact)
+    persistMergedContacts()
+    refoldMergedRows()
+    // Le fil qu'on lisait vient de se replier : on suit la ligne qui le porte.
+    let memberIDs = Set(contact.memberIDs)
+    if let id = selectedConversationID, memberIDs.contains(id) { selectedConversationID = contact.id }
+    if let id = focusConversationID, memberIDs.contains(id) { focusConversationID = contact.id }
+  }
+
+  /// Ajoute des fils à une ligne déjà fusionnée. Une autre ligne fusionnée
+  /// dans le lot apporte ses membres et disparaît.
+  func addToMerge(mergedID: String, _ toAdd: [Conversation]) {
+    guard let index = mergedContacts.firstIndex(where: { $0.id == mergedID }) else { return }
+    let ids = toAdd.filter { !$0.isGroup && $0.id != mergedID }.map(\.id)
+    guard !ids.isEmpty else { return }
+    let (contact, absorbed) = mergedContacts[index].absorbing(ids, contacts: mergedContacts)
+    guard contact.memberIDs != mergedContacts[index].memberIDs else { return }
+
+    for conversation in toAdd where !MergedContact.isMergedID(conversation.id) {
+      mergedMemberCache[conversation.id] = conversation
+    }
+    mergedContacts[index] = contact
+    let absorbedIDs = Set(absorbed.map(\.id))
+    mergedContacts.removeAll { absorbedIDs.contains($0.id) }
+    for id in absorbedIDs { forgetMergedRowState(id) }
+    persistMergedContacts()
+    refoldMergedRows()
+    let gone = absorbedIDs.union(ids)
+    if let id = selectedConversationID, gone.contains(id) { selectedConversationID = mergedID }
+    if let id = focusConversationID, gone.contains(id) { focusConversationID = mergedID }
+  }
+
+  /// Sépare : les fils repartent chacun de leur côté, et la paire ne se
+  /// repropose pas d'elle-même dans la foulée.
+  func unmerge(_ mergedID: String) {
+    guard let contact = mergedContact(for: mergedID) else { return }
+    mergedContacts.removeAll { $0.id == mergedID }
+    dismissedMergePairs.insert(MergeCandidates.pairKey(contact.memberIDs))
+    persistMergedContacts()
+
+    // Ce qui visait la ligne réunie suit un fil réel : le brouillon se perdrait.
+    let present = Set(conversations.map(\.id)).union(mergedMemberCache.keys)
+    let heir = contact.activeMemberID(among: present) ?? contact.memberIDs.first
+    if let heir, let draft = localDrafts.removeValue(forKey: mergedID), !draft.isEmpty,
+       draftText(heir).isEmpty
+    {
+      localDrafts[heir] = draft
+    }
+    forgetMergedRowState(mergedID)
+    refoldMergedRows()
+    for id in contact.memberIDs { mergedMemberCache.removeValue(forKey: id) }
+    if selectedConversationID == mergedID { selectedConversationID = heir }
+    if focusConversationID == mergedID { focusConversationID = heir }
+  }
+
+  /// « Ne plus proposer » : la paire repérée se tait, ici et sur le Mac.
+  func dismissMergeCandidate(_ conversations: [Conversation]) {
+    guard conversations.count >= 2 else { return }
+    dismissedMergePairs.insert(MergeCandidates.pairKey(conversations.map(\.id)))
+    persistMergedContacts()
+  }
+
+  /// « Changer de chat » : le réseau choisi devient celui où part le prochain
+  /// message, et il le reste (c'est le `lastUsedConversationID`).
+  func setActiveMember(mergedID: String, conversationID: String) {
+    guard let index = mergedContacts.firstIndex(where: { $0.id == mergedID }),
+          mergedContacts[index].memberIDs.contains(conversationID)
+    else { return }
+    mergedContacts[index].lastUsedConversationID = conversationID
+    persistMergedContacts()
+  }
+
+  /// Une ligne virtuelle qui disparaît n'a plus d'état à elle : ses drapeaux
+  /// locaux partent avec elle (ses membres gardent les leurs, qui sont dans le Relais).
+  private func forgetMergedRowState(_ id: String) {
+    state.archived.remove(id)
+    state.pinned.remove(id)
+    state.muted.remove(id)
+    state.reminders.removeValue(forKey: id)
+    localDrafts.removeValue(forKey: id)
+  }
+
+  /// Rejoue le repli d'après les fusions courantes : les lignes virtuelles
+  /// s'effacent, leurs membres reviennent du cache, et `mergedRows` repose
+  /// celles qui existent encore. C'est ce qui fait qu'une fusion défaite sur
+  /// le Mac rouvre deux fils ici sans attendre un catalogue complet.
+  private func refoldMergedRows() {
+    var pool = conversations.filter { !MergedContact.isMergedID($0.id) }
+    let present = Set(pool.map(\.id))
+    pool += mergedMemberCache.values.filter { !present.contains($0.id) }.sorted { $0.id < $1.id }
+    conversations = mergedRows(pool)
+  }
+
+  /// La liste adoptée du Relais — le Mac a fusionné, séparé ou refusé.
+  func adoptMergedContacts(_ stored: MergedContactStore.Stored) {
+    dismissedMergePairs = stored.dismissedPairs
+    guard stored.merged != mergedContacts else { return }
+    mergedContacts = stored.merged
+    refoldMergedRows()
+    // Une ligne qui vient de disparaître sous nos yeux : on suit un de ses fils.
+    let ids = Set(conversations.map(\.id))
+    if let id = selectedConversationID, MergedContact.isMergedID(id), !ids.contains(id) {
+      selectedConversationID = nil
+    }
+    if let id = focusConversationID, MergedContact.isMergedID(id), !ids.contains(id) {
+      focusConversationID = nil
+    }
+  }
+
+  /// Les fusions partent au Relais comme un drapeau : tout de suite à l'écran,
+  /// l'écriture dans la file, envoyée au premier passage.
+  private func persistMergedContacts() {
+    relayQueue.enqueue(.mergedContacts(
+      MergedContactStore.Stored(merged: mergedContacts, dismissedPairs: dismissedMergePairs)
+    ))
+    saveRelayQueue()
+    startRelayFlush()
   }
 
   // MARK: - Listes
@@ -1429,7 +1620,11 @@ final class RelayStore {
 
   struct ThreadMember: Identifiable, Hashable {
     let userID: String
+    /// Le nom qu'on montre : celui du carnet quand le pont n'a qu'un numéro.
     let displayName: String?
+    /// Ce que le pont dit de lui — souvent un numéro. C'est là qu'on lit le
+    /// téléphone d'un fantôme WhatsApp désigné par son LID.
+    var bridgeName: String? = nil
     var id: String { userID }
     var name: String { displayName ?? MatrixIdentity.localpart(userID) }
   }
@@ -1448,10 +1643,28 @@ final class RelayStore {
 
   /// Les correspondants d'un fil. En démonstration, il n'y a pas de salon :
   /// on relit les auteurs des messages, un par nom.
+  ///
+  /// Un pont ne connaît souvent que le numéro : WhatsApp dit « +33 6 12 34 56
+  /// 78 » de quelqu'un qui s'appelle Julie dans le carnet de l'iPhone. Le nom
+  /// du carnet prend le dessus quand le pont n'en donne pas, ou n'en donne
+  /// qu'un numéro — comme le Mac le fait avec Contacts.
   func members(_ conversationID: String) async -> [ThreadMember] {
     guard isDemo else {
-      return await matrix.members(conversationID: conversationID)
-        .map { ThreadMember(userID: $0.userID, displayName: $0.displayName) }
+      var result: [ThreadMember] = []
+      for member in await matrix.members(conversationID: conversationID) {
+        var displayName = member.displayName
+        let looksLikeNumber = displayName.map { PhoneNormalizer.identityKey(for: $0)?.hasPrefix("tel:") == true } ?? true
+        if looksLikeNumber,
+           let known = await ContactBook.shared.name(forPhone: displayName ?? MatrixIdentity.localpart(member.userID))
+        {
+          displayName = known
+        }
+        result.append(ThreadMember(userID: member.userID, displayName: displayName, bridgeName: member.displayName))
+      }
+      // Le carnet vient peut-être d'être lu pour la première fois : les fils
+      // titrés par un numéro peuvent maintenant porter un nom.
+      refoldMergedRows()
+      return result
     }
     var seen: Set<String> = []
     var result: [ThreadMember] = []
@@ -1460,6 +1673,99 @@ final class RelayStore {
       result.append(ThreadMember(userID: message.senderID ?? name, displayName: name))
     }
     return result
+  }
+
+  /// Ce qu'on sait d'un membre, au-delà de son nom : son numéro lisible, le
+  /// tête-à-tête qu'on a déjà avec lui, et les groupes où l'on se croise.
+  struct MemberProfile {
+    var member: ThreadMember
+    /// Le réseau du fil d'où l'on vient : celui du fantôme.
+    var network: MessageNetwork
+    /// « +33 6… » quand le pont ou le nom le disent ; `nil` sinon (Instagram, Signal caché).
+    var phone: String?
+    var directConversation: Conversation?
+    var sharedGroups: [Conversation]
+  }
+
+  /// La fiche d'un membre, lue dans ce que l'appareil a déjà : les salons de
+  /// la base locale. Aucune requête réseau — on parcourt les membres de chaque
+  /// fil, c'est en mémoire.
+  func profile(of member: ThreadMember, from conversationID: String) async -> MemberProfile {
+    let network = conversation(conversationID)?.network
+      ?? activeMember(of: conversationID)?.network
+      ?? .whatsapp
+    // Le numéro : ce que le pont dit de lui s'il s'agit d'un numéro, sinon
+    // celui du fantôme quand il en porte un (`whatsapp_33612345678`) — pas un
+    // LID (`whatsapp_lid-…`), qui ne dit rien. Seulement sur un réseau qui numérote.
+    var phone: String?
+    if network.identifiesByPhone {
+      let localpart = MatrixIdentity.localpart(member.userID)
+      let ghostDigits = localpart.split(separator: "_").dropFirst().joined(separator: "_")
+      for candidate in [member.bridgeName, ghostDigits.allSatisfy(\.isNumber) ? ghostDigits : nil].compactMap({ $0 })
+      where phone == nil {
+        if let e164 = PhoneNormalizer.e164(candidate) { phone = e164 }
+        else if let key = PhoneNormalizer.identityKey(for: candidate), key.hasPrefix("tel:") {
+          phone = "+" + key.dropFirst(4)
+        }
+      }
+    }
+
+    var direct: Conversation?
+    var groups: [Conversation] = []
+    let seen = Set(relayTargets(of: conversationID))
+    // Les fils réels : une ligne de fusion n'a pas de salon, ses membres si.
+    let pool = conversations.flatMap { row -> [Conversation] in
+      MergedContact.isMergedID(row.id) ? memberConversations(of: row.id) : [row]
+    }
+    for candidate in pool where candidate.network == network {
+      let present: Bool
+      if isDemo {
+        present = (messages[candidate.id] ?? []).contains { $0.senderID == member.userID }
+      } else {
+        present = await matrix.members(conversationID: candidate.id).contains { $0.userID == member.userID }
+      }
+      guard present else { continue }
+      if candidate.isGroup {
+        if !seen.contains(candidate.id) { groups.append(candidate) }
+      } else if direct == nil {
+        direct = candidate
+      }
+    }
+    groups.sort { $0.lastMessageAt > $1.lastMessageAt }
+    return MemberProfile(
+      member: member, network: network, phone: phone, directConversation: direct, sharedGroups: groups
+    )
+  }
+
+  /// Ouvre un tête-à-tête avec un membre, et attend que le fil arrive.
+  ///
+  /// Par le numéro quand on en a un (`pm +33…` au bot) ; sinon en invitant son
+  /// fantôme dans un salon direct, ce que le pont transforme en portail. Le
+  /// salon, lui, arrive par le `/sync` : on le guette jusqu'à douze secondes,
+  /// et on rend son identifiant — `nil` s'il tarde encore (il paraîtra dans l'inbox).
+  func startDirectChat(with member: ThreadMember, network: MessageNetwork, phone: String?) async throws -> String? {
+    guard !isDemo else { return nil }
+    if let phone {
+      try await matrix.startConversation(network: network, identifier: phone)
+    } else {
+      _ = try await matrix.createDirectRoom(with: member.userID)
+    }
+    let digits = phone.map { $0.filter(\.isNumber) }
+    for _ in 0..<24 {
+      try? await Task.sleep(for: .milliseconds(500))
+      conversations = mergedRows(await matrix.conversations())
+      for candidate in conversations.flatMap({ row -> [Conversation] in
+        MergedContact.isMergedID(row.id) ? memberConversations(of: row.id) : [row]
+      }) where !candidate.isGroup && candidate.network == network {
+        if let digits, !digits.isEmpty, candidate.address.filter(\.isNumber).hasSuffix(digits.suffix(9)) {
+          return candidate.id
+        }
+        if await matrix.members(conversationID: candidate.id).contains(where: { $0.userID == member.userID }) {
+          return candidate.id
+        }
+      }
+    }
+    return nil
   }
 
   /// Ajoute quelqu'un au groupe, par son numéro ou son pseudo selon le réseau.

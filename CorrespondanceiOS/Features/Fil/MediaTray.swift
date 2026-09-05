@@ -173,6 +173,29 @@ struct MediaTray: View {
   private var doors: some View {
     ScrollView(.horizontal) {
       HStack(alignment: .top, spacing: Spacing.xs) {
+        // Ligne fusionnée : la porte du réseau d'envoi, en tête — c'est la seule
+        // qui change d'un fil à l'autre. Elle dit où part le prochain message
+        // et en change ; le choix reste, ici et sur le Mac.
+        if let active = store.activeMember(of: conversationID) {
+          Menu {
+            Section("Changer de chat") {
+              ForEach(store.memberConversations(of: conversationID)) { member in
+                Button {
+                  store.setActiveMember(mergedID: conversationID, conversationID: member.id)
+                } label: {
+                  Label {
+                    Text(member.networkAndReadableAddress)
+                  } icon: {
+                    Image(systemName: member.id == active.id ? "checkmark" : member.network.systemImage)
+                  }
+                }
+              }
+            }
+          } label: {
+            Door(title: active.network.labelFR, systemImage: active.network.systemImage, theme: theme)
+          }
+          .accessibilityLabel("Chat actif : \(active.network.labelFR). Changer de réseau d'envoi.")
+        }
         Button(action: onPhotos) { Door(title: "Photos", systemImage: "photo.on.rectangle", theme: theme) }
         Button(action: onCamera) { Door(title: "Caméra", systemImage: "camera", theme: theme) }
         Button(action: onFile) { Door(title: "Fichier", systemImage: "doc", theme: theme) }

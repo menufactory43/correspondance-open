@@ -105,13 +105,22 @@ public struct MergedContact: Identifiable, Codable, Hashable, Sendable {
       // là que la recherche retrouve la ligne quand on tape le numéro WhatsApp
       // d'un contact dont la ligne, elle, porte l'adresse iMessage.
       participantHandles: members.flatMap { [$0.address] + $0.participantHandles },
-      // La photo : celle du chat par défaut, sinon la première qu'un membre
-      // porte. Une ligne sans photo perdait celle de la personne dans l'inbox,
+      // La photo : celle du membre choisi à la fusion, sinon celle du chat par
+      // défaut, sinon la première qu'un membre porte. Une ligne sans photo perdait celle de la personne dans l'inbox,
       // la notification et la rangée de partage, alors que Julie a la même
       // tête sur Signal et sur WhatsApp.
-      groupPhotoPath: ([base] + members).first { $0.groupPhotoPath != nil }?.groupPhotoPath,
-      remoteAvatarID: ([base] + members).first { $0.remoteAvatarID != nil }?.remoteAvatarID
+      groupPhotoPath: faceOrder(members, base: base).first { $0.groupPhotoPath != nil }?.groupPhotoPath,
+      remoteAvatarID: faceOrder(members, base: base).first { $0.remoteAvatarID != nil }?.remoteAvatarID
     )
+  }
+
+  /// Les membres dans l'ordre où l'on leur emprunte un visage : celui choisi à
+  /// la fusion d'abord, puis le chat par défaut, puis les autres. Le Mac a son
+  /// propre magasin d'avatars (`ConversationAvatarStore.adopt`) ; l'iPhone,
+  /// lui, n'a que la ligne — c'est elle qui doit porter la bonne photo.
+  private func faceOrder(_ members: [Conversation], base: Conversation) -> [Conversation] {
+    let chosen = members.first { $0.id == avatarConversationID }
+    return [chosen, base].compactMap { $0 } + members
   }
 
   /// Remplace les membres par leur ligne virtuelle. Fonction pure : c'est elle

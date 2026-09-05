@@ -305,4 +305,36 @@ extension MergedContactTests {
       id: "merged:1", title: "Julie", memberIDs: [signal.id, whatsapp.id], defaultConversationID: signal.id)
     XCTAssertEqual(contact.row(from: [signal, whatsapp])?.remoteAvatarID, "mxc://r/julie")
   }
+
+  /// Le visage choisi à la fusion prime sur celui du chat par défaut : c'est
+  /// la seule photo que l'iPhone connaît d'une ligne fusionnée.
+  func testRowPrefersTheFaceChosenAtMergeTime() {
+    let signal = Conversation(
+      id: "signal:!a:r", network: .signal, address: "uuid", title: "Julie", preview: "",
+      lastMessageAt: Date(timeIntervalSince1970: 100), unreadCount: 0, isArchived: false,
+      transportKey: "!a:r", isGroup: false, remoteAvatarID: "mxc://r/julie-signal")
+    let whatsapp = Conversation(
+      id: "whatsapp:!b:r", network: .whatsapp, address: "+33", title: "Julie", preview: "",
+      lastMessageAt: Date(timeIntervalSince1970: 50), unreadCount: 0, isArchived: false,
+      transportKey: "!b:r", isGroup: false, remoteAvatarID: "mxc://r/julie-whatsapp")
+    let contact = MergedContact(
+      id: "merged:1", title: "Julie", memberIDs: [signal.id, whatsapp.id],
+      avatarConversationID: whatsapp.id, defaultConversationID: signal.id)
+    XCTAssertEqual(contact.row(from: [signal, whatsapp])?.remoteAvatarID, "mxc://r/julie-whatsapp")
+    // Sans choix, le chat par défaut garde la main.
+    let plain = MergedContact(
+      id: "merged:2", title: "Julie", memberIDs: [signal.id, whatsapp.id], defaultConversationID: signal.id)
+    XCTAssertEqual(plain.row(from: [signal, whatsapp])?.remoteAvatarID, "mxc://r/julie-signal")
+  }
+
+  func testReadableAddressHidesTechnicalIdentifiers() {
+    XCTAssertEqual(
+      conversation("w", network: .whatsapp, address: "@whatsapp_33612345678:correspondance.local").readableAddress,
+      "+33612345678")
+    XCTAssertNil(conversation("s", network: .signal, address: "3fa85f64-5717-4562-b3fc-2c963f66afa6").readableAddress)
+    XCTAssertNil(conversation("m", network: .messenger, address: "17841400000000001").readableAddress)
+    XCTAssertEqual(
+      conversation("m", network: .messenger, address: "17841400000000001").networkAndReadableAddress,
+      MessageNetwork.messenger.labelFR)
+  }
 }

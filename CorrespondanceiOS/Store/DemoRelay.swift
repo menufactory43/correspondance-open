@@ -104,6 +104,9 @@ enum DemoRelay {
     /// Qui écrit, par fil — l'EDU `m.typing` des payloads, lue par le vrai
     /// analyseur : sans elle, la bulle à trois points n'a rien à montrer.
     var typingLabels: [String: String] = [:]
+    /// Une personne reconnue sur deux réseaux : la démonstration montre la
+    /// ligne fusionnée (Alice, Signal + WhatsApp) et sa fiche « Chats réunis ».
+    var merged: [MergedContact] = []
     var state = InboxState()
   }
 
@@ -204,6 +207,23 @@ enum DemoRelay {
       catalogue.state.drafts[ordered[1].id] = "Je te réponds ce soir, promis —"
     }
     if let muted = ordered.first(where: \.isGroup) { catalogue.state.muted.insert(muted.id) }
+
+    // Une ligne fusionnée, pour montrer la fiche « Chats réunis » et le choix
+    // du réseau d'envoi : le tête-à-tête le plus récent, réuni au plus récent
+    // d'un autre réseau — comme si la fusion avait été décidée sur le Mac.
+    let solos = ordered.filter { !$0.isGroup && $0.network != .selfNote && $0.network != .agent }
+    var members: [Conversation] = []
+    for solo in solos where !members.contains(where: { $0.network == solo.network }) {
+      members.append(solo)
+    }
+    if members.count >= 2, let first = members.first {
+      catalogue.merged = [MergedContact(
+        id: MergedContact.idPrefix + "demo",
+        title: first.title,
+        memberIDs: members.map(\.id),
+        defaultConversationID: first.id
+      )]
+    }
     return catalogue
   }
 

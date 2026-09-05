@@ -1,4 +1,5 @@
 import Contacts
+import CorrespondanceCore
 import Foundation
 
 /// Le carnet d'adresses de l'iPhone, pour écrire à quelqu'un qui n'est pas
@@ -37,6 +38,61 @@ actor ContactBook {
         }
         .prefix(limit)
     )
+  }
+
+  /// Le nom qu'on a donné à ce numéro dans le carnet, s'il y est. C'est ce qui
+  /// change « +33 6 12 34 56 78 » en « Julie » dans la liste des membres d'un
+  /// groupe : le pont ne connaît que le numéro, le carnet connaît la personne.
+  /// `nil` si le carnet est fermé, ou si personne ne porte ce numéro.
+  func name(forPhone raw: String) async -> String? {
+    guard let key = Self.phoneKey(raw) else { return nil }
+    guard await ensureAccess() else { return nil }
+    _ = loadIfNeeded()
+    return byPhone[key]
+  }
+
+  /// Index numéro → nom, posé à la première lecture du carnet.
+  private var byPhone: [String: String] = [:] {
+    didSet { Self.snapshot.replace(byPhone) }
+  }
+
+  /// La même table, lisible sans attendre l'acteur : c'est ce que la liste de
+  /// l'inbox consulte à chaque catalogue pour titrer un fil « Julie » plutôt
+  /// que « +33 6… ». Vide tant que le carnet n'a pas été lu.
+  private static let snapshot = NameSnapshot()
+
+  nonisolated static func cachedName(forPhone raw: String) -> String? {
+    guard let key = phoneKey(raw) else { return nil }
+    return snapshot.name(for: key)
+  }
+
+  /// Lit le carnet si l'accès est déjà accordé — sans rien demander : au
+  /// lancement, une boîte de permission tomberait sur un écran qui n'a rien
+  /// demandé. La demande vient avec le premier geste qui en a besoin.
+  func warm() async {
+    switch CNContactStore.authorizationStatus(for: .contacts) {
+    case .authorized, .limited: authorized = true
+    default: return
+    }
+    _ = loadIfNeeded()
+  }
+
+  private final class NameSnapshot: @unchecked Sendable {
+    private let lock = NSLock()
+    private var names: [String: String] = [:]
+    func replace(_ next: [String: String]) { lock.lock(); names = next; lock.unlock() }
+    func name(for key: String) -> String? { lock.lock(); defer { lock.unlock() }; return names[key] }
+  }
+
+  /// Les neuf derniers chiffres : ce qui reste égal entre « +33 6… », « 06… »
+  /// et le `whatsapp_336…` d'un fantôme de pont.
+  nonisolated private static func phoneKey(_ raw: String) -> String? {
+    let source = PhoneNormalizer.identityKey(for: raw).flatMap { key -> String? in
+      key.hasPrefix("tel:") ? String(key.dropFirst(4)) : nil
+    } ?? raw
+    let digits = source.filter(\.isNumber)
+    guard digits.count >= 9 else { return nil }
+    return String(digits.suffix(9))
   }
 
   private func ensureAccess() async -> Bool {
@@ -88,6 +144,13 @@ actor ContactBook {
       result.append(Person(name: displayed, phones: phones))
     }
     cached = result
+    var index: [String: String] = [:]
+    for person in result {
+      for phone in person.phones {
+        if let key = Self.phoneKey(phone), index[key] == nil { index[key] = person.name }
+      }
+    }
+    byPhone = index
     return result
   }
 }

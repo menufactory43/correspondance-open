@@ -29,11 +29,24 @@ struct ThreadInfoSheet: View {
   @State private var agentInvitable = false
   /// Le média que la visionneuse montre, tapé dans les quatre carrés.
   @State private var openedMedia: OpenedMedia?
+  /// « Fusionner avec… » / « Ajouter un chat » : le sélecteur de fils.
+  @State private var isPickingMerge = false
+  /// « Séparer » se confirme : la ligne disparaît sous les yeux.
+  @State private var isConfirmingUnmerge = false
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
   private var conversation: Conversation? { store.conversation(conversationID) }
   private var media: [MessageAttachment] { store.media(conversationID) }
+  /// Les fils réunis sous cette ligne, s'il s'agit d'un contact fusionné.
+  private var mergedMembers: [Conversation] {
+    store.isMerged(conversationID) ? store.memberConversations(of: conversationID) : []
+  }
+  /// Réunir cette personne avec ses autres réseaux a un sens : un tête-à-tête
+  /// avec quelqu'un — pas un groupe, pas la note à soi, pas l'agent.
+  private func canMerge(_ conversation: Conversation) -> Bool {
+    !conversation.isGroup && conversation.network != .selfNote && conversation.network != .agent
+  }
 
   /// Ajouter quelqu'un passe par le ghost de son numéro ou de son pseudo.
   /// La table des capacités tranche — plus aucune liste de réseaux en dur.
@@ -48,10 +61,21 @@ struct ThreadInfoSheet: View {
             confidentialite(conversation)
             actionRow(conversation)
             mediaSection
-            membersSection(conversation)
+            if !mergedMembers.isEmpty {
+              mergedSection(conversation)
+            } else {
+              membersSection(conversation)
+            }
+            if canMerge(conversation) {
+              mergeEntry(conversation)
+            }
           }
           .padding(.horizontal, Spacing.md)
           .padding(.vertical, Spacing.sm)
+          // La fiche fait la largeur de l'écran, jamais celle de son texte le
+          // plus long : sans cette borne, une phrase qui refusait de se plier
+          // élargissait tout le contenu, qu'on pouvait alors traîner de côté.
+          .containerRelativeFrame(.horizontal)
         }
       }
       .background(theme.paper.ignoresSafeArea())
@@ -67,11 +91,44 @@ struct ThreadInfoSheet: View {
       .navigationDestination(for: MediaGridRoute.self) { _ in
         ThreadMediaGrid(conversationID: conversationID)
       }
+      // La fiche d'un membre : poussée dans la même pile que « Voir plus ».
+      .navigationDestination(for: RelayStore.ThreadMember.self) { member in
+        MemberProfileView(member: member, fromConversationID: conversationID) { id in
+          // Ouvrir un fil, c'est quitter cette fiche : la feuille se referme,
+          // et la sélection change une fois qu'elle est partie.
+          dismiss()
+          guard !id.isEmpty else { return }
+          store.selectedConversationID = id
+          Task { await store.open(conversationID: id) }
+        }
+      }
     }
     .tint(theme.accent)
     .task(id: conversationID) {
-      members = await store.members(conversationID)
+      // Une ligne de fusion n'a pas de salon : ses gens sont ceux du fil actif.
+      members = await store.members(store.relayTargets(of: conversationID).first ?? conversationID)
       agentInvitable = await store.agentInvitable(conversationID)
+    }
+    .sheet(isPresented: $isPickingMerge) {
+      if let conversation {
+        MergePickerSheet(source: conversation)
+          .environment(store)
+          .environment(themes)
+      }
+    }
+    .confirmationDialog(
+      "Séparer ces chats ?",
+      isPresented: $isConfirmingUnmerge,
+      titleVisibility: .visible
+    ) {
+      Button("Séparer", role: .destructive) {
+        let id = conversationID
+        dismiss()
+        store.unmerge(id)
+      }
+      Button("Annuler", role: .cancel) {}
+    } message: {
+      Text("Chaque fil reprend sa ligne dans l'inbox. Rien n'est effacé, et tu pourras les réunir de nouveau.")
     }
     .sheet(isPresented: $isSearching) {
       SearchSheet(scope: conversationID)
@@ -167,6 +224,10 @@ struct ThreadInfoSheet: View {
   }
 
   private func subtitle(_ conversation: Conversation) -> String {
+    // Une ligne fusionnée est plusieurs réseaux : elle les nomme tous.
+    if !mergedMembers.isEmpty {
+      return mergedMembers.map(\.network.labelFR).joined(separator: " · ")
+    }
     guard conversation.isGroup else { return conversation.network.labelFR }
     let count = members.count
     if count == 0 { return "\(conversation.network.labelFR) · groupe" }
@@ -375,7 +436,10 @@ struct ThreadInfoSheet: View {
           memberRow(name: conversation.title, detail: conversation.address, avatarUserID: nil)
         }
         ForEach(Array(members.enumerated()), id: \.element.id) { index, member in
-          memberRow(name: member.name, detail: nil, avatarUserID: member.userID)
+          NavigationLink(value: member) {
+            memberRow(name: member.name, detail: nil, avatarUserID: member.userID, showsChevron: true)
+          }
+          .buttonStyle(.plain)
             .contextMenu {
               if store.canRemoveMember(conversationID) {
                 Button(role: .destructive) {
@@ -400,7 +464,126 @@ struct ThreadInfoSheet: View {
     }
   }
 
-  private func memberRow(name: String, detail: String?, avatarUserID: String?) -> some View {
+  // MARK: - Les chats réunis
+
+  /// Les fils d'un contact fusionné, un par réseau. Le coche dit où part le
+  /// prochain message ; taper une autre ligne change de chat, comme le
+  /// sélecteur du composer sur le Mac. « Séparer » défait la fusion.
+  private func mergedSection(_ conversation: Conversation) -> some View {
+    let active = store.activeMember(of: conversationID)
+    return VStack(alignment: .leading, spacing: Spacing.xs) {
+      sectionTitle("Chats réunis")
+      VStack(spacing: 0) {
+        ForEach(Array(mergedMembers.enumerated()), id: \.element.id) { index, member in
+          Button {
+            store.setActiveMember(mergedID: conversationID, conversationID: member.id)
+          } label: {
+            HStack(spacing: 12) {
+              ConversationAvatar(conversation: member, size: 40, theme: theme)
+              VStack(alignment: .leading, spacing: 1) {
+                Text(member.networkAndReadableAddress)
+                  .font(Typography.body(typeface, size: 16))
+                  .foregroundStyle(theme.ink)
+                  .lineLimit(1)
+                  .truncationMode(.middle)
+                Text(member.id == active?.id ? "Le prochain message part ici" : member.title)
+                  .font(Typography.meta(typeface))
+                  .foregroundStyle(member.id == active?.id ? theme.accent : theme.inkTertiary)
+                  .lineLimit(1)
+              }
+              Spacer(minLength: 0)
+              if member.id == active?.id {
+                Image(systemName: "checkmark")
+                  .font(.system(size: 14, weight: .semibold))
+                  .foregroundStyle(theme.accent)
+              }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(member.networkAndReadableAddress)
+          .accessibilityHint("Écrire sur ce réseau")
+          .accessibilityAddTraits(member.id == active?.id ? [.isButton, .isSelected] : .isButton)
+          if index < mergedMembers.count - 1 { rowDivider }
+        }
+        rowDivider
+        Button {
+          isConfirmingUnmerge = true
+        } label: {
+          HStack(spacing: 12) {
+            Image(systemName: "arrow.triangle.branch")
+              .font(.system(size: 16, weight: .medium))
+              .foregroundStyle(theme.inkSecondary)
+              .frame(width: 40, height: 40)
+            Text("Séparer")
+              .font(Typography.body(typeface, size: 16))
+              .foregroundStyle(theme.ink)
+            Spacer(minLength: 0)
+          }
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Chaque fil reprend sa ligne")
+      }
+      .background(
+        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.paperSecondary)
+      )
+    }
+  }
+
+  /// « Fusionner avec un autre chat… », ou « Ajouter un chat à cette
+  /// personne… » quand la ligne est déjà réunie. Une fusion déjà repérée
+  /// (même numéro, même nom) est dite ici, et proposée en tête du sélecteur.
+  private func mergeEntry(_ conversation: Conversation) -> some View {
+    let suggested = store.mergeCandidates(for: conversation)
+    return Button {
+      isPickingMerge = true
+    } label: {
+      HStack(spacing: 12) {
+        Image(systemName: "person.line.dotted.person.fill")
+          .font(.system(size: 16, weight: .medium))
+          .foregroundStyle(theme.accent)
+          .frame(width: 40, height: 40)
+          .background(Circle().fill(theme.accent.opacity(0.12)))
+        VStack(alignment: .leading, spacing: 1) {
+          Text(mergedMembers.isEmpty ? "Fusionner avec un autre chat…" : "Ajouter un chat à cette personne…")
+            .font(Typography.body(typeface, size: 16))
+            .foregroundStyle(theme.ink)
+            .fixedSize(horizontal: false, vertical: true)
+          if let suggested {
+            Text("\(suggested.count - 1) chat\(suggested.count > 2 ? "s" : "") repéré\(suggested.count > 2 ? "s" : "") — même numéro ou même nom")
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.accent)
+              .fixedSize(horizontal: false, vertical: true)
+          } else {
+            Text("Signal, Messenger, WhatsApp… la même personne, une seule ligne.")
+              .font(Typography.meta(typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        Spacer(minLength: 0)
+        Image(systemName: "chevron.right")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(theme.inkTertiary)
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(
+        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.paperSecondary)
+      )
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(mergedMembers.isEmpty ? "Fusionner avec un autre chat" : "Ajouter un chat à cette personne")
+  }
+
+  private func memberRow(name: String, detail: String?, avatarUserID: String?, showsChevron: Bool = false) -> some View {
     HStack(spacing: 12) {
       MemberAvatar(conversationID: conversationID, userID: avatarUserID, name: name, size: 40, theme: theme)
       VStack(alignment: .leading, spacing: 1) {
@@ -417,9 +600,15 @@ struct ThreadInfoSheet: View {
         }
       }
       Spacer(minLength: 0)
+      if showsChevron {
+        Image(systemName: "chevron.right")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(theme.inkTertiary)
+      }
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
+    .contentShape(Rectangle())
     .accessibilityElement(children: .combine)
   }
 

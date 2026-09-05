@@ -1567,6 +1567,14 @@ public actor MatrixBridgeService {
   /// WhatsApp attend un numéro. Instagram et Messenger attendent l'identifiant
   /// **numérique** Meta :
   /// un pseudo doit d'abord passer par `search`, dont on lit la réponse du bot.
+  /// Un salon direct avec un fantôme de pont, créé en l'invitant : c'est la
+  /// voie quand on n'a pas de numéro à donner au bot — un membre WhatsApp
+  /// désigné par son LID (`@whatsapp_lid-…`), un compte Meta. Le pont voit
+  /// l'invitation de son fantôme et en fait un portail.
+  public func createDirectRoom(with ghostUserID: String) async throws -> String {
+    try await client.createDM(with: ghostUserID)
+  }
+
   public func startConversation(network: MessageNetwork, identifier: String) async throws {
     guard let bridge = network.bridge else {
       throw MatrixError.decoding("réseau non bridgé : \(network.rawValue)")

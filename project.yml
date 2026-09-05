@@ -356,7 +356,7 @@ targets:
           - Fonts/IBMPlexSerif-Italic.ttf
           - Fonts/IBMPlexSans-Regular.ttf
           - Fonts/IBMPlexSans-Italic.ttf
-        NSContactsUsageDescription: Correspondance retrouve vos contacts pour écrire à quelqu’un qui n’a pas encore de conversation.
+        NSContactsUsageDescription: Correspondance retrouve vos contacts pour écrire à quelqu’un qui n’a pas encore de conversation, et pour nommer les fils et les membres d’un groupe que le réseau ne désigne que par un numéro.
         NSPhotoLibraryUsageDescription: Correspondance joint vos photos à vos messages.
         NSCameraUsageDescription: Correspondance prend une photo pour la joindre à un message.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour vos messages vocaux.

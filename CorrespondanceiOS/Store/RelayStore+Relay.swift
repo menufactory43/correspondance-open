@@ -216,9 +216,7 @@ extension RelayStore {
     for roomID in roomToConversation.keys { hidden.formUnion(snapshot.hidden[roomID] ?? []) }
     if hidden != hiddenMessageIDs { hiddenMessageIDs = hidden }
 
-    if let stored = snapshot.mergedContacts, stored.merged != mergedContacts {
-      mergedContacts = stored.merged
-    }
+    if let stored = snapshot.mergedContacts { adoptMergedContacts(stored) }
 
     // Ce que l'extension de notification a le droit de savoir, et rien d'autre :
     // quels salons sont muets. Elle ne tient pas de `/sync` — c'est ce dépôt-là

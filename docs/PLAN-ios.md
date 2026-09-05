@@ -84,7 +84,7 @@ Ordre des écrans, chacun livrable seul :
 3. **Fil** : `MessageBubbleView` partagée, en-tête flottant, réactions, citations, « Vu par », `ComposerBar` avec **+** (Photos / Caméra / Fichier / Plus tard) et micro.
 4. **Adaptatif** : `NavigationSplitView` — compact = pile, regular = liste + fil ; état conservé au changement de size class (test : simulateur iPad Pro 13 + rotation ; Fold quand le simulateur existera).
 5. **Focus** : un écran = une conversation, gestes archiver / suivante, atteint depuis la barre du bas.
-6. **Archive, épingles, muet, fusions lues** : via l'état du Relais (Phase B) — aucune logique nouvelle.
+6. **Archive, épingles, muet, fusions** : via l'état du Relais (Phase B). Les fusions se décident aussi depuis l'iPhone (fiche du fil › « Fusionner avec… », « Séparer », « Changer de chat » sous le composer) et partent au Relais par la même file d'écritures que les drapeaux (`RelayStore` § « Fusionner, séparer »).
 7. **Push** : Sygnal dans `infra/matrix/docker-compose.yml`, clé APNs `.p8`, `MatrixClient.setPusher`, Notification Service Extension pour l'aperçu.
 8. **Nouvelle conversation** : puces réseau, réutilise `createDM` / `startBridgeChat`.
 9. **Recherche** : `ConversationSearch` (Core) + onglets médias.
