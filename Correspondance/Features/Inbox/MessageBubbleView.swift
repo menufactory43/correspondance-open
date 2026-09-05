@@ -276,7 +276,7 @@ struct MessageBubbleView: View {
   /// L'adresse dont on montre la carte : la première du message, et seulement
   /// si le réglage est allumé et que la bulle porte bien du texte.
   private var previewedLink: URL? {
-    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble,
+    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, !displayText.isEmpty,
           sharedPost == nil
     else { return nil }
     // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.
@@ -594,8 +594,20 @@ struct MessageBubbleView: View {
     return trimmed
   }
 
+  /// Un message qui n'est QUE son lien, et dont la carte est là : la carte
+  /// suffit — elle porte le domaine et s'ouvre d'un clic, l'adresse nue
+  /// n'apprendrait rien de plus. Tant que la carte n'est pas arrivée, le
+  /// lien souligné reste : la bulle ne se vide jamais.
   private var showsTextBubble: Bool {
-    !displayText.isEmpty
+    guard !displayText.isEmpty else { return false }
+    return !linkOnlyWithPreview
+  }
+
+  private var linkOnlyWithPreview: Bool {
+    guard let link = previewedLink,
+          displayText.trimmingCharacters(in: .whitespacesAndNewlines) == link.absoluteString
+    else { return false }
+    return bridgedPreview != nil || LinkPreviewStore.shared.cached(for: link) != nil
   }
 
   /// La bande sous un « @Nom ». Sur ma bulle, elle s'éclaircit ; sur celle

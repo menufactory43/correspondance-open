@@ -1,10 +1,16 @@
 // Sous Linux, pas de LinkPresentation : les aperçus de liens viennent des ponts seulement.
 #if canImport(LinkPresentation)
+#if canImport(AppKit)
+import AppKit
+#else
+import UIKit
+#endif
 import CoreGraphics
 import CryptoKit
 import Foundation
 import LinkPresentation
 import ImageIO
+import SwiftUI
 import UniformTypeIdentifiers
 
 /// LES APERÇUS DE LIENS, cherchés une fois et gardés.
@@ -55,29 +61,70 @@ public final class LinkPreviewStore {
     return digest.map { String(format: "%02x", $0) }.joined()
   }
 
+  /// L'aperçu déjà en mémoire, sans rien déclencher. C'est ce que lit la carte
+  /// à chaque rendu : la lecture est observée, la carte se redessine quand
+  /// l'aperçu arrive.
+  public func cached(for url: URL) -> LinkPreview? {
+    memory[Self.key(for: url)]
+  }
+
+  /// Lance la recherche sans l'attendre, si rien n'est encore su de l'adresse.
+  /// Idempotent et bon marché : une adresse connue, ratée ou en route rend la
+  /// main tout de suite. La carte l'appelle à sa naissance — un `.task` posé
+  /// sur une carte encore vide ne se déclencherait jamais.
+  public func warm(_ url: URL) {
+    let key = Self.key(for: url)
+    guard memory[key] == nil, !failed.contains(key), inFlight[key] == nil else { return }
+    _ = startLoading(url: url, key: key)
+  }
+
   /// L'aperçu de cette adresse, cherché au besoin. `nil` = on ne saura pas.
   public func metadata(for url: URL) async -> LinkPreview? {
     let key = Self.key(for: url)
     if let hit = memory[key] { return hit }
     if failed.contains(key) { return nil }
     if let running = inFlight[key] { return await running.value }
+    return await startLoading(url: url, key: key).value
+  }
 
-    if let onDisk = Self.readFromDisk(key: key) {
-      memory[key] = onDisk
-      return onDisk
+  /// Le disque d'abord, le réseau ensuite ; le résultat se range en mémoire
+  /// et la tâche se partage entre toutes les bulles qui citent l'adresse.
+  private func startLoading(url: URL, key: String) -> Task<LinkPreview?, Never> {
+    let task = Task<LinkPreview?, Never> { [weak self] in
+      if let onDisk = Self.readFromDisk(key: key) {
+        self?.remember(onDisk, key: key, animated: false)
+        return onDisk
+      }
+      let result = await Self.fetch(url: url, key: key)
+      if let result {
+        Self.writeToDisk(result, key: key)
+        // Le fil est ancré en bas : la carte pousse le contenu sans arracher
+        // la lecture. Un fondu suffit à dire qu'elle vient d'arriver.
+        self?.remember(result, key: key, animated: true)
+      } else {
+        self?.failed.insert(key)
+      }
+      self?.inFlight[key] = nil
+      return result
     }
-
-    let task = Task<LinkPreview?, Never> { await Self.fetch(url: url, key: key) }
     inFlight[key] = task
-    let result = await task.value
-    inFlight[key] = nil
-    if let result {
-      memory[key] = result
-      Self.writeToDisk(result, key: key)
-    } else {
-      failed.insert(key)
+    return task
+  }
+
+  private func remember(_ preview: LinkPreview, key: String, animated: Bool) {
+    guard animated, !Self.reduceMotion else {
+      memory[key] = preview
+      return
     }
-    return result
+    withAnimation(.easeOut(duration: 0.18)) { memory[key] = preview }
+  }
+
+  private static var reduceMotion: Bool {
+    #if canImport(AppKit)
+    NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    #else
+    UIAccessibility.isReduceMotionEnabled
+    #endif
   }
 
   /// Côté maximal, en pixels, d'une vignette de carte : deux fois la largeur

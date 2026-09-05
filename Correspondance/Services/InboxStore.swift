@@ -3563,7 +3563,7 @@ final class InboxStore {
     if usingDemoData && conversation.network == .iMessage {
       return "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages."
     }
-    if conversation.network == .iMessage, !iMessageSender.automationAuthorized() {
+    if conversation.network == .iMessage, iMessageSender.automationRefused() {
       guard interactive, requestMessagesAutomation() else {
         if interactive { openAutomationPrivacySettings() }
         return IMessageSendError.automationDenied.localizedDescription

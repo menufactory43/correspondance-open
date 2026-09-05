@@ -460,10 +460,23 @@ struct MessageBubble: View {
     return trimmed
   }
 
-  private var showsTextBubble: Bool { !displayText.isEmpty }
+  /// Un message qui n'est QUE son lien, et dont la carte est là : la carte
+  /// suffit — elle porte le domaine et s'ouvre d'une tape. Tant qu'elle n'est
+  /// pas arrivée, le lien souligné reste : la bulle ne se vide jamais.
+  private var showsTextBubble: Bool {
+    guard !displayText.isEmpty else { return false }
+    return !linkOnlyWithPreview
+  }
+
+  private var linkOnlyWithPreview: Bool {
+    guard let link = previewedLink,
+          displayText.trimmingCharacters(in: .whitespacesAndNewlines) == link.absoluteString
+    else { return false }
+    return bridgedPreview != nil || LinkPreviewStore.shared.cached(for: link) != nil
+  }
 
   private var previewedLink: URL? {
-    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, showsTextBubble,
+    guard showsLinkPreviews, !message.isRetracted, !message.isEmojiOnly, !displayText.isEmpty,
           sharedPost == nil
     else { return nil }
     // L'aperçu livré par le réseau désigne son adresse ; sinon la première du texte.

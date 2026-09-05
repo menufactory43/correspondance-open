@@ -33,9 +33,12 @@ struct IMessageSender: Sendable {
     permissionStatus(askUser: true) == .authorized
   }
 
+  /// Vrai seulement sur un refus explicite (-1743). Messages fermé donne
+  /// `procNotFound` : ce n'est pas un refus, le script le lancera lui-même et
+  /// macOS posera sa boîte au premier événement s'il le faut.
   @MainActor
-  func automationAuthorized() -> Bool {
-    permissionStatus(askUser: false) == .authorized
+  func automationRefused() -> Bool {
+    permissionStatus(askUser: false) == .denied
   }
 
   @MainActor
@@ -83,9 +86,7 @@ struct IMessageSender: Sendable {
     do {
       try await runAppleScript(source)
     } catch let IMessageSendError.appleScript(detail)
-      where detail.localizedCaseInsensitiveContains("not authorized")
-      || detail.localizedCaseInsensitiveContains("not authorised")
-      || detail.localizedCaseInsensitiveContains("errAEEventNotPermitted")
+      where detail.localizedCaseInsensitiveContains("errAEEventNotPermitted")
     {
       throw IMessageSendError.automationDenied
     }
@@ -206,6 +207,12 @@ struct IMessageSender: Sendable {
         let script = NSAppleScript(source: source)
         _ = script?.executeAndReturnError(&error)
         if let error {
+          // Le refus se lit au numéro (-1743), pas au texte : le message
+          // est localisé (« Non autorisé à envoyer des événements Apple… »).
+          if (error[NSAppleScript.errorNumber] as? Int) == Int(errAEEventNotPermitted) {
+            continuation.resume(throwing: IMessageSendError.automationDenied)
+            return
+          }
           let message = error[NSAppleScript.errorMessage] as? String
             ?? error.description
           continuation.resume(throwing: IMessageSendError.appleScript(message))

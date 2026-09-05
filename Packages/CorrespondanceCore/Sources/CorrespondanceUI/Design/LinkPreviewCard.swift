@@ -9,6 +9,12 @@ import CorrespondanceCore
 ///
 /// La carte n'existe que lorsque les métadonnées sont arrivées : tant qu'on
 /// cherche, la bulle garde son lien nu et souligné, et le fil ne bouge pas.
+///
+/// Piège rencontré : un `.task` posé sur cette carte tant qu'elle est vide
+/// (`Group { if let … }` sans rien dedans) ne se déclenche JAMAIS — la vue
+/// n'existe pas, le modificateur non plus — et les aperçus n'arrivaient
+/// jamais. La recherche part donc à la naissance de la carte (`warm`), et le
+/// corps lit le magasin, observé : la carte paraît quand l'aperçu est là.
 public struct LinkPreviewCard: View {
   public let url: URL
   public let theme: WritingTheme
@@ -19,8 +25,6 @@ public struct LinkPreviewCard: View {
   public var bridged: LinkPreview?
 
   @Environment(\.openURL) private var openURL
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var preview: LinkPreview?
 
   /// Assez large pour qu'un titre tienne sur deux lignes, assez étroite pour
   /// rester une note en marge de la bulle plutôt qu'une seconde bulle.
@@ -29,24 +33,9 @@ public struct LinkPreviewCard: View {
   private static let thumbnailHeight: CGFloat = 132
 
   public var body: some View {
-    Group {
-      if let preview {
-        card(preview)
-          .transition(.opacity)
-      }
-    }
-    .task(id: url) {
-      if let bridged {
-        preview = bridged
-        return
-      }
-      let found = await LinkPreviewStore.shared.metadata(for: url)
-      guard !Task.isCancelled else { return }
-      // Le fil est ancré en bas : la carte pousse le contenu sans arracher la
-      // lecture. Un fondu suffit à dire qu'elle vient d'arriver.
-      withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-        preview = found
-      }
+    if let preview = bridged ?? LinkPreviewStore.shared.cached(for: url) {
+      card(preview)
+        .transition(.opacity)
     }
   }
 
@@ -108,6 +97,10 @@ public struct LinkPreviewCard: View {
     return "Aperçu du lien : \(title), sur \(preview.domain)"
   }
 
+  /// Sur le fil principal : c'est ici que la recherche part, et le magasin y
+  /// vit. Idempotent — une bulle se reconstruit souvent, l'adresse ne se
+  /// cherche qu'une fois.
+  @MainActor
   public init(
     url: URL,
     theme: WritingTheme,
@@ -118,5 +111,8 @@ public struct LinkPreviewCard: View {
     self.theme = theme
     self.typeface = typeface
     self.bridged = bridged
+    if bridged == nil {
+      LinkPreviewStore.shared.warm(url)
+    }
   }
 }
