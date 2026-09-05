@@ -76,15 +76,25 @@ struct RootView: View {
     .task { openDemoScreenIfRequested() }
   }
 
+  /// L'attente ne se dit qu'à partir d'une seconde : un lancement ordinaire
+  /// n'atteint jamais ce cap, et le papier nu vaut mieux qu'un mot qui clignote.
+  @State private var loadingIsLong = false
+
   private var loading: some View {
     VStack(spacing: Spacing.sm) {
-      ProgressView()
-      Text("Connexion au Relais…")
-        .font(Typography.emptyState(themes.typeface))
-        .foregroundStyle(theme.inkSecondary)
+      if loadingIsLong {
+        ProgressView()
+        Text("Connexion au Relais…")
+          .font(Typography.emptyState(themes.typeface))
+          .foregroundStyle(theme.inkSecondary)
+      }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(theme.paper.ignoresSafeArea())
+    .task {
+      try? await Task.sleep(for: .seconds(1))
+      loadingIsLong = true
+    }
   }
 
   @ViewBuilder

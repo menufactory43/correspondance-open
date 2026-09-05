@@ -38,7 +38,18 @@ final class RelayStore {
   var connectionError: String?
   /// Le `/sync` a échoué mais la session tient : bandeau discret, pas d'écran d'erreur.
   private(set) var syncError: String?
+  /// Échecs de `/sync` d'affilée : le prochain essai vient d'autant plus vite
+  /// que la panne est jeune (1 s, 2 s, 3 s, puis 5 s).
+  private var syncFailureStreak = 0
+  /// Le délai de grâce avant de montrer la bannière : Tailscale remonte son
+  /// tunnel en une ou deux secondes au retour de l'app, et une bannière qui
+  /// paraît puis s'efface aussitôt n'apprend rien.
+  private var syncErrorGrace: Task<Void, Never>?
+  private static let syncErrorGraceDelay: Duration = .seconds(4)
   private(set) var isSyncing = false
+  /// Les salons se relisent sur disque : la liste est vide parce qu'on n'a pas
+  /// encore lu, pas parce qu'il n'y a rien — l'inbox ne dit pas « vide ».
+  private(set) var isRestoring = false
 
   let matrix: MatrixBridgeService
 
@@ -148,10 +159,16 @@ final class RelayStore {
       session = .disconnected
       return
     }
+    // La coquille de l'inbox paraît TOUT DE SUITE : le Trousseau dit qu'il y a
+    // une session, le reste (salons relus sur disque) suit en quelques dixièmes
+    // de seconde. Avant, on regardait « Connexion au Relais… » le temps de la
+    // relecture, à chaque lancement.
+    isRestoring = true
+    session = .connected
     if await matrix.restoreFromDisk() {
       conversations = mergedRows(await matrix.conversations())
-      session = .connected
     }
+    isRestoring = false
     switch await matrix.checkSession() {
     case .invalid:
       session = .disconnected
@@ -159,7 +176,7 @@ final class RelayStore {
       return
     case .unreachable:
       session = .connected
-      syncError = "Relais injoignable pour l'instant — nouvel essai en cours."
+      noteSyncFailure("Relais injoignable pour l'instant — nouvel essai en cours.")
     case .valid:
       session = .connected
       conversations = mergedRows(await matrix.conversations())
@@ -283,10 +300,55 @@ final class RelayStore {
         await self.syncOnce()
         if Task.isCancelled { return }
         // Le long-poll rend la main dès qu'il se passe quelque chose ; le
-        // souffle évite de marteler le Relais quand il rend une erreur.
-        if self.syncError != nil { try? await Task.sleep(for: .seconds(5)) }
+        // souffle évite de marteler le Relais quand il rend une erreur — mais
+        // une panne toute jeune est souvent un tunnel qui remonte : on
+        // revient vite, puis de moins en moins.
+        if self.syncFailureStreak > 0 {
+          let delays: [Int] = [1, 2, 3, 5]
+          let delay = delays[min(self.syncFailureStreak, delays.count) - 1]
+          try? await Task.sleep(for: .seconds(delay))
+        }
       }
     }
+  }
+
+  /// L'app passe en arrière-plan : la boucle s'arrête proprement. Sans ça, le
+  /// long-poll en vol échouait au retour et posait la bannière avant même que
+  /// le réseau ait eu le temps de revenir.
+  func pauseSync() {
+    guard !isDemo else { return }
+    syncTask?.cancel()
+    syncTask = nil
+  }
+
+  /// L'app revient : une passe tout de suite, pas après le souffle d'attente.
+  func resumeSync() {
+    guard !isDemo, session == .connected else { return }
+    syncTask?.cancel()
+    syncTask = nil
+    startSyncLoop()
+  }
+
+  /// Un échec de `/sync` : compté, et montré seulement s'il dure.
+  private func noteSyncFailure(_ message: String) {
+    syncFailureStreak += 1
+    guard syncErrorGrace == nil, syncError == nil else {
+      if syncError != nil { syncError = message }
+      return
+    }
+    syncErrorGrace = Task { @MainActor [weak self] in
+      try? await Task.sleep(for: Self.syncErrorGraceDelay)
+      guard let self, !Task.isCancelled, self.syncFailureStreak > 0 else { return }
+      self.syncError = message
+      self.syncErrorGrace = nil
+    }
+  }
+
+  private func clearSyncFailure() {
+    syncFailureStreak = 0
+    syncErrorGrace?.cancel()
+    syncErrorGrace = nil
+    syncError = nil
   }
 
   private func syncOnce() async {
@@ -294,7 +356,7 @@ final class RelayStore {
     defer { isSyncing = false }
     do {
       let fresh = try await matrix.syncOnce()
-      syncError = nil
+      clearSyncFailure()
       conversations = mergedRows(fresh)
       reassertReadOnScreen()
       networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
@@ -312,7 +374,9 @@ final class RelayStore {
       syncTask?.cancel()
       syncTask = nil
     } catch {
-      syncError = Self.readable(error)
+      // La boucle qu'on vient d'arrêter (arrière-plan, relance) n'est pas une panne.
+      guard !Task.isCancelled else { return }
+      noteSyncFailure(Self.readable(error))
     }
   }
 

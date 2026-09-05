@@ -47,8 +47,15 @@ struct CorrespondanceiOSApp: App {
         .onChange(of: scenePhase) { _, phase in
           // En arrière-plan, le push prend le relais des notifications locales ;
           // le rattrapage du retour ne doit pas les rejouer.
-          if phase == .background { store.notificationsWillResumeFromBackground() }
+          if phase == .background {
+            store.notificationsWillResumeFromBackground()
+            // La boucle `/sync` s'arrête : un long-poll laissé en vol échoue au
+            // retour et affiche « Relais injoignable » pour rien.
+            store.pauseSync()
+          }
           guard phase == .active else { return }
+          // Et repart tout de suite au retour, sans attendre le souffle d'attente.
+          store.resumeSync()
           Task { await store.viderLaBoiteDuPartage() }
         }
         .onChange(of: store.session) { _, session in

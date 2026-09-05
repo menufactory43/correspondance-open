@@ -24,6 +24,7 @@ public struct MatrixSyncParser: Sendable {
         // n'apparaissait qu'après une relecture de l'historique, jamais au
         // moment où on l'invite.
         applyMembershipNotice(event, roomID: roomID, to: &model)
+        applyRoomChangeNotice(event, to: &model)
         applyState(event, to: &model)
         applyMessage(event, roomID: roomID, to: &model)
         applyReaction(event, to: &model)
@@ -118,6 +119,7 @@ public struct MatrixSyncParser: Sendable {
         alreadyKnown += 1
       }
       applyMembershipNotice(event, roomID: roomID, to: &model)
+      applyRoomChangeNotice(event, to: &model)
       applyState(event, to: &model)
       applyMessage(event, roomID: roomID, to: &model)
       applyReaction(event, to: &model)
@@ -358,21 +360,43 @@ public struct MatrixSyncParser: Sendable {
           let eventID = event.eventID,
           let userID = event.stateKey,
           userID != selfUserID,
-          !MatrixIdentity.isGhost(userID),
           !MatrixIdentity.isBridgeBot(userID),
           let content = event.content
     else { return }
+    // Un fantôme de pont va et vient au rythme du réseau : à la création du
+    // portail, tous arrivent d'un bloc, et ça n'a rien à annoncer. Mais dans
+    // un groupe qui vit déjà, un fantôme qui entre ou sort, c'est bien
+    // quelqu'un qu'on a ajouté ou qui est parti — comme WhatsApp ou Signal
+    // le disent dans le fil.
+    let isGroup = model.isGroup(selfUserID: selfUserID)
+    if MatrixIdentity.isGhost(userID) {
+      guard isGroup, model.messagesByID.values.contains(where: { !$0.isSystemEvent }) else { return }
+    }
     let membership = content.string(at: "membership") ?? "leave"
     let wasJoined = model.members[userID]?.membership == "join"
-    let verb: String
-    switch (wasJoined, membership) {
-    case (false, "join"): verb = "a rejoint la conversation"
-    case (true, "leave"), (true, "ban"): verb = "a quitté la conversation"
-    default: return
-    }
     let name = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
       ?? model.members[userID]?.displayName
       ?? MatrixIdentity.localpart(of: userID)
+    let place = isGroup ? "le groupe" : "la conversation"
+    // L'auteur du geste : le pont signe l'événement du fantôme de celui qui a
+    // ajouté ou retiré. Quand c'est la personne elle-même, elle « rejoint »
+    // ou « quitte » ; quand c'est un autre, il « ajoute » ou « retire ».
+    let actor = event.sender.flatMap { sender -> String? in
+      guard sender != userID, !MatrixIdentity.isBridgeBot(sender) else { return nil }
+      if sender == selfUserID { return "Vous" }
+      return model.members[sender]?.displayName ?? MatrixIdentity.localpart(of: sender)
+    }
+    let text: String
+    switch (wasJoined, membership) {
+    case (false, "join"):
+      text = actor.map { $0 == "Vous" ? "Vous avez ajouté \(name)" : "\($0) a ajouté \(name)" }
+        ?? "\(name) a rejoint \(place)"
+    case (true, "leave"), (true, "ban"):
+      text = actor.map { $0 == "Vous" ? "Vous avez retiré \(name)" : "\($0) a retiré \(name)" }
+        ?? "\(name) a quitté \(place)"
+    default:
+      return
+    }
     let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
     model.messagesByID[eventID] = ChatMessage(
       id: eventID,
@@ -383,10 +407,70 @@ public struct MatrixSyncParser: Sendable {
       isFromMe: false,
       senderID: userID,
       senderName: name,
-      systemEventText: "\(name) \(verb)"
+      systemEventText: text
     )
     model.markWritten(eventID)
     if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  /// « Le groupe s'appelle désormais… », « … a changé la photo du groupe » :
+  /// un nom ou une photo qui CHANGE, dans un groupe déjà nommé — pas celui
+  /// que le portail reçoit à sa création. À jouer avant `applyState`, comme
+  /// l'adhésion : c'est l'état encore en mémoire qui dit s'il y a changement.
+  private func applyRoomChangeNotice(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
+    guard let eventID = event.eventID, let content = event.content else { return }
+    let text: String
+    switch event.type {
+    case "m.room.name":
+      guard content.bool(at: "fi.mau.implicit_name") != true,
+            let raw = content.string(at: "name"),
+            let previous = model.explicitName, !previous.isEmpty
+      else { return }
+      let name = MatrixIdentity.stripBridgeSuffix(raw)
+      guard name != previous, !name.isEmpty else { return }
+      let actor = Self.actorName(of: event, in: model, selfUserID: selfUserID)
+      text = actor.map { $0 == "Vous" ? "Vous avez renommé le groupe « \(name) »" : "\($0) a renommé le groupe « \(name) »" }
+        ?? "Le groupe s'appelle désormais « \(name) »"
+    case "m.room.avatar":
+      guard model.isGroup(selfUserID: selfUserID),
+            model.messagesByID.values.contains(where: { !$0.isSystemEvent }),
+            let previous = model.avatarMXC, !previous.isEmpty
+      else { return }
+      let url = content.string(at: "url") ?? ""
+      guard url != previous else { return }
+      let actor = Self.actorName(of: event, in: model, selfUserID: selfUserID)
+      if url.isEmpty {
+        text = actor.map { $0 == "Vous" ? "Vous avez retiré la photo du groupe" : "\($0) a retiré la photo du groupe" }
+          ?? "La photo du groupe a été retirée"
+      } else {
+        text = actor.map { $0 == "Vous" ? "Vous avez changé la photo du groupe" : "\($0) a changé la photo du groupe" }
+          ?? "La photo du groupe a changé"
+      }
+    default:
+      return
+    }
+    let network = model.network ?? Self.inferredNetwork(in: model) ?? .whatsapp
+    model.messagesByID[eventID] = ChatMessage(
+      id: eventID,
+      conversationID: model.conversationID,
+      network: network,
+      text: "",
+      sentAt: event.sentAt,
+      isFromMe: event.sender == selfUserID,
+      senderID: event.sender,
+      senderName: nil,
+      systemEventText: text
+    )
+    model.markWritten(eventID)
+    if event.sentAt > model.lastEventAt { model.lastEventAt = event.sentAt }
+  }
+
+  /// Qui a fait le geste : « Vous », le nom connu du membre, ou rien quand
+  /// c'est le bot du pont qui signe (le réseau ne dit pas qui).
+  private static func actorName(of event: MatrixEvent, in model: MatrixRoomModel, selfUserID: String) -> String? {
+    guard let sender = event.sender, !MatrixIdentity.isBridgeBot(sender) else { return nil }
+    if sender == selfUserID { return "Vous" }
+    return model.members[sender]?.displayName ?? MatrixIdentity.localpart(of: sender)
   }
 
   // MARK: - Propositions de l'agent

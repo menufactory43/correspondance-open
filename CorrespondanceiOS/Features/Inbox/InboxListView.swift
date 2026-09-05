@@ -42,7 +42,7 @@ struct InboxListView: View {
 
     return Group {
         if list.isEmpty {
-          emptyState
+          if !store.isRestoring { emptyState }
         } else {
           List(selection: $store.selectedConversationID) {
             if !sections.pinned.isEmpty {
