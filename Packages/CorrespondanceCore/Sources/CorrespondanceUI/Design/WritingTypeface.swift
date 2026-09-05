@@ -98,6 +98,28 @@ public enum FocusScope: String, CaseIterable, Identifiable, Codable, Sendable {
   }
 }
 
+extension WritingTypeface {
+  /// La chasse moyenne d'un caractère de prose française, à ce corps : c'est
+  /// elle qui traduit « 64 caractères par ligne » en points. Mesurée sur un
+  /// échantillon, pas sur un seul glyphe — Quattro et Duo n'ont pas une seule
+  /// largeur, et une ligne de prose n'est pas une ligne de « n ».
+  public func characterWidth(size: CGFloat) -> CGFloat {
+    let key = "\(rawValue)|\(size)"
+    Self.widthLock.lock(); defer { Self.widthLock.unlock() }
+    if let cached = Self.widthCache[key] { return cached }
+    let sample = "Le vif renard brun saute par-dessus le chien paresseux, et il en rit encore. "
+    let width = NSAttributedString(string: sample, attributes: [.font: nsFont(size: size)]).size().width
+    let perCharacter = max(1, width / CGFloat(sample.count))
+    Self.widthCache[key] = perCharacter
+    return perCharacter
+  }
+
+  nonisolated(unsafe) private static var widthCache: [String: CGFloat] = [:]
+  private static let widthLock = NSLock()
+}
+
+/// La longueur de ligne, en caractères — comme iA Writer et Drafts, jamais
+/// en points : à ⌘+ la ligne garde son nombre de mots.
 public enum LineLengthPreset: Int, CaseIterable, Identifiable, Codable, Sendable {
   case narrow = 64
   case classic = 72

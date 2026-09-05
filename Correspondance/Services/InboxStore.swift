@@ -120,6 +120,9 @@ final class InboxStore {
   private(set) var messagesAutomationHealth: IMessageAutomationHealth = .unknown
   var notificationStatusFR: String = "…"
   var isPresentingNewConversation = false
+  /// La feuille de garde (⌘K) : taper un nom, la page tourne — sans quitter
+  /// le Focus, sans rouvrir la liste.
+  var isPresentingJump = false
   /// La feuille « Fusionner avec… » : le fil qui cherche sa jumelle sur un
   /// autre réseau. `nil` = fermée.
   var mergePickerConversationID: String?

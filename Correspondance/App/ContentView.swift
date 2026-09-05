@@ -72,6 +72,15 @@ struct ContentView: View {
         .accessibilityHidden(true)
       }
     }
+    // La feuille de garde (⌘K) se pose sur la page, pas dans une fenêtre à
+    // part : on ne quitte pas le Focus pour tourner la page.
+    .overlay {
+      if store.isPresentingJump {
+        FocusJumpSheet()
+          .transition(.opacity)
+      }
+    }
+    .animation(chromeAnimation, value: store.isPresentingJump)
     // La barre d'outils ne peint RIEN : le fond continu vient de la sidebar
     // (à gauche) et du papier de la fenêtre (à droite). Cf. WindowChrome.swift.
     .correspondanceTransparentToolbar()

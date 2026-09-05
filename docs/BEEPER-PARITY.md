@@ -123,7 +123,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 | Sons | `NOTIFICATION_SOUND_NAME`, sons par réseau (help/desktop) | **Absent** | S | P2 |
 | Notifier quand l'app est au premier plan | `NOTIFY_IN_FOCUS` | **Absent** | S | ✗ (notifier ce qu'on regarde déjà) |
 | Réagir aux réactions | `NOTIFY_FOR_REACTIONS` | **Absent** | S | ✗ |
-| Mode Focus « une conversation » | **N'existe pas chez Beeper** | **Fait — notre différenciation** : `FocusConversationView`, chrome fantôme, atténuation à 0.34 pendant la frappe, `focusPrevious/focusNext/archiveSelected`, `FocusTranscriptView` en prose | — | — |
+| Mode Focus « une conversation » | **N'existe pas chez Beeper** | **Fait — notre différenciation** : `FocusConversationView`, chrome fantôme, atténuation à 0.34 pendant la frappe, `focusPrevious/focusNext/archiveSelected`, `FocusTranscriptView` en prose. La page tourne (nom d'abord, glissement dans le sens du geste), compteur « 3 sur 12 » sous le nom, lisières gauche/droite au survol, feuille de garde ⌘K (`FocusJumpSheet`) | — | — |
 | Incognito (lecture sans accusé) | `Incognito mode keeps chats unread even when you click on them and doesn't notify recipients you've read them` | **Absent** | M | P2 (à considérer *après* les accusés de lecture, comme leur interrupteur) |
 | Nudge / secouer la conversation | `Shake the conversation when someone sends you a nudge`, `You got nudged!` | **Absent** | — | ✗ |
 

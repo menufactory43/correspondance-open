@@ -445,6 +445,12 @@ public final class ThemePreferences {
     didSet { UserDefaults.standard.set(lineLength.rawValue, forKey: Keys.lineLength) }
   }
 
+  /// La colonne de la page Focus, en points, pour ce corps de texte : la
+  /// longueur de ligne choisie × la chasse de la police. Elle suit donc ⌘+.
+  public func letterWidth(bodySize: CGFloat) -> CGFloat {
+    (CGFloat(lineLength.rawValue) * typeface.characterWidth(size: bodySize)).rounded()
+  }
+
   public var focusScope: FocusScope {
     didSet { UserDefaults.standard.set(focusScope.rawValue, forKey: Keys.focusScope) }
   }
@@ -553,4 +559,8 @@ public enum LayoutMetrics {
   /// Lisière haute qui rappelle la barre d'outils en Focus : assez haute pour
   /// qu'on la trouve sans viser, assez basse pour ne pas s'ouvrir par accident.
   public static let focusChromeHoverHeight: CGFloat = 56
+  /// Les lisières gauche et droite de la page Focus, où une flèche paraît au
+  /// survol pour tourner la page. Tient dans la marge gauche d'une fenêtre
+  /// large ; la fenêtre serrée n'en a pas.
+  public static let focusEdgeTurnWidth: CGFloat = 88
 }

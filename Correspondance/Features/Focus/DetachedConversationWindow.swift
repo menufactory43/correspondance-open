@@ -54,7 +54,7 @@ struct DetachedConversationWindow: View {
 
   private func page(conversationID: String, session: ConversationSession) -> some View {
     GeometryReader { geometry in
-      let metrics = FocusPageMetrics.resolve(width: geometry.size.width)
+      let metrics = FocusPageMetrics.resolve(width: geometry.size.width, themes: themes)
       VStack(alignment: .leading, spacing: 0) {
         header(conversationID: conversationID, metrics: metrics, showsNetwork: geometry.size.width >= 520)
         FocusTranscriptView(session: session, metrics: metrics, includesEditor: false)

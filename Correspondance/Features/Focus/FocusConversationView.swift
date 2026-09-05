@@ -20,9 +20,11 @@ struct FocusPageMetrics: Equatable {
   /// jamais plus que la page n'en laisse entre ses marges.
   var attachmentMaxWidth: CGFloat = 360
 
-  /// La largeur de colonne du texte. Ce n'est qu'un plafond : sous cette
-  /// largeur, la page prend ce qu'on lui laisse.
-  var letterWidth: CGFloat { LayoutMetrics.letterWidth }
+  /// La largeur de colonne du texte, en points — la longueur de ligne des
+  /// réglages (64, 72 ou 80 caractères) traduite pour la police et le corps
+  /// courants. Ce n'est qu'un plafond : sous cette largeur, la page prend ce
+  /// qu'on lui laisse.
+  var letterWidth: CGFloat = LayoutMetrics.letterWidth
 
   static let page = FocusPageMetrics(
     leading: LayoutMetrics.pageLeading,
@@ -32,8 +34,11 @@ struct FocusPageMetrics: Equatable {
     isCompact: false
   )
 
-  static func resolve(width: CGFloat) -> FocusPageMetrics {
+  @MainActor
+  static func resolve(width: CGFloat, themes: ThemePreferences? = nil) -> FocusPageMetrics {
     let w = max(width, 0)
+    let letterWidth = themes.map { $0.letterWidth(bodySize: $0.theme.bodySize * $0.textScale) }
+      ?? LayoutMetrics.letterWidth
     let leading: CGFloat
     switch w {
     case ..<380: leading = 14
@@ -48,7 +53,8 @@ struct FocusPageMetrics: Equatable {
       top: w < 380 ? 4 : (w < 640 ? 10 : LayoutMetrics.pageTopInset * 0.4),
       bottom: w < 380 ? Spacing.sm : (w < 640 ? Spacing.lg : LayoutMetrics.pageBottomInset),
       isCompact: w < 420,
-      attachmentMaxWidth: max(80, min(360, w - leading - trailing))
+      attachmentMaxWidth: max(80, min(360, w - leading - trailing)),
+      letterWidth: letterWidth
     )
   }
 }
@@ -62,16 +68,36 @@ struct FocusConversationView: View {
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+  /// Tourner la page : le nom paraît dans la même frame que la bascule, les
+  /// paragraphes se posent un instant après. Les deux glissent d'un
+  /// demi-interligne dans le sens du geste — vers le haut pour « suivante »,
+  /// vers le bas pour « précédente » — assez pour donner un sens, pas assez
+  /// pour être une animation. `turnPhase` va de 0 (page qui arrive) à 1.
+  @State private var turnPhase: CGFloat = 1
+  @State private var turnOffset: CGFloat = 0
+  /// Le rang du fil précédent dans la file : c'est lui qui donne le sens.
+  @State private var lastFocusIndex: Int?
+
   private var theme: WritingTheme { themes.theme }
   private var isWriting: Bool { store.isComposerFocused }
   private var live: ConversationSession? { session ?? store.primarySession }
   private var conversation: Conversation? {
     live.flatMap { store.conversationRow($0.conversationID) }
   }
+  /// La page de l'inbox — celle qui a une file à parcourir. Une fenêtre
+  /// détachée lit UN fil et ne tourne jamais de page.
+  private var isPrimary: Bool { session == nil }
+
+  /// « 3 sur 12 » : où l'on en est dans la file, sans barre. Rien si le fil
+  /// ouvert n'est pas dans la file (archivé, filtré par le rail).
+  private var queueLabel: String? {
+    guard isPrimary, let index = store.focusIndex else { return nil }
+    return "\(index + 1) sur \(store.activeQueue.count)"
+  }
 
   var body: some View {
     GeometryReader { geometry in
-      page(FocusPageMetrics.resolve(width: geometry.size.width))
+      page(FocusPageMetrics.resolve(width: geometry.size.width, themes: themes))
     }
   }
 
@@ -89,16 +115,26 @@ struct FocusConversationView: View {
         }
 
         if let conversation {
-          Text(conversation.title)
-            .font(Typography.toolbarPhrase(themes.typeface))
-            .foregroundStyle(theme.inkTertiary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.md)
-            .opacity(isWriting ? 0 : 1)
-            .accessibilityHidden(isWriting)
+          HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            Text(conversation.title)
+              .font(Typography.toolbarPhrase(themes.typeface))
+              .foregroundStyle(theme.inkTertiary)
+              .lineLimit(1)
+              .truncationMode(.tail)
+            if let queueLabel, !metrics.isCompact {
+              Text(queueLabel)
+                .font(Typography.meta(themes.typeface))
+                .foregroundStyle(theme.inkTertiary.opacity(0.8))
+                .monospacedDigit()
+                .accessibilityLabel("Conversation \(queueLabel)")
+            }
+          }
+          .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.md)
+          .opacity(isWriting ? 0 : turnPhase)
+          .offset(y: (1 - turnPhase) * turnOffset)
+          .accessibilityHidden(isWriting)
 
-          FocusTranscriptView(session: live, metrics: metrics)
+          FocusTranscriptView(session: live, metrics: metrics, turnOffset: turnOffset * 1.6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
           VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -120,6 +156,26 @@ struct FocusConversationView: View {
       .padding(.trailing, metrics.trailing)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .animation(chromeAnimation, value: isWriting)
+
+      // Les lisières : survoler le bord gauche ou droit de la page montre une
+      // flèche pâle à hauteur de lecture. Les chevrons de la barre fantôme
+      // restent ; ceux-ci sont là où l'œil est. Pas dans une fenêtre serrée,
+      // où la marge ne les loge pas, ni dans une fenêtre détachée, qui n'a
+      // pas de file.
+      if isPrimary, !metrics.isCompact {
+        FocusEdgeTurn(direction: .previous, isEnabled: canTurn(-1)) { turn(-1) }
+          .frame(maxHeight: .infinity)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .opacity(isWriting ? 0.34 : 1)
+        FocusEdgeTurn(direction: .next, isEnabled: canTurn(1)) { turn(1) }
+          .frame(maxHeight: .infinity)
+          .frame(maxWidth: .infinity, alignment: .trailing)
+          .opacity(isWriting ? 0.34 : 1)
+      }
+    }
+    .onChange(of: live?.conversationID) { _, _ in
+      guard isPrimary else { return }
+      noteTurn(to: store.focusIndex)
     }
   }
 
@@ -127,6 +183,95 @@ struct FocusConversationView: View {
     reduceMotion ? nil : .easeOut(duration: 0.15)
   }
 
+  private func canTurn(_ step: Int) -> Bool {
+    guard let index = store.focusIndex else { return false }
+    let target = index + step
+    return target >= 0 && target < store.activeQueue.count
+  }
+
+  private func turn(_ step: Int) {
+    Task { @MainActor in
+      if step > 0 { await store.focusNext() } else { await store.focusPrevious() }
+    }
+  }
+
+  /// La page tourne : sens du geste depuis le rang dans la file, phase remise
+  /// à zéro sans animer, puis ramenée à un — au tour de boucle suivant, pour
+  /// que les deux écritures ne se fondent pas en une seule.
+  private func noteTurn(to index: Int?) {
+    defer { lastFocusIndex = index }
+    let direction: CGFloat
+    switch (lastFocusIndex, index) {
+    case let (old?, new?) where new > old: direction = 1
+    case let (old?, new?) where new < old: direction = -1
+    default: direction = 0
+    }
+    guard !reduceMotion else { return }
+    turnOffset = 6 * direction
+    var transaction = Transaction()
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { turnPhase = 0 }
+    DispatchQueue.main.async {
+      withAnimation(.easeOut(duration: 0.32)) { turnPhase = 1 }
+    }
+  }
+
+}
+
+/// Une lisière de la page : une bande de survol qui n'attrape rien (la
+/// sélection de texte reste libre), et une flèche qui n'existe qu'au survol —
+/// elle seule prend le clic.
+struct FocusEdgeTurn: View {
+  enum Direction {
+    case previous, next
+
+    var systemImage: String { self == .next ? "chevron.right" : "chevron.left" }
+    var label: String { self == .next ? "Conversation suivante" : "Conversation précédente" }
+    var hint: String { self == .next ? "suivante ⌘↓" : "⌘↑ précédente" }
+  }
+
+  var direction: Direction
+  var isEnabled: Bool
+  var action: () -> Void
+
+  @Environment(ThemePreferences.self) private var themes
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var isHovered = false
+
+  private var theme: WritingTheme { themes.theme }
+  private var isShown: Bool { isHovered && isEnabled }
+
+  var body: some View {
+    ZStack(alignment: .bottom) {
+      HoverZone { hovering in
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { isHovered = hovering }
+      }
+      .accessibilityHidden(true)
+
+      Button(action: action) {
+        Image(systemName: direction.systemImage)
+          .font(.system(size: 17, weight: .medium))
+          .foregroundStyle(theme.inkTertiary)
+          .frame(width: 32, height: 44)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(direction.label)
+      .accessibilityLabel(direction.label)
+      .frame(maxHeight: .infinity)
+      .opacity(isShown ? 1 : 0)
+      .offset(x: isShown ? 0 : (direction == .next ? -6 : 6))
+      .allowsHitTesting(isShown)
+
+      Text(direction.hint)
+        .font(Typography.meta(themes.typeface))
+        .foregroundStyle(theme.inkTertiary.opacity(0.8))
+        .padding(.bottom, Spacing.lg)
+        .opacity(isShown ? 1 : 0)
+        .accessibilityHidden(true)
+    }
+    .frame(width: LayoutMetrics.focusEdgeTurnWidth)
+  }
 }
 
 /// Fil en prose — le brouillon est le dernier paragraphe de la page.
@@ -137,11 +282,30 @@ struct FocusTranscriptView: View {
   /// Faux quand la page pose elle-même le composer sous le fil — c'est le cas
   /// de la fenêtre détachée, où le composer ne doit jamais défiler hors de vue.
   var includesEditor = true
+  /// D'où la page arrive quand elle tourne (cf. `FocusConversationView`) :
+  /// le fil glisse de cette hauteur en se posant. Zéro = il paraît sur place.
+  var turnOffset: CGFloat = 0
 
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var isShowingThread = false
+  /// La page paraît par sa QUEUE, comme le fil de l'Inbox : les vingt derniers
+  /// paragraphes d'abord, le reste monté au-dessus par paliers d'une frame,
+  /// hors champ — le bas tient, rien ne bouge à l'écran. Avant, les cent vingt
+  /// paragraphes se construisaient d'un bloc, page blanche pendant ce temps :
+  /// c'est ce qui faisait paraître la bascule lente. `nil` = entier.
+  @State private var launchTail: Int? = ThreadMetrics.launchTailCount
+  /// Le compte de messages pour lequel une expansion est programmée : si le
+  /// fil a changé entre-temps, la passe suivante reprogrammera la sienne.
+  @State private var pendingExpansionCount: Int?
+  /// L'encre dit ce qui est nouveau : ce qu'on avait déjà lu en ouvrant la
+  /// page reste en encre secondaire, ce qui est arrivé depuis — et ce qu'on
+  /// écrit — est en encre pleine. L'œil sait où reprendre, sans pastille.
+  /// Vide quand rien n'était nouveau : une page sans nouvelle se lit entière,
+  /// pas grise. Figé à l'ouverture, jusqu'à la page suivante.
+  @State private var readIDs: Set<String> = []
+  @State private var hasSettledInk = false
   /// Faux tant que la page se met en place : à l'ouverture d'une conversation,
   /// les vingt derniers paragraphes ne doivent pas se tracer un par un.
   @State private var animatesArrivals = false
@@ -174,8 +338,17 @@ struct FocusTranscriptView: View {
   private var isWriting: Bool { store.isComposerFocused }
   private var live: ConversationSession? { session ?? store.primarySession }
   private var conversationID: String? { live?.conversationID }
-  private var thread: [ChatMessage] { awaitsFirstFrame ? [] : (live?.messages ?? []) }
+  /// Tout ce que la session connaît — ce que le fil MONTE est `thread`.
+  private var fullThread: [ChatMessage] { awaitsFirstFrame ? [] : (live?.messages ?? []) }
+  private var thread: [ChatMessage] {
+    guard let tail = launchTail else { return fullThread }
+    return Array(fullThread.suffix(tail))
+  }
   private var row: Conversation? { conversationID.flatMap { store.conversationRow($0) } }
+  /// L'ancre du vrai bas de la page — sous la marge basse, pas sous le
+  /// brouillon : `scrollTo(id, anchor: .bottom)` sur le brouillon s'arrêtait
+  /// une marge trop haut.
+  private static let bottomAnchorID = "focus-bottom"
 
   /// Le geste choisi dans les réglages — encre ou plume.
   private var arrival: MessageArrival { themes.messageArrival }
@@ -211,8 +384,17 @@ struct FocusTranscriptView: View {
     }
   }
 
+  /// La grande marge basse fait respirer l'éditeur QUAND il vit dans le fil —
+  /// la page se termine par sa réponse, comme une lettre. Posé dessous
+  /// (fenêtre détachée, réponse rapide), elle ne laisserait qu'un grand vide
+  /// entre le dernier message et lui. (Une « ligne de lecture » à 60 % de la
+  /// hauteur, façon machine à écrire, a été essayée et retirée : la page
+  /// finie se lit avec sa réponse en bas.)
+  private var bottomInset: CGFloat { includesEditor ? metrics.bottom : Spacing.sm }
+
   var body: some View {
-    ScrollViewReader { proxy in
+    let inset = bottomInset
+    return ScrollViewReader { proxy in
       ScrollView {
         // Pile simple, et surtout pas paresseuse. Un `LazyVStack` ancré en bas
         // sur des lignes hautes et inégales — des photos — ne converge jamais :
@@ -272,7 +454,11 @@ struct FocusTranscriptView: View {
                       mentions: MentionHighlight.withAgents(live?.mentionCandidates.map(\.name) ?? [])
                     )
                       .font(pageFont)
-                      .foregroundStyle(theme.ink.opacity(message.isFromMe ? 0.72 : 1))
+                      .foregroundStyle(
+                        (readIDs.contains(message.id) ? theme.inkSecondary : theme.ink)
+                          .opacity(message.isFromMe ? 0.72 : 1)
+                      )
+                      .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: readIDs.isEmpty)
                       // L'interligne DE LETTRE du thème, entier : la page Focus
                       // est de la prose, et la prose se lit aérée. Il suit
                       // l'échelle comme le corps — les deux vont ensemble.
@@ -322,17 +508,15 @@ struct FocusTranscriptView: View {
               ) {
                 SendLaterPicker()
               }
-          } else {
-            // Sans composer dans le fil, il faut tout de même une ancre en bas.
-            Color.clear
-              .frame(height: 1)
-              .id("draft")
           }
         }
-        // La grande marge basse fait respirer l'éditeur QUAND il vit dans le
-        // fil ; posé dessous (fenêtre détachée, réponse rapide), elle ne
-        // laisserait qu'un grand vide entre le dernier message et lui.
-        .padding(.bottom, includesEditor ? metrics.bottom : Spacing.sm)
+        .padding(.bottom, inset)
+        // L'ancre du vrai bas — c'est elle qu'on vise, jamais le brouillon.
+        .overlay(alignment: .bottom) {
+          Color.clear
+            .frame(height: 1)
+            .id(Self.bottomAnchorID)
+        }
       }
       .defaultScrollAnchor(.bottom)
       .scrollIndicators(.never)
@@ -349,38 +533,41 @@ struct FocusTranscriptView: View {
         }
       }
       .opacity(isShowingThread ? 1 : 0)
+      .offset(y: isShowingThread ? 0 : turnOffset)
       .overlay {
         MacOverlayScrollerHider()
           .allowsHitTesting(false)
       }
       // Une réaction, une citation, un aperçu qui arrive après coup : la page
       // grandit sans que son compte bouge, et le bas doit tenir quand même.
-      // L'ancre est le brouillon ; sous lui, la marge basse de la page fait
-      // partie du « bas ».
-      .keepScrolledToBottom(
-        threshold: (includesEditor ? metrics.bottom : Spacing.sm) + 24,
-        isNearBottom: $isNearBottom
-      ) { keepBottom(proxy) }
+      .keepScrolledToBottom(isNearBottom: $isNearBottom) { keepBottom(proxy) }
       .onAppear { pinToBottom(proxy) }
       .task {
         guard awaitsFirstFrame else { return }
+        // Langue et liens des paragraphes se calculent sur un autre cœur
+        // pendant qu'AppKit monte la fenêtre : la page les trouve prêts.
+        ThreadPrewarm.schedule(live?.messages ?? [])
         await LaunchGate.firstWindowOnScreen()
         awaitsFirstFrame = false
         pinToBottom(proxy)
       }
-      .onChange(of: thread.count) { oldCount, newCount in
-        // « Répondre… » est l'ancre : on la recale sans animer, le geste se
-        // joue dans le paragraphe. Animer ici ferait glisser le bas de la page.
+      .onChange(of: fullThread.count) { oldCount, newCount in
+        // Le bas est l'ancre : on le recale sans animer, le geste se joue
+        // dans le paragraphe. Animer ici ferait glisser le bas de la page.
         noteArrival(increased: newCount > oldCount)
         pinToBottom(proxy)
       }
       // Redimensionner une fenêtre détachée ne doit pas renvoyer le fil à son
       // début : le bas de la page est ce qu'on lit.
       .onChange(of: metrics) { _, _ in
-        proxy.scrollTo("draft", anchor: .bottom)
+        proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
       }
       .onChange(of: conversationID) { _, _ in
+        LaunchTrace.event("select")
         isShowingThread = false
+        launchTail = ThreadMetrics.launchTailCount
+        readIDs = []
+        hasSettledInk = false
         animatesArrivals = false
         settledMessageID = thread.last?.id
         inkLedger.reset()
@@ -437,22 +624,68 @@ struct FocusTranscriptView: View {
     guard isNearBottom else { return }
     var transaction = Transaction()
     transaction.disablesAnimations = true
-    withTransaction(transaction) { proxy.scrollTo("draft", anchor: .bottom) }
+    withTransaction(transaction) { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
   }
 
   private func pinToBottom(_ proxy: ScrollViewProxy) {
-    proxy.scrollTo("draft", anchor: .bottom)
+    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+    ThreadPrewarm.schedule(fullThread)
     DispatchQueue.main.async {
-      proxy.scrollTo("draft", anchor: .bottom)
+      proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
       // Tant que le fil n'est pas arrivé, rien n'est « posé » ni à montrer.
       guard !awaitsFirstFrame else { return }
-      isShowingThread = true
+      // La page se pose : un fondu et le glissement du geste, jamais plus.
+      withAnimation(reduceMotion ? nil : .easeOut(duration: 0.32)) { isShowingThread = true }
+      // Les mêmes jalons que le fil de l'Inbox : `tools/launch` les relit.
+      LaunchTrace.mark("thread")
+      LaunchTrace.event("shown", fullThread.count)
+      LaunchBench.noteShown(count: fullThread.count)
       LaunchGate.markThreadPainted()
+      expandTail()
+      settleInk()
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = thread.last?.id
       // Une page encore vide n'arme pas le geste : ce qui va la remplir est un
       // chargement, pas une arrivée. Cf. `ThreadView`.
       animatesArrivals = !thread.isEmpty
+    }
+  }
+
+  /// Ce qui était déjà lu à l'ouverture — le compte de non-lus au moment de
+  /// la sélection le dit. Une seule fois par page, sur la page de l'inbox
+  /// (une fenêtre détachée n'a pas ce compte), et seulement s'il y a du neuf.
+  private func settleInk() {
+    guard isPrimary, !hasSettledInk, !fullThread.isEmpty else { return }
+    hasSettledInk = true
+    let fresh = store.unreadAtSelection
+    guard fresh > 0, fresh < fullThread.count else { return }
+    readIDs = Set(fullThread.prefix(fullThread.count - fresh).map(\.id))
+  }
+
+  /// La queue est peinte ; le reste de la page monte au-dessus, hors champ,
+  /// par paliers d'une frame — cf. `ThreadView`, même mécanique, mêmes bornes.
+  private func expandTail() {
+    guard launchTail != nil, !fullThread.isEmpty else { return }
+    let count = fullThread.count
+    pendingExpansionCount = count
+    Task { @MainActor in
+      // Un court délai, pour que la frame de la queue parte avant ; puis les
+      // mémos de langue et de liens, s'ils sont encore en route — un temps
+      // borné, jamais au prix de la page.
+      try? await Task.sleep(for: .milliseconds(80))
+      await ThreadPrewarm.ready(within: .milliseconds(250))
+      guard pendingExpansionCount == count, fullThread.count == count else { return }
+      while let tail = launchTail, tail < count {
+        launchTail = tail + ThreadMetrics.expansionStep
+        try? await Task.sleep(for: .milliseconds(16))
+        guard pendingExpansionCount == count, fullThread.count == count else { return }
+      }
+      pendingExpansionCount = nil
+      launchTail = nil
+      DispatchQueue.main.async {
+        LaunchTrace.mark("thread-full")
+        LaunchTrace.event("full", count)
+      }
     }
   }
 

@@ -51,7 +51,8 @@ fenêtres ; tout ce que Focus sait faire dans l'inbox, il le sait faire détach�
    enregistrement Carbon `RegisterEventHotKey` (pas de permission Accessibilité nécessaire pour un hotkey) ; icône de
    barre de menus optionnelle (`MenuBarExtra`) avec le compteur non lus.
 3. **Contenu** : par défaut le **fil non lu le plus récent** ; ⌘↑/⌘↓ passent au suivant ; ⌘K ouvre un mini-sélecteur
-   (recherche de la liste, réutilise l'index de recherche P0). Envoi = Entrée ; Échap ferme ; le panneau se ferme aussi
+   (recherche de la liste, réutilise l'index de recherche P0). Fait, et le même ⌘K ouvre la feuille de garde
+   dans l'inbox (`FocusJumpSheet`) : la page tourne sans quitter le Focus. Envoi = Entrée ; Échap ferme ; le panneau se ferme aussi
    après envoi si « Fermer après envoi » (on par défaut).
 4. **Depuis une notification** : action « Répondre » inline (`UNTextInputNotificationAction`) déjà possible sans panneau ;
    « Ouvrir en réponse rapide » comme seconde action.

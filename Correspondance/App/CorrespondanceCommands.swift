@@ -136,6 +136,12 @@ struct CorrespondanceCommands: Commands {
       }
       .keyboardShortcut(.upArrow, modifiers: [.command])
 
+      // La même touche que la réponse rapide : ⌘K ouvre la feuille de garde.
+      Button("Aller à une conversation…") {
+        store.isPresentingJump.toggle()
+      }
+      .keyboardShortcut("k", modifiers: [.command])
+
       Button(archiveTitle) {
         Task { @MainActor in
           guard let id = archiveTarget else { return }

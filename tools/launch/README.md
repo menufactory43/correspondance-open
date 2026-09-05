@@ -149,3 +149,25 @@ trackpad synthétique de 8 s (phases began/changed/ended, `scratchpad/scroll`).
   au lieu d'un bloc. Ce qui reste : ~3 ms par bulle de construction SwiftUI
   (corps, ~15 modificateurs, `Text` attribué) — à mesurer modificateur par
   modificateur sur 130 rangées, pas sur la queue de 20.
+
+## Septembre 2026 (suite) — la page Focus tourne
+
+La page Focus montait ses cent vingt paragraphes d'un bloc, page blanche
+pendant ce temps — sans la queue d'abord ni le préchauffage du fil Inbox.
+Elle a désormais les deux (`FocusTranscriptView`, mêmes bornes que
+`ThreadMetrics`), et les mêmes jalons `EVENT select` / `EVENT shown` : le
+banc de bascule se lance en Focus avec `--args -correspondance.inboxMode focus`.
+
+Mesuré avant/après, 8 blocs alternés × 12 bascules, en Focus, latence réelle
+sélection → page montrée (médiane des médianes par run, médiane des p90) :
+
+| | médiane | p90 |
+|---|---|---|
+| avant | ~85 ms | ~305 ms |
+| après | ~92 ms | ~199 ms |
+
+La médiane ne bouge pas (bruit : ±20 ms) — un fil court se montre aussi vite
+entier que par sa queue. Ce sont les fils longs qui gagnent : ~100 ms au p90.
+La bascule elle-même se joue autrement (nom d'abord, paragraphes 50 ms
+après, glissement), ce que le banc ne voit pas.
+

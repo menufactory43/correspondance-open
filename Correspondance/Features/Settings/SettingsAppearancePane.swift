@@ -124,6 +124,22 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
+        SettingsRow(label: "Longueur de ligne", systemImage: "arrow.left.and.right.text.vertical") {
+          Picker("", selection: Binding(
+            get: { themes.lineLength },
+            set: { themes.lineLength = $0 }
+          )) {
+            ForEach(LineLengthPreset.allCases) { preset in
+              Text(preset.labelFR).tag(preset)
+            }
+          }
+          .pickerStyle(.segmented)
+          .frame(width: 220)
+          .help("La colonne de la page Focus, en caractères — elle suit la police et la taille du texte.")
+        }
+
+        SettingsDivider()
+
         SettingsRow(label: "Taille du texte", systemImage: "textformat.size") {
           HStack(spacing: Spacing.xs) {
             Slider(

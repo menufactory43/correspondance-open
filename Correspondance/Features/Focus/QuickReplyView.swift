@@ -26,7 +26,7 @@ struct QuickReplyView: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let metrics = FocusPageMetrics.resolve(width: geometry.size.width)
+      let metrics = FocusPageMetrics.resolve(width: geometry.size.width, themes: themes)
       ZStack {
         theme.paper
         if let conversation, let session {
