@@ -55,6 +55,9 @@ public actor MatrixBridgeService {
   private var dirtyRoomIDs: Set<String> = []
   /// La réconciliation avec `/joined_rooms` n'a lieu qu'une fois par lancement.
   private var didReconcileJoinedRooms = false
+  /// Salons sans réseau dont on a déjà redemandé l'état au Relais, ce
+  /// lancement-ci : un salon de gestion n'en aura jamais, inutile d'insister.
+  private var attemptedBridgeStateRepairs: Set<String> = []
   /// Les consoles d'agents déjà trouvées, par nom d'agent. Les chercher,
   /// c'est un GET d'état par salon joint : la fiche d'un fil mettait des
   /// secondes à dire ce que cc y fait. `nil` : jamais balayé. Interne, pour
@@ -132,6 +135,7 @@ public actor MatrixBridgeService {
     loadedHistoryRoomIDs = []
     dirtyRoomIDs = []
     backfilledRoomIDs = []
+    attemptedBridgeStateRepairs = []
     pendingTimelineGaps = [:]
     didReconcileJoinedRooms = false
   }
@@ -228,6 +232,7 @@ public actor MatrixBridgeService {
     parser.applyConversationState(response, to: &relayState)
     dirtyRoomIDs.formUnion(response.rooms?.join?.keys ?? [:].keys)
     let left = before.subtracting(rooms.keys)
+    await repairNetworklessPortals()
     detectManagementRooms()
     await fillTimelineGaps()
     await fetchMissingQuoteTargets()
@@ -1949,8 +1954,14 @@ public actor MatrixBridgeService {
 
   /// Un salon sans réseau (donc pas un portail) dont un membre est le bot de X est
   /// le salon de gestion de X. Les deux ponts en ont un, distinct.
+  ///
+  /// Un salon où vit un ghost n'est jamais un salon de gestion : c'est un
+  /// portail dont le réseau n'a pas encore été lu (voir
+  /// `repairNetworklessPortals`), et le prendre pour la console du pont y
+  /// ferait poster des commandes — devant le correspondant.
   private func detectManagementRooms() {
     for model in rooms.values where model.network == nil {
+      guard !model.members.keys.contains(where: MatrixIdentity.isGhost) else { continue }
       for userID in model.members.keys {
         guard let network = MatrixIdentity.network(ofBot: userID),
               managementRoomIDs[network] == nil
@@ -1958,6 +1969,51 @@ public actor MatrixBridgeService {
         managementRoomIDs[network] = model.roomID
       }
     }
+  }
+
+  /// Redemande au Relais l'état des salons rangés sans réseau alors qu'un
+  /// bot ou un ghost de pont y vit.
+  ///
+  /// Le cas vécu : l'iPhone tournait une version de l'app d'avant X et Slack
+  /// quand leurs portails sont arrivés. Le `/sync` a bien livré leur `m.bridge`,
+  /// mais `protocol.id` valait « slack » ou « twitter » — inconnus alors — et
+  /// le salon est resté sans réseau, donc sans ligne d'inbox. L'app mise à
+  /// jour n'y changeait rien : un `/sync` incrémental ne rejoue jamais un état
+  /// déjà servi, et la base relisait le salon tel quel. Résultat : « on ne
+  /// relaie pas X et Slack sur l'iPhone », alors que le Relais les servait.
+  ///
+  /// Une fois par salon et par lancement — un salon de gestion n'a pas de
+  /// `m.bridge` et n'en aura jamais. Un échec réseau laisse le salon pour la
+  /// prochaine passe.
+  private func repairNetworklessPortals() async {
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    for roomID in Self.roomsWorthRefetchingBridgeState(in: rooms)
+    where !attemptedBridgeStateRepairs.contains(roomID) {
+      guard let events = try? await client.roomStateEvents(roomID: roomID),
+            var model = rooms[roomID]
+      else { continue }
+      attemptedBridgeStateRepairs.insert(roomID)
+      parser.applyState(events, roomID: roomID, to: &model)
+      rooms[roomID] = model
+      guard let network = model.network else { continue }
+      dirtyRoomIDs.insert(roomID)
+      // Pris pour la console du pont tant qu'il n'avait pas de réseau : ce
+      // n'en est pas une.
+      if managementRoomIDs[network] == roomID { managementRoomIDs[network] = nil }
+    }
+  }
+
+  /// Les salons sans réseau où vit un bot ou un ghost de pont : ceux dont le
+  /// `m.bridge` mérite d'être relu. Un salon de gestion en fait partie — il
+  /// ressemble à un portail tant qu'on n'a pas lu son état.
+  static func roomsWorthRefetchingBridgeState(in rooms: [String: MatrixRoomModel]) -> [String] {
+    rooms.values
+      .filter { model in
+        model.network == nil
+          && model.members.keys.contains { MatrixIdentity.isGhost($0) || MatrixIdentity.isBridgeBot($0) }
+      }
+      .map(\.roomID)
+      .sorted()
   }
 
   public static func pairingCode(in body: String) -> String? {

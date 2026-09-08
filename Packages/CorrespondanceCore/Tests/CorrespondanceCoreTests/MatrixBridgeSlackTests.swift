@@ -298,3 +298,56 @@ final class MatrixBridgeSlackTests: XCTestCase {
     XCTAssertNil(MatrixBridgeService.slackInputStep(inBotMessage: "Some unrelated chatter"))
   }
 }
+
+/// Un portail rangé sans réseau par une app d'avant Slack : son `m.bridge` a
+/// été servi une fois, avec un `protocol.id` inconnu alors, et `/sync` ne le
+/// rejouera pas. C'est ce qui rendait X et Slack invisibles sur l'iPhone.
+final class MatrixBridgeStateRepairTests: XCTestCase {
+  private let me = "@meffysto:correspondance.local"
+
+  private func room(_ id: String, members: [String], network: MessageNetwork? = nil) -> MatrixRoomModel {
+    var model = MatrixRoomModel(roomID: id)
+    model.network = network
+    for member in members + [me] {
+      model.members[member] = .init(displayName: nil, membership: "join", avatarMXC: nil)
+    }
+    return model
+  }
+
+  func testOnlyNetworklessRoomsWithABridgeMemberAreRefetched() {
+    let rooms = [
+      "!dm:x": room("!dm:x", members: ["@slack_T0123-U0456:correspondance.local", "@slackbot:correspondance.local"]),
+      "!console:x": room("!console:x", members: ["@twitterbot:correspondance.local"]),
+      "!known:x": room("!known:x", members: ["@slack_T0123-U0789:correspondance.local"], network: .slack),
+      "!humans:x": room("!humans:x", members: ["@cc:correspondance.local"]),
+    ]
+    XCTAssertEqual(
+      MatrixBridgeService.roomsWorthRefetchingBridgeState(in: rooms),
+      ["!console:x", "!dm:x"],
+      "un portail sans réseau et une console possible ; jamais un salon déjà typé, ni un salon sans pont"
+    )
+  }
+
+  func testRefetchedStateGivesTheRoomItsNetworkAndItsRow() throws {
+    var model = room("!dm:x", members: ["@slack_T0123-U0456:correspondance.local", "@slackbot:correspondance.local"])
+    XCTAssertNil(model.conversation(selfUserID: me), "sans réseau, pas de ligne d'inbox")
+    let events = try JSONDecoder().decode(
+      [MatrixEvent].self,
+      from: Data(
+        """
+        [{"type":"m.bridge","state_key":"fi.mau.slack://slack/T0123/D0456",
+          "sender":"@slackbot:correspondance.local","event_id":"$b","origin_server_ts":1756500000000,
+          "content":{"bridgebot":"@slackbot:correspondance.local",
+            "protocol":{"id":"slack","displayname":"Slack"},
+            "channel":{"id":"T0123-D0456","displayname":"Rogzy"},
+            "com.beeper.room_type.v2":"dm"}}]
+        """.utf8
+      )
+    )
+    MatrixSyncParser(selfUserID: me).applyState(events, roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.network, .slack)
+    let row = try XCTUnwrap(model.conversation(selfUserID: me))
+    XCTAssertEqual(row.network, .slack)
+    XCTAssertFalse(row.isGroup)
+  }
+}
