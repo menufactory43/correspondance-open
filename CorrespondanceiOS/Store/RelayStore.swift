@@ -130,6 +130,9 @@ final class RelayStore {
   var isNotificationPrimed = false
 
   private var syncTask: Task<Void, Never>?
+  /// L'empreinte de la dernière liste écrite pour la feuille de partage
+  /// (RelayStore+Partage) : on ne réécrit pas ce qui n'a pas changé.
+  var empreinteDuPartage: Int?
   /// Les fils dont on a déjà demandé l'historique cette session.
   private var openedConversationIDs: Set<String> = []
   /// Vrai en mode démonstration : aucun réseau, des conversations en dur.
@@ -368,7 +371,11 @@ final class RelayStore {
     do {
       let fresh = try await matrix.syncOnce()
       clearSyncFailure()
-      conversations = mergedRows(fresh)
+      // Réécrite seulement si elle change : un `/sync` qui ne rapporte qu'un
+      // accusé ou une frappe recréait sinon toutes les rangées de la liste —
+      // et leurs portraits avec (mesuré sur l'iPhone, un pic de CPU par `/sync`).
+      let rows = mergedRows(fresh)
+      if rows != conversations { conversations = rows }
       reassertReadOnScreen()
       networkFlaggedRequestIDs = await matrix.networkFlaggedRequestIDs()
       await adoptRelayState()

@@ -84,9 +84,13 @@ struct MessageAvatarView: View {
     if agentGlyph != nil { return }
     // En tête-à-tête, l'auteur *est* le fil : on emprunte l'image déjà résolue
     // (carnet d'adresses, portail, mosaïque) plutôt que d'en chercher une autre.
+    // Décodé à la taille du disque, pas à celle de la photo : une photo de
+    // profil de 1024 px pèse 4 Mo décodée, et le fil en montre des dizaines.
+    let maxPixel = size * 3
     if let conversation, !conversation.isGroup {
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
-         let loaded = PlatformImage(data: data)
+         let loaded = await AttachmentThumbnailStore.shared.portrait(
+           data: data, key: "portrait|\(conversation.id)|\(data.count)|\(data.hashValue)", maxPixel: maxPixel)
       {
         image = loaded
         return
@@ -97,7 +101,10 @@ struct MessageAvatarView: View {
       senderID: message.senderID,
       network: message.network
     )
-    if let data, let loaded = PlatformImage(data: data) {
+    if let data,
+       let loaded = await AttachmentThumbnailStore.shared.portrait(
+         data: data, key: "portrait|\(taskKey)|\(data.count)|\(data.hashValue)", maxPixel: maxPixel)
+    {
       image = loaded
     }
   }

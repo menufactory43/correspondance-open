@@ -20,6 +20,25 @@ struct MessageAvatarView: View {
   @Environment(RelayStore.self) private var store
   @State private var image: PlatformImage?
 
+  init(message: ChatMessage, conversation: Conversation?, size: CGFloat = 26, theme: WritingTheme) {
+    self.message = message
+    self.conversation = conversation
+    self.size = size
+    self.theme = theme
+    // Le fil recrée ses bulles au défilement : une photo déjà décodée revient
+    // sans tâche ni décodage (cf. `ConversationAvatar`).
+    _image = State(initialValue: Self.cachedImage(message: message, conversation: conversation, size: size))
+  }
+
+  private static func cachedImage(message: ChatMessage, conversation: Conversation?, size: CGFloat) -> PlatformImage? {
+    let store = AttachmentThumbnailStore.shared
+    if let conversation, !conversation.isGroup, let mxc = conversation.remoteAvatarID, !mxc.isEmpty {
+      return store.cachedPortrait(key: "portrait|\(mxc)", maxPixel: size * 3)
+    }
+    let key = "\(conversation?.id ?? message.conversationID)|\(MessageGrouping.authorKey(message))"
+    return store.cachedPortrait(key: "portrait|\(key)", maxPixel: size * 3)
+  }
+
   var body: some View {
     ZStack {
       if let image {
@@ -49,12 +68,19 @@ struct MessageAvatarView: View {
   }
 
   private func load() async {
+    if let cached = Self.cachedImage(message: message, conversation: conversation, size: size) {
+      image = cached
+      return
+    }
     image = nil
     // En tête-à-tête, l'auteur *est* le fil : on emprunte la photo du portail.
+    // À la taille du disque (cf. `AttachmentThumbnailStore.portrait`).
+    let maxPixel = size * 3
     if let conversation, !conversation.isGroup {
       if let mxc = conversation.remoteAvatarID, !mxc.isEmpty,
          let data = await store.matrix.avatarData(mxcURI: mxc),
-         let loaded = PlatformImage(data: data)
+         let loaded = await AttachmentThumbnailStore.shared.portrait(
+           data: data, key: "portrait|\(mxc)", maxPixel: maxPixel)
       {
         image = loaded
         return
@@ -65,7 +91,10 @@ struct MessageAvatarView: View {
       conversationID: conversation?.id ?? message.conversationID,
       userID: senderID
     )
-    if let data, let loaded = PlatformImage(data: data) {
+    if let data,
+       let loaded = await AttachmentThumbnailStore.shared.portrait(
+         data: data, key: "portrait|\(taskKey)", maxPixel: maxPixel)
+    {
       image = loaded
     }
   }

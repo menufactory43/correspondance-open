@@ -2028,6 +2028,7 @@
 					"@executable_path/../Frameworks",
 				);
 				ONLY_ACTIVE_ARCH = YES;
+				ORDER_FILE = tools/launch/launch.order;
 				PRODUCT_BUNDLE_IDENTIFIER = app.correspondance.Correspondance;
 				PRODUCT_NAME = Correspondance;
 				SDKROOT = macosx;

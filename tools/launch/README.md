@@ -171,3 +171,117 @@ entier que par sa queue. Ce sont les fils longs qui gagnent : ~100 ms au p90.
 La bascule elle-même se joue autrement (nom d'abord, paragraphes 50 ms
 après, glissement), ce que le banc ne voit pas.
 
+
+## Septembre 2026 — le lancement à froid
+
+Mesuré cache disque vidé (`sudo purge`) : fenêtre à 1,8 s contre 0,7 s tiède.
+L'écart est presque entièrement de l'attente disque sur le fil principal
+(8 985 défauts de page fichier à froid contre 3 260 tiède, template App Launch,
+table `virtual-memory`) : 1,5 s dans le cache partagé dyld (SwiftUI 360 ms,
+AppKit 180, SwiftUICore 130, objc 110 — les classes et catégories que le premier
+écran fait réaliser), 250 ms dans notre binaire et les fichiers mappés (SF
+Symbols, Apple Color Emoji, ICU). Le `dlopen(WritingToolsUI)` du menu Édition
+monte à 220 ms. Nos propres fonctions n'y sont presque pour rien.
+
+Ce qu'on contrôle : l'ordre des fonctions dans `__text`. Touchées au lancement
+puis dispersées sur 34 Mo, elles coûtaient ~500 pages lues une à une ;
+`ORDER_FILE` (project.yml, Release) les range côte à côte. `orderfile.py`
+régénère `launch.order` depuis une trace App Launch symbolisée (froide, puis
+tiède) — à refaire quand le premier écran change de forme, pas à chaque commit :
+une fonction absente du fichier n'est qu'un avertissement muet de l'éditeur de
+liens. Mesuré entre deux builds fraîches, blocs alternés 8 × 2 : `main` −40 ms,
+fenêtre −110 à −160 ms tiède ; à froid, 3 paires seulement (une boîte de mot
+de passe par `purge`), médianes 2 071 → 1 950 ms, dans le bruit d'une machine
+chargée. Attention à comparer des builds du même âge : une build lancée depuis
+des jours a ses caches de lancement et part avec ~100 ms d'avance sur une
+build fraîche, et le tout premier lancement d'un binaire neuf paie Gatekeeper
+(4 s).
+
+Ce qui reste, hors de portée du code : la pagination des frameworks Apple que
+le premier écran touche. Le seul levier serait un premier écran qui en touche
+moins (liste seule, fil et composeur montés après la première image) — la
+variante « barre d'outils après la première frame » a déjà été écartée pour
+régression visible.
+
+## Septembre 2026 — l'empreinte mémoire
+
+`footprint.sh <app>` relève l'empreinte physique par catégorie chaque seconde
+après le lancement. Sur un vrai fil (150 messages montés, une centaine de
+portraits, une dizaine de photos et de cartes), la build du 8 septembre
+tenait à **391–415 Mo** dès la septième seconde, dont 164 Mo d'IOSurface,
+46 de CoreAnimation, 20 de CG raster, 130 de MALLOC_SMALL. Sur un Mac à
+8 Go, c'est ce qui évinçait le cache disque et rendait chaque lancement
+« froid » (cf. section précédente).
+
+Ce que les IOSurface étaient — trouvé en parcourant l'arbre de couches
+d'une instance vivante sous lldb (`CGImageGetWidth` sur `layer.contents`) :
+88 portraits de **1024 × 1024 px** derrière des disques de 26 points, un de
+3638 × 3638 (53 Mo à lui seul), des cartes Instagram et X à leur taille de
+fichier. `PlatformImage(data:)` livrait la photo entière à SwiftUI, qui la
+gardait telle quelle. Deux changements :
+
+- **Les portraits se décodent à la taille du disque** (`AttachmentThumbnailStore.portrait`,
+  ImageIO avec `kCGImageSourceThumbnailMaxPixelSize` = 3 × la taille en
+  points), dans le même cache que les vignettes, désormais **borné en octets**
+  (64 Mo) et non plus en nombre (240 vignettes pouvaient faire 400 Mo).
+- **Les photos et tuiles loin hors champ lâchent leur vignette**
+  (`viewportProximity`, CorrespondanceUI) : une sentinelle AppKit en fond de
+  chaque image écoute les bornes du `NSClipView` et ne parle qu'au
+  franchissement de deux hauteurs d'écran ; le rectangle garde sa taille, la
+  page ne bouge pas, la photo revient du cache ou du disque avant d'être à
+  l'écran. Hors de tout défilement (fiche, panneau), la sentinelle dit
+  « près » et rien ne change.
+
+Résultat, même protocole, même fil : **236 Mo** stables (IOSurface 1 Mo,
+CoreAnimation 44, CG raster 17, MALLOC_SMALL 126), soit **−40 %**. Vérifié
+à l'écran : portraits nets dans la liste et le fil, photos et cartes en place
+après un long défilement vers le haut, 243 Mo après ce défilement.
+
+Et le chrono ? Fenêtre → fil, blocs alternés 8 × 4 sur une machine qui n'a
+jamais été calme (charge 3 à 10) : build corrigée 296–369 ms, la même avec les
+deux changements désactivés par drapeau 320–349, la build témoin d'avant 336 ;
+l'écart change de signe d'une série à l'autre, donc rien de mesurable. La
+build installée depuis des jours faisait 207–250 : c'est l'âge du binaire
+(caches de lancement), pas le code — comparer des builds du même âge.
+
+Ce qui reste, et pourquoi : MALLOC_SMALL est pour l'essentiel le graphe
+SwiftUI des 150 messages montés (éléments typés, listes de vues, fermetures)
+et 80 poignées réseau de 120 Ko (`CProtocol.COptions`, Network.framework) ;
+CoreAnimation et CG raster sont les bulles de texte rasterisées, visibles ou
+non — c'est le prix de la pile non paresseuse, assumé (cf. `ThreadView`).
+
+## Septembre 2026 — l'iPhone qui chauffe
+
+Mesuré sur un iPhone 16 Pro branché, build de développement, `xctrace record
+--device … --template 'Time Profiler' --attach Correspondance`, l'app pilotée
+par argent (un fil long, six défilements, retour, second fil, retour, repos).
+Attention : le runner d'argent interroge l'arbre d'accessibilité et pèse à
+lui seul ~20 % d'un cœur ; le repos se mesure **sans** automatisation.
+
+Ce qui chauffait, par ordre :
+
+- **L'index de la feuille de partage réécrit à chaque `/sync`**
+  (`ecrireIndexDuPartage`, RelayStore+Partage) : pour chaque groupe, les
+  visages décodés en pleine résolution, la mosaïque composée, encodée en PNG,
+  puis jetée parce que la boîte avait déjà le fichier. 1,8 s de CPU sur
+  80 s d'usage, et au repos un pic de 450 ms à chaque `/sync` — c'est-à-dire
+  toutes les quelques secondes dès qu'un salon bouge. Désormais : une
+  empreinte de la liste, et rien n'est réécrit si elle n'a pas changé ; un
+  visage déjà dans la boîte n'est pas recomposé ; les visages sont réduits
+  avant la mosaïque.
+- **Les portraits décodés en pleine résolution** dans la liste, le fil et la
+  fiche, recréés à chaque recyclage de rangée (les piles y sont paresseuses) :
+  même correctif que le Mac, `AttachmentThumbnailStore.portrait`, et la vue
+  naît avec le portrait déjà en cache (pas de tâche, pas de décodage).
+- **Les mosaïques de l'inbox** composées puis passées par un PNG réencodé et
+  redécodé : `AvatarMosaic.composeImage` rend l'image directement, gardée
+  sous la clé de la mosaïque.
+- **`conversations` réécrite à chaque `/sync`** même à l'identique : toutes
+  les rangées recréées. Réassignée seulement si la liste change.
+
+Résultat, même parcours piloté (80 s actifs) : le travail d'images passe de
+1,8 s de CPU à zéro (PNG 736 → 0 ms, mosaïques 1 177 → 0, JPEG 347 → 58) ;
+au repos sans automatisation, **1,8 % → 0,2 % d'un cœur** sur 60 s, le seul
+reste étant le `/sync` lui-même (~100 ms par retour). Le fil principal
+pendant le défilement ne bouge pas (15 s sur 80) : c'est SwiftUI qui place
+et dessine, plus le runner d'argent.

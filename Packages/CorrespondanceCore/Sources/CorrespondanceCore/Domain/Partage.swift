@@ -265,6 +265,14 @@ public struct PartageBoite: Sendable {
     return try? Self.decoder.decode(Partage.Index.self, from: data)
   }
 
+  /// Le nom de la photo déjà posée sous cette clé, s'il y en a une : ce qui
+  /// permet de ne pas la refabriquer (une mosaïque se compose, se décode et
+  /// s'encode ; à chaque `/sync`, ça chauffait l'iPhone pour rien).
+  public func avatarPose(cle: String) -> String? {
+    let nom = Self.nomSur(cle) + ".img"
+    return FileManager.default.fileExists(atPath: avatars.appendingPathComponent(nom).path) ? nom : nil
+  }
+
   /// Pose une photo, nommée d'après ce qui l'identifie (un `mxc`, un chemin) :
   /// la même photo n'est écrite qu'une fois. Rend le nom du fichier.
   @discardableResult

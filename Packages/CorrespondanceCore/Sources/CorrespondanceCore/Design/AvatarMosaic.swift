@@ -17,6 +17,13 @@ public struct AvatarMosaic {
   /// `nil` quand il n'y a rien à montrer — l'appelant retombe alors sur les initiales.
   /// Une seule image donne le disque seul : c'est déjà la bonne réponse.
   public static func compose(_ images: [PlatformImage], size: CGFloat, separator: PlatformColor) -> Data? {
+    composeImage(images, size: size, separator: separator)?.pngData()
+  }
+
+  /// La même mosaïque, sans passer par un PNG : ce qu'une vue affiche tout de
+  /// suite. L'aller-retour PNG (encoder, puis redécoder) coûtait un tiers du
+  /// temps de défilement sur l'iPhone.
+  public static func composeImage(_ images: [PlatformImage], size: CGFloat, separator: PlatformColor) -> CGImage? {
     guard !images.isEmpty, size > 0 else { return nil }
     let tiles = Array(images.prefix(4))
     let side = Int((size * Self.scale).rounded())
@@ -55,8 +62,7 @@ public struct AvatarMosaic {
       draw(tiles[index], in: frame, context: context)
     }
 
-    guard let output = context.makeImage() else { return nil }
-    return output.pngData()
+    return context.makeImage()
   }
 
   /// Gabarits en carré unité, repère écran. Les tailles suivent Messages :

@@ -184,6 +184,10 @@ targets:
         # distribution ignore ce réglage et reste universelle.
         Release:
           ONLY_ACTIVE_ARCH: YES
+          # Les fonctions touchées au lancement, rangées côte à côte dans
+          # `__text` : à froid, le noyau lit moins de pages du binaire.
+          # Régénéré par `tools/launch/orderfile.py` (cf. README du dossier).
+          ORDER_FILE: tools/launch/launch.order
     info:
       path: Correspondance/Info.plist
       properties:

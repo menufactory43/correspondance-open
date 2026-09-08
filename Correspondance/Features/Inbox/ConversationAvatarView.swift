@@ -94,8 +94,12 @@ struct ConversationAvatarView: View {
       if !LaunchGate.didPaintFirstThread {
         await LaunchGate.firstThreadOnScreen()
       }
+      // À la taille du disque (cf. `AttachmentThumbnailStore.portrait`) : la
+      // photo entière derrière 36 points, c'était jusqu'à 53 Mo pour un seul
+      // portrait de 3638 px.
       if let data = await ConversationAvatarStore.shared.imageData(for: conversation),
-         let loaded = PlatformImage(data: data)
+         let loaded = await AttachmentThumbnailStore.shared.portrait(
+           data: data, key: "portrait|\(conversation.id)|\(data.count)|\(data.hashValue)", maxPixel: size * 3)
       {
         image = loaded
       }

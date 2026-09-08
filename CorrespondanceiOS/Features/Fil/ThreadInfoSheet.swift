@@ -778,7 +778,8 @@ struct MemberAvatar: View {
       guard let userID else { return }
       guard let data = await store.matrix.memberAvatarData(conversationID: conversationID, userID: userID)
       else { return }
-      image = PlatformImage(data: data)
+      image = await AttachmentThumbnailStore.shared.portrait(
+        data: data, key: "portrait|\(userID)|\(data.count)", maxPixel: size * 3)
     }
     .accessibilityHidden(true)
   }

@@ -26,8 +26,12 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
   private let worker = ThumbnailWorker()
 
   private init() {
-    // Une vignette de 640 px ≈ 1,6 Mo : 240 vignettes ≈ 400 Mo au pire, et le
-    // système vide le cache avant d'en arriver là.
+    // Une vignette de 640 px ≈ 1,6 Mo. Borné en octets, pas en nombre : à
+    // 240 vignettes le cache pouvait tenir 400 Mo, et « le système vide le
+    // cache avant » n'est vrai que sous pression — sur un Mac à 8 Go, c'est
+    // le cache disque qui partait d'abord. 64 Mo ≈ quarante photos, bien
+    // plus que ce qu'un écran et sa marge montrent (cf. `viewportProximity`).
+    cache.totalCostLimit = 64 * 1024 * 1024
     cache.countLimit = 240
     // Une taille pèse seize octets : on peut en garder beaucoup.
     sizes.countLimit = 4_000
@@ -81,14 +85,12 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
   public func thumbnail(for url: URL, maxPixel: CGFloat) async -> PlatformImage? {
     let key = Self.cacheKey(url: url, maxPixel: maxPixel) as NSString
     if let hit = cache.object(forKey: key) { return hit }
-    let image = await worker.decode(url: url, maxPixel: maxPixel) { [self] in
-      // Deux vues peuvent demander le même fichier (le fil et la fenêtre
-      // Focus) : celle qui passe en second récupère ce que la première a
-      // décodé plutôt que de recommencer.
-      cached(for: url, maxPixel: maxPixel)
-    }
+    let image = await worker.run(
+      alreadyDone: { [self] in cached(for: url, maxPixel: maxPixel) },
+      produce: { Self.downsample(url: url, maxPixel: maxPixel) }
+    )
     if let image {
-      cache.setObject(image, forKey: key)
+      cache.setObject(image, forKey: key, cost: Self.cost(of: image))
     }
     return image
   }
@@ -96,6 +98,50 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
   /// La clé porte la date de modification et la taille du fichier : un média
   /// remplacé sur disque (pont qui finit son téléchargement) ne ressort pas
   /// avec l'ancienne vignette.
+  /// Un portrait tenu en mémoire (photo de profil, mosaïque), décodé **à la
+  /// taille où il se montre**. `PlatformImage(data:)` livrait la photo entière
+  /// à SwiftUI, qui la gardait telle quelle derrière un disque de 26 points :
+  /// mesuré sur un fil, 88 portraits de 1024 × 1024 px (4 Mo chacun décodés),
+  /// et un de 3638 × 3638 — pour des disques de 26 et 36 points. Le résultat
+  /// vit dans le même cache borné que les vignettes, sous une clé fournie par
+  /// l'appelant (identité + empreinte des octets).
+  public func cachedPortrait(key: String, maxPixel: CGFloat) -> PlatformImage? {
+    cache.object(forKey: "\(key)|\(Int(maxPixel))" as NSString)
+  }
+
+  public func portrait(data: Data, key: String, maxPixel: CGFloat) async -> PlatformImage? {
+    let cacheKey = "\(key)|\(Int(maxPixel))"
+    if let hit = cache.object(forKey: cacheKey as NSString) { return hit }
+    let image = await worker.run(
+      alreadyDone: { [self] in cache.object(forKey: cacheKey as NSString) },
+      produce: { Self.downsample(data: data, maxPixel: maxPixel) }
+    )
+    if let image {
+      cache.setObject(image, forKey: cacheKey as NSString, cost: Self.cost(of: image))
+    }
+    return image
+  }
+
+  /// Range un portrait déjà prêt (une mosaïque composée) sous la même clé
+  /// que `portrait(data:key:maxPixel:)` le rendrait.
+  public func remember(_ image: PlatformImage, key: String, maxPixel: CGFloat) {
+    cache.setObject(image, forKey: "\(key)|\(Int(maxPixel))" as NSString, cost: Self.cost(of: image))
+  }
+
+  /// La même réduction qu'un fichier, depuis des octets en mémoire.
+  public static func downsample(data: Data, maxPixel: CGFloat) -> PlatformImage? {
+    let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
+    guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
+      return nil
+    }
+    return downsample(source: source, maxPixel: maxPixel)
+  }
+
+  /// Ce que la vignette pèse décodée : quatre octets par pixel.
+  private static func cost(of image: PlatformImage) -> Int {
+    Int(image.size.width * image.size.height * 4)
+  }
+
   private static func cacheKey(url: URL, maxPixel: CGFloat) -> String {
     let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
     let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
@@ -115,6 +161,10 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
     guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions as CFDictionary) else {
       return nil
     }
+    return downsample(source: source, maxPixel: maxPixel)
+  }
+
+  private static func downsample(source: CGImageSource, maxPixel: CGFloat) -> PlatformImage? {
     let thumbnailOptions: [CFString: Any] = [
       kCGImageSourceCreateThumbnailFromImageAlways: true,
       // Une photo prise à la verticale porte son orientation en métadonnée :
@@ -145,9 +195,8 @@ public final class AttachmentThumbnailStore: @unchecked Sendable {
 /// train de regarder, elle passe donc devant.
 private final class ThumbnailWorker: @unchecked Sendable {
   private struct Job {
-    let url: URL
-    let maxPixel: CGFloat
     let alreadyDone: @Sendable () -> PlatformImage?
+    let produce: @Sendable () -> PlatformImage?
     let resume: @Sendable (PlatformImage?) -> Void
   }
 
@@ -156,13 +205,12 @@ private final class ThumbnailWorker: @unchecked Sendable {
   private var pending: [Job] = []
   private var draining = false
 
-  func decode(
-    url: URL,
-    maxPixel: CGFloat,
-    alreadyDone: @escaping @Sendable () -> PlatformImage?
+  func run(
+    alreadyDone: @escaping @Sendable () -> PlatformImage?,
+    produce: @escaping @Sendable () -> PlatformImage?
   ) async -> PlatformImage? {
     await withCheckedContinuation { continuation in
-      let job = Job(url: url, maxPixel: maxPixel, alreadyDone: alreadyDone) {
+      let job = Job(alreadyDone: alreadyDone, produce: produce) {
         continuation.resume(returning: $0)
       }
       lock.lock()
@@ -185,11 +233,7 @@ private final class ThumbnailWorker: @unchecked Sendable {
         return
       }
       lock.unlock()
-      if let done = job.alreadyDone() {
-        job.resume(done)
-      } else {
-        job.resume(AttachmentThumbnailStore.downsample(url: job.url, maxPixel: job.maxPixel))
-      }
+      job.resume(job.alreadyDone() ?? job.produce())
     }
   }
 }

@@ -83,7 +83,10 @@ actor ConversationAvatarStore {
   ) async -> Data? {
     var images: [PlatformImage] = []
     for id in ids {
-      guard let data = await loader(id), let image = PlatformImage(data: data) else { continue }
+      // Une tuile de mosaïque fait 22 points : inutile de décoder la photo entière.
+      guard let data = await loader(id),
+            let image = AttachmentThumbnailStore.downsample(data: data, maxPixel: 128)
+      else { continue }
       images.append(image)
     }
     return AvatarMosaic.compose(images, size: 44, separator: .platformWindowBackground)

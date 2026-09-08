@@ -13,7 +13,9 @@ import CorrespondanceCore
 ///   monde, ce qui découvre d'autres photos, sans fin ;
 /// - si la vignette est déjà en mémoire, la vue naît avec. Le `LazyVStack`
 ///   détruit et reconstruit les bulles qui sortent de l'écran ; sans ça,
-///   chacune repasserait par le rectangle d'attente à chaque recyclage.
+///   chacune repasserait par le rectangle d'attente à chaque recyclage ;
+/// - loin hors champ, la vignette est **lâchée** (`viewportProximity`) : le
+///   rectangle reste, la mémoire part, et la photo revient à l'approche.
 public struct AttachmentImageView<Unavailable: View>: View {
   public let url: URL
   public var maxWidth: CGFloat
@@ -31,8 +33,18 @@ public struct AttachmentImageView<Unavailable: View>: View {
   }
 
   @State private var load: Load
+  /// Près de la partie visible du fil, dit par `viewportProximity`. Tant que
+  /// la lisière n'a rien dit, la photo attend : dans un fil de cent cinquante
+  /// messages monté d'un bloc, la plupart des photos sont loin hors champ, et
+  /// les décoder toutes coûtait 166 Mo d'IOSurface à demeure.
+  @State private var isNear = false
   /// Taille d'affichage, connue avant la photo elle-même.
   private let fitted: CGSize
+
+  private struct LoadKey: Hashable {
+    let url: URL
+    let isNear: Bool
+  }
 
   public init(
     url: URL,
@@ -82,12 +94,20 @@ public struct AttachmentImageView<Unavailable: View>: View {
 
   public var body: some View {
     content
-      .task(id: url) {
-        guard case .loading = load else { return }
+      .viewportProximity { near in
+        isNear = near
+        // Loin : la vignette est lâchée, le rectangle garde sa taille — rien
+        // ne bouge dans la page. Elle revient du cache, ou du disque, avant
+        // que la bulle ne repasse à l'écran.
+        if !near, case .ready = load { load = .loading }
+      }
+      .task(id: LoadKey(url: url, isNear: isNear)) {
+        guard isNear, case .loading = load else { return }
         let image = await AttachmentThumbnailStore.shared.thumbnail(
           for: url,
           maxPixel: Self.maxPixel(maxWidth: maxWidth, maxHeight: maxHeight)
         )
+        guard !Task.isCancelled else { return }
         load = image.map(Load.ready) ?? .failed
       }
   }

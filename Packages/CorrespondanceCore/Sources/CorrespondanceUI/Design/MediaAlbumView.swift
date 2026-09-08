@@ -103,6 +103,13 @@ public struct MediaTileImage: View {
   public var accentInk: Color
 
   @State private var image: PlatformImage?
+  /// Près du visible, dit par `viewportProximity` — cf. `AttachmentImageView`.
+  @State private var isNear = false
+
+  private struct LoadKey: Hashable {
+    let url: URL?
+    let isNear: Bool
+  }
 
   public init(
     url: URL?,
@@ -146,9 +153,15 @@ public struct MediaTileImage: View {
             .background(.black.opacity(0.45), in: Circle())
         }
       }
-      .task(id: url) {
-        guard image == nil, let url else { return }
-        image = await MediaThumbnails.thumbnail(for: url, isVideo: isVideo)
+      .viewportProximity { near in
+        isNear = near
+        if !near { image = nil }
+      }
+      .task(id: LoadKey(url: url, isNear: isNear)) {
+        guard isNear, image == nil, let url else { return }
+        let loaded = await MediaThumbnails.thumbnail(for: url, isVideo: isVideo)
+        guard !Task.isCancelled else { return }
+        image = loaded
       }
   }
 }

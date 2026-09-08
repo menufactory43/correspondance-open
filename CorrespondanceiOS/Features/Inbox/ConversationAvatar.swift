@@ -19,6 +19,30 @@ struct ConversationAvatar: View {
   @Environment(RelayStore.self) private var store
   @State private var image: PlatformImage?
 
+  init(conversation: Conversation, size: CGFloat = 46, theme: WritingTheme, showsNetworkBadge: Bool = true) {
+    self.conversation = conversation
+    self.size = size
+    self.theme = theme
+    self.showsNetworkBadge = showsNetworkBadge
+    // La liste recrée ses rangées à chaque défilement et à chaque `/sync` :
+    // une photo déjà décodée se retrouve ici sans tâche, sans décodage, et
+    // sans recomposer une mosaïque (mesuré sur l'iPhone : PNG réencodé à
+    // chaque passage, un quart de cœur au repos).
+    _image = State(initialValue: Self.cachedImage(for: conversation, size: size))
+  }
+
+  private static func cachedImage(for conversation: Conversation, size: CGFloat) -> PlatformImage? {
+    let store = AttachmentThumbnailStore.shared
+    if let mxc = conversation.remoteAvatarID, !mxc.isEmpty {
+      return store.cachedPortrait(key: "portrait|\(mxc)", maxPixel: size * 3)
+    }
+    return store.cachedPortrait(key: "mosaic|\(Self.avatarKey(of: conversation))", maxPixel: size * 3)
+  }
+
+  private static func avatarKey(of conversation: Conversation) -> String {
+    "\(conversation.id)|\(conversation.remoteAvatarID ?? "")|\(conversation.memberAvatarIDs.joined(separator: ","))"
+  }
+
   private var initials: String {
     let parts = conversation.title
       .split(whereSeparator: { $0.isWhitespace || $0 == "-" || $0 == "·" })
@@ -84,19 +108,26 @@ struct ConversationAvatar: View {
     }
     // Une nouvelle photo côté réseau change le `mxc` : la tâche doit repartir.
     .task(id: avatarKey) {
+      if let cached = Self.cachedImage(for: conversation, size: size) {
+        image = cached
+        return
+      }
       image = nil
       image = await resolve()
     }
   }
 
-  private var avatarKey: String {
-    "\(conversation.id)|\(conversation.remoteAvatarID ?? "")|\(conversation.memberAvatarIDs.joined(separator: ","))"
-  }
+  private var avatarKey: String { Self.avatarKey(of: conversation) }
 
   private func resolve() async -> PlatformImage? {
+    // Décodée à la taille du disque, pas à celle de la photo (cf. le Mac) :
+    // une photo de profil de 1024 px pèse 4 Mo décodée, la liste en montre
+    // des dizaines, et chaque décodage complet chauffe l'appareil pour rien.
+    let maxPixel = size * 3
     if let mxc = conversation.remoteAvatarID, !mxc.isEmpty,
        let data = await store.matrix.avatarData(mxcURI: mxc),
-       let loaded = PlatformImage(data: data)
+       let loaded = await AttachmentThumbnailStore.shared.portrait(
+         data: data, key: "portrait|\(mxc)", maxPixel: maxPixel)
     {
       return loaded
     }
@@ -106,17 +137,21 @@ struct ConversationAvatar: View {
     var faces: [PlatformImage] = []
     for mxc in ids {
       guard let data = await store.matrix.avatarData(mxcURI: mxc),
-            let face = PlatformImage(data: data)
+            let face = AttachmentThumbnailStore.downsample(data: data, maxPixel: 128)
       else { continue }
       faces.append(face)
     }
     guard faces.count >= 2 else { return nil }
-    guard let composed = AvatarMosaic.compose(
+    // Composée en image, pas en PNG réencodé puis redécodé ; gardée sous la
+    // clé de la mosaïque pour que les rangées suivantes la trouvent prête.
+    guard let composed = AvatarMosaic.composeImage(
       faces,
-      size: size * 3,
+      size: size * 1.5,
       separator: .platformWindowBackground
     ) else { return nil }
-    return PlatformImage(data: composed)
+    let image = PlatformImage.from(cgImage: composed)
+    AttachmentThumbnailStore.shared.remember(image, key: "mosaic|\(avatarKey)", maxPixel: maxPixel)
+    return image
   }
 
   private var badgeTint: Color {
