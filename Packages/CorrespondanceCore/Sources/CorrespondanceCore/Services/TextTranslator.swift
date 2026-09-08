@@ -90,7 +90,19 @@ public actor TextTranslator {
   /// dessinant, et un `await` par bulle ferait clignoter le fil. Elle est
   /// mémorisée par texte — le reconnaisseur repasse sinon sur les quatre
   /// cents bulles d'un groupe à chaque accusé de lecture.
-  nonisolated(unsafe) private static let detections = NSCache<NSString, NSString>()
+  ///
+  /// Un dictionnaire sous verrou, pas un `NSCache` : celui-ci vide ses
+  /// entrées quand bon lui semble, et un fil relu après une éviction relançait
+  /// le reconnaisseur sur le fil principal, bulle par bulle — 350 ms pendant
+  /// un défilement, mesuré au `sample` sur un groupe de mille messages. Le
+  /// reconnaisseur, lui, est unique : chaque `NLLanguageRecognizer()` recharge
+  /// son modèle (130 de ces 350 ms), et il se remet à zéro entre deux textes.
+  /// Il n'est pas sûr d'un fil à l'autre : le verrou le garde aussi.
+  private static let detectionsLock = NSLock()
+  nonisolated(unsafe) private static var detections: [String: String] = [:]
+  nonisolated(unsafe) private static let recognizer = NLLanguageRecognizer()
+  /// Au-delà, on oublie tout : borne grossière, comme le mémo des liens.
+  private static let detectionsLimit = 10_000
 
   /// La langue d'un texte (`fr`, `pt`, `zh-Hans`…), ou `nil` quand on ne sait
   /// pas assez pour le dire : trop court, sans lettres, ou reconnaisseur hésitant.
@@ -99,14 +111,17 @@ public actor TextTranslator {
     guard trimmed.count >= minimumLength,
           trimmed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) })
     else { return nil }
-    if let known = detections.object(forKey: trimmed as NSString) {
-      return known.length == 0 ? nil : known as String
+    detectionsLock.lock()
+    defer { detectionsLock.unlock() }
+    if let known = detections[trimmed] {
+      return known.isEmpty ? nil : known
     }
-    let recognizer = NLLanguageRecognizer()
+    recognizer.reset()
     recognizer.processString(trimmed)
     let best = recognizer.languageHypotheses(withMaximum: 1).max { $0.value < $1.value }
     let found = best.flatMap { $0.value >= confidenceThreshold ? $0.key.rawValue : nil }
-    detections.setObject((found ?? "") as NSString, forKey: trimmed as NSString)
+    if detections.count >= detectionsLimit { detections.removeAll(keepingCapacity: true) }
+    detections[trimmed] = found ?? ""
     return found
   }
 

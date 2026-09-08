@@ -15,15 +15,17 @@ extension InboxStore {
   /// iMessage, « Annuler l'envoi » (≤ 2 min) est le seul retrait qui existe.
   func canDeleteEverywhere(_ message: ChatMessage) -> Bool {
     guard message.isFromMe, !message.isPending, !message.isSystemEvent else { return false }
-    guard let conversation = conversation(ofMessage: message) else { return false }
-    switch conversation.network {
+    // Le réseau de la bulle, pas celui lu dans `conversations` : le fil
+    // demande ceci pour chaque bulle à chaque passe, et lire `conversations`
+    // l'attachait à chaque `/sync` (cf. `ThreadFacts`).
+    switch message.network {
     case .iMessage: return false
     // La note à soi n'a personne d'autre : « pour tout le monde », c'est moi.
     case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
       // Et pas après l'heure : Signal ferme à 24 h, WhatsApp à 48 h. Passé là,
       // le pont refuse sans le dire et la bulle ne disparaîtrait que chez nous.
       return isMatrixConnected
-        && conversation.network.acceptsDeleteForEveryone(sentAt: message.sentAt)
+        && message.network.acceptsDeleteForEveryone(sentAt: message.sentAt)
     }
   }
 

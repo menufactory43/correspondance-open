@@ -22,6 +22,7 @@ final class InboxStore {
     didSet {
       if normalizeArchiveState() { return }
       if normalizeMergedContacts() { return }
+      refreshSelectedThreadFacts()
       conversationsDidChange()
     }
   }
@@ -45,7 +46,27 @@ final class InboxStore {
   private(set) var threadSearchMatchIDs: [String] = []
   /// Index du match courant dans `threadSearchMatchIDs`.
   private(set) var threadSearchCursor = 0
-  var selectedConversationID: String?
+  var selectedConversationID: String? {
+    didSet { refreshSelectedThreadFacts() }
+  }
+  /// Ce que le fil ouvert sait de sa conversation, stable d'un `/sync` à
+  /// l'autre — cf. `ThreadFacts`. `nil` sans sélection.
+  private(set) var selectedThreadFacts: ThreadFacts?
+
+  /// Recalcule les faits du fil ouvert, et ne les réécrit que s'ils ont
+  /// changé : c'est cette garde qui épargne au fil les `/sync` ordinaires.
+  private func refreshSelectedThreadFacts() {
+    var facts: ThreadFacts?
+    if let selected = selectedConversation {
+      var next = ThreadFacts(row: selected.faceOnly, lastDelivery: selected.lastDelivery)
+      if isMerged(selected.id) {
+        next.members = memberConversations(of: selected.id).map(\.faceOnly)
+        next.activeMemberID = activeMember(of: selected.id)?.id
+      }
+      facts = next
+    }
+    if facts != selectedThreadFacts { selectedThreadFacts = facts }
+  }
 
   // Le fil, le brouillon, l'envoi : rien de tout cela n'appartient au magasin,
   // tout appartient à la SESSION du fil (cf. `ConversationSession`). Ce qui
@@ -1230,8 +1251,9 @@ final class InboxStore {
     guard message.isFromMe, !message.isPending, !message.isRetracted, !message.isSystemEvent,
           !message.text.isEmpty
     else { return false }
-    guard let conversation = conversation(ofMessage: message) else { return false }
-    return conversation.network.acceptsEdit(sentAt: message.sentAt) && isMatrixConnected
+    // Le réseau de la bulle : lire `conversations` ici attachait le fil à
+    // chaque `/sync` (cf. `ThreadFacts`).
+    return message.network.acceptsEdit(sentAt: message.sentAt) && isMatrixConnected
   }
 
   // MARK: - Corriger un message envoyé

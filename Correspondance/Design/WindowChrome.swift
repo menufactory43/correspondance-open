@@ -103,13 +103,19 @@ extension View {
   /// `threshold` : la distance sous l'ancre qui compte encore comme « en bas »
   /// (la marge basse de la page Focus, par exemple).
   @ViewBuilder
+  /// `isScrolling`, s'il est donné, suit le geste du lecteur : vrai du premier
+  /// mouvement à la fin de l'inertie. Ce qui permet au fil de se rendre
+  /// insensible au survol pendant ce temps — cf. `ThreadView`.
   func keepScrolledToBottom(
     threshold: CGFloat = 24,
     isNearBottom: Binding<Bool>,
+    isScrolling: Binding<Bool>? = nil,
     keepBottom: @escaping () -> Void
   ) -> some View {
     if #available(macOS 15.0, *) {
-      modifier(KeepScrolledToBottom(threshold: threshold, isNearBottom: isNearBottom, keepBottom: keepBottom))
+      modifier(KeepScrolledToBottom(
+        threshold: threshold, isNearBottom: isNearBottom, isScrolling: isScrolling, keepBottom: keepBottom
+      ))
     } else {
       // Rien d'observable ici : on retient le bas à chaque changement de hauteur.
       background {
@@ -145,6 +151,7 @@ extension View {
 private struct KeepScrolledToBottom: ViewModifier {
   let threshold: CGFloat
   @Binding var isNearBottom: Bool
+  var isScrolling: Binding<Bool>?
   let keepBottom: () -> Void
 
   @State private var isReaderScrolling = false
@@ -196,6 +203,9 @@ private struct KeepScrolledToBottom: ViewModifier {
         isReaderScrolling = newPhase == .tracking || newPhase == .interacting || newPhase == .decelerating
         // Les bulles lisent ce drapeau : pas de rangée de survol pendant le geste.
         ThreadScrolling.isActive = isReaderScrolling
+        if let isScrolling, isScrolling.wrappedValue != isReaderScrolling {
+          isScrolling.wrappedValue = isReaderScrolling
+        }
         guard newPhase == .idle else { return }
         let geometry = context.geometry
         let visibleBottom = geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top

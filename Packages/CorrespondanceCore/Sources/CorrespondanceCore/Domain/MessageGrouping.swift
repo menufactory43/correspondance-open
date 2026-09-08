@@ -118,3 +118,12 @@ public enum MessageGrouping {
     return identifier.isEmpty ? nil : identifier
   }
 }
+
+extension MessageGroup {
+  /// `id` s'il désigne un message de ce groupe, `nil` sinon : ce qui permet à
+  /// une rangée de ne recevoir que ce qui la concerne.
+  public func owns(_ id: String?) -> String? {
+    guard let id, messages.contains(where: { $0.id == id }) else { return nil }
+    return id
+  }
+}

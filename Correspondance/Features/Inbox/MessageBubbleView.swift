@@ -80,8 +80,15 @@ struct MessageBubbleView: View {
     }
   }
 
+  #if DEBUG
+  nonisolated(unsafe) static var bodyPasses = 0
+  #endif
+
   var body: some View {
-    HStack(spacing: 6) {
+    #if DEBUG
+    Self.bodyPasses += 1
+    #endif
+    return HStack(spacing: 6) {
       if message.isFromMe {
         Spacer(minLength: 48)
         if isHovered || isPickingReaction { hoverActions }

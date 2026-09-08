@@ -52,13 +52,17 @@ struct ThreadView: View {
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
   @State private var pendingExpansionCount: Int?
-  /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
-  /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
-  @State private var isNearBottom = true
+  /// Où en est le lecteur dans le fil — en bas ou plus haut, en train de
+  /// défiler ou non, combien de messages sont arrivés pendant qu'il lisait
+  /// plus haut. Tenu HORS du corps de `ThreadView` : ces trois valeurs
+  /// basculent à chaque bord de geste, et tant qu'elles étaient des `@State`
+  /// d'ici, chaque fin de défilement refaisait le corps du fil — une passe
+  /// que le banc chiffre à ~50 ms sur deux cent quarante bulles. Seules la
+  /// pilule ↓ et la garde de survol les lisent, chacune dans sa propre vue ;
+  /// le corps du fil n'y touche que dans ses gestionnaires.
+  @State private var tracker = ThreadScrollTracker()
   /// La bulle vers laquelle on vient de sauter depuis une citation — surlignée un instant.
   @State private var flashedMessageID: String?
-  /// Ce qui est arrivé pendant qu'on lisait plus haut.
-  @State private var missedCount = 0
   /// Un fichier survole le fil : la colonne se borde de pointillé.
   @State private var isDropTargeted = false
   /// Le moniteur d'Espace. Pas un raccourci de menu : Espace appartient
@@ -94,9 +98,18 @@ struct ThreadView: View {
     )
   }
 
+  #if DEBUG
+  /// Compteur de passes du corps, pour le banc : un `/sync` ordinaire ne doit
+  /// pas en provoquer une.
+  nonisolated(unsafe) static var bodyPasses = 0
+  #endif
+
   var body: some View {
-    Group {
-      if store.selectedConversation != nil {
+    #if DEBUG
+    Self.bodyPasses += 1
+    #endif
+    return Group {
+      if store.selectedThreadFacts != nil {
         VStack(spacing: 0) {
           if store.isThreadSearchActive {
             ThreadSearchBar(theme: theme, typeface: themes.typeface)
@@ -149,10 +162,13 @@ struct ThreadView: View {
                 }
               }
             },
+            // Par les faits du fil, pas par `conversations` : lus ici, ces deux
+            // jugements refaisaient le fil à chaque `/sync` (cf. `ThreadFacts`).
             onManageGroup: store.selectedConversationID.flatMap { id in
-              store.canManageGroup(id) ? { store.presentGroupSheet(id) } : nil
+              store.selectedThreadFacts?.canManageGroup == true ? { store.presentGroupSheet(id) } : nil
             },
-            voiceConversationID: store.canRecordVoice(in: store.selectedConversationID)
+            voiceConversationID: store.selectedThreadFacts?.sendingConversation.network.supportsVoiceMessages == true
+              && store.isMatrixConnected
               ? store.selectedConversationID
               : nil,
             onSend: {
@@ -254,10 +270,10 @@ struct ThreadView: View {
   /// Le fil ne montre plus une bulle isolée par message : les prises de parole
   /// consécutives se serrent, le nom ne s'écrit qu'une fois, l'heure ne revient
   /// qu'après un silence. Cf. `MessageGrouping`.
-  private var messageGroups: [MessageGroup] {
+  private func messageGroups(of thread: [ChatMessage]) -> [MessageGroup] {
     MessageGrouping.groups(
       for: thread,
-      showsSenderNames: store.selectedConversation?.isGroup == true,
+      showsSenderNames: store.selectedThreadFacts?.isGroup == true,
       // Fil fusionné : le séparateur d'heure dit sur quel réseau on repart.
       showsNetworkOrigin: isMergedThread
     )
@@ -273,7 +289,7 @@ struct ThreadView: View {
   private func olderMessagesButton(_ proxy: ScrollViewProxy) -> some View {
     Button {
       let anchorID = thread.first?.id
-      isNearBottom = false
+      tracker.isNearBottom = false
       windowCount += ThreadMetrics.windowCount
       if let anchorID {
         DispatchQueue.main.async {
@@ -295,341 +311,197 @@ struct ThreadView: View {
 
   private var messages: some View {
     ScrollViewReader { proxy in
-      ScrollView {
-        // Pile simple, et surtout pas paresseuse. Un `LazyVStack` ancré en bas
-        // sur des lignes hautes et inégales — des photos — ne converge jamais :
-        // il place, découvre que les hauteurs ne sont pas celles qu'il croyait,
-        // retraduit l'ancre, replace, sans fin. Le fil tournait à 80 % d'un cœur
-        // sans que rien ne bouge à l'écran. La pile reste donc simple, et c'est
-        // `windowCount` qui la borne — cf. `thread`.
-        VStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
-          if hiddenOlderCount > 0, launchTail == nil {
-            olderMessagesButton(proxy)
-          }
-          ForEach(messageGroups) { group in
-            if let stamp = group.timeSeparator {
-              ThreadTimeSeparator(
-                date: stamp,
-                network: group.networkOrigin,
-                theme: theme,
-                typeface: themes.typeface
+      // Le cadre répond seul aux mesures « au plus petit » et « à l'idéal »
+      // qu'AppKit et la pile réclament à chaque frame d'un défilement — sans
+      // quoi le fil entier se remesurait à largeur nulle. Cf. `ThreadViewport`.
+      ThreadViewport {
+        threadScroll(proxy)
+      }
+    }
+  }
+
+  private func threadScroll(_ proxy: ScrollViewProxy) -> some View {
+    ScrollView {
+      // Pile simple, et surtout pas paresseuse. Un `LazyVStack` ancré en bas
+      // sur des lignes hautes et inégales — des photos — ne converge jamais :
+      // il place, découvre que les hauteurs ne sont pas celles qu'il croyait,
+      // retraduit l'ancre, replace, sans fin. Le fil tournait à 80 % d'un cœur
+      // sans que rien ne bouge à l'écran. La pile reste donc simple, et c'est
+      // `windowCount` qui la borne — cf. `thread`.
+      // `thread` se calcule UNE fois par passe : lu dans la boucle des
+      // rangées, il refiltrait les messages du fil pour chacune d'elles —
+      // deux cent quarante-trois filtres de deux cent quarante-trois
+      // messages, le gros d'une passe du corps (mesuré au `sample`).
+      let visible = thread
+      let lastMessageID = visible.last?.id
+      VStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
+        if hiddenOlderCount > 0, launchTail == nil {
+          olderMessagesButton(proxy)
+        }
+        // Un seul enfant par groupe, comparable en bloc — séparateur d'heure
+        // compris : deux enfants dont l'un n'est pas comparable, et la pile
+        // remesurait tout à chaque passe.
+        ForEach(messageGroups(of: visible)) { group in
+          MessageGroupRow(
+            group: group,
+            avatarConversation: group.messages.first.flatMap { store.selectedThreadFacts?.face(forMessage: $0) },
+            showsMessageAvatars: themes.showsMessageAvatars,
+            theme: theme,
+            typeface: themes.typeface,
+            textScale: themes.textScale,
+            showsLinkPreviews: themes.showsLinkPreviews,
+            highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
+            currentMatchID: group.owns(store.threadSearchCurrentID),
+            flashedMessageID: group.owns(flashedMessageID),
+            freshMessageID: freshMessageID(in: group),
+            reduceMotion: reduceMotion,
+            selectedConversationID: store.selectedConversationID,
+            pilotAgent: store.agentsInSelectedConversation.first ?? MatrixIdentity.agentName,
+            lastMessageID: lastMessageID,
+            offers: group.messages.map { message in
+              BubbleOffers(
+                edit: store.canEditAnyway(message),
+                undoViaAutomation: store.canUndoSendViaAutomation(message),
+                forward: store.canForward(message),
+                undoSend: store.canUndoSend(message.id),
+                deleteEverywhere: store.canDeleteEverywhere(message)
               )
-            }
-            groupRow(group, proxy: proxy)
-          }
-
-          // « Annuler » vit sur CETTE ligne, pas sous la bulle : la ligne est
-          // là de « Envoi… » à « Vu », à hauteur constante — un bouton qui
-          // prenait une ligne sous la bulle puis s'en allait faisait sauter
-          // tout le fil, ancré en bas, à chaque changement d'état.
-          // Et elle se déduit du dernier message du fil, pas seulement de la
-          // ligne d'inbox : celle-ci se réécrit à chaque `/sync` — une frappe
-          // qui dit « écrit… » suffit — et un accusé absent le temps d'un
-          // aller-retour faisait clignoter la ligne, donc sauter le fil.
-          if let last = thread.last, last.isFromMe {
-            let delivery = store.selectedConversation?.lastDelivery
-              ?? (last.isPending || store.canUndoSend(last.id) ? .sending : .sent)
-            DeliveryReceiptLabel(
-              delivery: delivery,
-              seenBy: store.selectedConversationID.flatMap { store.seenByLabel($0) },
-              onUndo: store.canUndoSend(last.id) ? { store.undoSend(last.id) } : nil,
-              theme: theme,
-              typeface: themes.typeface
-            )
-          }
-
-          // Ce qui partira plus tard attend en bas du fil, en pointillé.
-          ForEach(store.scheduledForSelection) { scheduled in
-            ScheduledMessageRow(
-              message: scheduled,
-              theme: theme,
-              typeface: themes.typeface,
-              textScale: themes.textScale
-            )
-              .id("scheduled-\(scheduled.id)")
-          }
-
-          // Les trois points, là où la bulle apparaîtra.
-          if let id = store.selectedConversationID, let typing = store.typingLabel(id) {
-            TypingBubble(
-              name: store.selectedConversation?.isGroup == true ? typing : nil,
-              accessibilityLabel: typing,
-              theme: theme,
-              typeface: themes.typeface,
-              cornerRadius: 14
-            )
-            .padding(.leading, 4)
-            .transition(.opacity)
-          }
-
-          // LE bas du fil : sous le dernier message il y a l'accusé, les envois
-          // programmés… Viser le message laissait tout ça hors champ.
-          Color.clear
-            .frame(height: 1)
-            .id(Self.bottomAnchorID)
+            },
+            store: store,
+            onJump: { jumpTo($0, proxy: proxy) }
+          )
+          .equatable()
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.bottom, Spacing.md)
+
+        // « Annuler » vit sur CETTE ligne, pas sous la bulle : la ligne est
+        // là de « Envoi… » à « Vu », à hauteur constante — un bouton qui
+        // prenait une ligne sous la bulle puis s'en allait faisait sauter
+        // tout le fil, ancré en bas, à chaque changement d'état.
+        // Et elle se déduit du dernier message du fil, pas seulement de la
+        // ligne d'inbox : celle-ci se réécrit à chaque `/sync` — une frappe
+        // qui dit « écrit… » suffit — et un accusé absent le temps d'un
+        // aller-retour faisait clignoter la ligne, donc sauter le fil.
+        if let last = visible.last, last.isFromMe {
+          let delivery = store.selectedThreadFacts?.lastDelivery
+            ?? (last.isPending || store.canUndoSend(last.id) ? .sending : .sent)
+          DeliveryReceiptLabel(
+            delivery: delivery,
+            seenBy: store.selectedConversationID.flatMap { store.seenByLabel($0) },
+            onUndo: store.canUndoSend(last.id) ? { store.undoSend(last.id) } : nil,
+            theme: theme,
+            typeface: themes.typeface
+          )
+        }
+
+        // Ce qui partira plus tard attend en bas du fil, en pointillé.
+        ForEach(store.scheduledForSelection) { scheduled in
+          ScheduledMessageRow(
+            message: scheduled,
+            theme: theme,
+            typeface: themes.typeface,
+            textScale: themes.textScale
+          )
+            .id("scheduled-\(scheduled.id)")
+        }
+
+        // Les trois points, là où la bulle apparaîtra.
+        if let id = store.selectedConversationID, let typing = store.typingLabel(id) {
+          TypingBubble(
+            name: store.selectedThreadFacts?.isGroup == true ? typing : nil,
+            accessibilityLabel: typing,
+            theme: theme,
+            typeface: themes.typeface,
+            cornerRadius: 14
+          )
+          .padding(.leading, 4)
+          .transition(.opacity)
+        }
+
+        // LE bas du fil : sous le dernier message il y a l'accusé, les envois
+        // programmés… Viser le message laissait tout ça hors champ.
+        Color.clear
+          .frame(height: 1)
+          .id(Self.bottomAnchorID)
       }
-      // `contentMargins` s'AJOUTE à la zone sûre de la barre d'outils — inutile
-      // d'y recompter la hauteur du titre.
-      .contentMargins(.top, ThreadMetrics.topClearance, for: .scrollContent)
-      .defaultScrollAnchor(.bottom)
-      .overlay(alignment: .top) { TopScrollFade(theme: theme) }
-      // La pilule ↓ : elle ne paraît que lorsqu'on a remonté, et dit combien
-      // de messages sont arrivés depuis.
-      .overlay(alignment: .bottomTrailing) {
-        if !isNearBottom, isShowingThread {
-          ScrollToBottomButton(unreadCount: missedCount, theme: theme, size: 34) {
-            missedCount = 0
-            isNearBottom = true
-            withAnimation(.easeOut(duration: 0.2)) {
-              proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
-            }
-          }
-          .padding(.trailing, Spacing.md)
-          .padding(.bottom, Spacing.sm)
+      .padding(.horizontal, Spacing.md)
+      .padding(.bottom, Spacing.md)
+      .modifier(ThreadHoverGate(tracker: tracker))
+    }
+    // `contentMargins` s'AJOUTE à la zone sûre de la barre d'outils — inutile
+    // d'y recompter la hauteur du titre.
+    .contentMargins(.top, ThreadMetrics.topClearance, for: .scrollContent)
+    .defaultScrollAnchor(.bottom)
+    .overlay(alignment: .top) { TopScrollFade(theme: theme) }
+    // La pilule ↓ : elle ne paraît que lorsqu'on a remonté, et dit combien
+    // de messages sont arrivés depuis.
+    .overlay(alignment: .bottomTrailing) {
+      ThreadBottomPill(tracker: tracker, isShowingThread: isShowingThread, theme: theme) {
+        withAnimation(.easeOut(duration: 0.2)) {
+          proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
         }
       }
-      // Une réaction, une citation, un aperçu qui arrive après coup : le fil
-      // grandit sans que son compte bouge, et le bas doit tenir quand même.
-      .keepScrolledToBottom(isNearBottom: $isNearBottom) { keepBottom(proxy) }
-      // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
-      // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
-      .opacity(isShowingThread ? 1 : 0)
-      // Cliquer dans le fil vaut lecture. `simultaneousGesture` pour ne rien
-      // voler à la sélection de texte ni aux liens des bulles.
-      .simultaneousGesture(TapGesture().onEnded { store.confirmSelectionAsRead() })
-      .onAppear { pinToBottom(proxy) }
-      .task {
-        guard awaitsFirstFrame else { return }
-        // Langue et liens des bulles se calculent sur un autre cœur pendant
-        // qu'AppKit monte la fenêtre : le fil les trouve prêts.
-        ThreadPrewarm.schedule(store.messages)
-        await LaunchGate.firstWindowOnScreen()
-        awaitsFirstFrame = false
-        LaunchTrace.mark("thread-begin")
-        pinToBottom(proxy)
-      }
-      .onChange(of: store.messages.count) { oldCount, newCount in
-        if newCount > oldCount, !isNearBottom { missedCount += newCount - oldCount }
-        noteArrival(increased: newCount > oldCount)
-        pinToBottom(proxy)
-      }
-      .task(id: store.selectedConversationID) {
-        await rechargerLesAgents()
-      }
-      .onChange(of: store.selectedConversationID) { _, _ in
-        LaunchTrace.event("select")
-        missedCount = 0
-        isShowingThread = false
-        launchTail = ThreadMetrics.launchTailCount
-        windowCount = ThreadMetrics.windowCount
-        animatesArrivals = false
-        settledMessageID = store.messages.last?.id
-        inkLedger.reset()
-        isNearBottom = true
-        pinToBottom(proxy)
-      }
-      .onChange(of: store.threadSearchCurrentID) { _, target in
-        guard let target else { return }
-        // On lit une occurrence, plus le bas : ce qui grandit ne doit pas nous y ramener.
-        isNearBottom = false
-        // L'occurrence peut vivre au-dessus de la fenêtre : on l'ouvre jusqu'à
-        // elle, puis on y va — après la passe de layout, sinon l'ancre n'existe pas.
-        if !thread.contains(where: { $0.id == target }),
-           let index = store.messages.firstIndex(where: { $0.id == target }) {
-          windowCount = max(windowCount, store.messages.count - index + 10)
-          DispatchQueue.main.async {
-            proxy.scrollTo(target, anchor: .center)
-          }
-          return
-        }
-        withAnimation(.easeOut(duration: 0.18)) {
+    }
+    // Une réaction, une citation, un aperçu qui arrive après coup : le fil
+    // grandit sans que son compte bouge, et le bas doit tenir quand même.
+    .keepScrolledToBottom(
+      isNearBottom: Bindable(tracker).isNearBottom,
+      isScrolling: Bindable(tracker).isScrolling
+    ) { keepBottom(proxy) }
+    // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
+    // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
+    .opacity(isShowingThread ? 1 : 0)
+    // Cliquer dans le fil vaut lecture. `simultaneousGesture` pour ne rien
+    // voler à la sélection de texte ni aux liens des bulles.
+    .simultaneousGesture(TapGesture().onEnded { store.confirmSelectionAsRead() })
+    .onAppear { pinToBottom(proxy) }
+    .task {
+      guard awaitsFirstFrame else { return }
+      // Langue et liens des bulles se calculent sur un autre cœur pendant
+      // qu'AppKit monte la fenêtre : le fil les trouve prêts.
+      ThreadPrewarm.schedule(store.messages)
+      await LaunchGate.firstWindowOnScreen()
+      awaitsFirstFrame = false
+      LaunchTrace.mark("thread-begin")
+      pinToBottom(proxy)
+    }
+    .onChange(of: store.messages.count) { oldCount, newCount in
+      if newCount > oldCount, !tracker.isNearBottom { tracker.missedCount += newCount - oldCount }
+      noteArrival(increased: newCount > oldCount)
+      pinToBottom(proxy)
+    }
+    .task(id: store.selectedConversationID) {
+      await rechargerLesAgents()
+    }
+    .onChange(of: store.selectedConversationID) { _, _ in
+      LaunchTrace.event("select")
+      tracker.missedCount = 0
+      isShowingThread = false
+      launchTail = ThreadMetrics.launchTailCount
+      windowCount = ThreadMetrics.windowCount
+      animatesArrivals = false
+      settledMessageID = store.messages.last?.id
+      inkLedger.reset()
+      tracker.isNearBottom = true
+      pinToBottom(proxy)
+    }
+    .onChange(of: store.threadSearchCurrentID) { _, target in
+      guard let target else { return }
+      // On lit une occurrence, plus le bas : ce qui grandit ne doit pas nous y ramener.
+      tracker.isNearBottom = false
+      // L'occurrence peut vivre au-dessus de la fenêtre : on l'ouvre jusqu'à
+      // elle, puis on y va — après la passe de layout, sinon l'ancre n'existe pas.
+      if !thread.contains(where: { $0.id == target }),
+         let index = store.messages.firstIndex(where: { $0.id == target }) {
+        windowCount = max(windowCount, store.messages.count - index + 10)
+        DispatchQueue.main.async {
           proxy.scrollTo(target, anchor: .center)
         }
+        return
+      }
+      withAnimation(.easeOut(duration: 0.18)) {
+        proxy.scrollTo(target, anchor: .center)
       }
     }
-  }
-
-  /// Une prise de parole : la photo de son auteur dans la marge, puis ses bulles.
-  /// La photo se coupe dans Réglages ; les événements de conversation, eux, ne
-  /// sont de personne et gardent toute la largeur.
-  @ViewBuilder
-  private func groupRow(_ group: MessageGroup, proxy: ScrollViewProxy) -> some View {
-    let first = group.messages.first
-    let showsAvatar = themes.showsMessageAvatars
-      && !group.isFromMe
-      && first?.isSystemEvent != true
-    // La photo se pose EN BAS de la prise de parole, en face de la dernière
-    // bulle : c'est là que Messages, WhatsApp et Telegram la mettent, et c'est
-    // la bulle la plus récente que l'œil cherche à attribuer. Sur son BORD, pas
-    // sous ce qui la suit — cf. `VerticalAlignment.bubbleBottom`.
-    HStack(alignment: .bubbleBottom, spacing: ThreadMetrics.avatarSpacing) {
-      if showsAvatar, let first {
-        MessageAvatarView(
-          message: first,
-          conversation: store.conversation(ofMessage: first),
-          size: ThreadMetrics.avatarSize,
-          theme: theme
-        )
-      }
-      VStack(alignment: .leading, spacing: ThreadMetrics.intraGroupSpacing) {
-        if let label = group.senderLabel {
-          Text(label)
-            .font(Typography.meta(themes.typeface))
-            .foregroundStyle(SenderTint.color(for: label, theme: theme))
-            .lineLimit(1)
-            .padding(.leading, ThreadMetrics.senderLabelLeading)
-        }
-        ForEach(Array(group.messages.enumerated()), id: \.element.id) { index, message in
-          if let proposal = message.agentProposal {
-            AgentProposalCard(
-              proposal: proposal,
-              theme: theme,
-              typeface: themes.typeface,
-              onSend: { Task { await store.sendAgentProposal(message) } },
-              onEdit: { store.editAgentProposal(message) },
-              onIgnore: { store.ignoreAgentProposal(message) },
-              onReply: { store.requestComposerFocus() }
-            )
-            .id(message.id)
-          } else if let notice = message.agentNotice {
-            // L'avis de cc sur lui-même : une pastille, et le geste qu'il propose.
-            AgentNoticePill(
-              notice: notice,
-              theme: theme,
-              typeface: themes.typeface,
-              onAction: notice.action.map { action in
-                {
-                  Task {
-                    switch action {
-                    case .rescan: await store.rescanAgent(named: notice.agent)
-                    case .retry: await store.retryLastAside()
-                    }
-                  }
-                }
-              }
-            )
-            .id(message.id)
-          } else if let event = message.systemEventText {
-            ThreadEventSeparator(text: event, theme: theme, typeface: themes.typeface)
-              .id(message.id)
-          } else if message.isFromMe, message.isPiloted {
-            // Envoyé par cc en mon nom : la bulle est la mienne, la ligne
-            // dessous le dit — en rouge, parce que c'est le mode qui engage.
-            VStack(alignment: .trailing, spacing: 2) {
-              bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
-                .equatable()
-              PilotedFootnote(
-                agent: store.agentsInSelectedConversation.first ?? MatrixIdentity.agentName,
-                sentAt: message.sentAt,
-                theme: theme,
-                typeface: themes.typeface
-              )
-            }
-            .id(message.id)
-          } else if !message.isFromMe, !message.isRetracted, message.attachments.isEmpty,
-                    let source = TextTranslator.foreignLanguage(of: message.text) {
-            // Une bulle reçue dans une autre langue que celle du Mac : le
-            // « Traduire » vit ICI, sous la bulle, pas dedans — dans la bulle,
-            // sous son menu contextuel et sa forme de contenu, ni un bouton ni
-            // un geste ne recevaient le clic (vérifié à l'écran, trace à
-            // l'appui). La ligne traduite s'affiche d'emblée quand le fil le
-            // demande. Sur cet appareil, sans réseau : cf. `TextTranslator`.
-            VStack(alignment: .leading, spacing: 2) {
-              bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
-                .equatable()
-              IncomingTranslationSlot(
-                messageID: message.id,
-                text: message.text,
-                source: source,
-                // Le fil ouvert, pas `message.conversationID` : dans la note à
-                // soi et le fil d'un agent, la bulle porte l'identifiant brut du
-                // salon quand la fiche écrit le réglage sous le sien — « Français »
-                // choisi, et la bulle anglaise restait à « Traduire ».
-                conversationID: store.selectedConversationID ?? message.conversationID,
-                theme: theme,
-                typeface: themes.typeface,
-                font: Typography.bubble(themes.typeface, scale: themes.textScale)
-              )
-            }
-            .id(message.id)
-          } else {
-            // `.equatable()` : le fil se rafraîchit pour mille raisons qui ne
-            // regardent pas cette bulle-là. Cf. `MessageBubbleView: Equatable`.
-            bubble(for: message, position: BubblePosition(index: index, count: group.messages.count), proxy: proxy)
-              .equatable()
-              .id(message.id)
-              .messageArrival(
-                .encre,
-                isFresh: isFresh(message),
-                isEnabled: !reduceMotion
-              )
-              // Le surlignage d'arrivée après un saut de citation : la rangée
-              // s'éclaire puis s'éteint, le temps que l'œil trouve.
-              .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .fill(theme.accent.opacity(flashedMessageID == message.id ? 0.14 : 0))
-                  .padding(-3)
-              )
-          }
-        }
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-
-  /// Une bulle et tout ce qu'on peut lui faire. Extraite de la boucle : le
-  /// vérificateur de types s'y perdait.
-  /// Le type concret, pas `some View` : `.equatable()` a besoin de savoir que
-  /// c'est une `MessageBubbleView` pour se servir de son `==`.
-  private func bubble(for message: ChatMessage, position: BubblePosition, proxy: ScrollViewProxy) -> MessageBubbleView {
-    // « Modifier » ouvre le composer en mode correction ; c'est le magasin qui
-    // choisit ensuite le chemin — automatisation Messages ou `m.replace`.
-    let onEdit: (() -> Void)? = store.canEditAnyway(message)
-      ? { store.beginEditing(message) }
-      : nil
-    // Deux minutes, pas plus : au-delà, Messages n'a plus l'entrée du menu.
-    let onUndoSend: (() -> Void)? = store.canUndoSendViaAutomation(message)
-      ? { Task { await store.undoSendViaAutomation(messageID: message.id) } }
-      : nil
-    return MessageBubbleView(
-      message: message,
-      theme: theme,
-      typeface: themes.typeface,
-      textScale: themes.textScale,
-      showsLinkPreviews: themes.showsLinkPreviews,
-      highlightQuery: store.isThreadSearchActive ? store.threadSearchQuery : "",
-      isCurrentMatch: store.threadSearchCurrentID == message.id,
-      position: position,
-      // Survoler une bulle, c'est la viser : ⌘R, ⌘T et ⌘⌥R agissaient sinon
-      // sur le dernier message du fil, jamais sur celui qu'on regardait.
-      onHoverBegan: { store.selectMessage(message.id) },
-      onQuoteTap: message.replyTo?.messageID.map { targetID in { jumpTo(targetID, proxy: proxy) } },
-      onReact: { emoji in
-        Task { await store.react(messageID: message.id, emoji: emoji) }
-      },
-      onReply: {
-        store.selectMessage(message.id)
-        store.replyToSelectedMessage()
-      },
-      onEdit: onEdit,
-      onUndoSend: onUndoSend,
-      onForward: store.canForward(message) ? { store.beginForwarding(message) } : nil,
-      // Le dernier message a son « Annuler » sur la ligne de l'accusé ; seul
-      // un envoi en sursis qui n'est plus le dernier garde le sien sous lui.
-      onCancelPending: store.canUndoSend(message.id) && thread.last?.id != message.id
-        ? { store.undoSend(message.id) } : nil,
-      onDeleteLocally: { store.deleteLocally(messageID: message.id) },
-      onDeleteEverywhere: store.canDeleteEverywhere(message)
-        ? { Task { await store.deleteEverywhere(messageID: message.id) } }
-        : nil,
-      onVotePoll: message.poll == nil ? nil : { answerID in
-        Task { await store.votePoll(messageID: message.id, answerID: answerID) }
-      }
-    )
   }
 
   /// L'encre ne prend que sur un vrai message, jamais sur une bascule de
@@ -654,6 +526,13 @@ struct ThreadView: View {
     return true
   }
 
+  /// Le message de ce groupe qui s'encre, s'il y en a un : seul le dernier
+  /// du fil peut l'être, on ne demande rien aux autres.
+  private func freshMessageID(in group: MessageGroup) -> String? {
+    guard let last = group.messages.last, last.id == store.messages.last?.id, isFresh(last) else { return nil }
+    return last.id
+  }
+
   private func noteArrival(increased: Bool) {
     guard increased, animatesArrivals else { return }
     let id = store.messages.last?.id
@@ -666,7 +545,7 @@ struct ThreadView: View {
   /// Le saut vers un message cité : on y va — en ouvrant la fenêtre jusqu'à lui
   /// s'il est plus haut qu'elle, comme le fait ⌘F — on le surligne, l'éclat s'éteint.
   private func jumpTo(_ messageID: String, proxy: ScrollViewProxy) {
-    isNearBottom = false
+    tracker.isNearBottom = false
     if !thread.contains(where: { $0.id == messageID }) {
       guard let index = store.messages.firstIndex(where: { $0.id == messageID }) else { return }
       windowCount = max(windowCount, store.messages.count - index + 10)
@@ -688,7 +567,7 @@ struct ThreadView: View {
   private static let bottomAnchorID = "thread-bottom"
 
   private func keepBottom(_ proxy: ScrollViewProxy) {
-    guard isNearBottom else { return }
+    guard tracker.isNearBottom else { return }
     var transaction = Transaction()
     transaction.disablesAnimations = true
     withTransaction(transaction) { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
@@ -929,7 +808,7 @@ private struct ReplyBanner: View {
   /// message bridgé sans nom retombe sur le titre du fil : c'est toujours
   /// à quelqu'un qu'on répond.
   private var targetNameFR: String {
-    message.displayedSenderName ?? store.selectedConversation?.title ?? "ce message"
+    message.displayedSenderName ?? store.selectedThreadFacts?.row.title ?? "ce message"
   }
 
   var body: some View {
@@ -1041,5 +920,55 @@ private struct DeliveryReceiptLabel: View {
     // libellé change : même fonte, même rangée. Ce qui bouge, c'est le mot.
     .animation(nil, value: label)
     .accessibilityLabel("Dernier message : \(label)")
+  }
+}
+
+/// Cf. `ThreadView.tracker`.
+@Observable
+@MainActor
+final class ThreadScrollTracker {
+  /// Vrai tant que le lecteur n'a pas remonté le fil : c'est ce qui décide si
+  /// une hauteur qui change (réaction, citation, aperçu) le garde en bas.
+  var isNearBottom = true
+  /// Vrai le temps du geste de défilement, inertie comprise.
+  var isScrolling = false
+  /// Ce qui est arrivé pendant qu'on lisait plus haut.
+  var missedCount = 0
+}
+
+/// La pilule ↓ : elle ne paraît que lorsqu'on a remonté, et dit combien de
+/// messages sont arrivés depuis. Seule à lire `isNearBottom` et `missedCount`
+/// dans un corps : quand ils basculent, c'est elle qui se refait, pas le fil.
+private struct ThreadBottomPill: View {
+  let tracker: ThreadScrollTracker
+  let isShowingThread: Bool
+  let theme: WritingTheme
+  let scrollToBottom: () -> Void
+
+  var body: some View {
+    if !tracker.isNearBottom, isShowingThread {
+      ScrollToBottomButton(unreadCount: tracker.missedCount, theme: theme, size: 34) {
+        tracker.missedCount = 0
+        tracker.isNearBottom = true
+        scrollToBottom()
+      }
+      .padding(.trailing, Spacing.md)
+      .padding(.bottom, Spacing.sm)
+    }
+  }
+}
+
+/// Pendant le geste de défilement, inertie comprise, le fil ne se laisse pas
+/// survoler : à chaque frame, SwiftUI cherchait sinon la rangée sous le
+/// curseur à travers les cent cinquante `onHover`, `help` et `contentShape`
+/// du fil — 700 ms sur 5 s de geste, mesuré au `sample`, une fois la
+/// remesure de la fenêtre ôtée. Le curseur ne vise rien pendant que le
+/// contenu passe dessous ; il retrouve tout à l'arrêt, d'une seule recherche.
+/// Un modificateur à part, pour que la bascule ne refasse que lui.
+private struct ThreadHoverGate: ViewModifier {
+  let tracker: ThreadScrollTracker
+
+  func body(content: Content) -> some View {
+    content.allowsHitTesting(!tracker.isScrolling)
   }
 }

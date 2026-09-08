@@ -5,6 +5,7 @@ import CorrespondanceUI
 @testable import Correspondance
 
 /// Ce qu'une fenêtre détachée retient : sa place, et son épingle.
+@MainActor
 final class DetachedWindowStateTests: XCTestCase {
   private var defaults: UserDefaults!
   private var suiteName: String!
