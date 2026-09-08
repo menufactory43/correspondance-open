@@ -1,7 +1,9 @@
-import CoreGraphics
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+#endif
 
 /// Les payloads `/sync` de démonstration — ceux qui servent déjà de fixtures
 /// aux tests — et les médias qu'ils annoncent. Partagé par le Mac et l'iPhone :
@@ -53,16 +55,20 @@ public enum DemoFixtures {
     let hues: [Double] = [0.09, 0.42, 0.55, 0.86]
     for (rank, hue) in hues.enumerated() {
       seedImage(
-        mxc: "mxc://correspondance.local/demo-album-\(rank + 1)", type: .png,
+        mxc: "mxc://correspondance.local/demo-album-\(rank + 1)", png: true,
         width: rank.isMultiple(of: 2) ? 480 : 640, height: rank.isMultiple(of: 2) ? 640 : 480, hue: hue
       )
     }
-    seedImage(mxc: "mxc://correspondance.local/demo-reel-1", type: .jpeg, width: 540, height: 960, hue: 0.72)
+    seedImage(mxc: "mxc://correspondance.local/demo-reel-1", png: false, width: 540, height: 960, hue: 0.72)
     seedVoice(mxc: "mxc://correspondance.local/demo-vocal-1", seconds: 7)
   }
 
-  private static func seedImage(mxc: String, type: UTType, width: Int, height: Int, hue: Double) {
-    let contentType = type == .png ? "image/png" : "image/jpeg"
+  /// Sous Linux, sans CoreGraphics, la démo ne dessine pas ses aplats : la
+  /// bulle dit « indisponible », comme pour une photo jamais téléchargée.
+  private static func seedImage(mxc: String, png: Bool, width: Int, height: Int, hue: Double) {
+    #if canImport(CoreGraphics)
+    let type: UTType = png ? .png : .jpeg
+    let contentType = png ? "image/png" : "image/jpeg"
     guard MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: contentType) == nil,
           let context = CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -81,6 +87,7 @@ public enum DemoFixtures {
     CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { return }
     _ = MatrixAttachmentStore.store(data: data as Data, forMXC: mxc, contentType: contentType)
+    #endif
   }
 
   /// Un vrai WAV, parce que la bulle mesure sa durée avec AVFoundation.
@@ -107,7 +114,7 @@ public enum DemoFixtures {
     _ = MatrixAttachmentStore.store(data: wav, forMXC: mxc, contentType: "audio/wav")
   }
 
-  private static func rgb(hue: Double, saturation s: Double, brightness v: Double) -> (CGFloat, CGFloat, CGFloat) {
+  private static func rgb(hue: Double, saturation s: Double, brightness v: Double) -> (Double, Double, Double) {
     let h = hue * 6
     let i = floor(h), f = h - i
     let p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f))
