@@ -114,7 +114,7 @@ extension RelayStore {
   /// ou, pour un groupe qui n'en a pas — Instagram n'en donne jamais —, la
   /// liste des visages de sa mosaïque. `nil` quand il n'y a rien à montrer.
   nonisolated static func cleDuVisage(de conversation: Conversation) -> String? {
-    if let mxc = conversation.remoteAvatarID, MatrixAvatarStore.existingData(forMXC: mxc) != nil {
+    if let mxc = conversation.remoteAvatarID, MatrixAvatarStore.hasData(forMXC: mxc) {
       return mxc
     }
     let ids = Array(conversation.memberAvatarIDs.prefix(4))

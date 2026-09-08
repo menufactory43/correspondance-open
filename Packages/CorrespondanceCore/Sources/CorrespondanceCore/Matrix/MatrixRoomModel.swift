@@ -331,7 +331,21 @@ public struct MatrixRoomModel: Sendable {
   /// Une proposition de l'agent n'a été dite à personne : elle ne devient ni
   /// l'aperçu de la ligne d'inbox, ni la date qui fait remonter le fil.
   public var lastListedMessage: ChatMessage? {
-    sortedMessages.last { !$0.isAgentProposal }
+    // Un parcours, pas un tri : la ligne d'inbox de chacun des deux cents
+    // salons se recalcule à chaque retour de `/sync`, et trier trois cents
+    // messages par salon coûtait 70 ms par passe sur l'iPhone. Les réactions
+    // et le sondage ne s'attachent qu'au message retenu, comme `sortedMessages`
+    // le ferait pour lui.
+    guard var last = messagesByID.values
+      .filter({ !$0.isAgentProposal })
+      .max(by: { $0.sentAt < $1.sentAt })
+    else { return nil }
+    let raw = reactionsByEventID.values
+      .filter { $0.targetEventID == last.id }
+      .map { (emoji: $0.emoji, sender: $0.senderName, isMine: $0.isMine) }
+    if !raw.isEmpty { last.reactions = MessageReaction.aggregate(raw) }
+    if let poll = pollsByEventID[last.id]?.poll { last.poll = poll }
+    return last
   }
 
   /// La note à soi : un salon sans pont dont je suis le seul habitant.

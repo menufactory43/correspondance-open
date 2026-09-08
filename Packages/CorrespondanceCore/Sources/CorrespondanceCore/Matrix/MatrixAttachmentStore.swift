@@ -106,6 +106,15 @@ public enum MatrixAvatarStore {
       .replacingOccurrences(of: ":", with: "_")
   }
 
+  /// La photo est-elle déjà là ? Sans la lire : l'index du partage le demande
+  /// pour chaque fil à chaque réécriture, et lire deux cents fichiers pour ne
+  /// garder que l'existence coûtait 40 ms par passe.
+  public static func hasData(forMXC mxc: String) -> Bool {
+    let url = directory.appendingPathComponent(fileName(forMXC: mxc))
+    let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
+    return size > 0
+  }
+
   public static func existingData(forMXC mxc: String) -> Data? {
     let url = directory.appendingPathComponent(fileName(forMXC: mxc))
     guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }

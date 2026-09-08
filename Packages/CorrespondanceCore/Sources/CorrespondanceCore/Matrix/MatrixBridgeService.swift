@@ -221,7 +221,8 @@ public actor MatrixBridgeService {
     // Le chiffrement, s'il est compilé **et** demandé. Sans les deux, cet appel
     // ne fait rien et le /sync qui suit est celui d'avant.
     if let ligne = await MatrixChiffrement.brancher(sur: client) { print("[Correspondance] \(ligne)") }
-    let response = try await client.sync(since: nextBatch, timeoutMilliseconds: timeoutMilliseconds)
+    let response = try await client.sync(
+      since: nextBatch, timeoutMilliseconds: timeoutMilliseconds, filter: Self.liveSyncFilter)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
     // Avant `apply` : c'est l'état d'avant la passe qui dit jusqu'où remonter.
     for gap in MatrixSyncParser.timelineGaps(in: response, rooms: rooms) {
@@ -1145,6 +1146,12 @@ public actor MatrixBridgeService {
   public var conversationState: ConversationStateSnapshot { relayState }
 
   /// Relit tout l'état depuis le Relais, sans consommer le curseur `/sync` :
+  /// Le filtre de la boucle `/sync` : sans la présence. Personne ne la lit,
+  /// mais chaque fantôme de pont qui passe en ligne ou hors ligne réveillait
+  /// le long-poll — radio, CPU, et sur l'iPhone une passe complète de l'inbox
+  /// pour rien. Le Relais garde une réponse vide pour lui et continue d'attendre.
+  static let liveSyncFilter = #"{"presence":{"types":[]}}"#
+
   /// un sync initial filtré (aucun message, aucun état de salon) ne rapporte
   /// que les tags et les account data. C'est ce qui fait revenir l'archive
   /// après un `defaults delete`, ou sur un appareil neuf.

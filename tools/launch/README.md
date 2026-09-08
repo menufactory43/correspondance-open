@@ -285,3 +285,12 @@ au repos sans automatisation, **1,8 % → 0,2 % d'un cœur** sur 60 s, le seul
 reste étant le `/sync` lui-même (~100 ms par retour). Le fil principal
 pendant le défilement ne bouge pas (15 s sur 80) : c'est SwiftUI qui place
 et dessine, plus le runner d'argent.
+
+Et le `/sync` lui-même, après ça : la boucle demande désormais un filtre sans
+présence (`MatrixBridgeService.liveSyncFilter`) — personne ne la lisait, et
+chaque fantôme de pont qui changeait d'état réveillait le long-poll ; le
+Relais garde une réponse vide pour lui et continue d'attendre. Et la ligne
+d'inbox de chaque salon (`lastListedMessage`) se trouve par un parcours, plus
+par un tri de tous ses messages : `conversations()` passe de 67 à 14 ms par
+retour de `/sync` sur l'iPhone. Ce qui reste par retour utile : l'index du
+partage quand la liste a vraiment changé (~50 ms), et le `/sync` lui-même.
