@@ -146,14 +146,20 @@ final class CorrespondanceAppDelegate: NSObject, NSApplicationDelegate {
   /// Cliquer le Dock rouvre l'inbox quand elle n'est plus à l'écran — même si
   /// une fenêtre détachée, elle, y est encore : `hasVisibleWindows` la compte,
   /// et c'est précisément le cas où l'on veut retrouver la liste.
+  ///
+  /// Sans aucune fenêtre visible, on laisse faire : SwiftUI rouvre lui-même
+  /// sa scène principale quand on répond `true` — en ouvrir une nous-mêmes en
+  /// plus, c'était deux inbox et une roue. On ne prend la main que dans le cas
+  /// que SwiftUI ne voit pas : une fenêtre détachée seule à l'écran.
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+    guard hasVisibleWindows else { return true }
     let inboxIsOnScreen = NSApp.windows.contains {
       $0.identifier?.rawValue.hasPrefix(WindowOpener.inboxSceneID) == true
         && $0.level == .normal && $0.isVisible
     }
     guard !inboxIsOnScreen else { return true }
     WindowOpener.shared.openInbox()
-    return true
+    return false
   }
 
   func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
