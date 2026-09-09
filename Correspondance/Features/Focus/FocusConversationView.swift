@@ -732,11 +732,15 @@ struct FocusPageEditor: View {
   /// Appelé quand le message est bel et bien parti — la réponse rapide s'en
   /// sert pour se refermer derrière lui.
   var onSent: (() -> Void)?
+  /// Posé sous le fil (fenêtre détachée, réponse rapide) : au-delà de cette
+  /// hauteur le champ défile en lui-même, et le fil garde la sienne.
+  var maxEditorHeight: CGFloat?
 
   @Environment(InboxStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @FocusState private var isFocused: Bool
+  @State private var isFocused = false
+  @State private var mentionRouter = MentionKeyRouter()
   @State private var isActivelyTyping = false
   @State private var idleTask: Task<Void, Never>?
   @State private var isTrayExpanded = false
@@ -764,6 +768,28 @@ struct FocusPageEditor: View {
   }
 
   private var showsChrome: Bool { !isActivelyTyping }
+
+  /// Les touches que le champ tend à la page. Le menu « @ » a la main
+  /// d'abord ; puis Entrée envoie et Échap quitte.
+  private func handleCommand(_ command: GrowingTextEditor.Command) -> Bool {
+    switch command {
+    case .moveUp: return mentionRouter.send(.up)
+    case .moveDown: return mentionRouter.send(.down)
+    case .tab: return mentionRouter.send(.pick)
+    case .send:
+      if mentionRouter.send(.pick) { return true }
+      // Rien à envoyer : Entrée ne fait rien, et surtout pas une ligne vide.
+      guard canSend, !isSending else { return true }
+      endTyping()
+      onSend()
+      return true
+    case .escape:
+      if mentionRouter.send(.escape) { return true }
+      isFocused = false
+      endTyping()
+      return true
+    }
+  }
 
   private var pageBodySize: CGFloat { theme.bodySize * themes.textScale }
 
@@ -800,32 +826,28 @@ struct FocusPageEditor: View {
       }
 
       HStack(alignment: .top, spacing: 8) {
-        TextField(showsChrome ? "Répondre…" : "", text: text, axis: .vertical)
-          .textFieldStyle(.plain)
-          .font(pageFont)
+        // Une vue AppKit, pas un `TextField` vertical : celui-ci ne suit pas
+        // la largeur d'une fenêtre détachée qu'on redimensionne, et oublie
+        // l'interligne dans sa hauteur (voir `GrowingTextEditor`).
+        GrowingTextEditor(
+          text: text,
+          isFocused: $isFocused,
+          placeholder: showsChrome ? "Répondre…" : "",
+          font: themes.typeface.nsFont(size: pageBodySize),
+          textColor: NSColor(theme.ink),
+          placeholderColor: NSColor(theme.inkTertiary),
+          caretColor: NSColor(theme.caret),
           // Même interligne que la prose qu'on relit juste au-dessus.
-          .lineSpacing(theme.lineSpacing(forBodySize: pageBodySize))
-          .foregroundStyle(theme.ink)
-          .lineLimit(1...20)
-          .focused($isFocused)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          // Avant « Entrée = envoyer » et « Échap = quitter » : le menu « @ » a la main.
-          .mentionMenu(
-            text: text, session: session, theme: theme, font: pageFont,
-            lineSpacing: theme.lineSpacing(forBodySize: pageBodySize)
-          )
-          .onKeyPress(.return) {
-            if NSEvent.modifierFlags.contains(.shift) { return .ignored }
-            guard canSend, !isSending else { return .handled }
-            endTyping()
-            onSend()
-            return .handled
-          }
-          .onKeyPress(.escape) {
-            isFocused = false
-            endTyping()
-            return .handled
-          }
+          lineSpacing: theme.lineSpacing(forBodySize: pageBodySize),
+          maxHeight: maxEditorHeight,
+          onCommand: handleCommand
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .mentionMenu(
+          text: text, session: session, theme: theme, font: pageFont,
+          lineSpacing: theme.lineSpacing(forBodySize: pageBodySize),
+          router: mentionRouter
+        )
 
         ComposerPlusTray(
           theme: theme,

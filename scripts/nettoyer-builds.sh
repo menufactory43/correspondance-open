@@ -37,5 +37,9 @@ for c in $cibles; do
   rm -rf "$c"
 done
 
+# Et LaunchServices ne connaît plus que /Applications : sinon Réglages Système
+# peut valider l'accès disque sur une copie jetée.
+scripts/desinscrire-doublons.sh
+
 apres=$(du -sk build Packages/CorrespondanceCore/.build* 2>/dev/null | awk '{s+=$1} END{print s}')
 printf "%.1f Go → %.1f Go\n" $((avant/1048576.0)) $((apres/1048576.0))

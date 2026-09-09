@@ -61,7 +61,9 @@ struct DetachedConversationWindow: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
           // Le fil s'arrête à la ligne de l'entête : il ne remonte pas dessous.
           .clipped()
-        FocusPageEditor(session: session, theme: theme)
+        // Un long brouillon ne mange pas le fil : passé la moitié de la
+        // page, le champ défile en lui-même.
+        FocusPageEditor(session: session, theme: theme, maxEditorHeight: geometry.size.height * 0.5)
           .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.sm)
       }
       .frame(maxWidth: .infinity, alignment: .leading)

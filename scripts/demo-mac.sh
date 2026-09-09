@@ -42,6 +42,9 @@ ARGS=(-CorrespondanceDemo 1 -correspondance.inboxMode "$MODE" -correspondance.ne
 [ -n "$THEME" ] && ARGS+=(-correspondance.theme "$THEME")
 [ -n "$SELECT" ] && ARGS+=(-CorrespondanceDemoSelect "$SELECT")
 open -n -a "$APP" --args "${ARGS[@]}"
+# `open` vient d'inscrire cette copie auprès de LaunchServices : on l'en
+# retire, pour que Réglages Système › Accès disque ne voie que /Applications.
+sleep 1; scripts/desinscrire-doublons.sh >/dev/null 2>&1 || true
 echo "→ démonstration lancée (mode $MODE${THEME:+, thème $THEME}${SELECT:+, fil « $SELECT »})"
 if [ -n "$CAPTURE" ]; then
   swift scripts/park-mouse.swift

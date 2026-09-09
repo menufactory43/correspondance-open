@@ -91,7 +91,7 @@ struct MessageBubbleView: View {
     return HStack(spacing: 6) {
       if message.isFromMe {
         Spacer(minLength: 48)
-        if isHovered || isPickingReaction { hoverActions }
+        hoverActionsSlot
       }
       VStack(alignment: message.isFromMe ? .trailing : .leading, spacing: 6) {
         if let quote = message.replyTo, !quote.isEmpty {
@@ -219,7 +219,7 @@ struct MessageBubbleView: View {
         alignment: message.isFromMe ? .trailing : .leading
       )
       if !message.isFromMe {
-        if isHovered || isPickingReaction { hoverActions }
+        hoverActionsSlot
         Spacer(minLength: 48)
       }
     }
@@ -305,6 +305,17 @@ struct MessageBubbleView: View {
   private var translatableSource: String? {
     guard !message.isFromMe, !message.isRetracted, message.attachments.isEmpty else { return nil }
     return TextTranslator.foreignLanguage(of: displayText)
+  }
+
+  /// Les pastilles gardent leur place même éteintes : posées dans la rangée
+  /// à côté de la bulle, elles lui prenaient leur largeur en paraissant, et
+  /// un long message se recomposait à chaque passage de la souris.
+  private var hoverActionsSlot: some View {
+    let visible = isHovered || isPickingReaction
+    return hoverActions
+      .opacity(visible ? 1 : 0)
+      .allowsHitTesting(visible)
+      .accessibilityHidden(!visible)
   }
 
   private var hoverActions: some View {

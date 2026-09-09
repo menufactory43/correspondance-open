@@ -31,6 +31,7 @@
 		1739909CA62E893F0198D40E /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD59EB717FCB32F6BFD374EB /* CorrespondanceCore */; };
 		1A09B518E7B07C14A042C7B8 /* InboxListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D40C88633B918284B962D0 /* InboxListView.swift */; };
 		1A7B2A61452B94AFD7E5CC5C /* ReactionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B5F5874770558B125F18B0 /* ReactionTests.swift */; };
+		1B0040C594D3BA7A2C81FFB3 /* GrowingTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC60736DB6367E9F58BC040 /* GrowingTextEditor.swift */; };
 		1D0F23E0907C56A5BB57AED4 /* PartageModele.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DEC07F5551BC9A37F608456 /* PartageModele.swift */; };
 		1EA4B5AC2002FAE01DC0044F /* ThreadScrollBenchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2CA8F2542F51264E4CBDD3 /* ThreadScrollBenchTests.swift */; };
 		2084E9571D670203C4BC5118 /* ContactsPermissionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C08B1D958B924710041B44E /* ContactsPermissionBanner.swift */; };
@@ -163,6 +164,7 @@
 		C9682F7D91576B15927180B9 /* ContactBook.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA76B9F9792DFFD335C3F85C /* ContactBook.swift */; };
 		CA9F0B195B84A282365B10AB /* RelayStore+Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1214615E5DBB44ECBDB8F8 /* RelayStore+Notifications.swift */; };
 		CBF6C6ABEF0222C311EB0678 /* CorrespondanceCore in Frameworks */ = {isa = PBXBuildFile; productRef = EBB93444E46571A2B149F9D0 /* CorrespondanceCore */; };
+		CFD0C424482F3101AC6F0632 /* DiskAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D0C9A635CE6C51588DEC09 /* DiskAccess.swift */; };
 		D15D7A95318463E9AB25D6BD /* ConversationPillHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6E0BE3304EC9D3FDC2E3C3 /* ConversationPillHeader.swift */; };
 		D2343A8A5F28659A2C88CB28 /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */; };
 		D5D194636ECCA227A0CA1491 /* InFlightBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */; };
@@ -275,6 +277,7 @@
 
 /* Begin PBXFileReference section */
 		00BF33F3E86DAF9692B7AA43 /* BrowserSessionImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSessionImporter.swift; sourceTree = "<group>"; };
+		01D0C9A635CE6C51588DEC09 /* DiskAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiskAccess.swift; sourceTree = "<group>"; };
 		051A6E15F602013A1C9BD8A1 /* IMessageAutomationVerifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAutomationVerifier.swift; sourceTree = "<group>"; };
 		0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActionsOverlay.swift; sourceTree = "<group>"; };
 		06853CC092F39EA6D7674973 /* QuickLookPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPanel.swift; sourceTree = "<group>"; };
@@ -321,6 +324,7 @@
 		3F807FD24E1467416CB81E90 /* MentionMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MentionMenu.swift; sourceTree = "<group>"; };
 		3FAE43DF4A6BDED0DC0BC5B6 /* CorrespondanceSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrespondanceSmokeTests.swift; sourceTree = "<group>"; };
 		3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageAttachmentSendTests.swift; sourceTree = "<group>"; };
+		3FC60736DB6367E9F58BC040 /* GrowingTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowingTextEditor.swift; sourceTree = "<group>"; };
 		3FE71F29E53D51CEA9212BC6 /* AccueilRelaisView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccueilRelaisView.swift; sourceTree = "<group>"; };
 		40645D14EAC7E5F8DD136C48 /* AssistantCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantCard.swift; sourceTree = "<group>"; };
 		4109C837C975585D3BA753FE /* ThreadGesturesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadGesturesUITests.swift; sourceTree = "<group>"; };
@@ -593,6 +597,7 @@
 			children = (
 				2F765AC3695AED34BF7336EE /* ComposerControls.swift */,
 				67EDBFB111AFC492AB3E9891 /* ComposerDictation.swift */,
+				3FC60736DB6367E9F58BC040 /* GrowingTextEditor.swift */,
 				3F807FD24E1467416CB81E90 /* MentionMenu.swift */,
 				EC5ADCF20EA7E86419DB0AD7 /* OutgoingTranslationPanel.swift */,
 				ACE4F2167A3C0F231BD67F6B /* SuggestionBanner.swift */,
@@ -921,6 +926,7 @@
 				E696093D4D571FE8BD9F43B2 /* DemoMode.swift */,
 				1287866EC8A4BC6F245AEB8E /* DetachedWindowState.swift */,
 				C618DA341603EEA853087279 /* DictusBridge.swift */,
+				01D0C9A635CE6C51588DEC09 /* DiskAccess.swift */,
 				B7928E8ED800BA36957A5A50 /* EngineCatalog.swift */,
 				B8CFF36E05B15E3812D07C5D /* EngineInstaller.swift */,
 				4416D0B9EBE11AE72CF12470 /* GlobalHotKey.swift */,
@@ -1463,6 +1469,7 @@
 				26CA1D96200F9F1AA700D982 /* DetachedConversationWindow.swift in Sources */,
 				E701985C896FDF358142ACB9 /* DetachedWindowState.swift in Sources */,
 				E76EBCBFD0E0FF83CB0370C3 /* DictusBridge.swift in Sources */,
+				CFD0C424482F3101AC6F0632 /* DiskAccess.swift in Sources */,
 				AECC2E76BBFA4A49A1787848 /* EngineCatalog.swift in Sources */,
 				331D6F33D5AC08F2667D5908 /* EngineInstaller.swift in Sources */,
 				72844F5AEC9B03F135C9BECA /* FocusConversationView.swift in Sources */,
@@ -1470,6 +1477,7 @@
 				B29C767B7919B5E7524CE9E1 /* ForwardSheet.swift in Sources */,
 				9F89566B2CF8355D9B1FDE01 /* GlobalHotKey.swift in Sources */,
 				C24D8539867956DA1A0AA941 /* GroupSheet.swift in Sources */,
+				1B0040C594D3BA7A2C81FFB3 /* GrowingTextEditor.swift in Sources */,
 				21CF5807546C941279E7C524 /* HoverZone.swift in Sources */,
 				5C4F159E6D6EA2EDA0E5E76F /* IMessageAutomation.swift in Sources */,
 				5FFE55AB239E658DF272BAF2 /* IMessageAutomationHealth.swift in Sources */,

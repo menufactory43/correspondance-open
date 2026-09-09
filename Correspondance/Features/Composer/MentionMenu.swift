@@ -7,6 +7,9 @@ import CorrespondanceUI
 /// Le même modifieur sert au composer de la boîte et à la feuille du Focus.
 struct MentionField: ViewModifier {
   @Binding var text: String
+  /// Quand le champ est une vue AppKit (la page Focus), c'est elle qui reçoit
+  /// les touches la première : elle les passe au menu par ce routeur.
+  var router: MentionKeyRouter?
   /// Le fil dont on cite les gens. `nil` = aucun fil ouvert, pas de menu.
   var session: ConversationSession?
   var theme: WritingTheme
@@ -32,7 +35,18 @@ struct MentionField: ViewModifier {
   }
 
   func body(content: Content) -> some View {
-    content
+    router?.handle = { key in
+      switch key {
+      case .up: return step(-1) == .handled
+      case .down: return step(1) == .handled
+      case .pick: return pick() == .handled
+      case .escape:
+        guard isVisible else { return false }
+        dismissedToken = token
+        return true
+      }
+    }
+    return content
       // La mention posée se voit dans le champ : `TextField` ne prend que du
       // texte nu, la bande d'accent se glisse donc derrière lui.
       .background(alignment: .topLeading) {
@@ -100,12 +114,26 @@ extension View {
   /// Taper « @ » dans ce champ ouvre le menu des gens du fil ouvert.
   func mentionMenu(
     text: Binding<String>, session: ConversationSession?, theme: WritingTheme, font: Font,
-    lineSpacing: CGFloat
+    lineSpacing: CGFloat, router: MentionKeyRouter? = nil
   ) -> some View {
     modifier(
-      MentionField(text: text, session: session, theme: theme, font: font, lineSpacing: lineSpacing)
+      MentionField(
+        text: text, router: router, session: session, theme: theme, font: font,
+        lineSpacing: lineSpacing
+      )
     )
   }
+}
+
+/// Les touches du menu « @ » (↑ ↓, Entrée ou Tab, Échap) quand le champ est
+/// une vue AppKit : `onKeyPress` ne les voit pas passer, le champ les tend
+/// ici. `true` = le menu les a prises.
+@MainActor
+final class MentionKeyRouter {
+  enum Key { case up, down, pick, escape }
+  var handle: ((Key) -> Bool)?
+
+  func send(_ key: Key) -> Bool { handle?(key) ?? false }
 }
 
 struct MentionMenuView: View {

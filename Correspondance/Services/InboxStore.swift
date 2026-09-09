@@ -4300,6 +4300,12 @@ final class InboxStore {
         }.value
         ContactDirectoryDisk.enrichSenderNames(&fetched)
         return HiddenMessageStore.visible(fetched, hiddenIDs: hiddenMessageIDs)
+      } catch let error as IMessageAccessError {
+        // L'accès refusé a déjà sa bannière, avec le geste qui le répare :
+        // pas une alerte de plus à chaque fil qu'on ouvre.
+        if case .authorizationDenied = error { return [] }
+        lastErrorMessage = error.localizedDescription
+        return []
       } catch {
         lastErrorMessage = error.localizedDescription
         return []

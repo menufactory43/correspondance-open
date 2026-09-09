@@ -30,7 +30,7 @@ struct QuickReplyView: View {
       ZStack {
         theme.paper
         if let conversation, let session {
-          page(conversation: conversation, session: session, metrics: metrics)
+          page(conversation: conversation, session: session, metrics: metrics, editorMaxHeight: geometry.size.height * 0.5)
         } else {
           Text("Rien à répondre pour l’instant.")
             .font(Typography.emptyState(themes.typeface))
@@ -66,7 +66,8 @@ struct QuickReplyView: View {
   // MARK: - La page
 
   private func page(
-    conversation: Conversation, session: ConversationSession, metrics: FocusPageMetrics
+    conversation: Conversation, session: ConversationSession, metrics: FocusPageMetrics,
+    editorMaxHeight: CGFloat
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       header(conversation, metrics: metrics)
@@ -76,9 +77,11 @@ struct QuickReplyView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // En post-it, le fil remonterait sous l'entête : il s'arrête à sa ligne.
         .clipped()
-      FocusPageEditor(session: session, theme: theme) {
+      // Un long brouillon ne mange pas le fil : passé la moitié du panneau,
+      // le champ défile en lui-même.
+      FocusPageEditor(session: session, theme: theme, onSent: {
         QuickReplyPanelController.shared.noteSent()
-      }
+      }, maxEditorHeight: editorMaxHeight)
       .padding(.bottom, metrics.isCompact ? Spacing.xs : Spacing.sm)
     }
     .padding(.leading, metrics.leading)

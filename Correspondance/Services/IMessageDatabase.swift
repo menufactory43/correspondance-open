@@ -10,7 +10,7 @@ enum IMessageAccessError: LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .authorizationDenied:
-      "Accès refusé à Messages. Accorde « Accès complet au disque » à Correspondance (Réglages Système → Confidentialité)."
+      "Accès refusé à Messages. Accorde « Accès complet au disque » à Correspondance (Réglages Système → Confidentialité et sécurité), puis quitte et relance l’app : macOS n’applique ce réglage qu’au prochain lancement."
     case .openFailed(let detail):
       "Impossible d’ouvrir chat.db : \(detail)"
     case .queryFailed(let detail):
