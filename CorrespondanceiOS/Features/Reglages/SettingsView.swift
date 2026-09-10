@@ -11,6 +11,7 @@ import SwiftUI
 /// dit en une ligne.
 struct SettingsView: View {
   @Environment(RelayStore.self) private var store
+  @Environment(\.demoSwitch) private var demoSwitch
   @Environment(ThemePreferences.self) private var themes
   @Environment(PushRegistration.self) private var push
   @Environment(\.dismiss) private var dismiss
@@ -40,6 +41,7 @@ struct SettingsView: View {
         incognitoSection
         agentSection
         notificationsSection
+        aboutSection
         signOutSection
       }
       .scrollContentBackground(.hidden)
@@ -297,6 +299,29 @@ struct SettingsView: View {
         }
       }
       .disabled(isSigningOut || store.isDemo)
+
+      if store.isDemo {
+        Button("Quitter la démonstration") { demoSwitch(false) }
+      }
+    } footer: {
+      if store.isDemo {
+        Text("Démonstration : ces conversations sont fictives, rien ne part nulle part.")
+      }
+    }
+  }
+
+  /// Ce qu'Apple demande de trouver dans l'app, et ce qu'un utilisateur
+  /// cherche de toute façon : la politique de confidentialité, où écrire,
+  /// et le code.
+  private var aboutSection: some View {
+    Section {
+      Link("Politique de confidentialité", destination: URL(string: "https://correspondance-eta.vercel.app/confidentialite")!)
+      Link("Aide et contact", destination: URL(string: "https://correspondance-eta.vercel.app/support")!)
+      Link("Code source (MIT)", destination: URL(string: "https://github.com/menufactory43/correspondance-open")!)
+    } header: {
+      Text("À propos")
+    } footer: {
+      Text("Correspondance \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") — gratuit, pour toujours.")
     }
   }
 

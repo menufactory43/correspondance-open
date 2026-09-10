@@ -23,6 +23,14 @@ struct CorrespondanceiOSApp: App {
         .environment(store)
         .environment(themes)
         .environment(push)
+        .environment(\.demoSwitch) { demo in
+          // Un magasin neuf à chaque bascule : la démonstration ne touche ni
+          // au Trousseau ni au Relais, et en sortir reprend la vraie session.
+          store = RelayStore(demo: demo)
+          push.attach(to: store)
+          AppDelegate.store = store
+          if !demo { Task { await store.start() } }
+        }
         // Le chrome du système suit le thème : un thème sombre sur une barre
         // d'état claire, c'est la moitié de l'écran qui jure.
         .preferredColorScheme(themes.theme.isDark ? .dark : .light)

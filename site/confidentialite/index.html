@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Politique de confidentialité — Correspondance</title>
+<meta name="description" content="Ce que Correspondance fait de vos données : rien ne transite par nos serveurs.">
+<link rel="icon" href="/img/favicon.png">
+<link rel="alternate" hreflang="en" href="https://correspondance-eta.vercel.app/en/privacy">
+
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff;--bg-2:#f7f6f3;--ink:#111114;--ink-2:#4b4a52;--ink-3:#83828a;--line:#e6e4df;--accent:#8a3f2b;--sans:"Inter",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}.wrap{width:min(720px,calc(100% - 48px));margin:0 auto;padding:40px 0 80px}
+nav{display:flex;align-items:center;gap:10px;font-weight:600;text-decoration:none;color:var(--ink)}nav img{width:28px;height:28px;border-radius:7px}
+h1{font-size:clamp(32px,5vw,44px);letter-spacing:-.03em;line-height:1.1;margin:36px 0 10px}h2{font-size:22px;letter-spacing:-.02em;margin:40px 0 8px}
+p,li{color:var(--ink-2)}.lede{font-size:19px}ul{padding-left:20px}li{margin:6px 0}
+.btn{display:inline-flex;align-items:center;height:48px;padding:0 22px;border-radius:12px;background:var(--ink);color:#fff;text-decoration:none;font-weight:600;margin-top:16px}
+.note{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:20px 0}
+footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);font-size:14px;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a class="brand" href="/"><nav><img src="/img/icon.png" alt="">Correspondance</nav></a>
+
+<h1>Politique de confidentialité</h1>
+<p class="lede">Correspondance n'a ni compte, ni cloud, ni serveur qui voie vos messages. Cette page dit précisément ce que l'app touche, où ça va, et ce que nous ne recevons jamais.</p>
+<p>Dernière mise à jour : 10 septembre 2026.</p>
+<h2>Ce que nous ne collectons pas</h2>
+<ul>
+<li>Aucun message, aucun contact, aucune photo, aucun vocal ne nous est envoyé. Nous n'avons ni clés ni copie.</li>
+<li>Aucune analyse d'usage, aucun SDK publicitaire, aucun traceur. L'app ne contient aucun outil de mesure.</li>
+<li>Aucun compte Correspondance : il n'y a rien à créer chez nous, donc rien à supprimer.</li>
+</ul>
+<h2>Le Relais : votre serveur</h2>
+<p>Vos conversations Signal, WhatsApp, Instagram, Messenger, X et Slack passent par un Relais que vous installez vous-même, sur votre Mac ou une machine à vous. C'est un serveur Matrix et des ponts (mautrix) qui tournent chez vous. Entre votre iPhone, votre Mac et votre Relais, les messages sont chiffrés de bout en bout ; les clés ne quittent pas vos appareils.</p>
+<p>Les réseaux liés (Meta, Signal, Slack, X) voient le Relais comme un appareil de plus, avec leurs propres conditions et leur propre politique de confidentialité.</p>
+<h2>iMessage</h2>
+<p>Sur le Mac, l'app lit la base de Messages localement, avec votre autorisation d'accès au disque, et envoie par l'app Messages. Rien ne quitte la machine. L'iPhone n'a pas accès à iMessage.</p>
+<h2>Notifications sur iPhone</h2>
+<p>Pour vous prévenir d'un nouveau message quand l'app est fermée, votre Relais passe par une passerelle de notifications que nous hébergeons. Elle reçoit seulement ce qu'il faut pour réveiller l'app : le jeton de notification de votre iPhone, l'identifiant du salon concerné et un compteur. Jamais le contenu du message, ni le nom de l'expéditeur. Ces données ne sont ni conservées au-delà de l'envoi, ni croisées avec quoi que ce soit. Se déconnecter dans les réglages retire votre iPhone de cette passerelle.</p>
+<h2>Contacts, micro, photos</h2>
+<ul>
+<li><b>Contacts</b> : lus sur l'appareil pour nommer les fils et écrire à quelqu'un. Jamais envoyés à nous, ni au Relais.</li>
+<li><b>Micro et reconnaissance vocale</b> : pour enregistrer un vocal et le transcrire. La transcription se fait sur l'appareil.</li>
+<li><b>Photos et appareil photo</b> : pour joindre une image à un message. Elle part vers votre Relais, puis vers le réseau du destinataire.</li>
+</ul>
+<h2>Assistant et agents</h2>
+<p>L'assistant tourne sur votre Mac ou votre machine, avec votre propre abonnement au moteur que vous choisissez (Claude Code, Hermes…). Ce que vous lui adressez est envoyé à ce moteur selon ses conditions à lui, jamais à nous. Un brouillon de l'assistant ne part jamais sans votre validation dès qu'un tiers est dans la conversation.</p>
+<h2>Traduction</h2>
+<p>Le bouton Traduire utilise la traduction d'Apple, sur l'appareil. Aucun texte ne part vers un service de traduction.</p>
+<h2>Import d'une session depuis un navigateur (Mac)</h2>
+<p>Pour lier X, l'app Mac peut, à votre demande explicite, lire la session de votre navigateur (Brave, Chrome, Edge, Arc) pour l'importer dans votre Relais. Cela demande votre accord dans le Trousseau, et rien n'en sort de votre Mac.</p>
+<h2>Le code est public</h2>
+<p>Tout ce qui précède se vérifie : le code de l'app, du Relais et de l'agent est <a href="https://github.com/menufactory43/correspondance-open">sur GitHub</a>, sous licence MIT.</p>
+<h2>Nous écrire</h2>
+<p>Pour toute question sur cette politique : <a href="mailto:meffysto@gmail.com">meffysto@gmail.com</a>.</p>
+
+<footer>© 2026 Correspondance · <a href="/">Accueil</a> · <a href="/en/privacy">English</a></footer>
+</div>
+</body>
+</html>

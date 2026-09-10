@@ -52,6 +52,8 @@
 	<string>Correspondance prend une photo pour la joindre à un message.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Correspondance retrouve vos contacts pour écrire à quelqu’un qui n’a pas encore de conversation, et pour nommer les fils et les membres d’un groupe que le réseau ne désigne que par un numéro.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Correspondance joint votre Relais quand il est sur le même réseau local que cet iPhone.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Correspondance utilise le micro pour vos messages vocaux.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

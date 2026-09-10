@@ -11,6 +11,7 @@ import SwiftUI
 struct RelayLoginView: View {
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
+  @Environment(\.demoSwitch) private var demoSwitch
 
   @State private var homeserver = ""
   @State private var user = ""
@@ -60,6 +61,8 @@ struct RelayLoginView: View {
 
         submit
 
+        demoButton
+
         Text(
           "Le Relais est ton serveur, celui qui porte tes conversations WhatsApp, "
             + "Instagram, Messenger, X, Slack et Signal. Il faut être sur son réseau pour l’atteindre."
@@ -83,7 +86,7 @@ struct RelayLoginView: View {
 
   /// Le site, là où l'app Mac se télécharge. L'iPhone ne pose pas de Relais :
   /// il s'y connecte.
-  private static let siteMac = URL(string: "https://correspondance-eta.vercel.app/")!
+  private static let siteMac = URL(string: "https://correspondance-eta.vercel.app/relais")!
 
   /// Quelqu'un qui installe l'app iPhone en premier n'a rien à écrire dans
   /// ces trois champs : un Relais se pose depuis le Mac, en un clic, et c'est
@@ -214,6 +217,23 @@ struct RelayLoginView: View {
     .buttonStyle(.plain)
     .disabled(!canSubmit)
     .accessibilityLabel("Se connecter au Relais")
+  }
+
+  /// Voir l'app sans Relais : des conversations de démonstration, aucun
+  /// réseau. C'est aussi ce que voit la relecture de l'App Store.
+  private var demoButton: some View {
+    Button {
+      focus = nil
+      demoSwitch(true)
+    } label: {
+      Text("Découvrir en mode démonstration")
+        .font(Typography.body(typeface))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+    .buttonStyle(.plain)
+    .foregroundStyle(theme.accent)
+    .accessibilityHint("Ouvre l’app avec des conversations fictives, sans Relais.")
   }
 
   private func submitIfPossible() {
