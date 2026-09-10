@@ -295,10 +295,18 @@ struct FocusTranscriptView: View {
   /// hors champ — le bas tient, rien ne bouge à l'écran. Avant, les cent vingt
   /// paragraphes se construisaient d'un bloc, page blanche pendant ce temps :
   /// c'est ce qui faisait paraître la bascule lente. `nil` = entier.
+  /// Et comme dans l'Inbox, le reste ne monte plus d'office : de quoi remplir
+  /// deux écrans, puis un cran chaque fois que le lecteur touche le haut
+  /// (`mountOlderIfNeeded`).
   @State private var launchTail: Int? = ThreadMetrics.launchTailCount
   /// Le compte de messages pour lequel une expansion est programmée : si le
   /// fil a changé entre-temps, la passe suivante reprogrammera la sienne.
   @State private var pendingExpansionCount: Int?
+  /// Le jalon « fil complet » ne s'écrit qu'une fois par page.
+  @State private var didReportFull = false
+  /// La géométrie du dernier défilement, hors du graphe : elle bouge à chaque
+  /// frame et personne ne la lit dans un corps.
+  @State private var scrollGeometry = FocusScrollGeometry()
   /// L'encre dit ce qui est nouveau : ce qu'on avait déjà lu en ouvrant la
   /// page reste en encre secondaire, ce qui est arrivé depuis — et ce qu'on
   /// écrit — est en encre pleine. L'œil sait où reprendre, sans pastille.
@@ -540,7 +548,10 @@ struct FocusTranscriptView: View {
       }
       // Une réaction, une citation, un aperçu qui arrive après coup : la page
       // grandit sans que son compte bouge, et le bas doit tenir quand même.
-      .keepScrolledToBottom(isNearBottom: $isNearBottom) { keepBottom(proxy) }
+      .keepScrolledToBottom(
+        isNearBottom: $isNearBottom,
+        onGeometry: { noteScrollGeometry($0, proxy: proxy) }
+      ) { keepBottom(proxy) }
       .onAppear { pinToBottom(proxy) }
       .task {
         guard awaitsFirstFrame else { return }
@@ -566,6 +577,7 @@ struct FocusTranscriptView: View {
         LaunchTrace.event("select")
         isShowingThread = false
         launchTail = ThreadMetrics.launchTailCount
+        didReportFull = false
         readIDs = []
         hasSettledInk = false
         animatesArrivals = false
@@ -641,7 +653,7 @@ struct FocusTranscriptView: View {
       LaunchTrace.event("shown", fullThread.count)
       LaunchBench.noteShown(count: fullThread.count)
       LaunchGate.markThreadPainted()
-      expandTail()
+      expandTail(proxy)
       settleInk()
       // Ce qui est à l'écran à l'ouverture est déjà posé.
       settledMessageID = thread.last?.id
@@ -662,9 +674,9 @@ struct FocusTranscriptView: View {
     readIDs = Set(fullThread.prefix(fullThread.count - fresh).map(\.id))
   }
 
-  /// La queue est peinte ; le reste de la page monte au-dessus, hors champ,
-  /// par paliers d'une frame — cf. `ThreadView`, même mécanique, mêmes bornes.
-  private func expandTail() {
+  /// La queue est peinte ; ce qui manque pour remplir l'écran monte au-dessus,
+  /// hors champ, un palier à la fois — cf. `ThreadView`, même mécanique.
+  private func expandTail(_ proxy: ScrollViewProxy) {
     guard launchTail != nil, !fullThread.isEmpty else { return }
     let count = fullThread.count
     pendingExpansionCount = count
@@ -675,17 +687,51 @@ struct FocusTranscriptView: View {
       try? await Task.sleep(for: .milliseconds(80))
       await ThreadPrewarm.ready(within: .milliseconds(250))
       guard pendingExpansionCount == count, fullThread.count == count else { return }
-      while let tail = launchTail, tail < count {
-        launchTail = tail + ThreadMetrics.expansionStep
-        try? await Task.sleep(for: .milliseconds(16))
-        guard pendingExpansionCount == count, fullThread.count == count else { return }
-      }
       pendingExpansionCount = nil
-      launchTail = nil
-      DispatchQueue.main.async {
-        LaunchTrace.mark("thread-full")
-        LaunchTrace.event("full", count)
+      mountOlderIfNeeded(idle: false, proxy: proxy)
+    }
+  }
+
+  private func noteScrollGeometry(_ probe: ThreadScrollProbe, proxy: ScrollViewProxy) {
+    scrollGeometry.content = probe.content
+    scrollGeometry.viewport = probe.viewport
+    scrollGeometry.top = probe.top
+    mountOlderIfNeeded(idle: probe.idle, proxy: proxy)
+  }
+
+  /// Monte-t-on la suite de la page ? Quand ce qui est monté ne remplit pas
+  /// deux écrans (le bas tient, rien ne bouge), ou quand le lecteur s'est
+  /// arrêté tout en haut (la suite se pose au-dessus, le premier paragraphe
+  /// reste sous ses yeux). Sinon rien — et le jalon « fil complet » s'écrit.
+  private func mountOlderIfNeeded(idle: Bool, proxy: ScrollViewProxy) {
+    guard isShowingThread, pendingExpansionCount == nil, scrollGeometry.viewport > 0 else { return }
+    if launchTail != nil, thread.count < fullThread.count {
+      if scrollGeometry.content < scrollGeometry.viewport * 2 {
+        mountOlder(anchored: false, proxy: proxy)
+        return
       }
+      if idle, scrollGeometry.top <= 4 {
+        mountOlder(anchored: true, proxy: proxy)
+        return
+      }
+    }
+    guard !didReportFull else { return }
+    didReportFull = true
+    LaunchTrace.mark("thread-full")
+    LaunchTrace.event("full", fullThread.count)
+  }
+
+  private func mountOlder(anchored: Bool, proxy: ScrollViewProxy) {
+    guard let tail = launchTail else { return }
+    let anchorID = thread.first?.id
+    let next = tail + ThreadMetrics.expansionStep
+    launchTail = next < fullThread.count ? next : nil
+    guard anchored, let anchorID else { return }
+    isNearBottom = false
+    DispatchQueue.main.async {
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { proxy.scrollTo(anchorID, anchor: .top) }
     }
   }
 
@@ -1055,4 +1101,12 @@ private final class OverlayScrollerHiderView: NSView {
     tokens.forEach { nc.removeObserver($0) }
     tokens.removeAll()
   }
+}
+
+/// Cf. `FocusConversationView.scrollGeometry` — une boîte, pas un état observé.
+@MainActor
+final class FocusScrollGeometry {
+  var content: CGFloat = 0
+  var viewport: CGFloat = 0
+  var top: CGFloat = 0
 }

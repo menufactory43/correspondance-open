@@ -34,6 +34,12 @@ struct ThreadView: View {
   /// (`keepScrolledToBottom`), rien ne bouge à l'écran. Mesuré : le fil
   /// paraît ~190 ms plus tôt au lancement, et 710 → 135 ms entre le clic et
   /// le fil à l'écran sur un fil de 199 messages. `nil` = entier.
+  ///
+  /// Et le reste ne monte plus « tout jusqu'à `windowCount` » d'office : on
+  /// monte de quoi remplir deux écrans, et la suite quand le lecteur touche
+  /// le haut (`mountOlderIfNeeded`). Cent trente bulles de plus, hors champ,
+  /// c'était ~1,2 s de fil principal après chaque bascule — mesuré sur un
+  /// groupe Signal de 168 messages — pour un fil qu'on lit par le bas.
   @State private var launchTail: Int? = LaunchGate.didPaintFirstWindow ? nil : ThreadMetrics.launchTailCount
   /// Combien de messages le fil MONTE — pas combien il en connaît. Un fil de
   /// groupe fleuve (quatre cents messages et plus) monté d'un bloc fait un
@@ -52,6 +58,8 @@ struct ThreadView: View {
   /// fil a changé entre-temps (chargement arrivé après la queue), on laisse
   /// la passe suivante reprogrammer la sienne.
   @State private var pendingExpansionCount: Int?
+  /// Le jalon « fil complet » ne s'écrit qu'une fois par fil ouvert.
+  @State private var didReportFull = false
   /// Où en est le lecteur dans le fil — en bas ou plus haut, en train de
   /// défiler ou non, combien de messages sont arrivés pendant qu'il lisait
   /// plus haut. Tenu HORS du corps de `ThreadView` : ces trois valeurs
@@ -288,16 +296,7 @@ struct ThreadView: View {
   /// vue reste sur le message qu'on lisait — ce qui arrive arrive au-dessus.
   private func olderMessagesButton(_ proxy: ScrollViewProxy) -> some View {
     Button {
-      let anchorID = thread.first?.id
-      tracker.isNearBottom = false
-      windowCount += ThreadMetrics.windowCount
-      if let anchorID {
-        DispatchQueue.main.async {
-          var transaction = Transaction()
-          transaction.disablesAnimations = true
-          withTransaction(transaction) { proxy.scrollTo(anchorID, anchor: .top) }
-        }
-      }
+      mountOlder(by: ThreadMetrics.windowCount, anchored: true, proxy: proxy)
     } label: {
       Text("Voir les \(min(hiddenOlderCount, ThreadMetrics.windowCount)) messages précédents")
         .font(Typography.meta(themes.typeface))
@@ -335,7 +334,7 @@ struct ThreadView: View {
       let visible = thread
       let lastMessageID = visible.last?.id
       VStack(alignment: .leading, spacing: ThreadMetrics.interGroupSpacing) {
-        if hiddenOlderCount > 0, launchTail == nil {
+        if hiddenOlderCount > 0 {
           olderMessagesButton(proxy)
         }
         // Un seul enfant par groupe, comparable en bloc — séparateur d'heure
@@ -445,7 +444,8 @@ struct ThreadView: View {
     // grandit sans que son compte bouge, et le bas doit tenir quand même.
     .keepScrolledToBottom(
       isNearBottom: Bindable(tracker).isNearBottom,
-      isScrolling: Bindable(tracker).isScrolling
+      isScrolling: Bindable(tracker).isScrolling,
+      onGeometry: { noteScrollGeometry($0, proxy: proxy) }
     ) { keepBottom(proxy) }
     // TODO(macOS 27) : réduire la barre d'outils au défilement vers le bas.
     // .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
@@ -478,6 +478,7 @@ struct ThreadView: View {
       isShowingThread = false
       launchTail = ThreadMetrics.launchTailCount
       windowCount = ThreadMetrics.windowCount
+      didReportFull = false
       animatesArrivals = false
       settledMessageID = store.messages.last?.id
       inkLedger.reset()
@@ -493,6 +494,7 @@ struct ThreadView: View {
       if !thread.contains(where: { $0.id == target }),
          let index = store.messages.firstIndex(where: { $0.id == target }) {
         windowCount = max(windowCount, store.messages.count - index + 10)
+        launchTail = nil
         DispatchQueue.main.async {
           proxy.scrollTo(target, anchor: .center)
         }
@@ -562,6 +564,62 @@ struct ThreadView: View {
     }
   }
 
+  /// La géométrie du défilement, à chaque mouvement et à chaque arrêt. Tenue
+  /// dans le `tracker`, hors du corps : la lire ici ne refait rien.
+  private func noteScrollGeometry(_ probe: ThreadScrollProbe, proxy: ScrollViewProxy) {
+    tracker.contentHeight = probe.content
+    tracker.viewportHeight = probe.viewport
+    tracker.topOffset = probe.top
+    mountOlderIfNeeded(idle: probe.idle, proxy: proxy)
+  }
+
+  /// Monte-t-on la suite du fil ? Deux raisons, et deux seulement :
+  /// - ce qui est monté ne remplit pas deux écrans — le lecteur remonterait
+  ///   d'un geste et tomberait sur le vide. On complète par paliers, le bas
+  ///   tient (`keepScrolledToBottom`), rien ne bouge ;
+  /// - le lecteur s'est arrêté tout en haut de ce qui est monté. La suite se
+  ///   pose au-dessus, et la première bulle reste sous ses yeux.
+  /// Sinon rien : les messages hors champ ne se construisent pas. Une fois
+  /// le fil assez haut — ou entier — le jalon « fil complet » s'écrit, pour
+  /// le banc.
+  private func mountOlderIfNeeded(idle: Bool, proxy: ScrollViewProxy) {
+    guard isShowingThread, pendingExpansionCount == nil, tracker.viewportHeight > 0 else { return }
+    if hiddenOlderCount > 0 {
+      if tracker.contentHeight < tracker.viewportHeight * 2 {
+        mountOlder(by: ThreadMetrics.expansionStep, anchored: false, proxy: proxy)
+        return
+      }
+      if idle, tracker.topOffset <= 4 {
+        mountOlder(by: ThreadMetrics.expansionStep, anchored: true, proxy: proxy)
+        return
+      }
+    }
+    guard !didReportFull else { return }
+    didReportFull = true
+    LaunchTrace.mark("thread-full")
+    LaunchTrace.event("full", store.messages.count)
+  }
+
+  /// Un cran de plus vers le haut. `anchored` : la bulle qui était première
+  /// reste à sa place à l'écran — ce qui arrive arrive au-dessus. Sans ancre,
+  /// c'est le bas qui tient.
+  private func mountOlder(by step: Int, anchored: Bool, proxy: ScrollViewProxy) {
+    let anchorID = thread.first?.id
+    if let tail = launchTail {
+      let next = tail + step
+      launchTail = next < windowCount ? next : nil
+    } else {
+      windowCount += step
+    }
+    guard anchored, let anchorID else { return }
+    tracker.isNearBottom = false
+    DispatchQueue.main.async {
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { proxy.scrollTo(anchorID, anchor: .top) }
+    }
+  }
+
   /// Si on lisait le bas, on y reste — dans la même passe, sans animer : rien
   /// ne doit défiler à l'écran. Remonter d'un cran libère l'ancre.
   private static let bottomAnchorID = "thread-bottom"
@@ -589,9 +647,10 @@ struct ThreadView: View {
       LaunchBench.noteShown(count: store.messages.count)
       LaunchGate.markThreadPainted()
       if launchTail != nil, !store.messages.isEmpty {
-        // La queue est peinte ; le reste du fil monte au-dessus, hors champ.
-        // Un court délai, pour que la frame de la queue parte avant. Si le
-        // fil change d'ici là (chargement après la bascule), la passe qui
+        // La queue est peinte. Ce qui manque pour remplir l'écran monte
+        // au-dessus, hors champ, un palier à la fois (`mountOlderIfNeeded`) —
+        // après un court délai, pour que la frame de la queue parte avant. Si
+        // le fil change d'ici là (chargement après la bascule), la passe qui
         // suit reprogrammera la sienne.
         let count = store.messages.count
         pendingExpansionCount = count
@@ -601,22 +660,8 @@ struct ThreadView: View {
           // encore en route — un temps borné, jamais au prix du fil.
           await ThreadPrewarm.ready(within: .milliseconds(250))
           guard pendingExpansionCount == count, store.messages.count == count else { return }
-          // Par PALIERS d'une frame, pas d'un bloc : cent trente bulles d'un
-          // coup gelaient le fil principal ~500 ms — fenêtre à l'écran, mais
-          // sourde au premier clic et au premier défilement. Chaque palier
-          // reste sous le budget d'une frame ou deux ; le bas tient entre eux
-          // (`keepScrolledToBottom`), rien ne bouge à l'écran.
-          while let tail = launchTail, tail < windowCount, tail < count {
-            launchTail = min(tail + ThreadMetrics.expansionStep, windowCount)
-            try? await Task.sleep(for: .milliseconds(16))
-            guard pendingExpansionCount == count, store.messages.count == count else { return }
-          }
           pendingExpansionCount = nil
-          launchTail = nil
-          DispatchQueue.main.async {
-            LaunchTrace.mark("thread-full")
-            LaunchTrace.event("full", store.messages.count)
-          }
+          mountOlderIfNeeded(idle: false, proxy: proxy)
         }
       }
       // Ce qui est à l'écran à l'ouverture est déjà posé.
@@ -649,9 +694,9 @@ enum ThreadMetrics {
   /// fenêtre haute de bulles courtes (≈ 40 pt chacune), assez peu pour que
   /// la passe reste brève : 15 → 30 messages coûtaient ~50 ms de plus.
   static let launchTailCount = 20
-  /// Ce que chaque palier ajoute au-dessus de la queue, une frame après
-  /// l'autre, jusqu'à `windowCount`. Quarante bulles : ~100 ms de montage,
-  /// le fil principal respire entre deux.
+  /// Ce que chaque palier ajoute au-dessus de la queue — jusqu'à remplir deux
+  /// écrans, puis un cran chaque fois que le lecteur touche le haut. Quarante
+  /// bulles : ~100 ms de montage, le fil principal respire entre deux.
   static let expansionStep = 40
   /// La fenêtre d'affichage du fil : ce qui est monté d'un coup. Au-delà,
   /// « Voir les messages précédents ». Cent cinquante : trois fois le plus
@@ -934,6 +979,11 @@ final class ThreadScrollTracker {
   var isScrolling = false
   /// Ce qui est arrivé pendant qu'on lisait plus haut.
   var missedCount = 0
+  /// La géométrie du dernier défilement — cf. `ThreadScrollProbe`. Hors
+  /// observation : elle bouge à chaque frame, et personne ne la lit dans un corps.
+  @ObservationIgnored var contentHeight: CGFloat = 0
+  @ObservationIgnored var viewportHeight: CGFloat = 0
+  @ObservationIgnored var topOffset: CGFloat = 0
 }
 
 /// La pilule ↓ : elle ne paraît que lorsqu'on a remonté, et dit combien de

@@ -106,15 +106,20 @@ extension View {
   /// `isScrolling`, s'il est donné, suit le geste du lecteur : vrai du premier
   /// mouvement à la fin de l'inertie. Ce qui permet au fil de se rendre
   /// insensible au survol pendant ce temps — cf. `ThreadView`.
+  /// `onGeometry`, s'il est donné, reçoit la géométrie du défilement à chaque
+  /// mouvement et à chaque arrêt : c'est par là que le fil sait s'il est trop
+  /// court pour l'écran, ou que le lecteur touche le haut — cf. `ThreadView`.
   func keepScrolledToBottom(
     threshold: CGFloat = 24,
     isNearBottom: Binding<Bool>,
     isScrolling: Binding<Bool>? = nil,
+    onGeometry: ((ThreadScrollProbe) -> Void)? = nil,
     keepBottom: @escaping () -> Void
   ) -> some View {
     if #available(macOS 15.0, *) {
       modifier(KeepScrolledToBottom(
-        threshold: threshold, isNearBottom: isNearBottom, isScrolling: isScrolling, keepBottom: keepBottom
+        threshold: threshold, isNearBottom: isNearBottom, isScrolling: isScrolling,
+        onGeometry: onGeometry, keepBottom: keepBottom
       ))
     } else {
       // Rien d'observable ici : on retient le bas à chaque changement de hauteur.
@@ -152,6 +157,7 @@ private struct KeepScrolledToBottom: ViewModifier {
   let threshold: CGFloat
   @Binding var isNearBottom: Bool
   var isScrolling: Binding<Bool>?
+  var onGeometry: ((ThreadScrollProbe) -> Void)?
   let keepBottom: () -> Void
 
   @State private var isReaderScrolling = false
@@ -184,9 +190,12 @@ private struct KeepScrolledToBottom: ViewModifier {
         ScrollBottomProbe(
           content: geometry.contentSize.height,
           visibleBottom: geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top,
-          contentBottom: geometry.contentSize.height + geometry.contentInsets.bottom
+          contentBottom: geometry.contentSize.height + geometry.contentInsets.bottom,
+          viewport: geometry.containerSize.height + geometry.contentInsets.top,
+          top: geometry.contentOffset.y + geometry.contentInsets.top
         )
       } action: { old, new in
+        onGeometry?(ThreadScrollProbe(content: new.content, viewport: new.viewport, top: new.top, idle: false))
         guard isNearBottom, !isReaderScrolling else { return }
         let drifted = new.visibleBottom < new.contentBottom - threshold
         guard new.content != old.content || drifted else { return }
@@ -211,8 +220,24 @@ private struct KeepScrolledToBottom: ViewModifier {
         let visibleBottom = geometry.contentOffset.y + geometry.containerSize.height + geometry.contentInsets.top
         let contentBottom = geometry.contentSize.height + geometry.contentInsets.bottom
         isNearBottom = visibleBottom >= contentBottom - threshold
+        onGeometry?(ThreadScrollProbe(
+          content: geometry.contentSize.height,
+          viewport: geometry.containerSize.height + geometry.contentInsets.top,
+          top: geometry.contentOffset.y + geometry.contentInsets.top,
+          idle: true
+        ))
       }
   }
+}
+
+/// Ce que le fil apprend du défilement : la hauteur de ce qui est monté, celle
+/// de la fenêtre qui le montre, et la distance déjà remontée depuis le haut
+/// (zéro : le lecteur est tout en haut). `idle` : le geste est fini.
+struct ThreadScrollProbe: Equatable {
+  var content: CGFloat
+  var viewport: CGFloat
+  var top: CGFloat
+  var idle: Bool
 }
 
 /// La position de défilement tenue HORS du graphe de vues — cf. `KeepScrolledToBottom`.
@@ -243,6 +268,8 @@ private struct ScrollBottomProbe: Equatable {
   var content: CGFloat
   var visibleBottom: CGFloat
   var contentBottom: CGFloat
+  var viewport: CGFloat
+  var top: CGFloat
 }
 
 /// Bouton d’outil discret, style Apple / Claude.

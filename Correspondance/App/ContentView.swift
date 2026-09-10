@@ -28,16 +28,20 @@ struct ContentView: View {
     !store.isMatrixConnected && !store.conversations.contains { $0.network.livesOnRelay }
   }
 
-  @ViewBuilder
   var body: some View {
-    if manqueUnRelais {
-      AccueilRelaisView()
-        .correspondanceWindowBackground(theme.paper)
-        .tint(theme.accent)
-        .correspondanceWindowChrome(theme)
-    } else {
-      inbox
+    Group {
+      if manqueUnRelais {
+        AccueilRelaisView()
+          .correspondanceWindowBackground(theme.paper)
+          .tint(theme.accent)
+          .correspondanceWindowChrome(theme)
+      } else {
+        inbox
+      }
     }
+    // Le bouton rouge cache la fenêtre au lieu de la fermer : la rouvrir
+    // depuis le Dock ne reconstruit rien. Cf. `InboxWindowHider`.
+    .inboxHidesInsteadOfClosing()
   }
 
   private var inbox: some View {

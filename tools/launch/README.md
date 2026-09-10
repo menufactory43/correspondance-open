@@ -294,3 +294,56 @@ d'inbox de chaque salon (`lastListedMessage`) se trouve par un parcours, plus
 par un tri de tous ses messages : `conversations()` passe de 67 à 14 ms par
 retour de `/sync` sur l'iPhone. Ce qui reste par retour utile : l'index du
 partage quand la liste a vraiment changé (~50 ms), et le `/sync` lui-même.
+
+## Septembre 2026 — la bascule ressentie, et le Dock
+
+Ce que l'utilisateur ressentait (« changer de conversation, c'est long ») ne
+se voyait pas au banc : le banc chronomètre sélection → premier fil garni, et
+s'arrête là. Mesuré sur l'instance vivante (journal + `xctrace --attach`, un
+groupe Signal de 168 messages) : le fil paraissait à ~500 ms, puis le fil
+principal restait gelé **1,2 à 1,7 s** de plus — les cent trente bulles hors
+champ montées par paliers au-dessus de la queue, dans un fil qu'on lit par le
+bas. Deux passes SwiftUI par bascule en plus : l'ancien fil démonté et la page
+vide, puis le nouveau fil ; la première coûtait autant que la seconde.
+
+Attention à la mesure : interroger l'app par l'accessibilité (une sonde AX,
+un `describe`, un gestionnaire de fenêtres) allume l'arbre d'accessibilité de
+SwiftUI pour toute la vie du process — ~17 % du fil principal ensuite à chaque
+passe. Mesurer sur une instance neuve, pilotée par `CORR_BENCH`, jamais à
+travers l'AX.
+
+Instance de mesure sans toucher aux vraies données : `CORRESPONDANCE_HOME=banc`
+avec une copie de `correspondance.sqlite` (`sqlite3 … ".backup"`) dans
+`~/Library/Application Support/Correspondance-banc`, lancée par son binaire
+(`open -n` refuse une seconde instance du même identifiant). Ne pas y copier
+`merged-contacts.json` : sans les fils iMessage (pas d'accès disque complet
+pour un binaire hors `/Applications`), `normalizeMergedContacts` se rappelait
+sans fin depuis le `didSet` de `conversations` — dépassement de pile.
+
+Gardé, mesuré en blocs alternés (2 × 3 variantes, 12 fils réels chacune) :
+
+| | clic → fil montré (médiane / p90) | sélection → fil complet (médiane / max) |
+|---|---|---|
+| avant | 270–310 / 590–790 ms | 340 / 690 ms |
+| montage à la demande | 305 / 400–600 | **130 / 200** |
+| + fil chargé avant la sélection | **210 / 340–400** | 200 / 370 |
+
+- **Montage à la demande** (`ThreadView.mountOlderIfNeeded`, pareil sur la
+  page Focus) : la queue, puis de quoi remplir deux écrans, puis un cran de
+  quarante quand le lecteur s'arrête tout en haut — la première bulle reste
+  sous ses yeux. `keepScrolledToBottom(onGeometry:)` fournit la géométrie.
+  Au lancement, `thread` → `thread-full` : 2,8 s → 100 ms.
+- **Le fil se charge avant la sélection** (`InboxStore.select`) : une passe
+  au lieu de deux. Deux clics rapprochés : le dernier gagne.
+
+Le Dock : fenêtre fermée puis Dock cliqué, SwiftUI reconstruisait la scène
+entière — **2,3 à 2,8 s** avant la fenêtre, et sur l'écran principal quel que
+soit l'écran d'où elle venait. L'inbox se cache désormais au lieu de se fermer
+(`InboxWindowHider` : bouton rouge et ⌘W), et le Dock la remontre telle
+quelle : **250–400 ms**, même fenêtre, même écran, dont ~100 ms d'événement
+Apple et d'activation.
+
+Reste, hors de ce lot : la liste de l'inbox (cent quatre-vingts lignes, menu
+contextuel compris) se refait à chaque changement de `conversations` — ~150 ms
+par bascule, visible dans chaque `/sync` ; et l'accessibilité, si un client AX
+est présent.

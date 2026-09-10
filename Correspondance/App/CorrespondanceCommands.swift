@@ -59,6 +59,13 @@ struct CorrespondanceCommands: Commands {
       .keyboardShortcut("r", modifiers: [.command, .shift])
     }
 
+    // ⌘W : l'inbox se cache au lieu de se fermer (cf. `InboxWindowHider`) ;
+    // une fenêtre détachée, les Réglages, la connexion se ferment comme avant.
+    CommandGroup(replacing: .saveItem) {
+      Button("Fermer") { InboxWindowHider.closeKeyWindow() }
+        .keyboardShortcut("w", modifiers: [.command])
+    }
+
     CommandMenu("Inbox") {
       // ⌘⇧F revient au transfert (comme Beeper) : le mode Focus passe en ⌘⇧O.
       Button("Mode Focus") {

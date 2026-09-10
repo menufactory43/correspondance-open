@@ -332,6 +332,9 @@ final class InboxStore {
   /// Une session par fil ouvert, et une seule : l'inbox et la fenêtre détachée
   /// d'un même fil tiennent le même objet.
   @ObservationIgnored private var sessions: [String: ConversationSession] = [:]
+  /// Le rang du dernier `select` : un chargement qui revient pour un clic
+  /// dépassé ne publie rien.
+  @ObservationIgnored private var selectGeneration = 0
 
   /// Les fils qui ont une fenêtre à eux. Observé : le menu Fenêtre en tire le
   /// libellé « Détacher » / « Ramener dans l'inbox ».
@@ -2676,6 +2679,18 @@ final class InboxStore {
     // Le brouillon appartient au fil, pas au curseur : il reste dans SA session
     // et n'a rien à suivre. On l'écrit tout de même avant de changer de page.
     persistDraftsNow()
+    // Le fil se charge AVANT que la sélection soit publiée. Publier d'abord,
+    // c'était deux passes SwiftUI — l'ancien fil démonté et la page vide,
+    // puis le nouveau fil — et la première coûtait autant que la seconde.
+    // Mesuré au banc (12 fils réels, blocs alternés) : clic → fil montré
+    // 305 → 210 ms à la médiane, p90 600 → 370. Deux clics rapprochés : le
+    // dernier gagne, le chargement du premier ne publie rien.
+    selectGeneration += 1
+    let generation = selectGeneration
+    if let id {
+      await loadMessages(into: session(for: id))
+      guard generation == selectGeneration else { return }
+    }
     selectedConversationID = id
     selectionIsUserMade = id != nil
     unreadAtSelection = id.flatMap { cible in conversations.first { $0.id == cible }?.unreadCount } ?? 0
@@ -2686,7 +2701,6 @@ final class InboxStore {
     pruneSessions()
     // En incognito, lire n'est pas lire : le compteur reste, le réseau ne sait rien.
     if let id, !isIncognito { clearUnread(for: id) }
-    await loadMessagesForSelection()
     if let id { indexMessages(messages, conversationID: id) }
     refreshThreadSearchMatches()
     await markConversationRead()
