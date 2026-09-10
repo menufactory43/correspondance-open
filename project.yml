@@ -285,6 +285,12 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"
+        # Pas sur Mac : TestFlight proposait d'installer l'app iPhone sur un
+        # Mac Apple Silicon, où elle remplaçait la vraie app Mac et son écran
+        # « Il manque un Relais » par un formulaire de connexion sans issue.
+        # Le Mac a son app ; l'iPhone reste un iPhone.
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_MACCATALYST: NO
         # L'icône iOS : la même image que le Mac, en 1024 sans alpha, dans
         # CorrespondanceiOS/Assets.xcassets. Sans elle, App Store Connect refuse
         # le build (90713, CFBundleIconName manquant).

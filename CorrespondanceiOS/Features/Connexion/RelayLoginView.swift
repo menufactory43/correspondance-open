@@ -67,6 +67,8 @@ struct RelayLoginView: View {
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)
         .fixedSize(horizontal: false, vertical: true)
+
+        sansRelais
       }
       .padding(Spacing.lg)
       .frame(maxWidth: 520)
@@ -77,6 +79,36 @@ struct RelayLoginView: View {
     .onAppear {
       if homeserver.isEmpty { homeserver = store.rememberedHomeserver }
     }
+  }
+
+  /// Le site, là où l'app Mac se télécharge. L'iPhone ne pose pas de Relais :
+  /// il s'y connecte.
+  private static let siteMac = URL(string: "https://correspondance-eta.vercel.app/")!
+
+  /// Quelqu'un qui installe l'app iPhone en premier n'a rien à écrire dans
+  /// ces trois champs : un Relais se pose depuis le Mac, en un clic, et c'est
+  /// lui qui donne l'adresse et le code. Sans ce paragraphe, l'écran était
+  /// une impasse — c'est ce qu'a vu le premier testeur.
+  private var sansRelais: some View {
+    VStack(alignment: .leading, spacing: Spacing.xs) {
+      Text("Pas encore de Relais ?")
+        .font(Typography.body(typeface))
+        .foregroundStyle(theme.ink)
+      Text(
+        "Il se pose depuis Correspondance pour Mac, en un clic : l’app l’installe, "
+          + "puis te donne l’adresse et l’identifiant à saisir ici."
+      )
+      .font(Typography.meta(typeface))
+      .foregroundStyle(theme.inkSecondary)
+      .fixedSize(horizontal: false, vertical: true)
+      Link("Télécharger Correspondance pour Mac", destination: Self.siteMac)
+        .font(Typography.meta(typeface))
+        .foregroundStyle(theme.accent)
+    }
+    .padding(Spacing.sm)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .accessibilityElement(children: .combine)
   }
 
   private var header: some View {

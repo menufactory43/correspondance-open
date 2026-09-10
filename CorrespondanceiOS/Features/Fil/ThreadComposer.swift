@@ -370,9 +370,25 @@ struct ThreadComposer: View {
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Envoyer")
-    } else {
+    } else if canRecordVoice {
       micButton
+    } else {
+      // Pas de vocal sur ce réseau (X n'a aucun type audio dans sa table) :
+      // le micro s'efface, et la flèche éteinte garde la place. Mieux vaut
+      // un geste absent qu'un vocal que le pont renvoie « not bridged ».
+      Image(systemName: "arrow.up")
+        .font(.system(size: 15, weight: .bold))
+        .foregroundStyle(theme.inkTertiary)
+        .frame(width: 32, height: 32)
+        .background(Circle().fill(theme.paperSecondary))
+        .accessibilityHidden(true)
     }
+  }
+
+  /// Le micro a-t-il un sens dans ce fil ? Seulement là où le pont porte le
+  /// vocal — la même règle que `canRecordVoice` sur le Mac.
+  private var canRecordVoice: Bool {
+    store.sendingNetwork(conversationID)?.supportsVoiceMessages == true
   }
 
   /// Le micro qu'on maintient. Pas un `Button` : c'est le glissement qui

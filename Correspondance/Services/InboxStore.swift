@@ -3681,6 +3681,10 @@ final class InboxStore {
         }
       }
     case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
+      // Un `.MOV` du Mac partait tel quel, et Signal le refusait (pas de
+      // `video/quicktime` dans sa table) : la vidéo part en MP4, comme sur
+      // l'iPhone.
+      let attachments = await VideoTranscoder.settled(attachments)
       try await matrix.send(
         conversationID: conversation.id,
         text: text,

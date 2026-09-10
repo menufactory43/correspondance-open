@@ -169,7 +169,6 @@
 		D2343A8A5F28659A2C88CB28 /* matrix-sync-whatsapp.json in Resources */ = {isa = PBXBuildFile; fileRef = E9B0FA1C79E4DC8DEEA0D739 /* matrix-sync-whatsapp.json */; };
 		D5D194636ECCA227A0CA1491 /* InFlightBubbleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFAF5C30E2667E1D30A64689 /* InFlightBubbleTests.swift */; };
 		D612B696A66B2E50298191F2 /* AgentNoticePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AB95F4E61BDA44900DC906E /* AgentNoticePill.swift */; };
-		D6A2F52406CBF0C7AB7784F5 /* VideoTranscoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BCDFBC71A80F70251DC706A /* VideoTranscoder.swift */; };
 		D6BD49E60D5A37EC73C89D91 /* SettingsAccountsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = A747BE4317FAD76FBF14AE1C /* SettingsAccountsPane.swift */; };
 		D71222FEC5E0DB599CD49F74 /* CorrespondanceCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B5EBA07D4C06B9C1A13312E /* CorrespondanceCommands.swift */; };
 		D715DF3EF9D0387064702836 /* IMessageAttachmentSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */; };
@@ -339,7 +338,6 @@
 		471DBB431518CAF077924600 /* SettingsAutomationPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAutomationPane.swift; sourceTree = "<group>"; };
 		493AAB9D6DB5A60432C901F5 /* IMessageGroupDetectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMessageGroupDetectionTests.swift; sourceTree = "<group>"; };
 		4976195DBD7F9218A7A3A5AA /* matrix-sync-cc.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "matrix-sync-cc.json"; sourceTree = "<group>"; };
-		4BCDFBC71A80F70251DC706A /* VideoTranscoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTranscoder.swift; sourceTree = "<group>"; };
 		4D700131A2B49F6AA3D0F586 /* GroupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupSheet.swift; sourceTree = "<group>"; };
 		4EF8CAED95D3DE50E4E57CA8 /* SendLaterViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLaterViews.swift; sourceTree = "<group>"; };
 		503F3F88679B6D47523DF6E9 /* RelayStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayStore.swift; sourceTree = "<group>"; };
@@ -641,7 +639,6 @@
 				F182E185A81655BCD5EF0FE6 /* ThreadComposer.swift */,
 				FE0BB00F497F79E70CF5B424 /* ThreadInfoSheet.swift */,
 				16D2CE4167125A5E3D61756E /* ThreadView.swift */,
-				4BCDFBC71A80F70251DC706A /* VideoTranscoder.swift */,
 			);
 			path = Fil;
 			sourceTree = "<group>";
@@ -1398,7 +1395,6 @@
 				76E873AC961652BB6447FF67 /* ThreadComposer.swift in Sources */,
 				C05D603D740D93B6EBCCFE87 /* ThreadInfoSheet.swift in Sources */,
 				D91D4B35B2A3A6F8A4C99B2B /* ThreadView.swift in Sources */,
-				D6A2F52406CBF0C7AB7784F5 /* VideoTranscoder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1910,6 +1906,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
 				PRODUCT_NAME = Correspondance;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -2015,6 +2013,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.correspondance.ios;
 				PRODUCT_NAME = Correspondance;
 				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
