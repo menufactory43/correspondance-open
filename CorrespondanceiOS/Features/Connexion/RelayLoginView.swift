@@ -46,7 +46,7 @@ struct RelayLoginView: View {
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
 
-          field("Identifiant", hint: "meffysto", text: $user, field: .user)
+          field("Identifiant", hint: "prénom", text: $user, field: .user)
             .textContentType(.username)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()

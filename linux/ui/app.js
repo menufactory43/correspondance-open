@@ -287,7 +287,7 @@
       <div class="tabs"><button type="button" data-tab="code" class="${loginTab === "code" ? "on" : ""}">Code d'appairage</button><button type="button" data-tab="manual" class="${loginTab === "manual" ? "on" : ""}">Adresse et identifiant</button></div>
       ${loginTab === "code" ? `<div class="field"><label>Le code que l'installeur du Relais affiche (<code>correspondance://relais/…</code>)</label><textarea name="code" placeholder="correspondance://relais/eyJ…" autofocus></textarea></div><div class="chemin" id="chemin"></div>`
         : `<div class="field"><label>Adresse du Relais</label><input name="homeserver" placeholder="relais.local:8008" value="${esc(st.rememberedHomeserver)}" autocomplete="url"></div>
-           <div class="field"><label>Identifiant</label><input name="user" placeholder="meffysto" autocomplete="username"></div>
+           <div class="field"><label>Identifiant</label><input name="user" placeholder="prénom" autocomplete="username"></div>
            <div class="field"><label>Mot de passe</label><input name="password" type="password" placeholder="••••••••" autocomplete="current-password"></div>`}
       ${st.connectionError ? `<div class="error">${esc(st.connectionError)}</div>` : ""}
       <button class="btn" ${connecting ? "disabled" : ""}>${connecting ? "Connexion…" : "Se connecter"}</button>
