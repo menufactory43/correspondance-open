@@ -199,6 +199,16 @@ services:
       # La clé APNs (.p8) vit HORS du dépôt et hors de data/ : elle ne se
       # régénère pas, elle se retélécharge chez Apple (une fois, jamais deux).
       - ./secrets/apns:/secrets:ro
+    # L'image amont déclare un HEALTHCHECK en `curl`, mais n'embarque plus
+    # `curl` : la sonde échoue à chaque passage et le conteneur se dit
+    # `unhealthy` alors qu'il signe et livre (vu le 10 sept. 2026 : 44 797
+    # échecs d'affilée depuis le bootstrap). Python, lui, est là — c'est ce
+    # que Sygnal est. La sonde ci-dessous remplace celle de l'image.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 25s
     networks:
       - matrix
 
