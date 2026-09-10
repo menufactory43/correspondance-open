@@ -100,15 +100,20 @@ struct GrowingTextEditor: NSViewRepresentable {
 
   func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: NSScrollView, context: Context) -> CGSize? {
     guard let textView = context.coordinator.textView else { return nil }
-    let width = proposal.width.map { max($0, 1) } ?? max(textView.bounds.width, 1)
+    // SwiftUI sonde aussi à zéro et à l'infini (la HStack jauge la souplesse
+    // de chacun) : on mesure à part, sans jamais redimensionner la vue.
+    let width: CGFloat? = {
+      if let proposed = proposal.width, proposed.isFinite { return max(proposed, 1) }
+      return textView.bounds.width > 1 ? textView.bounds.width : nil
+    }()
     let lineHeight = textView.lineHeight
-    let contentHeight = textView.usedHeight(forWidth: width)
+    let measured = textView.usedSize(forWidth: width)
     var height = min(
-      max(contentHeight, lineHeight),
+      max(measured.height, lineHeight),
       lineHeight * CGFloat(maxLines) + lineSpacing * CGFloat(maxLines - 1)
     )
     if let maxHeight { height = min(height, max(maxHeight, lineHeight)) }
-    return CGSize(width: width, height: ceil(height))
+    return CGSize(width: width ?? ceil(max(measured.width, 1)), height: ceil(height))
   }
 
   /// Pose police, encres, interligne et texte — sans réécrire ce que l'on est
@@ -195,14 +200,38 @@ final class EditorTextView: NSTextView {
     return ceil(layoutManager.defaultLineHeight(for: font))
   }
 
-  /// La hauteur qu'occupe le texte composé sur cette largeur.
-  func usedHeight(forWidth width: CGFloat) -> CGFloat {
-    guard let layoutManager, let textContainer else { return lineHeight }
-    if abs(bounds.width - width) > 0.5 {
-      setFrameSize(NSSize(width: width, height: bounds.height))
+  /// Un second gestionnaire de mise en page sur le même texte, pour mesurer.
+  /// Redimensionner la vraie vue à chaque sondage de SwiftUI la laissait
+  /// parfois sur une largeur nulle ou infinie : plus rien ne se dessinait.
+  private lazy var measuringContainer: NSTextContainer = {
+    let container = NSTextContainer(
+      size: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    )
+    container.lineFragmentPadding = 0
+    container.widthTracksTextView = false
+    container.heightTracksTextView = false
+    return container
+  }()
+
+  private lazy var measuringLayoutManager: NSLayoutManager = {
+    let manager = NSLayoutManager()
+    manager.addTextContainer(measuringContainer)
+    return manager
+  }()
+
+  /// La place qu'occupe le texte composé sur cette largeur — `nil` = sans
+  /// contrainte, sur une seule ligne.
+  func usedSize(forWidth width: CGFloat?) -> CGSize {
+    guard let textStorage else { return CGSize(width: 0, height: lineHeight) }
+    if measuringLayoutManager.textStorage !== textStorage {
+      textStorage.addLayoutManager(measuringLayoutManager)
     }
-    layoutManager.ensureLayout(for: textContainer)
-    return layoutManager.usedRect(for: textContainer).height
+    let containerWidth = width.map { max($0, 1) } ?? CGFloat.greatestFiniteMagnitude
+    if measuringContainer.size.width != containerWidth {
+      measuringContainer.size = NSSize(width: containerWidth, height: CGFloat.greatestFiniteMagnitude)
+    }
+    measuringLayoutManager.ensureLayout(for: measuringContainer)
+    return measuringLayoutManager.usedRect(for: measuringContainer).size
   }
 
   override func draw(_ dirtyRect: NSRect) {
