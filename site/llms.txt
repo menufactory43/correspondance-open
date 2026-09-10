@@ -2,7 +2,7 @@
 
 > Free app: all your messaging apps in one inbox, on Mac, iPhone and Linux. iMessage, Signal, WhatsApp, Instagram, Messenger, X and Slack. An AI assistant drafts replies you approve before they go out, sums up what you missed, and translation happens on the device. Nothing leaves without you. Self-hosted (the relay runs on your own machine), no Meta app needed on your phone.
 
-- Price: free (beta on TestFlight and GitHub releases), no subscription.
+- Price: free, forever. Open source under the MIT license, no subscription, no paid tier.
 - Platforms: macOS 14+, iOS 18+, Linux (agent).
 - Mac and Linux: https://github.com/menufactory43/correspondance-releases/releases
 - Source code (MIT): https://github.com/menufactory43/correspondance-open
