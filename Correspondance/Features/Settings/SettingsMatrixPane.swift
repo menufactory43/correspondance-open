@@ -9,7 +9,7 @@ struct SettingsMatrixPane: View {
   @Environment(ThemePreferences.self) private var themes
 
   @State private var homeserver = InboxStore.defaultHomeserver
-  @State private var matrixUser = "meffysto"
+  @State private var matrixUser = ""
   @State private var matrixPassword = ""
   @State private var isConnecting = false
   /// Le code que l'installeur du Relais a affiché — c'est le chemin normal.
@@ -163,7 +163,7 @@ struct SettingsMatrixPane: View {
         SettingsCard(title: "Ou avec un identifiant") {
           VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField("Adresse du Relais", text: $homeserver)
-            TextField("Identifiant", text: $matrixUser)
+            TextField("Identifiant", text: $matrixUser, prompt: Text("prénom"))
             SecureField("Mot de passe", text: $matrixPassword)
           }
           .textFieldStyle(.roundedBorder)
