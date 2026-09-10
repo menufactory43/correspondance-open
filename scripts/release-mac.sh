@@ -9,7 +9,7 @@
 # Ce qu'il faut sur la machine, et rien d'autre :
 #   - Xcode connecté au compte de l'équipe AKMNXGVVGX (Réglages › Comptes) : c'est
 #     lui qui pose la signature Developer ID à l'export, sans profil à la main ;
-#   - le profil notarytool « notarisation » dans le Trousseau ;
+#   - un profil notarytool dans le Trousseau, nommé par git config correspondance.notaryProfile ;
 #   - ~/unclic-publication/tailcat-darwin-arm64 pour que le mandataire soit embarqué
 #     (sinon l'app le dit à l'écran, et la build ne casse pas).
 #
@@ -24,7 +24,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NOTARIZE="${NOTARIZE:-1}"
-NOTARY_PROFILE="${NOTARY_PROFILE:-notarisation}"
+# Le nom du profil notarytool est propre à chaque machine : il se lit dans la
+# config git locale (git config correspondance.notaryProfile <nom>), jamais
+# dans le dépôt. À défaut : « notarisation ».
+NOTARY_PROFILE="${NOTARY_PROFILE:-$(git config --get correspondance.notaryProfile 2>/dev/null || echo notarisation)}"
 TEAM="AKMNXGVVGX"
 SCHEME="Correspondance"
 OUT="build/release"

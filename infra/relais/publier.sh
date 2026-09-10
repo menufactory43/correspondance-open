@@ -201,7 +201,10 @@ echo
 # tout — `flags=0x20002(adhoc,linker-signed)` est ce que le linker pose d'office
 # sur arm64.
 IDENTITE="$(security find-identity -v -p codesigning 2>/dev/null | grep -c 'Developer ID Application' || true)"
-NOTARY_PROFILE="${CORRESPONDANCE_NOTARY_PROFILE:-notarisation}"
+# Le nom du profil notarytool est propre à chaque machine : il se lit dans la
+# config git locale (git config correspondance.notaryProfile <nom>), jamais
+# dans le dépôt. À défaut : « notarisation ».
+NOTARY_PROFILE="${CORRESPONDANCE_NOTARY_PROFILE:-$(git config --get correspondance.notaryProfile 2>/dev/null || echo notarisation)}"
 echo "Signature et notarisation"
 if [ "$SIGNER" = 1 ] && [ "$IDENTITE" = 0 ]; then
   echo "!! --signer demandé sans identité « Developer ID Application » sur cette machine." >&2
