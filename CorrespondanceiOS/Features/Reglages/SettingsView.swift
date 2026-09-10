@@ -318,6 +318,11 @@ struct SettingsView: View {
       Link("Politique de confidentialité", destination: URL(string: "https://correspondance-eta.vercel.app/confidentialite")!)
       Link("Aide et contact", destination: URL(string: "https://correspondance-eta.vercel.app/support")!)
       Link("Code source (MIT)", destination: URL(string: "https://github.com/menufactory43/correspondance-open")!)
+      if !store.isDemo {
+        // Voir l'app avec des conversations fictives, sans toucher à la
+        // session : « Quitter la démonstration » la reprend telle quelle.
+        Button("Voir la démonstration") { demoSwitch(true) }
+      }
     } header: {
       Text("À propos")
     } footer: {

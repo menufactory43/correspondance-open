@@ -12,7 +12,7 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "9"
+    CURRENT_PROJECT_VERSION: "10"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Correspondance
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
@@ -284,7 +284,7 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         GENERATE_INFOPLIST_FILE: YES
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         # Pas sur Mac : TestFlight proposait d'installer l'app iPhone sur un
         # Mac Apple Silicon, où elle remplaçait la vraie app Mac et son écran
         # « Il manque un Relais » par un formulaire de connexion sans issue.
@@ -421,7 +421,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: CorrespondanceiOSNotificationService/Info.plist
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: AKMNXGVVGX
         CODE_SIGN_IDENTITY: "Apple Development"
@@ -455,7 +455,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: CorrespondanceiOSPartage/Info.plist
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: AKMNXGVVGX
         CODE_SIGN_IDENTITY: "Apple Development"
@@ -507,7 +507,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.correspondance.ios.uitests
         GENERATE_INFOPLIST_FILE: YES
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         TEST_TARGET_NAME: Correspondance iOS
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: ""

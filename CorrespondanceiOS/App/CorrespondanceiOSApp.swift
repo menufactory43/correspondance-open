@@ -20,6 +20,10 @@ struct CorrespondanceiOSApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
+        // Un magasin neuf (bascule démo) = des vues neuves : sinon la pile de
+        // navigation et la barre d'onglets gardent l'état de l'ancien, et un
+        // fil ne s'ouvre plus.
+        .id(ObjectIdentifier(store))
         .environment(store)
         .environment(themes)
         .environment(push)
@@ -72,6 +76,14 @@ struct CorrespondanceiOSApp: App {
         }
         .onOpenURL { url in
           guard url.scheme == Partage.schemaURL else { return }
+          // `correspondance://demo` : la démonstration, pour les captures et
+          // la relecture — le même chemin que le bouton de l'écran de connexion.
+          if url.host == "demo" {
+            store = RelayStore(demo: true)
+            push.attach(to: store)
+            AppDelegate.store = store
+            return
+          }
           Task { await store.viderLaBoiteDuPartage() }
         }
         .onChange(of: store.session) { _, session in
