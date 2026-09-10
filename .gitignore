@@ -35,3 +35,17 @@ docs/verify-*.png
 
 # Worktrees d'agents — jamais versionnés.
 .claude/worktrees/
+
+# Outils d'agents et d'éditeurs — config locale, jamais versionnée.
+.agents/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.kiro/
+.opencode/
+.vscode/
+.zed/
+.mcp.json
+opencode.json
+skills-lock.json

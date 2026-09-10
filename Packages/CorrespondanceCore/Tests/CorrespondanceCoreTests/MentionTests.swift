@@ -24,7 +24,7 @@ final class MentionTests: XCTestCase {
   }
 
   func testUneAdresseEmailNOuvrePasLeMenu() {
-    XCTAssertNil(MentionParser.activeToken(in: "écris à meffysto@gmail.com"))
+    XCTAssertNil(MentionParser.activeToken(in: "écris à moi@exemple.fr"))
   }
 
   func testUneMentionPoseeSuivieDUnBlancRefermeLeMenu() {
@@ -92,7 +92,7 @@ final class MentionTests: XCTestCase {
   }
 
   func testUneAdresseEmailNEstPasUneMention() {
-    XCTAssertEqual(surligne("écris à papa@pasteque.fr", people), [])
+    XCTAssertEqual(surligne("écris à papa@prune.fr", people), [])
   }
 
   func testLAgentSeReconnaitSansEtreMembre() {

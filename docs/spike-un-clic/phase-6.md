@@ -220,7 +220,7 @@ Plan d'installation du Relais : tout est conforme.
 l'inbox quand il manque un Relais. `Correspondance/Services/RelaisInstallation.swift` tient le
 téléchargement, la vérification et le processus enfant.
 
-![L'écran d'accueil](phase-6-accueil.png)
+_(capture retirée avant publication : L'écran d'accueil)_
 
 Il n'y a que deux cartes, parce qu'il n'y a que deux endroits où poser un Relais. Pas de carte
 « hébergé » : nous n'hébergeons rien. Aucune question sur le chiffrement : il est d'office depuis
@@ -232,18 +232,18 @@ L'app va chercher `SHA256SUMS` puis `relais-install.sh` à `CORRESPONDANCE_RELEA
 somme avant d'exécuter quoi que ce soit**, lance le script en `bash … --json` comme processus
 enfant, et lit sa sortie ligne par ligne.
 
-![Les étapes qui défilent](phase-6-etapes.png)
+_(capture retirée avant publication : Les étapes qui défilent)_
 
 À la dernière ligne, elle colle le code elle-même — `RelayPairingCode(encoded:)` puis
 `connectMatrix`, c'est-à-dire exactement le chemin du champ des réglages, sans le copier-coller.
 
-![Connectée, la note à soi](phase-6-connectee.png)
+_(capture retirée avant publication : Connectée, la note à soi)_
 
 **26 secondes du clic à la note à soi visible.** Rien n'a été tapé : ni adresse, ni identifiant, ni
 mot de passe, ni code. (La liste des conversations est recadrée : ce Mac porte de vraies
 conversations iMessage.)
 
-![Le fil de la note à soi](phase-6-note-a-soi.png)
+_(capture retirée avant publication : Le fil de la note à soi)_
 
 ### Deux choses qui ne se sont vues qu'à l'exécution
 
@@ -262,7 +262,7 @@ c'est-à-dire entre la fin de l'installation et la connexion qui fait disparaît
 d'accueil — après quoi il devenait inatteignable. Il s'affiche désormais sur la **marque** que
 `install.sh` écrit et que `uninstall.sh` exige avant d'effacer quoi que ce soit :
 
-![« Tout retirer » sur un Relais déjà posé](phase-6-tout-retirer.png)
+_(capture retirée avant publication : « Tout retirer » sur un Relais déjà posé)_
 
 Cliqué pour de vrai, depuis l'app :
 

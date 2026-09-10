@@ -173,7 +173,7 @@ $ CORRESPONDANCE_HOME=unclic /tmp/dd-unclic/Build/Products/Debug/Correspondance.
 
 Réglages › Serveur Matrix, le code collé dans « Connecter un Relais » :
 
-![L'app connectée au Relais posé par l'installeur](phase-3-app-mac.png)
+_(capture retirée avant publication : L'app connectée au Relais posé par l'installeur)_
 
 *« Correspondance-unclic », « Matrix live · aucun fil bridgé », « Synchronisé avec le Relais ».*
 
@@ -320,7 +320,7 @@ comme le Relais d'essai, et c'est le tunnel qui fait le reste.
 
 Code collé dans l'app, même chemin qu'au § 2 :
 
-![L'app connectée au Relais du NUC par le tunnel](phase-3-app-nuc.png)
+_(capture retirée avant publication : L'app connectée au Relais du NUC par le tunnel)_
 
 Et la contre-preuve, prise **sur le NUC** :
 

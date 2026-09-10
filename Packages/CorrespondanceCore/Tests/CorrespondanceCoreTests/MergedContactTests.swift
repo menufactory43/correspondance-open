@@ -273,9 +273,9 @@ extension MergedContactTests {
   }
 
   func testAbsorbingAddsAThreadAndSwallowsAnotherMergedLine() {
-    let pasteque = MergedContact(id: "merged:p", title: "Pastèque", memberIDs: ["im", "wa"], defaultConversationID: "im")
+    let prune = MergedContact(id: "merged:p", title: "Pastèque", memberIDs: ["im", "wa"], defaultConversationID: "im")
     let julie = MergedContact(id: "merged:j", title: "Julie", memberIDs: ["ms", "ig"], defaultConversationID: "ms")
-    let result = pasteque.absorbing(["sig", "merged:j", "im"], contacts: [pasteque, julie])
+    let result = prune.absorbing(["sig", "merged:j", "im"], contacts: [prune, julie])
     XCTAssertEqual(result.contact.memberIDs, ["im", "wa", "sig", "ms", "ig"])
     XCTAssertEqual(result.contact.title, "Pastèque")
     XCTAssertEqual(result.contact.defaultConversationID, "im")

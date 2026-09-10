@@ -161,8 +161,8 @@ This is your management room: prefixing commands with `!fb` is not required.
 Réglages › Comptes montre désormais quatre réseaux pontés. « Connecter… » ouvre la feuille et
 va **jusqu'à demander la session** ; rien n'y a été saisi, aucun compte n'a été lié.
 
-![La feuille « Connecter Instagram »](phase-4-instagram.png)
-![La feuille « Connecter Messenger »](phase-4-messenger.png)
+_(capture retirée avant publication : La feuille « Connecter Instagram »)_
+_(capture retirée avant publication : La feuille « Connecter Messenger »)_
 
 *Un défaut d'affichage à noter, qui n'appartient pas à ce livrable : la vue web de la feuille
 Messenger commence par montrer la bannière de cookies d'Instagram — la `WKWebView` n'est pas
@@ -441,7 +441,7 @@ $ cat /tmp/correspondance-cc.unclic.log
          · prêts : claude, claude-code-acp
 ```
 
-![cc actif sur ce Mac](phase-4-cc-actif.png)
+_(capture retirée avant publication : cc actif sur ce Mac)_
 
 Le moteur ne manque pas : `claude` 2.1.258 est installé et connecté sur cette machine, donc
 le tour est un vrai tour, pas une simulation.
@@ -451,11 +451,11 @@ le tour est un vrai tour, pas une simulation.
 10:41:02 [!OE-lGe…] ← 4 caractères
 ```
 
-![`@cc ping` dans la note à soi, et `pong`](phase-4-note-a-soi.png)
+_(capture retirée avant publication : `@cc ping` dans la note à soi, et `pong`)_
 
 Et le journal des tours s'écrit :
 
-![Derniers tours : ping, 6 s, 10:41](phase-4-tours.png)
+_(capture retirée avant publication : Derniers tours : ping, 6 s, 10:41)_
 
 ### La garde du second cc
 
@@ -464,7 +464,7 @@ Une session de `@cc` ouverte depuis « ailleurs » (`initial_device_display_name
 refuse **en nommant la session** — la lecture passe par `#admins` et par l'analyseur de
 `Debug` Rust :
 
-![La garde refuse la seconde activation](phase-4-garde.png)
+_(capture retirée avant publication : La garde refuse la seconde activation)_
 
 > cc tourne déjà sur **umbrel** (vu il y a 9 s). Deux agents sur le même compte répondraient
 > deux fois — arrête celui-là d'abord. Si c'est déjà fait, le Relais met jusqu'à un quart

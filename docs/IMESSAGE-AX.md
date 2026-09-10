@@ -166,7 +166,7 @@ action** — jamais d'échec silencieux.
 
 Conséquence pour la relecture : **aucune** des fonctions 1, 2, 4 (tapback, réponse
 citée, modifier, annuler) n'a pu être exercée en vrai. Il n'existe par ailleurs aucune
-conversation à soi-même dans ce `chat.db` (aucun `chat` sur `meffysto@gmail.com`,
+conversation à soi-même dans ce `chat.db` (aucun `chat` sur `moi@exemple.fr`,
 `+33699000001` ni `moi@travail.fr`), donc rien n'aurait pu être validé en
 écriture sans écrire à un tiers.
 

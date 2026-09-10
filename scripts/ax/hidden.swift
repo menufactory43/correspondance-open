@@ -6,7 +6,7 @@ print("avant : front=\(frontBefore) hidden=\(app()?.isHidden ?? false)")
 // 1) lancement/deep link sans activation
 let cfg = NSWorkspace.OpenConfiguration(); cfg.activates = false; cfg.hides = true; cfg.addsToRecentItems = false
 let sem = DispatchSemaphore(value: 0)
-NSWorkspace.shared.open([URL(string: "imessage://meffysto@gmail.com")!],
+NSWorkspace.shared.open([URL(string: "imessage://moi@exemple.fr")!],
   withApplicationAt: URL(fileURLWithPath: "/System/Applications/Messages.app"),
   configuration: cfg) { _, e in print("open err=\(String(describing: e))"); sem.signal() }
 _ = sem.wait(timeout: .now() + 10)

@@ -317,7 +317,7 @@ $ … preuve-chiffrement envoyer appareilA '!9xY9…' "Preuve phase 2 : ce messa
 → ce que le Relais stocke : type=m.room.encrypted algorithm=m.megolm.v1.aes-sha2
 ```
 
-![La Note à soi chiffrée, lue par l'app](app-note-chiffree.png)
+_(capture retirée avant publication : La Note à soi chiffrée, lue par l'app)_
 
 *La ligne d'inbox de la « Note à soi », dans l'app, à 01:35 : « Preuve phase 2 : ce message
 est chiffré d… ». Le Relais ne stocke qu'un `m.room.encrypted` ; l'app affiche le texte.

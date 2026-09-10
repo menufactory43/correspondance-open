@@ -1883,7 +1883,7 @@ final class InboxStore {
   // MARK: - Matrix / réseaux bridgés
 
   /// Adresse par défaut du homeserver (NUC via Tailscale).
-  static let defaultHomeserver = "http://relais.exemple.ts.net:8008"
+  static let defaultHomeserver = ""
 
   func connectMatrix(homeserver: String, user: String, password: String) async {
     let trimmed = homeserver.trimmingCharacters(in: .whitespacesAndNewlines)

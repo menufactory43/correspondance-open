@@ -364,7 +364,7 @@ $ open /tmp/dd-unclic/Build/Products/Debug/Correspondance.app --env CORRESPONDAN
 
 Réglages › Serveur Matrix, le code collé dans « Connecter un Relais » :
 
-![L'app connectée au Relais du spike](app-connectee.png)
+_(capture retirée avant publication : L'app connectée au Relais du spike)_
 
 *« Correspondance-unclic » (jeu de données à part), « Matrix connecté (@essai:unclic.local) »,
 « Synchronisé avec le Relais ». L'app n'a rien décodé de travers : le `RelayPairingCode` du
@@ -388,12 +388,12 @@ $ curl -s -X PUT …/rooms/%219xY9…/send/m.room.message/preuve… \
 {"event_id":"$nncn91GYjJ3QI5eXxT4xR9J-RCK1DAJr1qcLDkW_00k"}
 ```
 
-![La Note à soi dans l'inbox](note-a-soi.png)
+_(capture retirée avant publication : La Note à soi dans l'inbox)_
 
 Et après un arrêt/relance complet du Relais (celui de la mesure de démarrage à froid), l'app
 reprend son `/sync` toute seule, sans intervention :
 
-![Après redémarrage du Relais](note-a-soi-apres-redemarrage.png)
+_(capture retirée avant publication : Après redémarrage du Relais)_
 
 **Ce qui n'a pas pu être automatisé.** Le pilotage AppleScript de la liste des conversations
 n'aboutit pas : `set selected of row 2` et le clic aux coordonnées atteignent bien l'élément
