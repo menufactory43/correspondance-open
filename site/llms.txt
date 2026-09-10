@@ -5,6 +5,7 @@
 - Price: free (beta on TestFlight and GitHub releases), no subscription.
 - Platforms: macOS 14+, iOS 18+, Linux (agent).
 - Mac and Linux: https://github.com/menufactory43/correspondance-releases/releases
+- Source code (MIT): https://github.com/menufactory43/correspondance-open
 - iPhone: https://testflight.apple.com/join/pv7HR2YT
 - Site: https://correspondance-eta.vercel.app (French), https://correspondance-eta.vercel.app/en/ (English)
 - Maker: meffysto (@menufactory43), built with Claude Code in Swift.
