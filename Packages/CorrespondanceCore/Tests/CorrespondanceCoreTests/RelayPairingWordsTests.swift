@@ -20,7 +20,7 @@ final class RelayPairingWordsTests: XCTestCase {
     )
     XCTAssertEqual(
       code.fingerprintWords(),
-      ["chêne", "falaise", "dune", "givre", "flotte", "sable"],
+      ["olive", "arbre", "houle", "kiosque", "neige", "grange"],
       "produit par : infra/matrix/pair.sh"
     )
   }
