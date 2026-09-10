@@ -107,3 +107,7 @@ Six ambiances (papier / dune / clair de lune / encre de nuit / vieux bureau / ci
 export Developer ID par Xcode (compte de l'équipe connecté), notarisation avec le profil
 `notarisation` du Trousseau, ticket agrafé sur l'app puis sur le DMG. `NOTARIZE=0` pour une
 build signée sans l'aller-retour Apple. Le résultat est dans `build/release/`.
+
+## Licence
+
+MIT — voir [`LICENSE`](LICENSE). Avant de commiter, activer le garde-fou : `git config core.hooksPath scripts/hooks` (gitleaks relit ce qui est indexé).

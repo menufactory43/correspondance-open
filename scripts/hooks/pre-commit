@@ -1,0 +1,5 @@
+#!/bin/sh
+# Rien de secret ni de personnel ne part dans un commit : gitleaks relit ce
+# qui est indexé. Activer une fois par clone : git config core.hooksPath scripts/hooks
+command -v gitleaks >/dev/null 2>&1 || { echo "gitleaks absent (brew install gitleaks) — commit refusé"; exit 1; }
+exec gitleaks protect --staged --no-banner --redact
