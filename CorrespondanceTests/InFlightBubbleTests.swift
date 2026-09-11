@@ -26,6 +26,42 @@ final class InFlightBubbleTests: XCTestCase {
     XCTAssertEqual(InboxStore.keepingInFlight(fresh, from: current).map(\.id), ["$event"])
   }
 
+  /// Le cas du bug revenu sur le Mac : le PUT a répondu (`isPending` retombé)
+  /// mais le `/sync` qui portera l'événement n'est pas encore passé — celui
+  /// déclenché par le brouillon vidé revient sans lui. La bulle ne doit pas
+  /// disparaître le temps du `/sync` suivant.
+  func testDeliveredBubbleSurvivesASyncThatDoesNotShowItYet() {
+    let current = [message("a", fromMe: false), echo("local-1", text: "Salut", network: .signal)]
+    let fresh = [message("a", fromMe: false)]
+    XCTAssertEqual(InboxStore.keepingInFlight(fresh, from: current).map(\.id), ["a", "local-1"])
+  }
+
+  /// Et dès que le Relais montre sa copie, c'est elle qui reste.
+  func testDeliveredBubbleYieldsOnceTheRelayShowsIt() {
+    let current = [echo("local-1", text: "Salut", network: .signal)]
+    let fresh = [
+      ChatMessage(
+        id: "$event", conversationID: "!salon", network: .signal, text: "Salut",
+        sentAt: Date(), isFromMe: true
+      )
+    ]
+    XCTAssertEqual(InboxStore.keepingInFlight(fresh, from: current).map(\.id), ["$event"])
+  }
+
+  /// Une photo envoyée : l'écho dit « 📷 Photo », la copie du Relais porte le
+  /// fichier. Même nombre de pièces jointes = même message, pas de doublon.
+  func testAttachmentEchoYieldsToTheRelayCopy() {
+    let photo = MessageAttachment(id: "p", contentType: "image/jpeg", filename: "p.jpg", localPath: "/tmp/p.jpg")
+    var local = echo("local-1", text: "📷 Photo", network: .signal)
+    local.attachments = [photo]
+    var relayed = ChatMessage(
+      id: "$event", conversationID: "!salon", network: .signal, text: "p.jpg",
+      sentAt: Date(), isFromMe: true
+    )
+    relayed.attachments = [photo]
+    XCTAssertEqual(InboxStore.keepingInFlight([relayed], from: [local]).map(\.id), ["$event"])
+  }
+
   func testAlreadyKnownBubbleIsNotDuplicated() {
     let current = [message("local-1", fromMe: true, pending: true)]
     let fresh = [message("local-1", fromMe: true)]
@@ -34,10 +70,12 @@ final class InFlightBubbleTests: XCTestCase {
 
   // MARK: - L'écho local d'un message déjà parti
 
-  private func echo(_ id: String, text: String, ageSeconds: Double = 5) -> ChatMessage {
+  private func echo(
+    _ id: String, text: String, ageSeconds: Double = 5, network: MessageNetwork = .iMessage
+  ) -> ChatMessage {
     ChatMessage(
-      id: id, conversationID: "imessage:1", network: .iMessage, text: text,
-      sentAt: Date().addingTimeInterval(-ageSeconds), isFromMe: true
+      id: id, conversationID: network == .iMessage ? "imessage:1" : "!salon", network: network,
+      text: text, sentAt: Date().addingTimeInterval(-ageSeconds), isFromMe: true
     )
   }
 

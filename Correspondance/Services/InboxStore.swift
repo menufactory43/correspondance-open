@@ -4044,7 +4044,10 @@ final class InboxStore {
       // brouillon d'agent qu'on vient d'ignorer revenait au message suivant.
       refreshed = HiddenMessageStore.visible(refreshed, hiddenIDs: hiddenMessageIDs)
       let others = session.messages.filter { !bridgedIDs.contains($0.conversationID) }
-      let recombined = (others + Self.keepingInFlight(refreshed, from: session.messages))
+      // Seules les bulles des membres bridgés se comparent au Relais : un écho
+      // iMessage est déjà dans `others`, le recoudre ici le doublerait.
+      let bridgedCurrent = session.messages.filter { bridgedIDs.contains($0.conversationID) }
+      let recombined = (others + Self.keepingInFlight(refreshed, from: bridgedCurrent))
         .sorted { $0.sentAt < $1.sentAt }
       // Le `/sync` revient dès qu'un événement passe QUELQUE PART — une frappe,
       // un accusé de lecture dans un autre salon. Réécrire le fil à l'identique
@@ -4078,11 +4081,19 @@ final class InboxStore {
   /// rendre la main pendant l'envoi — l'agent se met à « écrire » dès qu'on
   /// lui parle — et la réécriture du fil faisait disparaître la bulle
   /// optimiste, pas encore au magasin, jusqu'à la confirmation du Relais.
-  /// Une fois livrée (`isPending` retombé), la copie du Relais la remplace.
+  ///
+  /// Livrée (`isPending` retombé) ne veut pas dire relue : le PUT du Relais a
+  /// répondu, mais l'événement n'entre au magasin qu'au `/sync` suivant. Un
+  /// `/sync` parti avant — le brouillon vidé à l'envoi en déclenche un aussitôt
+  /// — revenait sans le message, et la bulle disparaissait le temps du suivant.
+  /// L'écho local survit donc jusqu'à ce que le Relais montre sa copie, qui
+  /// le remplace alors (`keepingLocalEchoes`).
   static func keepingInFlight(_ fresh: [ChatMessage], from current: [ChatMessage]) -> [ChatMessage] {
     let known = Set(fresh.map(\.id))
     let flying = current.filter { $0.isPending && $0.isFromMe && !known.contains($0.id) }
-    return flying.isEmpty ? fresh : fresh + flying
+    let delivered = current.filter { !$0.isPending && $0.isFromMe && $0.id.hasPrefix("local-") }
+    let withFlying = flying.isEmpty ? fresh : fresh + flying
+    return delivered.isEmpty ? withFlying : keepingLocalEchoes(withFlying, from: delivered)
   }
 
   /// Le fil relu depuis la source, SANS perdre ce qu'on vient d'envoyer.
@@ -4095,24 +4106,32 @@ final class InboxStore {
   /// donc la bulle pouvait manquer longtemps.
   ///
   /// On garde donc l'écho local tant que la source ne montre pas le message :
-  /// de moi, même texte, à quelques minutes près. Passé dix minutes sans
-  /// retrouvailles, on le lâche — une pièce jointe ne se compare pas au texte,
-  /// et un écho qu'on ne saura jamais apparier deviendrait un doublon éternel.
+  /// de moi, même texte — ou, pour un envoi de pièces jointes, même nombre de
+  /// pièces jointes, l'écho portant « 📷 Photo » et non le nom du fichier —, à
+  /// quelques minutes près. Passé dix minutes sans retrouvailles, on le lâche :
+  /// un écho qu'on ne saura jamais apparier deviendrait un doublon éternel.
   static func keepingLocalEchoes(_ fresh: [ChatMessage], from current: [ChatMessage]) -> [ChatMessage] {
     let echoes = current.filter { $0.isFromMe && $0.id.hasPrefix("local-") }
     guard !echoes.isEmpty else { return fresh }
     let now = Date()
     let survivors = echoes.filter { echo in
       guard now.timeIntervalSince(echo.sentAt) < 600 else { return false }
-      let attendu = echo.text.trimmingCharacters(in: .whitespacesAndNewlines)
       return !fresh.contains { candidate in
         candidate.isFromMe
-          && candidate.text.trimmingCharacters(in: .whitespacesAndNewlines) == attendu
           && abs(candidate.sentAt.timeIntervalSince(echo.sentAt)) < 300
+          && isSameOutgoingContent(echo, candidate)
       }
     }
     guard !survivors.isEmpty else { return fresh }
     return (fresh + survivors).sorted { $0.sentAt < $1.sentAt }
+  }
+
+  /// L'écho et sa copie relue disent-ils la même chose ? Le texte tranche ; à
+  /// défaut (pièces jointes sans texte), le nombre de pièces jointes.
+  private static func isSameOutgoingContent(_ echo: ChatMessage, _ candidate: ChatMessage) -> Bool {
+    let attendu = echo.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if candidate.text.trimmingCharacters(in: .whitespacesAndNewlines) == attendu { return true }
+    return !echo.attachments.isEmpty && echo.attachments.count == candidate.attachments.count
   }
 
   /// Ce fil est-il réellement lu par quelqu'un en ce moment ? L'inbox le lit si
