@@ -1082,19 +1082,33 @@ public actor MatrixBridgeService {
   /// Marque le fil lu côté réseau, à l'ouverture. Silencieux en cas d'échec :
   /// un accusé perdu ne doit pas faire échouer l'ouverture d'une conversation.
   public func markRead(conversationID: String) async {
-    guard let roomID = roomID(forConversation: conversationID),
-          let last = rooms[roomID]?.sortedMessages.last
-    else { return }
-    // L'accusé se pose sur le DERNIER événement, le nôtre compris : c'est lui
-    // qui remet le compteur du serveur à zéro. Ne l'envoyer que sur un message
-    // reçu laissait un fil « 2 non lus » pour toujours dès qu'on avait répondu
-    // depuis l'autre appareil — l'iPhone ne posait plus d'accusé, le Relais
-    // recomptait les deux à chaque `/sync`.
-    try? await client.sendReadReceipt(roomID: roomID, eventID: last.id)
+    guard let roomID = roomID(forConversation: conversationID), let room = rooms[roomID] else { return }
+    // L'accusé se pose sur le DERNIER événement du fil, quel qu'il soit, le nôtre
+    // compris : c'est lui qui remet le compteur du serveur à zéro. Ne l'envoyer
+    // que sur un message reçu laissait un fil « 2 non lus » pour toujours dès
+    // qu'on avait répondu depuis l'autre appareil ; ne l'envoyer que sur un
+    // message *visible* laissait de même un fil dont le dernier message a été
+    // supprimé — et un fil sans plus aucun message n'en recevait aucun.
+    guard let eventID = await latestEventID(of: room) else { return }
+    try? await client.sendReadReceipt(roomID: roomID, eventID: eventID)
     // Et le modèle local suit tout de suite : le serveur ne renvoie
     // `unread_notifications` qu'au prochain `/sync` qui touche ce salon, et
     // d'ici là `conversations()` aurait continué d'annoncer l'ancien compte.
     rooms[roomID]?.unreadCount = 0
+  }
+
+  /// Le dernier événement connu du fil ; à défaut (fil vide relu du magasin
+  /// local, où seuls les messages survivent), le serveur le dit. Un écho local
+  /// (`local-…`) n'est pas un événement : le serveur refuserait l'accusé.
+  private func latestEventID(of room: MatrixRoomModel) async -> String? {
+    let lastMessage = room.sortedMessages.last(where: { !$0.id.hasPrefix("local-") })
+    if let known = room.latestEventID {
+      if let lastMessage, lastMessage.sentAt > room.latestEventAt { return lastMessage.id }
+      return known
+    }
+    if let lastMessage { return lastMessage.id }
+    let page = try? await client.roomMessages(roomID: room.roomID, direction: "b", limit: 1)
+    return page?.chunk.first?.eventID
   }
 
   /// Quitte le salon d'un fil, et l'oublie côté cache : quitter le portail d'un

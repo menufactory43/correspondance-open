@@ -32,6 +32,7 @@ public struct MatrixSyncParser: Sendable {
         applyAgentProposal(event, to: &model)
         applyAgentNotice(event, to: &model)
         applyRedaction(event, to: &model)
+        if let id = event.eventID { model.noteEvent(id: id, at: event.sentAt) }
       }
       for event in (room.ephemeral?.events ?? []) {
         applyReceipt(event, to: &model)
@@ -127,6 +128,7 @@ public struct MatrixSyncParser: Sendable {
       applyAgentProposal(event, to: &model)
       applyAgentNotice(event, to: &model)
       applyRedaction(event, to: &model)
+      if let id = event.eventID { model.noteEvent(id: id, at: event.sentAt) }
     }
     resolveQuotes(in: &model)
     let after = model.messagesByID.count + model.reactionsByEventID.count

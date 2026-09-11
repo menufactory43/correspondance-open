@@ -39,6 +39,23 @@ public struct MatrixRoomModel: Sendable {
   /// arrive — et disent au service ce qu'il reste à aller chercher.
   public var unresolvedQuoteMessageIDs: Set<String> = []
   public var lastEventAt: Date = .distantPast
+  /// Le DERNIER événement du fil, quel qu'il soit — message, adhésion,
+  /// suppression, état. C'est là que se pose l'accusé de lecture : le serveur
+  /// compte les notifications *après* l'accusé, et un accusé posé sur le dernier
+  /// message *visible* laisse tout ce qui suit (une suppression, un message
+  /// déjà supprimé) compter pour toujours. Vu le 11 sept. sur un groupe Signal :
+  /// l'unique message effacé deux minutes après son arrivée, plus aucun message
+  /// dans le fil, donc aucun accusé envoyé, et « 2 non lus » qui revenaient à
+  /// chaque `/sync` malgré dix ouvertures.
+  public var latestEventID: String?
+  public var latestEventAt: Date = .distantPast
+
+  /// Note un événement du fil ; le plus récent (par horodatage serveur) gagne.
+  public mutating func noteEvent(id: String, at date: Date) {
+    guard latestEventID == nil || date >= latestEventAt else { return }
+    latestEventID = id
+    latestEventAt = date
+  }
   /// Les modifications reçues avant le message qu'elles corrigent — une page
   /// remontée à l'envers en livre. La dernière par cible seulement : c'est
   /// elle qui fait foi, les intermédiaires n'ont plus rien à dire.
