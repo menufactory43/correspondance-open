@@ -20,7 +20,11 @@ struct MessageActionsOverlay: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var isPickingEmoji = false
-  @State private var pendingDeletion = false
+  /// « Supprimer pour tout le monde… » demande confirmation : la carte
+  /// d'actions se change en question, plutôt qu'une alerte système. Présentée
+  /// depuis cet overlay (un `if let` dans un `.overlay`), l'alerte s'affichait
+  /// mais ses boutons ne répondaient pas — vu sur iPhone 16 Pro, iOS 26.6.
+  @State private var isConfirmingDeletion = false
   @State private var hasAppeared = false
   /// Poser ou retirer une réaction se sent au doigt, comme dans Messages.
   @State private var reacted = 0
@@ -58,17 +62,6 @@ struct MessageActionsOverlay: View {
         react(emoji)
       }
       .environment(themes)
-    }
-    .alert("Supprimer ce message pour tout le monde ?", isPresented: $pendingDeletion) {
-      Button("Supprimer", role: .destructive) {
-        let fil = conversationID
-        let bulle = message.id
-        Task { @MainActor in await store.deleteEverywhere(messageID: bulle, conversationID: fil) }
-        close()
-      }
-      Button("Annuler", role: .cancel) { close() }
-    } message: {
-      Text("Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour.")
     }
   }
 
@@ -131,7 +124,48 @@ struct MessageActionsOverlay: View {
 
   // MARK: - Les actions
 
+  @ViewBuilder
   private var actions: some View {
+    if isConfirmingDeletion {
+      deletionConfirmation
+    } else {
+      actionList
+    }
+  }
+
+  /// La question, à la place de la liste : le titre, ce que ça fait, puis
+  /// le geste en rouge et « Annuler » qui rend la liste.
+  private var deletionConfirmation: some View {
+    VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Supprimer ce message pour tout le monde ?")
+          .font(Typography.body(typeface, size: 16).weight(.semibold))
+          .foregroundStyle(theme.ink)
+        Text("Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour.")
+          .font(Typography.meta(typeface))
+          .foregroundStyle(theme.inkSecondary)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 12)
+      divider
+      action("Supprimer", systemImage: "trash", destructive: true) {
+        let fil = conversationID
+        let bulle = message.id
+        Task { @MainActor in await store.deleteEverywhere(messageID: bulle, conversationID: fil) }
+        close()
+      }
+      divider
+      action("Annuler", systemImage: "xmark") {
+        withAnimation(.easeOut(duration: 0.18)) { isConfirmingDeletion = false }
+      }
+    }
+    .frame(width: 260)
+    .glassSurface(cornerRadius: 16, fallbackFill: theme.sidebar, border: theme.edge)
+    .transition(.opacity)
+  }
+
+  private var actionList: some View {
     VStack(spacing: 0) {
       action("Répondre en citant", systemImage: "arrowshape.turn.up.left") {
         store.setReplyTarget(message.id, conversationID: conversationID)
@@ -171,7 +205,7 @@ struct MessageActionsOverlay: View {
       if store.canDeleteEverywhere(message) {
         divider
         action("Supprimer pour tout le monde…", systemImage: "trash", destructive: true) {
-          pendingDeletion = true
+          withAnimation(.easeOut(duration: 0.18)) { isConfirmingDeletion = true }
         }
       }
       divider
@@ -182,6 +216,7 @@ struct MessageActionsOverlay: View {
     }
     .frame(width: 260)
     .glassSurface(cornerRadius: 16, fallbackFill: theme.sidebar, border: theme.edge)
+    .transition(.opacity)
   }
 
   private var divider: some View {
