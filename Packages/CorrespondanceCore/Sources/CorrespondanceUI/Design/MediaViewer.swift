@@ -182,6 +182,35 @@ public struct StableVideoPlayer: View {
           if autoplays { player?.play() }
         }
       }
+      .onAppear { Self.claimPlaybackSession() }
+      .onDisappear {
+        player?.pause()
+        Self.releasePlaybackSession()
+      }
+  }
+
+  /// La session audio de l'iPhone, pour une vidéo : l'interrupteur silencieux
+  /// la coupe, et les boutons de volume la règlent pendant qu'elle joue — la
+  /// règle de Photos et de Safari. Un vocal, lui, passe outre le silencieux
+  /// (voir `AudioMessageView`) et laisse la catégorie « playback » derrière
+  /// lui : sans ça, une vidéo lue après un vocal aurait ignoré l'interrupteur.
+  /// Hors de l'acteur principal : `setActive` attend le matériel.
+  private static func claimPlaybackSession() {
+    #if os(iOS)
+    Task.detached(priority: .userInitiated) {
+      let session = AVAudioSession.sharedInstance()
+      try? session.setCategory(.soloAmbient, mode: .moviePlayback)
+      try? session.setActive(true)
+    }
+    #endif
+  }
+
+  private static func releasePlaybackSession() {
+    #if os(iOS)
+    Task.detached(priority: .utility) {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    #endif
   }
 }
 

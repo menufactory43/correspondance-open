@@ -1,6 +1,10 @@
 import AppKit
 import Foundation
+import OSLog
 import UserNotifications
+
+/// `log stream --predicate 'subsystem == "app.correspondance" AND category == "notifications"'`
+private let journal = Logger(subsystem: "app.correspondance", category: "notifications")
 
 /// Notifications système + pastille du Dock.
 ///
@@ -52,6 +56,7 @@ final class NotificationService: NSObject {
     let center = UNUserNotificationCenter.current()
     registerCategories(on: center)
     let settings = await center.notificationSettings()
+    journal.info("autorisation : statut \(settings.authorizationStatus.rawValue), alertes \(settings.alertSetting.rawValue), bannières \(settings.alertStyle.rawValue)")
     switch settings.authorizationStatus {
     case .notDetermined:
       let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
@@ -120,7 +125,11 @@ final class NotificationService: NSObject {
     body: String,
     requestID: String? = nil
   ) {
-    guard isAvailable, isAuthorized else { return }
+    guard isAvailable, isAuthorized else {
+      journal.error("notification refusée avant envoi : disponible \(self.isAvailable), autorisée \(self.isAuthorized) — \(conversationID, privacy: .public)")
+      return
+    }
+    journal.info("notification demandée : \(conversationID, privacy: .public) / \(requestID ?? "-", privacy: .public)")
     let content = UNMutableNotificationContent()
     content.title = title
     content.subtitle = networkLabel
@@ -135,7 +144,13 @@ final class NotificationService: NSObject {
       content: content,
       trigger: nil
     )
-    UNUserNotificationCenter.current().add(request)
+    UNUserNotificationCenter.current().add(request) { error in
+      if let error {
+        journal.error("le système a refusé la notification : \(error.localizedDescription, privacy: .public)")
+      } else {
+        journal.info("notification acceptée par le système : \(request.identifier, privacy: .public)")
+      }
+    }
   }
 
   // MARK: - Pastille du Dock

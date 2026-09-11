@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import OSLog
 import UniformTypeIdentifiers
 import CorrespondanceCore
 
@@ -322,6 +323,8 @@ final class InboxStore {
   @ObservationIgnored private var draftPersistTask: Task<Void, Never>?
   /// Le premier plein chargement ne notifie rien : sinon toute l'inbox sonne au lancement.
   @ObservationIgnored private var isNotificationPrimed = false
+  /// `log stream --predicate 'subsystem == "app.correspondance" AND category == "notifications"'`
+  private static let notificationJournal = Logger(subsystem: "app.correspondance", category: "notifications")
 
   // MARK: - Relais (ADR 0001)
 
@@ -1506,9 +1509,19 @@ final class InboxStore {
     updateDockBadge()
     planifierIndexDuPartage()
     defer { notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
-    guard isNotificationPrimed else { return }
+    guard isNotificationPrimed else {
+      Self.notificationJournal.info("changement de conversations avant l'amorçage : pas de notification")
+      return
+    }
     for conversation in conversations {
-      guard shouldNotify(conversation, previous: notificationBaseline[conversation.id]) else { continue }
+      guard shouldNotify(conversation, previous: notificationBaseline[conversation.id]) else {
+        // Seul un fil qui vient de bouger mérite une ligne : sinon c'est tout l'inbox à chaque passe.
+        if let previous = notificationBaseline[conversation.id], conversation.lastMessageAt > previous.lastMessageAt {
+          Self.notificationJournal.info("pas de notification pour \(conversation.id, privacy: .public) : deMoi \(conversation.lastMessageIsFromMe), muet \(self.mutedIDs.contains(conversation.id)), àL'écran \(self.isReadOnScreen(conversation.id)), archivé \(conversation.isArchived), aperçu \(conversation.hasLivePreview && !conversation.preview.isEmpty), déjàNotifié \(self.lastNotifiedAt[conversation.id].map { $0 >= conversation.lastMessageAt } ?? false)")
+        }
+        continue
+      }
+      Self.notificationJournal.info("notification pour \(conversation.id, privacy: .public)")
       lastNotifiedAt[conversation.id] = conversation.lastMessageAt
       notificationSequence += 1
       let burst = NotificationGrouping.extend(
