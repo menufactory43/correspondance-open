@@ -38,6 +38,11 @@ struct ThreadView: View {
   @State private var isNearBottom = true
   /// La position pilotable du fil, pour compenser le clavier qui pousse par le bas.
   @State private var scrollPosition = ScrollPosition()
+  /// Jusqu'à quand le suivi du bas se fait en glissant plutôt que d'un bloc.
+  /// Posé par mes propres envois : c'est le seul moment où le fil doit se
+  /// voir bouger. Tout le reste — une photo qui se charge, une bulle reçue —
+  /// recolle sec, comme le faisait l'ancre.
+  @State private var animatedFollowUntil: Date?
   /// Le dernier relevé de géométrie : de quoi calculer le bas du fil en points.
   /// `scrollTo(edge: .bottom)` ne bouge pas avec une pile paresseuse — on vise
   /// un décalage concret à la place.
@@ -370,7 +375,15 @@ struct ThreadView: View {
     // décalage au-delà du dernier message. Plus rien à l'écran, donc plus rien
     // à mesurer, donc plus de correction : un balayage seul en sortait.
     // Seulement quand on lit le bas : plus haut, une arrivée ne doit pas tirer.
-    .defaultScrollAnchor(isNearBottom ? .bottom : nil, for: .sizeChanges)
+    //
+    // Ce travail-là ne se délègue plus à `defaultScrollAnchor(.bottom, for:
+    // .sizeChanges)` : l'ancre rattrapait la hauteur gagnée HORS transaction,
+    // donc en une seule image de 33 ms. C'est elle qui faisait le saut sec de
+    // 81 points à l'envoi, mesuré image par image. La même correction se fait
+    // à la main plus bas, dans le relevé de géométrie, où elle peut glisser.
+    // Signal fait exactement ce choix : sa `ConversationCollectionView`
+    // surcharge le setter de `contentOffset` pour EMPÊCHER UIKit de recaler
+    // le fil tout seul, et anime le décalage elle-même.
     .scrollPosition($scrollPosition)
     // Quand le bas se rétrécit — clavier qui s'ouvre, citation ou pièces
     // jointes qui coiffent le champ — le fil remonte d'autant : ce qu'on
@@ -401,6 +414,17 @@ struct ThreadView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) { scrollPosition.scrollTo(y: new.bottomScrollTarget) }
       }
+      // Le bas reste le bas quand le contenu grandit — ce que faisait l'ancre.
+      // Sec par défaut : une photo qui se charge ou une bulle reçue ne doit
+      // pas donner un mouvement de fil. Pendant mes envois, la fenêtre
+      // ouverte par `animatedFollowUntil` le fait glisser à la place.
+      let grew = new.contentHeight - old.contentHeight
+      if grew > 0.5, isNearBottom, new.distanceToBottom > 0.5 {
+        let glides = animatedFollowUntil.map { Date() < $0 } ?? false
+        var follow = Transaction(animation: glides ? .easeOut(duration: 0.28) : nil)
+        follow.disablesAnimations = !glides
+        withTransaction(follow) { scrollPosition.scrollTo(y: new.bottomScrollTarget) }
+      }
       let nearBottom = !new.isScrollable || new.distanceToBottom <= 60
       if nearBottom != isNearBottom {
         if nearBottom { missedCount = 0 }
@@ -428,6 +452,12 @@ struct ThreadView: View {
     .onChange(of: messages.last?.id, initial: true) { old, new in
       // Ce qui arrive alors qu'on lit plus haut se compte : la pilule ↓ le dit.
       if old != nil, old != new, !isNearBottom { missedCount += 1 }
+      // Mon envoi : la hauteur qu'il ajoute se rattrape en glissant, pas d'un
+      // bloc. La fenêtre s'ouvre ICI, avant que la rangée ne soit posée — le
+      // relevé de géométrie qui suit la trouvera déjà ouverte.
+      if old != nil, old != new, isNearBottom, messages.last?.isFromMe == true {
+        animatedFollowUntil = Date().addingTimeInterval(0.6)
+      }
       // L'encre a pris : passé le geste, la bulle est une bulle comme les autres.
       if let new {
         Task { @MainActor in
@@ -446,6 +476,19 @@ struct ThreadView: View {
       // rangées estimées, puis revenait : les bulles paraissaient,
       // disparaissaient, reparaissaient à chaque ouverture.
       let isOpening = old == nil
+      // UN SEUL pilote à la fois. Quand la fenêtre de glisse est ouverte, le
+      // relevé de géométrie a déjà lancé le trajet vers le bas : y ajouter
+      // celui-ci, 80 ms plus tard et depuis un bas presque atteint, donnait
+      // très exactement la bulle qui paraît, disparaît et revient. On laisse
+      // glisser, et on ne repasse que pour vérifier — à vide si tout va bien.
+      if animatedFollowUntil.map({ Date() < $0 }) ?? false {
+        Task { @MainActor in
+          try? await Task.sleep(for: .milliseconds(420))
+          guard abs(metrics.distanceToBottom) > 60 else { return }
+          scrollToBottom(duration: 0)
+        }
+        return
+      }
       // Un souffle : la bulle qui vient d'arriver doit être mesurée avant
       // qu'on sache où est le nouveau bas.
       Task { @MainActor in

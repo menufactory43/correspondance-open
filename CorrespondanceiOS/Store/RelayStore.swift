@@ -947,10 +947,43 @@ final class RelayStore {
   /// jusqu'à la confirmation du Relais.
   private func showLoaded(_ list: [ChatMessage], in target: String) {
     let known = Set(list.map(\.id))
+    // Livrée ne veut pas dire relue. Le PUT du Relais répond AVANT que
+    // l'événement n'entre au magasin local — il n'y arrive qu'au `/sync`
+    // suivant — et `loadMessages` rendait donc une liste sans le message :
+    // la bulle s'effaçait, le `/sync` suivant la ramenait. Le Mac a résolu
+    // ça en septembre (`keepingLocalEchoes`, InboxStore) ; voici le même
+    // marché sur iPhone. L'écho reste sous nos yeux tant que la copie du
+    // Relais ne l'a pas remplacé, et on le lâche passé dix minutes — un écho
+    // qu'on ne saura jamais apparier deviendrait un doublon éternel.
+    for (localID, echo) in inFlightBubbles where echo.conversationID == target {
+      if known.contains(localID) || Self.isEchoed(echo, in: list) || Self.isStale(echo) {
+        inFlightBubbles.removeValue(forKey: localID)
+      }
+    }
     let flying = inFlightBubbles.values
       .filter { $0.conversationID == target && !known.contains($0.id) }
       .sorted { $0.sentAt < $1.sentAt }
     messages[target] = list + flying
+  }
+
+  /// Le Relais montre-t-il déjà la copie de cet écho ? De moi, à quelques
+  /// minutes près, et disant la même chose : le texte tranche ; à défaut
+  /// (pièces jointes sans texte), le nombre de pièces jointes — l'écho porte
+  /// « 📷 Photo » là où la copie porte le fichier.
+  static func isEchoed(_ echo: ChatMessage, in list: [ChatMessage]) -> Bool {
+    list.contains { candidate in
+      guard candidate.isFromMe, candidate.id != echo.id,
+            abs(candidate.sentAt.timeIntervalSince(echo.sentAt)) < 300
+      else { return false }
+      let attendu = echo.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      if candidate.text.trimmingCharacters(in: .whitespacesAndNewlines) == attendu { return true }
+      return !echo.attachments.isEmpty && echo.attachments.count == candidate.attachments.count
+    }
+  }
+
+  /// Passé dix minutes, un écho jamais apparié se lâche.
+  static func isStale(_ echo: ChatMessage, now: Date = .now) -> Bool {
+    !echo.isPending && now.timeIntervalSince(echo.sentAt) >= 600
   }
 
   /// Les bulles optimistes dont l'envoi n'est pas encore confirmé, par
@@ -1176,7 +1209,16 @@ final class RelayStore {
         localID: localID,
         replyToMessageID: replyID
       )
-      inFlightBubbles.removeValue(forKey: localID)
+      // PAS de `removeValue` ici : le PUT a répondu, mais le magasin local
+      // n'a pas encore l'événement. L'écho reste, livré (`isPending` retombe :
+      // la coche passe de « Envoi… » à « Envoyé »), et `showLoaded` le lâchera
+      // quand la copie du Relais paraîtra.
+      inFlightBubbles[localID]?.isPending = false
+      messages[target] = messages[target]?.map {
+        var copy = $0
+        if copy.id == localID { copy.isPending = false }
+        return copy
+      }
       await loadMessages(conversationID: conversationID, backfill: false)
     } catch {
       syncError = Self.readable(error)
@@ -1324,7 +1366,13 @@ final class RelayStore {
         voice: voice,
         localID: localID
       )
-      inFlightBubbles.removeValue(forKey: localID)
+      // Même marché que pour le texte : l'écho survit au retour du PUT.
+      inFlightBubbles[localID]?.isPending = false
+      messages[target] = messages[target]?.map {
+        var copy = $0
+        if copy.id == localID { copy.isPending = false }
+        return copy
+      }
       await loadMessages(conversationID: conversationID, backfill: false)
     } catch {
       syncError = Self.readable(error)
