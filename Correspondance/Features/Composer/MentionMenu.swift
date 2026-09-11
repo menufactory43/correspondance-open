@@ -157,10 +157,16 @@ struct MentionMenuView: View {
       ScrollView(showsIndicators: false) {
         VStack(spacing: 2) {
           ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
-            row(candidate, isSelected: index == selectedIndex)
-              .id(candidate.id)
-              .onHover { if $0 { onHover(index) } }
-              .onTapGesture { onPick(candidate) }
+            // Un bouton, pas un `onTapGesture` : le geste de tap s'annule dès que
+            // la souris bouge d'un pixel entre l'appui et le relâchement, et ne
+            // voit pas le clic qui ramène la fenêtre au premier plan. Le bouton
+            // prend les deux — et se dit bouton à l'accessibilité sans qu'on l'y aide.
+            Button { onPick(candidate) } label: {
+              row(candidate, isSelected: index == selectedIndex)
+            }
+            .buttonStyle(.plain)
+            .id(candidate.id)
+            .onHover { if $0 { onHover(index) } }
           }
         }
         .padding(6)
@@ -200,6 +206,6 @@ struct MentionMenuView: View {
     )
     .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     .accessibilityElement(children: .combine)
-    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }

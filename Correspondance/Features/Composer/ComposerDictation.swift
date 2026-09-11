@@ -43,7 +43,7 @@ final class ComposerDictationController {
     stop()
     engine_ = .dictus
     do {
-      try await DictusBridge.toggleTranscription()
+      try await DictusBridge.startTranscription()
       isListening = true
     } catch {
       engine_ = .speech
