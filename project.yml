@@ -198,6 +198,10 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         ATSApplicationFontsPath: Fonts
+        # Le commit d'où vient la build, gravé par scripts/installer-mac.sh
+        # (`CORRESPONDANCE_COMMIT=…`) : c'est ce qui dit quel code tourne dans
+        # /Applications. Vide dans une build Xcode ordinaire.
+        CorrespondanceCommit: "$(CORRESPONDANCE_COMMIT)"
         NSAppleEventsUsageDescription: Correspondance envoie tes iMessages via l’app Messages (automatisation).
         NSContactsUsageDescription: Correspondance affiche les noms et photos de vos contacts iMessage dans la sidebar.
         NSMicrophoneUsageDescription: Correspondance utilise le micro pour dicter vos messages et enregistrer vos messages vocaux.

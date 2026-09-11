@@ -45,4 +45,18 @@ final class ArchiveStateTests: XCTestCase {
   func testUnknownArchivedIDIsHarmless() {
     XCTAssertNil(ArchiveState.normalized([conversation("a")], archivedIDs: ["disparu"]))
   }
+
+  /// Le crash du 11 sept. : deux membres archivés, leur ligne fusionnée pas dans
+  /// l'ensemble. `MergedContact.row(from:)` disait la ligne archivée, cette
+  /// passe la désarchivait, et le `didSet` tournait jusqu'à épuiser la pile.
+  /// La ligne fusionnée suit ses membres, et rien n'est à corriger.
+  func testMergedRowFollowsItsMembers() {
+    let row = conversation("merged:x", archived: true)
+    let members = ["merged:x": ["a", "b"]]
+    XCTAssertNil(ArchiveState.normalized([row], archivedIDs: ["a", "b"], mergedMembers: members))
+    XCTAssertTrue(ArchiveState.isArchived("merged:x", archivedIDs: ["a", "b"], mergedMembers: members))
+    // Un membre ressorti : la ligne ressort avec lui, même si son propre id est rangé.
+    let normalized = ArchiveState.normalized([row], archivedIDs: ["merged:x", "a"], mergedMembers: members)
+    XCTAssertEqual(normalized?.first?.isArchived, false)
+  }
 }

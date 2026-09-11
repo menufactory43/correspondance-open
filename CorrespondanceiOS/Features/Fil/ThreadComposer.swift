@@ -358,7 +358,8 @@ struct ThreadComposer: View {
         .frame(width: 32, height: 32)
     } else if store.canSend(conversationID) {
       Button {
-        isFocused = false
+        // Le clavier reste : on enchaîne souvent un second message, et la
+        // bulle qui part sous le champ vaut mieux qu'un clavier qui se démonte.
         haptic(.sent)
         Task { await store.send(conversationID: conversationID) }
       } label: {

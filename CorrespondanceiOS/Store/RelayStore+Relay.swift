@@ -184,6 +184,12 @@ extension RelayStore {
     for id in state.muted where !known.contains(id) { next.muted.insert(id) }
     for id in state.archived where !known.contains(id) { next.archived.insert(id) }
     for (id, text) in state.drafts where !known.contains(id) { next.drafts[id] = text }
+    // Un brouillon local que le Relais a repris n'a plus à primer : sinon un
+    // envoi d'ici (« » en local) cachait pour toujours ce qu'on écrirait
+    // ensuite sur le Mac.
+    for (id, text) in localDrafts where known.contains(id) && (next.drafts[id] ?? "") == text {
+      dropLocalDraft(id)
+    }
     for (id, reminder) in state.reminders where !known.contains(id) { next.reminders[id] = reminder }
     for (id, decision) in state.requestDecisions where !known.contains(id) { next.requestDecisions[id] = decision }
     // Recalculé juste après par `refreshPendingRequests` : on ne le perd pas ici.

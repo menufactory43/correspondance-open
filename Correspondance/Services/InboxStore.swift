@@ -20,12 +20,23 @@ final class InboxStore {
     // La normalisation ré-assigne `conversations` : la passe suivante ne trouve
     // plus rien à corriger et laisse passer la notification.
     didSet {
-      if normalizeArchiveState() { return }
-      if normalizeMergedContacts() { return }
+      // Garde-fou : si les deux passes ne s'accordaient pas, chacune défaisait
+      // l'autre à l'infini (pile épuisée au lancement, vu le 11 sept.). Au-delà
+      // de quelques tours, on laisse passer la liste telle quelle.
+      if normalizationDepth < 8 {
+        normalizationDepth += 1
+        defer { normalizationDepth -= 1 }
+        if normalizeArchiveState() { return }
+        if normalizeMergedContacts() { return }
+      } else {
+        Self.relayLog.error("normalisation de `conversations` en boucle : liste laissée telle quelle")
+      }
       refreshSelectedThreadFacts()
       conversationsDidChange()
     }
   }
+  /// Profondeur de ré-entrée du `didSet` ci-dessus.
+  @ObservationIgnored private var normalizationDepth = 0
   /// Vue « Archivés » de la liste (⌘⇧E). Ne change rien au stockage.
   var isShowingArchived = false
   /// Champ `.searchable` de la liste. Vide = pas de filtrage.
@@ -1522,7 +1533,9 @@ final class InboxStore {
   /// Renvoie `true` si la liste a été ré-assignée (le `didSet` va repasser).
   @discardableResult
   private func normalizeArchiveState() -> Bool {
-    guard let normalized = ArchiveState.normalized(conversations, archivedIDs: archivedIDs) else {
+    guard let normalized = ArchiveState.normalized(
+      conversations, archivedIDs: archivedIDs, mergedMembers: mergedMemberIDs
+    ) else {
       return false
     }
     conversations = normalized
@@ -1541,9 +1554,19 @@ final class InboxStore {
     // Les membres absents de la liste (un rafraîchissement partiel les a effacés)
     // reviennent du cache : sans eux, la ligne se rouvrirait en deux.
     let present = Set(conversations.map(\.id))
-    let pool = conversations + mergedMemberCache.values
+    var pool = conversations + mergedMemberCache.values
       .filter { !present.contains($0.id) }
       .sorted { $0.id < $1.id }
+    // Les membres du cache portent l'archive d'avant : la ligne recalculée
+    // dirait « rangée » quand l'ensemble dit « sortie » (ou l'inverse), et la
+    // passe d'archivage la corrigerait, à l'infini. Même source de vérité pour
+    // tout le monde avant de replier.
+    if let fixed = ArchiveState.normalized(pool, archivedIDs: archivedIDs, mergedMembers: mergedMemberIDs) {
+      pool = fixed
+      for conversation in pool where mergedMemberCache[conversation.id] != nil {
+        mergedMemberCache[conversation.id] = conversation
+      }
+    }
 
     let next = MergedContact.apply(to: pool, merged: mergedContacts)
     guard next != conversations else { return false }
@@ -2927,7 +2950,14 @@ final class InboxStore {
     }
   }
 
-  func isArchived(_ id: String) -> Bool { archivedIDs.contains(id) }
+  func isArchived(_ id: String) -> Bool {
+    ArchiveState.isArchived(id, archivedIDs: archivedIDs, mergedMembers: mergedMemberIDs)
+  }
+
+  /// Les membres de chaque ligne fusionnée, pour la règle d'archive.
+  private var mergedMemberIDs: [String: [String]] {
+    Dictionary(mergedContacts.map { ($0.id, $0.memberIDs) }, uniquingKeysWith: { a, _ in a })
+  }
 
   /// File des fils archivés — la vue « Archivés » de la liste.
   var archivedQueue: [Conversation] {
@@ -2945,7 +2975,7 @@ final class InboxStore {
 
   /// ⌘E : archive, ou désarchive si le fil l'est déjà.
   func toggleArchived(conversationID: String) async {
-    await setArchived(!archivedIDs.contains(conversationID), conversationID: conversationID)
+    await setArchived(!isArchived(conversationID), conversationID: conversationID)
   }
 
   func unarchive(conversationID: String) async {
@@ -3228,6 +3258,7 @@ final class InboxStore {
           session.replyingToMessageID = nil
           drafts.removeValue(forKey: row.id)
           persistDraftsNow()
+          relayClearDraft(conversationID: row.id)
           await loadMessages(into: session)
         }
         return
@@ -3249,6 +3280,7 @@ final class InboxStore {
     session.replyingToMessageID = nil
     drafts.removeValue(forKey: row.id)
     persistDraftsNow()
+    relayClearDraft(conversationID: row.id)
 
     // Délai de grâce : la bulle est là, le réseau attend. Rien ne quitte
     // l'appareil avant l'échéance — d'ici là, « Annuler » rend tout.
@@ -3782,6 +3814,7 @@ final class InboxStore {
     sendLaterConfig = nil
     drafts.removeValue(forKey: conversation.id)
     persistDraftsNow()
+    relayClearDraft(conversationID: conversation.id)
     scheduledDidChange()
   }
 

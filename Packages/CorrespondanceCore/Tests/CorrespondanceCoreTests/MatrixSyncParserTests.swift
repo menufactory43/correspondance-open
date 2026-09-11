@@ -267,4 +267,20 @@ extension MatrixSyncParserTests {
     XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: .instagram))
     XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: nil))
   }
+
+  /// Le pont renomme un fantôme (« +33675993742 » → « Maman maison ») : les
+  /// messages déjà rangés portent l'ancien nom, le salon porte le nouveau.
+  /// Le fil et l'aperçu se lisent avec le nom du moment.
+  func testStoredMessagesTakeTheCurrentMemberName() {
+    var model = MatrixRoomModel(roomID: "!groupe:correspondance.local")
+    let ghost = "@whatsapp_lid-1:correspondance.local"
+    model.members[ghost] = .init(displayName: "Maman maison", membership: "join")
+    model.messagesByID["$1"] = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!groupe:correspondance.local", network: .whatsapp,
+      text: "Il lui faudrait un garage", sentAt: Date(timeIntervalSince1970: 1_000),
+      isFromMe: false, senderID: ghost, senderName: "+33675993742"
+    )
+    XCTAssertEqual(model.sortedMessages.first?.senderName, "Maman maison")
+    XCTAssertEqual(model.lastListedMessage?.senderName, "Maman maison")
+  }
 }

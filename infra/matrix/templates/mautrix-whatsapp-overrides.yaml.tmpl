@@ -20,6 +20,15 @@ database:
   type: postgres
   uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_whatsapp?sslmode=disable
 
+network:
+  # Le nom qu'on a donné au contact dans son carnet, d'abord ; l'amont ne
+  # commence qu'au pseudo WhatsApp (PushName) et finit au numéro. Depuis que
+  # WhatsApp parle par LID, la moitié des fantômes n'avaient plus de pseudo
+  # au moment de leur création et s'appelaient « +33… » — dans les groupes
+  # comme dans les tête-à-tête (287 fantômes sur 300, le 11 sept.), alors que
+  # le pont connaissait le nom du carnet pour 287 contacts sur 293.
+  displayname_template: '{{or .FullName .BusinessName .PushName .Phone .RedactedPhone "Unknown user"}} (WA)'
+
 bridge:
   command_prefix: '!wa'
   # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.

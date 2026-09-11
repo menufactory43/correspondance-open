@@ -321,9 +321,22 @@ public struct MatrixRoomModel: Sendable {
         // Le sondage est dépouillé au moment de rendre le fil : les voix ont
         // pu arriver bien après la question.
         if let poll = pollsByEventID[message.id]?.poll { updated.poll = poll }
+        refreshSenderName(&updated)
         return updated
       }
       .sorted { $0.sentAt < $1.sentAt }
+  }
+
+  /// Le nom de l'expéditeur tel que le salon le dit **aujourd'hui**. Un message
+  /// est rangé avec le nom que son fantôme portait à l'arrivée ; quand le pont
+  /// renomme le fantôme (un « +33… » qui devient le nom du carnet, 11 sept.),
+  /// le `m.room.member` met les membres à jour, pas les messages déjà rangés.
+  /// Un fil se lit avec les noms du moment.
+  func refreshSenderName(_ message: inout ChatMessage) {
+    guard !message.isFromMe, let senderID = message.senderID,
+          let name = members[senderID]?.displayName, !name.isEmpty
+    else { return }
+    message.senderName = name
   }
 
   /// Le dernier message qui a le droit de représenter le fil dans la file.
@@ -345,6 +358,7 @@ public struct MatrixRoomModel: Sendable {
       .map { (emoji: $0.emoji, sender: $0.senderName, isMine: $0.isMine) }
     if !raw.isEmpty { last.reactions = MessageReaction.aggregate(raw) }
     if let poll = pollsByEventID[last.id]?.poll { last.poll = poll }
+    refreshSenderName(&last)
     return last
   }
 

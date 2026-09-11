@@ -123,6 +123,18 @@ extension InboxStore {
     }
   }
 
+  /// Envoyer vide le composer ici ; le Relais doit l'apprendre tout de suite,
+  /// sinon l'iPhone montre encore le message déjà parti. `clearDraft()` ne
+  /// passe pas par la capture (il réinstalle sans réécrire), et la poussée
+  /// différée du texte tapé pouvait même repartir après l'envoi : on l'annule.
+  func relayClearDraft(conversationID: String) {
+    relayDraftTasks.removeValue(forKey: conversationID)?.cancel()
+    guard let roomID = Self.relayRoomID(ofConversation: conversationID) else { return }
+    relayQueue.enqueue(.draft(roomID: roomID, text: ""))
+    saveRelayQueue()
+    startRelayFlush()
+  }
+
   /// Un fil qu'on quitte n'a plus d'état à pousser.
   func relayForget(conversationID: String) {
     relayDraftTasks.removeValue(forKey: conversationID)?.cancel()
