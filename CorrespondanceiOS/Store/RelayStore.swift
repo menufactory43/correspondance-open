@@ -1009,7 +1009,15 @@ final class RelayStore {
     // Relais ne l'a pas remplacé, et on le lâche passé dix minutes — un écho
     // qu'on ne saura jamais apparier deviendrait un doublon éternel.
     for (localID, echo) in inFlightBubbles where echo.conversationID == target {
-      if known.contains(localID) || Self.isEchoed(echo, in: list) || Self.isStale(echo) {
+      if let copy = Self.echoCopyID(of: echo, in: list) {
+        // La copie du Relais REMPLACE l'écho sous nos yeux : même bulle, deux
+        // identifiants. Sans ce lien, le fil voit partir une rangée et en voir
+        // arriver une autre — la cellule est détruite et refaite, et l'envoi
+        // scintille (« on dirait qu'il est rafraîchi », vu sur le téléphone
+        // dans Note à soi). La rangée garde donc l'identité de l'écho.
+        rememberEchoedRow(copyID: copy, keeping: localID)
+        inFlightBubbles.removeValue(forKey: localID)
+      } else if known.contains(localID) || Self.isStale(echo) {
         inFlightBubbles.removeValue(forKey: localID)
       }
     }
@@ -1024,14 +1032,42 @@ final class RelayStore {
   /// (pièces jointes sans texte), le nombre de pièces jointes — l'écho porte
   /// « 📷 Photo » là où la copie porte le fichier.
   static func isEchoed(_ echo: ChatMessage, in list: [ChatMessage]) -> Bool {
-    list.contains { candidate in
+    echoCopyID(of: echo, in: list) != nil
+  }
+
+  /// La même question, mais en rendant QUELLE copie : le fil en a besoin pour
+  /// donner à la rangée une identité qui survit à l'échange.
+  static func echoCopyID(of echo: ChatMessage, in list: [ChatMessage]) -> String? {
+    list.first { candidate in
       guard candidate.isFromMe, candidate.id != echo.id,
             abs(candidate.sentAt.timeIntervalSince(echo.sentAt)) < 300
       else { return false }
       let attendu = echo.text.trimmingCharacters(in: .whitespacesAndNewlines)
       if candidate.text.trimmingCharacters(in: .whitespacesAndNewlines) == attendu { return true }
       return !echo.attachments.isEmpty && echo.attachments.count == candidate.attachments.count
+    }?.id
+  }
+
+  /// L'identité de rangée d'une copie du Relais qui a remplacé un écho local,
+  /// par identifiant de copie. Bornée : seul le passé récent compte, et une
+  /// table qui grandit sans fin pour une session entière ne servirait à rien.
+  private var echoedRowIDs: [String: String] = [:]
+  private var echoedRowOrder: [String] = []
+
+  private func rememberEchoedRow(copyID: String, keeping localID: String) {
+    guard echoedRowIDs[copyID] == nil else { return }
+    echoedRowIDs[copyID] = localID
+    echoedRowOrder.append(copyID)
+    while echoedRowOrder.count > 200 {
+      echoedRowIDs.removeValue(forKey: echoedRowOrder.removeFirst())
     }
+  }
+
+  /// L'identité de la rangée qui porte ce message : la sienne, ou celle de
+  /// l'écho qu'il a remplacé. Le fil s'en sert pour ne pas refaire une cellule
+  /// que l'œil voit comme la même bulle.
+  func rowID(for message: ChatMessage) -> String {
+    echoedRowIDs[message.id] ?? message.id
   }
 
   /// Passé dix minutes, un écho jamais apparié se lâche.

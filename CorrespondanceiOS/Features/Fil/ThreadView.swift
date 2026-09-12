@@ -266,7 +266,8 @@ struct ThreadView: View {
       isLoadingOlder: store.isLoadingOlder,
       foldedAwayCount: foldedAwayCount,
       typingLabel: store.typingLabel(conversationID),
-      receiptLabel: readReceiptLabel
+      receiptLabel: readReceiptLabel,
+      rowID: store.rowID(for:)
     )
     let lastID = messages.last?.id
     for index in built.indices {

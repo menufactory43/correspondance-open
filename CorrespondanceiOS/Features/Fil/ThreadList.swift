@@ -131,8 +131,19 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
 
   /// Le fil s'est posé une première fois : avant ça, il n'y a rien à tenir.
   private var hasPlacedFirstLayout = false
-  /// Vrai tant que le bas du fil est à l'écran.
+  /// Vrai tant que le bas du fil est à l'écran. C'est ce que l'œil voit, et
+  /// ce qui allume ou éteint le chevron.
   private(set) var isNearBottom = true
+  /// Le fil est-il TENU par son bas ? Posé par les gestes de lecture et par
+  /// nos propres placements — jamais par un changement de géométrie.
+  ///
+  /// Les deux ne disent pas la même chose, et les confondre coûtait cher :
+  /// ouvrir le clavier ou le plateau des médias éloigne le bas de 300 points
+  /// sans que personne n'ait bougé le doigt. `isNearBottom` tombait alors à
+  /// faux, et la remise en page qui suivait concluait « on lit plus haut, on
+  /// ne recolle pas » — le dernier message restait derrière le plateau, le
+  /// chevron s'allumait sur un fil qu'on n'avait pas quitté.
+  private var holdsBottom = true
   /// On a touché le bas depuis l'ouverture : la barre des non-lus ne fait plus
   /// frontière, seul ce qui arrive ensuite compte.
   private var hasReachedBottom = false
@@ -244,9 +255,9 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
 
     // Ce qu'on tient : le bas, ou une rangée précise. Relevé AVANT la remise
     // en page — après, les index ont bougé.
-    let holdsBottom = isNearBottom
-    let anchor = holdsBottom ? nil : currentAnchor()
-    let glides = holdsBottom && (glidesUntil.map { Date() < $0 } ?? false)
+    let pinned = holdsBottom
+    let anchor = pinned ? nil : currentAnchor()
+    let glides = pinned && (glidesUntil.map { Date() < $0 } ?? false)
 
     var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
     snapshot.appendSections([0])
@@ -264,7 +275,7 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
       placeOnOpening()
       return
     }
-    if holdsBottom {
+    if pinned {
       place { scrollToBottom(animated: glides) }
     } else if let anchor {
       place { restore(anchor) }
@@ -288,10 +299,11 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
         // La barre se pose en HAUT de l'écran : ce qui attend est dessous,
         // d'un coup d'œil. Faute de barre — rien à lire — le bas fait l'affaire.
         if rowsByID[ThreadRows.unreadMarkID] != nil {
-          scroll(toRow: ThreadRows.unreadMarkID, at: .top, animated: false)
+          settle(onRow: ThreadRows.unreadMarkID, at: .top, retries: 6)
           // On n'a PAS vu le bas : le chevron doit annoncer ce qui reste.
           hasReachedBottom = false
           isNearBottom = false
+          holdsBottom = false
         } else {
           scrollToBottom(animated: false)
         }
@@ -321,6 +333,7 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     // propre bas — écran vide.
     scroll(toRow: last.id, at: .bottom, animated: animated)
     hasReachedBottom = true
+    holdsBottom = true
     frontierRowID = last.id
     if animated {
       // Le trajet fini, la dernière rangée est mesurée pour de bon : elle peut
@@ -335,21 +348,91 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     }
   }
 
-  /// Le rattrapage du bas, dans les deux sens : une rangée plus petite que son
-  /// estimation garait le fil SOUS son propre bas, écran vide.
-  private func settleAtBottom() {
-    guard !rows.isEmpty else { return }
-    let target = maxOffsetY
-    guard abs(target - collectionView.contentOffset.y) > 1 else { return }
+  /// Le rattrapage du bas, en PLUSIEURS passes.
+  ///
+  /// Une liste auto-dimensionnée n'a pas de hauteur vraie tant que ses
+  /// cellules ne sont pas posées : elle les ESTIME. Viser le bas depuis un fil
+  /// qu'on vient d'ouvrir atterrit donc court — les grandes bulles se mesurent
+  /// après coup, le contenu grandit, et le bas s'éloigne d'autant. Vu sur un
+  /// fil de démonstration : la dernière bulle coupée, le chevron allumé sur un
+  /// fil qui n'avait rien à lire. Chaque passe pose les cellules qu'elle
+  /// traverse, donc affine la hauteur : deux ou trois suffisent à converger,
+  /// et le compte est borné pour ne jamais tourner en rond.
+  ///
+  /// Le rattrapage va dans les DEUX sens : une rangée plus petite que son
+  /// estimation garait le fil sous son propre bas — écran vide.
+  private func settleAtBottom(retries: Int = 6) {
+    guard let last = rows.last else { return }
+    settle(onRow: last.id, at: .bottom, retries: retries)
+  }
+
+  /// Pose une rangée à sa place, et RECOMMENCE tant que la mesure bouge.
+  ///
+  /// Viser une rangée dans une liste auto-dimensionnée atterrit court : le
+  /// décalage est calculé depuis la somme des hauteurs au-dessus, et celles
+  /// qu'on n'a pas encore posées ne sont qu'estimées. Chaque passe pose les
+  /// cellules qu'elle traverse, donc affine la somme. Deux ou trois suffisent,
+  /// et une passe qui ne déplace plus rien a convergé.
+  ///
+  /// Ça vaut pour le bas comme pour la barre des non-lus : sans ça, le fil
+  /// d'Alice s'ouvrait à mi-chemin, la barre encore sous l'écran.
+  private func settle(
+    onRow id: String, at position: UICollectionView.ScrollPosition, retries: Int
+  ) {
+    guard dataSource.indexPath(for: id) != nil else { return }
+    collectionView.layoutIfNeeded()
+    let before = collectionView.contentOffset.y
+
     isSettling = true
-    collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: false)
+    if let indexPath = dataSource.indexPath(for: id) {
+      collectionView.scrollToItem(at: indexPath, at: position, animated: false)
+      collectionView.layoutIfNeeded()
+    }
+    // Pour le bas seulement : le bas RÉEL, quand la mesure le place plus loin
+    // que la dernière rangée.
+    if position == .bottom, maxOffsetY - collectionView.contentOffset.y > 1 {
+      collectionView.setContentOffset(CGPoint(x: 0, y: maxOffsetY), animated: false)
+      collectionView.layoutIfNeeded()
+    }
     isSettling = false
-    reportState()
+
+    guard retries > 0, abs(collectionView.contentOffset.y - before) > 1 else {
+      // Le trajet est fini : c'est ICI qu'on sait si le fil tient encore son
+      // bas. Sans ça, un placement qui nous en éloigne — un saut de citation,
+      // un résultat de recherche — laissait `holdsBottom` à vrai, et le
+      // premier rafraîchissement venu ramenait le fil en bas, annulant le
+      // saut. (Le surlignage de la bulle visée en est un.)
+      holdsBottom = maxOffsetY - collectionView.contentOffset.y <= 60
+      reportState()
+      return
+    }
+    // Rendre la main à la boucle : c'est elle qui pose les cellules dont on
+    // veut la vraie hauteur.
+    Task { @MainActor [weak self] in
+      self?.settle(onRow: id, at: position, retries: retries - 1)
+    }
   }
 
   func jump(to messageID: String, animated: Bool) {
-    guard rowsByID[messageID] != nil else { return }
-    place { scroll(toRow: messageID, at: .centeredVertically, animated: animated) }
+    // Une rangée ne porte pas toujours l'identifiant de son message : celle
+    // d'un envoi à moi garde l'identité de son écho local (cf. `rowID`). On
+    // cherche donc la rangée par son message quand le nom direct ne donne rien.
+    let target =
+      rowsByID[messageID] != nil
+      ? messageID
+      : rows.first { $0.message?.id == messageID }?.id
+    guard let target else { return }
+    // Tout de suite, sans attendre la fin du trajet : un rafraîchissement qui
+    // tomberait pendant l'animation ne doit pas croire qu'on tient le bas et
+    // nous y ramener. La valeur juste sera posée en arrivant (`settle`).
+    holdsBottom = false
+    place { scroll(toRow: target, at: .centeredVertically, animated: animated) }
+    // Un saut traverse des rangées jamais posées : il atterrit court, comme
+    // tout le reste. On le rattrape une fois le trajet fini.
+    Task { @MainActor [weak self] in
+      if animated { try? await Task.sleep(for: .milliseconds(340)) }
+      self?.settle(onRow: target, at: .centeredVertically, retries: 4)
+    }
   }
 
   func expectOwnSend() { glidesUntil = Date().addingTimeInterval(0.6) }
@@ -412,7 +495,7 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
   override func viewWillLayoutSubviews() {
     super.viewWillLayoutSubviews()
     guard hasPlacedFirstLayout, view.bounds.size != lastBounds else { return }
-    heldAnchor = isNearBottom ? nil : currentAnchor()
+    heldAnchor = holdsBottom ? nil : currentAnchor()
   }
 
   override func viewDidLayoutSubviews() {
@@ -435,7 +518,7 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     collectionView.collectionViewLayout.invalidateLayout()
     place {
       collectionView.layoutIfNeeded()
-      if isNearBottom {
+      if holdsBottom {
         scrollToBottom(animated: false)
       } else if let heldAnchor {
         restore(heldAnchor)
@@ -453,7 +536,7 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     let delta = bottom - lastBottomInset
     guard abs(delta) > 0.5 else { return }
     place {
-      if isNearBottom {
+      if holdsBottom {
         scrollToBottom(animated: false)
       } else if delta > 0 {
         collectionView.setContentOffset(
@@ -466,6 +549,12 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
 
   func scrollViewDidScroll(_ scrollView: UIScrollView) {
     guard hasPlacedFirstLayout, !isSettling else { return }
+    // SEUL un geste de lecture décroche le fil de son bas. Un défilement qui
+    // n'a pas de doigt derrière lui vient d'une remise en page, pas d'une
+    // envie de relire plus haut.
+    if collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating {
+      holdsBottom = maxOffsetY - collectionView.contentOffset.y <= 60
+    }
     reportState()
     // Remonter jusqu'en haut, c'est demander la suite : le Relais complète
     // au-dessus, et la lecture ne bouge pas d'un pouce (cf. `restore`).

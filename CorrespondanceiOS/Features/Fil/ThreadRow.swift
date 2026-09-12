@@ -78,6 +78,11 @@ enum ThreadRows {
   /// - Parameter unreadCount: ce qui n'était pas lu à l'ouverture du fil. La
   ///   barre se pose juste avant le premier de ces messages — et seulement
   ///   s'il en reste un à montrer, jamais en tête d'un historique tronqué.
+  /// - Parameter rowID: l'identité de rangée d'un message. Normalement la
+  ///   sienne — mais la copie que le Relais rend d'un message que je viens
+  ///   d'envoyer garde l'identité de l'écho local qu'elle remplace. Sans ça,
+  ///   la liste voit partir une rangée et en voir arriver une autre, refait la
+  ///   cellule, et l'envoi scintille.
   static func rows(
     groups: [MessageGroup],
     messages: [ChatMessage],
@@ -85,7 +90,8 @@ enum ThreadRows {
     isLoadingOlder: Bool,
     foldedAwayCount: Int?,
     typingLabel: String?,
-    receiptLabel: String?
+    receiptLabel: String?,
+    rowID: (ChatMessage) -> String = \.id
   ) -> [ThreadRow] {
     var rows: [ThreadRow] = []
     if isLoadingOlder { rows.append(ThreadRow(id: loadingID, kind: .loadingOlder)) }
@@ -93,7 +99,7 @@ enum ThreadRows {
       rows.append(ThreadRow(id: foldedID, kind: .foldedHeader(hidden)))
     }
 
-    let markBefore = UnreadMark.firstUnreadID(messages: messages, unreadCount: unreadCount)
+    let mark = UnreadMark.place(in: messages, unreadCount: unreadCount)
 
     for group in groups {
       if let separator = group.timeSeparator {
@@ -106,17 +112,17 @@ enum ThreadRows {
       for (index, message) in group.messages.enumerated() {
         // La barre se pose AVANT le message, séparateur d'heure compris : ce
         // qui est neuf commence sous elle, son horodatage avec.
-        if message.id == markBefore {
-          rows.append(ThreadRow(id: unreadMarkID, kind: .unreadMark(unreadCount)))
+        if let mark, message.id == mark.messageID {
+          rows.append(ThreadRow(id: unreadMarkID, kind: .unreadMark(mark.count)))
         }
         if let text = message.systemEventText {
-          rows.append(ThreadRow(id: message.id, kind: .systemEvent(text)))
+          rows.append(ThreadRow(id: rowID(message), kind: .systemEvent(text)))
           continue
         }
         let position = BubblePosition(index: index, count: group.messages.count)
         rows.append(
           ThreadRow(
-            id: message.id,
+            id: rowID(message),
             kind: .bubble(
               ThreadRow.Bubble(
                 message: message,
