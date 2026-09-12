@@ -240,6 +240,10 @@ private struct AssetThumbnail: View {
   let placeholder: Color
 
   @State private var image: UIImage?
+  /// La densité de l'écran OÙ CETTE VUE EST POSÉE. `UIScreen.main` n'en sait
+  /// rien : sur un iPhone Duo, la fenêtre n'est pas l'écran, et les deux
+  /// dalles n'ont pas la même densité.
+  @Environment(\.displayScale) private var displayScale
 
   var body: some View {
     ZStack {
@@ -251,7 +255,7 @@ private struct AssetThumbnail: View {
       }
     }
     .task(id: asset.localIdentifier) {
-      image = await library.thumbnail(asset, side: side)
+      image = await library.thumbnail(asset, side: side, scale: displayScale)
     }
   }
 }
@@ -296,9 +300,11 @@ final class RecentLibrary {
 
   func cachedThumbnail(_ asset: PHAsset) -> UIImage? { thumbnails[asset.localIdentifier] }
 
-  func thumbnail(_ asset: PHAsset, side: CGFloat) async -> UIImage? {
+  /// - Parameter scale: la densité de l'écran où la vignette sera posée, lue
+  ///   par la vue (`\.displayScale`). Jamais `UIScreen.main`, qui décrit un
+  ///   écran et pas une fenêtre.
+  func thumbnail(_ asset: PHAsset, side: CGFloat, scale: CGFloat) async -> UIImage? {
     if let hit = thumbnails[asset.localIdentifier] { return hit }
-    let scale = UIScreen.main.scale
     let target = CGSize(width: side * scale, height: side * scale)
     let options = PHImageRequestOptions()
     // Une seule livraison : l'opportuniste rappelle deux fois, ce qu'une

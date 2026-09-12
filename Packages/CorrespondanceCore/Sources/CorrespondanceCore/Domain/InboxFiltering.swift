@@ -283,15 +283,35 @@ public enum InboxOrdering {
     )
   }
 
+  /// Ce qui fait qu'une conversation attend une action — la règle d'entrée
+  /// dans la file Focus. Les deux appareils ne répondent pas pareil.
+  public enum FocusQueueRule: Sendable {
+    /// Tout ce qui n'est pas rangé : archive, rappel et demande mis à part,
+    /// le reste attend. La règle du Mac, où la file est un plan de travail.
+    case everythingLeft
+    /// Les seules conversations non lues. La règle de l'iPhone : un écran à
+    /// la fois, pris debout — la file doit tenir dans une main, pas recenser
+    /// l'inbox. Sans elle, 125 conversations se présentaient pour 2 non lues.
+    case unreadOnly
+
+    func accepts(_ conversation: Conversation) -> Bool {
+      switch self {
+      case .everythingLeft: true
+      case .unreadOnly: conversation.hasUnread
+      }
+    }
+  }
+
   /// La file Focus : ce qui reste à traiter, dans l'ordre où c'est arrivé.
   ///
   /// Ni archive ni filtre — Focus montre LA file, pas une vue de la file. Les
   /// conversations de catalogue (aucun message reçu) n'y entrent pas : il n'y a
-  /// rien à y traiter.
+  /// rien à y traiter. `rule` dit ensuite ce que « traiter » veut dire.
   public static func focusQueue(
     _ conversations: [Conversation],
     state: InboxState,
     network: MessageNetwork? = nil,
+    rule: FocusQueueRule = .everythingLeft,
     now: Date = Date()
   ) -> [Conversation] {
     conversations
@@ -300,6 +320,7 @@ public enum InboxOrdering {
           && !state.isAsleep($0, now: now) && !state.isRequest($0.id)
       }
       .filter { network == nil || $0.network == network }
+      .filter(rule.accepts)
       .sorted(by: byRecency)
   }
 

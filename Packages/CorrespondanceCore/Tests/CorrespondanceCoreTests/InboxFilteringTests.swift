@@ -191,6 +191,26 @@ final class InboxFilteringTests: XCTestCase {
     XCTAssertEqual(queue.map(\.id), ["a"])
   }
 
+  /// La règle de l'iPhone : la file ne retient que les non-lus. Sans elle,
+  /// 125 conversations se présentaient pour 2 messages qui attendaient.
+  func testUnreadOnlyRuleKeepsOnlyWhatIsWaiting() {
+    let list = [
+      conversation("lue", at: 10),
+      conversation("nonlue", at: 20, unread: 2),
+      conversation("archivee", at: 30, unread: 4),
+    ]
+    let queue = InboxOrdering.focusQueue(
+      list, state: InboxState(archived: ["archivee"]), rule: .unreadOnly)
+    XCTAssertEqual(queue.map(\.id), ["nonlue"])
+  }
+
+  /// Et la règle du Mac ne bouge pas : c'est la même liste, sans le filtre.
+  func testEverythingLeftRemainsTheDefault() {
+    let list = [conversation("lue", at: 10), conversation("nonlue", at: 20, unread: 2)]
+    XCTAssertEqual(
+      InboxOrdering.focusQueue(list, state: InboxState()).map(\.id), ["nonlue", "lue"])
+  }
+
   func testFocusQueueIgnoresPins() {
     let list = [conversation("vieille", at: 0), conversation("recente", at: 100)]
     let queue = InboxOrdering.focusQueue(list, state: InboxState(pinned: ["vieille"]))

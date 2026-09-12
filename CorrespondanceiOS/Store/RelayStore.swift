@@ -80,10 +80,21 @@ final class RelayStore {
   var filter: ConversationFilter = .all
   /// Le fil ouvert dans l'inbox. Survit au changement de size class : c'est le
   /// store qui le tient, pas la vue.
-  var selectedConversationID: String?
+  ///
+  /// Le relevé des non-lus se fait ICI, à la seconde où le fil est choisi —
+  /// pas à l'apparition de `ThreadView`. Entre le tap sur la ligne et le
+  /// `.task` de la vue, il passe un ou deux tours de boucle, et le `/sync` du
+  /// Relais — qui tourne en continu — appelle `reassertReadOnScreen` sur le
+  /// fil SÉLECTIONNÉ : il remettait le compteur à zéro avant qu'on l'ait lu,
+  /// et la barre des non-lus ne se posait jamais. Vu sur le téléphone.
+  var selectedConversationID: String? {
+    didSet { noteUnreadOnOpen(selectedConversationID) }
+  }
   /// Le fil montré en Focus. Séparé du précédent : passer en Focus puis revenir
   /// ne doit pas déplacer la sélection de l'inbox.
-  var focusConversationID: String?
+  var focusConversationID: String? {
+    didSet { noteUnreadOnOpen(focusConversationID) }
+  }
   /// Le message qu'un résultat de recherche vise : le fil s'y rend dès qu'il
   /// l'a sous la main, et l'efface en arrivant.
   var pendingJumpMessageID: String?
@@ -664,8 +675,15 @@ final class RelayStore {
     )
   }
 
+  /// La file Focus de l'iPhone : les conversations non lues, et rien d'autre.
+  ///
+  /// Le Mac garde sa file large (`everythingLeft`) — un plan de travail où
+  /// tout ce qui n'est pas rangé attend. Sur le téléphone, Focus se prend
+  /// debout, un écran à la fois : une file qui recense l'inbox n'est plus une
+  /// file. Conséquence assumée : parcourir l'inbox marque lu, donc vide la
+  /// file. C'est à quoi sert l'incognito.
   var focusQueue: [Conversation] {
-    InboxOrdering.focusQueue(conversations, state: viewState)
+    InboxOrdering.focusQueue(conversations, state: viewState, rule: .unreadOnly)
   }
 
   /// Ce que Focus doit savoir d'un envoi : lequel, et dans quel fil. La ligne
@@ -843,8 +861,43 @@ final class RelayStore {
     )
   }
 
+  /// Ce qui n'était PAS lu à l'ouverture de chaque fil, relevé avant que
+  /// l'accusé de lecture ne l'efface.
+  ///
+  /// `open` marque lu dans la foulée et `unreadCount` retombe à zéro : sans ce
+  /// relevé, le fil n'aurait plus aucun moyen de savoir où poser sa barre
+  /// « messages non lus ». Signal gèle la sienne de la même façon — elle reste
+  /// où elle était tant qu'on ne quitte pas la conversation.
+  private(set) var unreadOnOpen: [String: Int] = [:]
+
+  /// Combien de messages attendaient à l'ouverture de ce fil. Zéro quand il
+  /// n'y avait rien à lire : le fil s'ouvre alors sur son dernier message.
+  func unreadCountOnOpen(_ conversationID: String) -> Int {
+    unreadOnOpen[conversationID] ?? 0
+  }
+
+  /// La barre s'oublie en quittant le fil : y revenir ne doit pas ressusciter
+  /// des non-lus d'il y a une heure.
+  func forgetUnreadMark(_ conversationID: String) {
+    unreadOnOpen[conversationID] = nil
+  }
+
+  /// Relève le compte, une fois, avant que quoi que ce soit ne le remette à
+  /// zéro. Appelé à la sélection du fil (le plus tôt possible) et de nouveau à
+  /// son ouverture : le premier relevé est le bon, les suivants ne font rien.
+  func noteUnreadOnOpen(_ conversationID: String?) {
+    guard let conversationID, unreadOnOpen[conversationID] == nil else { return }
+    // Une ligne fusionnée additionne ses membres, comme l'inbox l'affiche.
+    let waiting = relayTargets(of: conversationID)
+      .compactMap { target in conversations.first { $0.id == target }?.unreadCount }
+      .reduce(0, +)
+    unreadOnOpen[conversationID] = max(waiting, conversation(conversationID)?.unreadCount ?? 0)
+  }
+
   /// Ouvre un fil : historique, pièces jointes, accusé de lecture — comme le Mac.
   func open(conversationID: String) async {
+    // AVANT tout accusé : c'est le seul instant où le compte est encore vrai.
+    noteUnreadOnOpen(conversationID)
     guard !isDemo else { return }
     let first = !openedConversationIDs.contains(conversationID)
     openedConversationIDs.insert(conversationID)

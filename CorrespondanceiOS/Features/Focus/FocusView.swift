@@ -129,7 +129,7 @@ struct FocusView: View {
             .font(Typography.letterHeading(typeface, 56))
             .foregroundStyle(theme.ink)
             .monospacedDigit()
-          Text(queue.count == 1 ? "conversation attend" : "conversations attendent")
+          Text(queue.count == 1 ? "conversation non lue" : "conversations non lues")
             .font(Typography.emptyState(typeface))
             .foregroundStyle(theme.inkSecondary)
             .padding(.top, -6)
@@ -221,7 +221,7 @@ struct FocusView: View {
           .font(Typography.emptyState(typeface))
           .foregroundStyle(theme.inkSecondary)
       } else {
-        Text("La file est vide. Rien n'attend de réponse.")
+        Text("Tout est lu. Rien n'attend dans la file.")
           .font(Typography.emptyState(typeface))
           .foregroundStyle(theme.inkSecondary)
       }
@@ -310,11 +310,24 @@ struct FocusView: View {
       }
       .background(theme.paper)
       .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+      // Une page de Focus est une lettre, pas une nappe : passé une certaine
+      // largeur, l'élargir n'ajoute que des lignes trop longues à lire. Ce qui
+      // dépasse devient de la marge (règle : plus de place ne veut pas dire
+      // des lignes plus longues).
+      .frame(maxWidth: Self.pageWidth)
+      .frame(maxWidth: .infinity)
       .padding(.horizontal, 8)
       .padding(.top, 4)
       .padding(.bottom, 10)
     }
   }
+
+  /// La largeur au-delà de laquelle une page cesse de grandir.
+  ///
+  /// À revoir sur iPhone Duo déplié : une page centrée dans un écran plié
+  /// tombe sur la pliure. La réponse est une région réservée — pas un nombre
+  /// deviné ici, tant que le simulateur Duo n'est pas là pour le vérifier.
+  private static let pageWidth: CGFloat = 620
 
   private func pageHeader(_ conversation: Conversation) -> some View {
     HStack(spacing: Spacing.sm) {
