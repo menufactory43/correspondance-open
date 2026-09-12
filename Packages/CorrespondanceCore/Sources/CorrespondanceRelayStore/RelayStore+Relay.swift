@@ -15,7 +15,7 @@ import Foundation
 /// clés Matrix que le Mac. Une seule différence assumée : aucune migration —
 /// un appareil neuf n'a rien de local à pousser, il ne fait que lire.
 extension RelayStore {
-  enum RelayFlag {
+  package enum RelayFlag {
     case archived, pinned, muted
   }
 
@@ -23,13 +23,13 @@ extension RelayStore {
 
   /// Le salon d'un fil, ou `nil` s'il ne passe pas par le Relais. Purement
   /// syntaxique, comme sur le Mac : pas de saut d'acteur au milieu d'un geste.
-  nonisolated static func relayRoomID(ofConversation conversationID: String) -> String? {
+  package nonisolated static func relayRoomID(ofConversation conversationID: String) -> String? {
     MatrixSyncParser.roomID(inConversationID: conversationID)
   }
 
   // MARK: - Écrire
 
-  func relayNote(_ flag: RelayFlag, value: Bool, conversationIDs: [String]) {
+  package func relayNote(_ flag: RelayFlag, value: Bool, conversationIDs: [String]) {
     for id in conversationIDs {
       guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
       switch flag {
@@ -44,7 +44,7 @@ extension RelayStore {
 
   /// Un rappel posé, ou levé. Même discipline que les drapeaux : le geste est
   /// déjà fait à l'écran, l'écriture attend son tour.
-  func relayNoteReminder(_ reminder: ConversationReminder?, conversationIDs: [String]) {
+  package func relayNoteReminder(_ reminder: ConversationReminder?, conversationIDs: [String]) {
     for id in conversationIDs {
       guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
       relayQueue.enqueue(.reminder(roomID: roomID, value: reminder))
@@ -55,7 +55,7 @@ extension RelayStore {
 
   /// Ce que j'ai décidé d'une demande : acceptée, refusée, ou remise en
   /// attente (`nil`).
-  func relayNoteRequest(_ decision: ConversationRequest.Decision?, conversationIDs: [String]) {
+  package func relayNoteRequest(_ decision: ConversationRequest.Decision?, conversationIDs: [String]) {
     for id in conversationIDs {
       guard let roomID = Self.relayRoomID(ofConversation: id) else { continue }
       relayQueue.enqueue(.request(roomID: roomID, value: decision))
@@ -68,13 +68,13 @@ extension RelayStore {
   /// Relais est par salon, et c'est lui qui fait autorité — on lui ajoute
   /// simplement ce qu'on vient de masquer.
   /// Les réglages de l'agent — account data globale, sans salon.
-  func relayNoteAgentSettings(_ settings: AgentSettings) {
+  package func relayNoteAgentSettings(_ settings: AgentSettings) {
     relayQueue.enqueue(.agentSettings(settings))
     saveRelayQueue()
     startRelayFlush()
   }
 
-  func relayNoteHidden(messageID: String, conversationID: String) {
+  package func relayNoteHidden(messageID: String, conversationID: String) {
     guard let roomID = Self.relayRoomID(ofConversation: conversationID),
           messageID.hasPrefix("$")
     else { return }
@@ -90,7 +90,7 @@ extension RelayStore {
   }
 
   /// Le brouillon part une seconde après la dernière frappe, jamais à chaque touche.
-  func scheduleRelayDraftPush(conversationID: String, text: String) {
+  package func scheduleRelayDraftPush(conversationID: String, text: String) {
     guard let roomID = Self.relayRoomID(ofConversation: conversationID) else { return }
     relayDraftTasks[conversationID]?.cancel()
     relayDraftTasks[conversationID] = Task { @MainActor [weak self] in
@@ -103,7 +103,7 @@ extension RelayStore {
     }
   }
 
-  func saveRelayQueue() {
+  package func saveRelayQueue() {
     relayQueue.save(to: .standard, key: Self.relayQueueKey)
   }
 
@@ -111,7 +111,7 @@ extension RelayStore {
 
   /// Envoie la file, dans l'ordre. Un échec arrête la passe : ce qui reste
   /// attendra le prochain `/sync` réussi, sans rien perdre ni rien dupliquer.
-  func flushRelayWrites() async {
+  package func flushRelayWrites() async {
     guard session == .connected, !isDemo, !relayQueue.isEmpty, !isFlushingRelay else { return }
     isFlushingRelay = true
     defer { isFlushingRelay = false }
@@ -130,7 +130,7 @@ extension RelayStore {
   }
 
   /// Lance un envoi sans attendre — un geste ne doit jamais patienter sur le réseau.
-  func startRelayFlush() {
+  package func startRelayFlush() {
     guard session == .connected, !isDemo else { return }
     Task { @MainActor [weak self] in
       await self?.flushRelayWrites()
@@ -142,7 +142,7 @@ extension RelayStore {
 
   /// Relit tout l'état depuis le Relais — au démarrage, et après une reconnexion.
   /// C'est ce qui fait qu'un iPhone neuf retrouve l'archive faite sur le Mac.
-  func reloadRelayState() async {
+  package func reloadRelayState() async {
     guard !isDemo else { return }
     do {
       _ = try await matrix.fetchConversationState()
@@ -155,7 +155,7 @@ extension RelayStore {
   /// L'état du Relais remplace le nôtre pour les fils CONNUS. Un salon dont la
   /// conversation n'est pas encore chargée ne fait rien changer : on ne peut ni
   /// le montrer, ni le perdre.
-  func adoptRelayState() async {
+  package func adoptRelayState() async {
     guard !isDemo else { return }
     let snapshot = relayQueue.applied(to: await matrix.conversationState)
     // Les réglages de l'agent ne dépendent d'aucun salon : ils s'adoptent avant

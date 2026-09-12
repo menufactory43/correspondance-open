@@ -9,7 +9,7 @@ extension RelayStore {
   /// Ouvre le chemin Tailcat vers le Relais et branche tout le trafic Matrix
   /// dessus. Rend le port local du mandataire.
   @discardableResult
-  func ouvrirTailcat(jeton: String) async throws -> Int {
+  package func ouvrirTailcat(jeton: String) async throws -> Int {
     let mandataire = tailcat ?? TailcatProxy()
     tailcat = mandataire
     // Le mandataire renaît s'il tombe, et son port change à chaque naissance.
@@ -26,7 +26,7 @@ extension RelayStore {
   /// Se connecter à partir d'un code d'appairage : le chemin d'abord, la
   /// session ensuite. Rend la note à afficher (par où on est passé).
   @discardableResult
-  func connecterParLeCode(_ code: RelayPairingCode) async -> String {
+  package func connecterParLeCode(_ code: RelayPairingCode) async -> String {
     var adresse = code.homeserver.absoluteString
     var note = "Relais joint \(code.chemin.titreFR)."
     if let jeton = code.tailcat, !jeton.isEmpty {
@@ -46,7 +46,7 @@ extension RelayStore {
 
   /// Au lancement : si la session a été ouverte par Tailcat, le chemin est
   /// rouvert avant le premier `/sync` — sinon `server.tailcat` ne se résout pas.
-  func rouvrirTailcatSiBesoin() async {
+  package func rouvrirTailcatSiBesoin() async {
     guard tailcat == nil, let jeton = UserDefaults.standard.string(forKey: Self.tailcatJetonKey), !jeton.isEmpty else { return }
     tailcatJeton = jeton
     do { _ = try await ouvrirTailcat(jeton: jeton) } catch {
@@ -55,7 +55,7 @@ extension RelayStore {
   }
 
   /// Arrête le mandataire et retire la configuration du client.
-  func fermerTailcat() {
+  package func fermerTailcat() {
     tailcat?.arreter()
     tailcat = nil
     tailcatJeton = nil
@@ -63,5 +63,5 @@ extension RelayStore {
     Task { await matrix.utiliserMandataireSOCKS(port: nil) }
   }
 
-  static let tailcatJetonKey = "correspondance.linux.tailcat"
+  package static let tailcatJetonKey = "correspondance.linux.tailcat"
 }

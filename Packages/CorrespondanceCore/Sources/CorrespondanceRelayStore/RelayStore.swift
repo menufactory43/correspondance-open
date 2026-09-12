@@ -19,13 +19,13 @@ import Observation
 /// le `/sync` raconte (`RelayStore+Relay.swift`).
 @MainActor
 @Observable
-final class RelayStore {
-  static let log = Journal(category: "relais")
+package final class RelayStore {
+  package static let log = Journal(category: "relais")
 
   /// Où en est la session avec le Relais. L'écran de connexion ne s'affiche
   /// que sur `.disconnected` — jamais sur `.unknown`, sinon il clignoterait au
   /// lancement le temps de lire le Trousseau.
-  enum Session: Equatable {
+  package enum Session: Equatable {
     case unknown
     case disconnected
     case connecting
@@ -34,47 +34,47 @@ final class RelayStore {
 
   // MARK: - Session
 
-  private(set) var session: Session = .unknown
+  package private(set) var session: Session = .unknown
   /// Dernière erreur montrable, en français. `nil` = rien à dire.
-  var connectionError: String?
+  package var connectionError: String?
   /// Le `/sync` a échoué mais la session tient : bandeau discret, pas d'écran d'erreur.
-  var syncError: String?
-  private(set) var isSyncing = false
+  package var syncError: String?
+  package private(set) var isSyncing = false
 
-  let matrix: MatrixBridgeService
+  package let matrix: MatrixBridgeService
 
   // MARK: - Contenu
 
-  private(set) var conversations: [Conversation] = []
-  private(set) var messages: [String: [ChatMessage]] = [:]
+  package private(set) var conversations: [Conversation] = []
+  package private(set) var messages: [String: [ChatMessage]] = [:]
   /// L'état de conversation, déjà traduit en identifiants de fil. Écrit par le
   /// geste (tout de suite) et par l'adoption de l'instantané du Relais.
-  var state = InboxState()
-  var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
+  package var state = InboxState()
+  package var hiddenMessageIDs: Set<String> = HiddenMessageStore.load()
   /// Comment « cc » répond dans les conversations où d'autres humains lisent.
   /// Le réglage vit dans l'account data globale, que l'agent relit sur le
   /// Relais ; ceci n'en est que la copie affichée.
-  private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
-  var mergedContacts: [MergedContact] = []
+  package private(set) var agentDefaultMode: AgentSettings.Mode = AgentSettings.fallback.defaultMode
+  package var mergedContacts: [MergedContact] = []
   /// Les messages qui attendent leur heure (`RelayStore+Scheduled`).
-  var scheduled: [ScheduledMessage] = ScheduledMessageStore.load()
+  package var scheduled: [ScheduledMessage] = ScheduledMessageStore.load()
 
   // MARK: - Ce que l'écran choisit
 
-  var scope: InboxScope = .inbox
-  var networkFilter: MessageNetwork?
-  var filter: ConversationFilter = .all
+  package var scope: InboxScope = .inbox
+  package var networkFilter: MessageNetwork?
+  package var filter: ConversationFilter = .all
   /// Le fil ouvert dans l'inbox. Survit au changement de size class : c'est le
   /// store qui le tient, pas la vue.
-  var selectedConversationID: String?
+  package var selectedConversationID: String?
   /// Le fil montré en Focus. Séparé du précédent : passer en Focus puis revenir
   /// ne doit pas déplacer la sélection de l'inbox.
-  var focusConversationID: String?
+  package var focusConversationID: String?
   /// Le message qu'un résultat de recherche vise : le fil s'y rend dès qu'il
   /// l'a sous la main, et l'efface en arrivant.
-  var pendingJumpMessageID: String?
+  package var pendingJumpMessageID: String?
   /// Une page d'historique est en route : le fil montre son attente en tête.
-  private(set) var isLoadingOlder = false
+  package private(set) var isLoadingOlder = false
   /// Les fils dont le Relais n'a plus rien à donner : inutile de le relancer
   /// à chaque fois qu'on effleure le haut.
   private var exhaustedThreadIDs: Set<String> = []
@@ -83,58 +83,82 @@ final class RelayStore {
 
   /// Brouillons en cours de frappe. Priment sur `state.drafts` : ce qu'on tape
   /// maintenant est plus vrai que ce que le Relais a renvoyé il y a dix secondes.
-  private(set) var localDrafts: [String: String] = [:]
+  package private(set) var localDrafts: [String: String] = [:]
   /// Un vidage de la boîte du partage est en cours (RelayStore+Partage) : le
   /// retour au premier plan et la connexion peuvent tomber ensemble.
-  var partageVidageEnCours = false
-  private(set) var pendingAttachments: [String: [String]] = [:]
-  private(set) var replyTargets: [String: String] = [:]
-  private(set) var sendingConversationIDs: Set<String> = []
+  package var partageVidageEnCours = false
+  package private(set) var pendingAttachments: [String: [String]] = [:]
+  package private(set) var replyTargets: [String: String] = [:]
+  package private(set) var sendingConversationIDs: Set<String> = []
   /// La bulle que le composer CORRIGE, par fil. Le champ porte alors sa
   /// version actuelle, et le bouton d'envoi envoie la correction.
-  private(set) var editingTargets: [String: String] = [:]
+  package private(set) var editingTargets: [String: String] = [:]
   /// Le brouillon mis de côté le temps d'une correction : y renoncer le rend.
   private var stashedDrafts: [String: String] = [:]
 
   // MARK: - Écriture vers le Relais (phase B)
 
-  var relayQueue = RelayWriteQueue.load(from: .standard, key: RelayStore.relayQueueKey)
-  var relayDraftTasks: [String: Task<Void, Never>] = [:]
-  var isFlushingRelay = false
-  static let relayQueueKey = "correspondance.ios.relayWriteQueue"
+  package var relayQueue = RelayWriteQueue.load(from: .standard, key: RelayStore.relayQueueKey)
+  package var relayDraftTasks: [String: Task<Void, Never>] = [:]
+  package var isFlushingRelay = false
+  package static let relayQueueKey = "correspondance.ios.relayWriteQueue"
 
   // MARK: - Notifications locales (cf. `RelayStore+Notifications`)
 
   /// L'état des fils au dernier passage : c'est la comparaison qui dit ce qui
   /// vient d'arriver.
-  var notificationBaseline: [String: Conversation] = [:]
-  var lastNotifiedAt: [String: Date] = [:]
-  var notificationBursts: [String: NotificationBurst] = [:]
-  var notificationSequence = 0
+  package var notificationBaseline: [String: Conversation] = [:]
+  package var lastNotifiedAt: [String: Date] = [:]
+  package var notificationBursts: [String: NotificationBurst] = [:]
+  package var notificationSequence = 0
   /// Faux tant que la ligne de flottaison n'est pas posée : un rattrapage de
   /// trente messages au lancement n'est pas trente arrivées.
-  var isNotificationPrimed = false
+  package var isNotificationPrimed = false
 
   /// Le mandataire Tailcat, quand le code d'appairage en portait un, et son
   /// jeton — gardé pour rouvrir le chemin au prochain lancement.
-  var tailcat: TailcatProxy?
-  var tailcatJeton: String?
+  package var tailcat: TailcatProxy?
+  package var tailcatJeton: String?
 
   /// Le navigateur est-il visible ? Il le dit (`visibilitychange`) ; tant
   /// qu'il l'est, un message qu'on regarde arriver ne sonne pas.
-  var isWindowVisible = true
+  package var isWindowVisible = true
+
+  /// Qui montre une notification. `nil` : `notify-send`, le bureau Linux. Le
+  /// terminal passe la sienne (OSC 99 chez Kitty, OSC 9 ailleurs) : elle suit
+  /// la fenêtre, sur macOS comme sur Linux, sans démon à chercher.
+  package var notificationPresenter: (@MainActor (_ title: String, _ body: String) -> Void)?
 
   private var syncTask: Task<Void, Never>?
   /// Les fils dont on a déjà demandé l'historique cette session.
   private var openedConversationIDs: Set<String> = []
   /// Vrai en mode démonstration : aucun réseau, des conversations en dur.
-  let isDemo: Bool
+  package let isDemo: Bool
 
   // MARK: - Cycle de vie
 
-  init(demo: Bool = false) {
+  package init(demo: Bool = false) {
     isDemo = demo
     matrix = MatrixBridgeService()
+  }
+
+  /// La démonstration : des fils tout faits, aucun réseau. Même contenu que
+  /// l'iPhone (`DemoRelay.catalogue`), assemblé par l'appelant.
+  package func installDemo(
+    conversations: [Conversation],
+    messages: [String: [ChatMessage]],
+    state: InboxState,
+    typingLabels: [String: String],
+    merged: [MergedContact]
+  ) {
+    guard isDemo else { return }
+    session = .connected
+    self.messages = messages
+    self.typingLabels = typingLabels
+    self.state = state
+    mergedContacts = merged
+    self.conversations = mergedRows(conversations)
+    refreshPendingRequests()
   }
 
   /// Reprend la session du Trousseau, s'il y en a une, et lance la boucle.
@@ -144,7 +168,7 @@ final class RelayStore {
   /// suite, la vérification de session court en fond. Et « injoignable »
   /// n'éjecte pas vers l'écran de connexion : la session est probablement
   /// bonne, c'est le réseau qui manque — la boucle `/sync` réessaiera.
-  func start() async {
+  package func start() async {
     guard !isDemo, session == .unknown else { return }
     guard MatrixCredentialStore.load() != nil else {
       session = .disconnected
@@ -184,7 +208,7 @@ final class RelayStore {
   /// « Recharger depuis le Relais » : la base locale se vide et le prochain
   /// `/sync` — initial — la repeuple. La porte de secours du jour où l'inbox ne
   /// ressemblerait plus à ce que raconte le Relais.
-  func reloadFromRelay() async {
+  package func reloadFromRelay() async {
     guard !isDemo, session == .connected else { return }
     syncTask?.cancel()
     syncTask = nil
@@ -195,7 +219,7 @@ final class RelayStore {
     startSyncLoop()
   }
 
-  func connect(homeserver raw: String, user: String, password: String) async {
+  package func connect(homeserver raw: String, user: String, password: String) async {
     connectionError = nil
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let url = Self.homeserverURL(from: trimmed) else {
@@ -222,7 +246,7 @@ final class RelayStore {
   /// La déconnexion. L'ordre compte : le pusher part AVANT le jeton d'accès —
   /// après, le Relais ne nous écouterait plus, et continuerait de réveiller un
   /// téléphone qui n'a plus de session.
-  func signOut() async {
+  package func signOut() async {
     fermerTailcat()
     syncTask?.cancel()
     syncTask = nil
@@ -242,21 +266,21 @@ final class RelayStore {
 
   /// L'adresse mémorisée du Relais — jamais une IP en dur, seulement ce que
   /// l'utilisateur a saisi la dernière fois.
-  static let lastHomeserverKey = "correspondance.ios.lastHomeserver"
-  var rememberedHomeserver: String {
+  package static let lastHomeserverKey = "correspondance.ios.lastHomeserver"
+  package var rememberedHomeserver: String {
     UserDefaults.standard.string(forKey: Self.lastHomeserverKey) ?? ""
   }
 
   /// « relais.local:8008 » vaut « http://relais.local:8008 » : sur un tailnet,
   /// personne ne tape le schéma.
-  static func homeserverURL(from raw: String) -> URL? {
+  package static func homeserverURL(from raw: String) -> URL? {
     guard !raw.isEmpty else { return nil }
     let candidate = raw.contains("://") ? raw : "http://\(raw)"
     guard let url = URL(string: candidate), url.host != nil else { return nil }
     return url
   }
 
-  static func readable(_ error: Error) -> String {
+  package static func readable(_ error: Error) -> String {
     // `MatrixError.transport` recopie le message d'URLSession, qui est en
     // anglais : le seul endroit de la pile où une erreur remonte non traduite.
     if case .transport = error as? MatrixError {
@@ -336,14 +360,14 @@ final class RelayStore {
 
   /// Les fils réunis sous une ligne de fusion — l'iPhone en a besoin pour leur
   /// état (une ligne fusionnée n'a pas de salon à elle).
-  func memberConversations(of mergedID: String) -> [Conversation] {
+  package func memberConversations(of mergedID: String) -> [Conversation] {
     guard let contact = mergedContacts.first(where: { $0.id == mergedID }) else { return [] }
     return contact.memberIDs.compactMap { id in conversations.first { $0.id == id } }
   }
 
   /// Les identifiants qui portent réellement un salon pour ce fil : lui-même,
   /// ou ses membres s'il s'agit d'une ligne de fusion.
-  func relayTargets(of conversationID: String) -> [String] {
+  package func relayTargets(of conversationID: String) -> [String] {
     guard MergedContact.isMergedID(conversationID) else { return [conversationID] }
     let members = mergedContacts.first { $0.id == conversationID }?.memberIDs ?? []
     return members.isEmpty ? [] : members
@@ -351,7 +375,7 @@ final class RelayStore {
 
   // MARK: - Listes
 
-  var visibleConversations: [Conversation] {
+  package var visibleConversations: [Conversation] {
     InboxOrdering.list(
       conversations,
       scope: scope,
@@ -364,7 +388,7 @@ final class RelayStore {
 
   /// La même liste, pour une portée donnée : l'iPhone tient Inbox et Archive
   /// dans deux onglets vivants en même temps, chacun avec la sienne.
-  func conversations(in scope: InboxScope) -> [Conversation] {
+  package func conversations(in scope: InboxScope) -> [Conversation] {
     InboxOrdering.list(
       conversations,
       scope: scope,
@@ -375,22 +399,22 @@ final class RelayStore {
     )
   }
 
-  var focusQueue: [Conversation] {
+  package var focusQueue: [Conversation] {
     InboxOrdering.focusQueue(conversations, state: viewState)
   }
 
   /// Ce que Focus doit savoir d'un envoi : lequel, et dans quel fil. La ligne
   /// s'en sert pour faire sortir la page dont on vient de répondre.
-  struct SentMark: Equatable {
-    let conversationID: String
-    let localID: String
-    let serial: Int
+  package struct SentMark: Equatable {
+    package let conversationID: String
+    package let localID: String
+    package let serial: Int
   }
-  private(set) var lastSent: SentMark?
+  package private(set) var lastSent: SentMark?
 
   /// L'état tel que l'écran doit le montrer : celui du Relais, corrigé par les
   /// brouillons qu'on est en train de taper.
-  var viewState: InboxState {
+  package var viewState: InboxState {
     var merged = state
     for (id, text) in localDrafts { merged.drafts[id] = text }
     return merged
@@ -400,13 +424,13 @@ final class RelayStore {
 
   /// Ce fil attend-il d'être accepté ? Une demande reste hors de la file
   /// jusque-là — c'est le seul état qui la retienne.
-  func isRequest(_ id: String) -> Bool { state.isRequest(id) }
+  package func isRequest(_ id: String) -> Bool { state.isRequest(id) }
 
   /// Les signaux que l'iPhone sait donner sur un fil. Écart assumé de la v1 :
   /// pas de carnet d'adresses ici (décision 2 — client Matrix pur), donc
   /// `isKnownCorrespondent` reste faux et seule la fusion, décidée sur le Mac,
   /// vaut reconnaissance.
-  func requestSignals(_ conversation: Conversation) -> RequestSignals {
+  package func requestSignals(_ conversation: Conversation) -> RequestSignals {
     // `nil` tant que le fil n'est pas chargé : on ne range personne sur un
     // soupçon. Un brouillon ou un dernier mot de moi suffisent, eux, à trancher.
     var ecrit: Bool?
@@ -427,11 +451,11 @@ final class RelayStore {
 
   /// Les fils que le pont annonce lui-même comme des demandes. Relu à chaque
   /// `/sync` : c'est de l'état de salon, pas de l'état de conversation.
-  private(set) var networkFlaggedRequestIDs: Set<String> = []
+  package private(set) var networkFlaggedRequestIDs: Set<String> = []
 
   /// Accepter, c'est faire entrer la conversation dans la file. Refuser, c'est
   /// la ranger : elle n'y entrera pas, et ne redemandera plus.
-  func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) {
+  package func decideRequest(_ decision: ConversationRequest.Decision?, conversationID: String) {
     for id in Set(relayTargets(of: conversationID) + [conversationID]) {
       if let decision { state.requestDecisions[id] = decision }
       else { state.requestDecisions.removeValue(forKey: id) }
@@ -443,7 +467,7 @@ final class RelayStore {
 
   /// Recalcule qui attend encore d'être accepté. À rejouer dès que la liste ou
   /// les décisions bougent : le tri, lui, ne fait que lire `pendingRequests`.
-  func refreshPendingRequests() {
+  package func refreshPendingRequests() {
     let pending = Set(
       conversations
         .filter {
@@ -455,11 +479,11 @@ final class RelayStore {
   }
 
   /// Le rappel posé sur ce fil, s'il en porte un.
-  func reminder(_ id: String) -> ConversationReminder? { state.reminder(id) }
+  package func reminder(_ id: String) -> ConversationReminder? { state.reminder(id) }
 
   /// Met une conversation de côté jusqu'à une heure — ou la ramène tout de
   /// suite (`nil`). Le geste est immédiat ici, le Relais suit.
-  func setReminder(_ wakeAt: Date?, conversationID: String) {
+  package func setReminder(_ wakeAt: Date?, conversationID: String) {
     let targets = relayTargets(of: conversationID)
     let reminder = wakeAt.map { ConversationReminder(wakeAt: $0) }
     for id in Set(targets + [conversationID]) {
@@ -473,22 +497,22 @@ final class RelayStore {
     }
   }
 
-  func isPinned(_ id: String) -> Bool { state.isPinned(id) }
-  func isMuted(_ id: String) -> Bool { state.isMuted(id) }
-  func isArchived(_ id: String) -> Bool { state.isArchived(id) }
+  package func isPinned(_ id: String) -> Bool { state.isPinned(id) }
+  package func isMuted(_ id: String) -> Bool { state.isMuted(id) }
+  package func isArchived(_ id: String) -> Bool { state.isArchived(id) }
 
-  func conversation(_ id: String?) -> Conversation? {
+  package func conversation(_ id: String?) -> Conversation? {
     guard let id else { return nil }
     return conversations.first { $0.id == id }
   }
 
-  var networksInUse: [MessageNetwork] {
+  package var networksInUse: [MessageNetwork] {
     MessageNetwork.matrixBridged.filter { network in
       conversations.contains { $0.network == network }
     }
   }
 
-  func unreadCount(for network: MessageNetwork?) -> Int {
+  package func unreadCount(for network: MessageNetwork?) -> Int {
     conversations.reduce(0) { total, conversation in
       guard !state.isArchived(conversation.id) else { return total }
       guard network == nil || conversation.network == network else { return total }
@@ -504,7 +528,7 @@ final class RelayStore {
   /// la base locale : on trouve la photo d'une conversation qu'on n'a pas
   /// ouverte depuis six mois, ce qui n'était pas le cas quand la recherche ne
   /// voyait que ce qui était chargé.
-  func facetHits(facet: MessageFacet, query: String) -> [FacetedSearch.Hit] {
+  package func facetHits(facet: MessageFacet, query: String) -> [FacetedSearch.Hit] {
     guard !isDemo else {
       return FacetedSearch.hits(in: conversations, facet: facet, query: query) {
         visibleMessages($0.id)
@@ -516,7 +540,7 @@ final class RelayStore {
 
   /// L'index de recherche pour cette question : ce que la base trouve dans le
   /// corps des messages, pour que « resto » ramène le fil qui en parle.
-  func searchIndex(query: String) -> [String: String] {
+  package func searchIndex(query: String) -> [String: String] {
     guard !isDemo else {
       return Dictionary(
         uniqueKeysWithValues: conversations.map {
@@ -527,7 +551,7 @@ final class RelayStore {
     return LocalStore.shared?.searchIndex(query: query) ?? [:]
   }
 
-  func visibleMessages(_ conversationID: String) -> [ChatMessage] {
+  package func visibleMessages(_ conversationID: String) -> [ChatMessage] {
     let raw: [ChatMessage]
     if MergedContact.isMergedID(conversationID) {
       raw = relayTargets(of: conversationID)
@@ -539,13 +563,13 @@ final class RelayStore {
     return HiddenMessageStore.visible(raw, hiddenIDs: hiddenMessageIDs)
   }
 
-  func groups(_ conversationID: String) -> [MessageGroup] {
+  package func groups(_ conversationID: String) -> [MessageGroup] {
     groups(conversationID, messages: visibleMessages(conversationID))
   }
 
   /// Le regroupement d'une partie du fil seulement — ce que Focus montre quand
   /// il replie l'historique à ce qui attend une réponse.
-  func groups(_ conversationID: String, messages: [ChatMessage]) -> [MessageGroup] {
+  package func groups(_ conversationID: String, messages: [ChatMessage]) -> [MessageGroup] {
     let conversation = conversation(conversationID)
     return MessageGrouping.groups(
       for: messages,
@@ -555,7 +579,7 @@ final class RelayStore {
   }
 
   /// Ouvre un fil : historique, pièces jointes, accusé de lecture — comme le Mac.
-  func open(conversationID: String) async {
+  package func open(conversationID: String) async {
     guard !isDemo else { return }
     let first = !openedConversationIDs.contains(conversationID)
     openedConversationIDs.insert(conversationID)
@@ -566,7 +590,7 @@ final class RelayStore {
   }
 
   /// Le geste explicite : ce fil est lu, ici et sur le Relais, incognito ou pas.
-  func markRead(conversationID: String) async {
+  package func markRead(conversationID: String) async {
     guard !isDemo else { return }
     for target in relayTargets(of: conversationID) {
       await matrix.markRead(conversationID: target)
@@ -576,12 +600,12 @@ final class RelayStore {
 
   // MARK: - Incognito
 
-  static let incognitoKey = "correspondance.ios.incognito"
+  package static let incognitoKey = "correspondance.ios.incognito"
 
   /// Le mode incognito de Beeper : on lit, et personne ne le sait. Aucun
   /// accusé de lecture ne part, le compteur de non-lus reste — pour répondre
   /// à son rythme. Répondre, ou « Marquer comme lu », lève le voile.
-  var isIncognito: Bool = UserDefaults.standard.bool(forKey: RelayStore.incognitoKey) {
+  package var isIncognito: Bool = UserDefaults.standard.bool(forKey: RelayStore.incognitoKey) {
     didSet {
       guard isIncognito != oldValue else { return }
       UserDefaults.standard.set(isIncognito, forKey: RelayStore.incognitoKey)
@@ -595,7 +619,7 @@ final class RelayStore {
   /// Remonter d'une page : ce que le défilement demande en approchant du haut.
   /// Le Relais rend le fil entier tel qu'il le connaît — on ne garde donc que
   /// s'il a vraiment grandi, et on cesse de demander quand il ne bouge plus.
-  func loadOlder(conversationID: String) async {
+  package func loadOlder(conversationID: String) async {
     guard !isDemo, !isLoadingOlder, !exhaustedThreadIDs.contains(conversationID) else { return }
     isLoadingOlder = true
     defer { isLoadingOlder = false }
@@ -669,11 +693,11 @@ final class RelayStore {
 
   // MARK: - Composer
 
-  func draftText(_ conversationID: String) -> String {
+  package func draftText(_ conversationID: String) -> String {
     localDrafts[conversationID] ?? state.drafts[conversationID] ?? ""
   }
 
-  func setDraft(_ text: String, conversationID: String) {
+  package func setDraft(_ text: String, conversationID: String) {
     guard draftText(conversationID) != text else { return }
     localDrafts[conversationID] = text
     // Écrire, c'est le dire ; effacer tout, c'est dire qu'on a fini.
@@ -681,40 +705,40 @@ final class RelayStore {
     scheduleRelayDraftPush(conversationID: conversationID, text: text)
   }
 
-  func attachments(_ conversationID: String) -> [String] {
+  package func attachments(_ conversationID: String) -> [String] {
     pendingAttachments[conversationID] ?? []
   }
 
-  func addAttachment(_ path: String, conversationID: String) {
+  package func addAttachment(_ path: String, conversationID: String) {
     var list = attachments(conversationID)
     guard !list.contains(path) else { return }
     list.append(path)
     pendingAttachments[conversationID] = list
   }
 
-  func removeAttachment(_ path: String, conversationID: String) {
+  package func removeAttachment(_ path: String, conversationID: String) {
     pendingAttachments[conversationID] = attachments(conversationID).filter { $0 != path }
   }
 
-  func replyTarget(_ conversationID: String) -> ChatMessage? {
+  package func replyTarget(_ conversationID: String) -> ChatMessage? {
     guard let id = replyTargets[conversationID] else { return nil }
     return visibleMessages(conversationID).first { $0.id == id }
   }
 
-  func setReplyTarget(_ messageID: String?, conversationID: String) {
+  package func setReplyTarget(_ messageID: String?, conversationID: String) {
     if let messageID { replyTargets[conversationID] = messageID }
     else { replyTargets.removeValue(forKey: conversationID) }
   }
 
   /// La bulle en cours de correction dans ce fil.
-  func editingMessage(_ conversationID: String) -> ChatMessage? {
+  package func editingMessage(_ conversationID: String) -> ChatMessage? {
     guard let id = editingTargets[conversationID] else { return nil }
     return visibleMessages(conversationID).first { $0.id == id }
   }
 
   /// Le composer passe en mode correction : le texte descend dedans, le
   /// brouillon attend son tour.
-  func beginEditing(_ message: ChatMessage, conversationID: String) {
+  package func beginEditing(_ message: ChatMessage, conversationID: String) {
     guard canEdit(message) else { return }
     if editingTargets[conversationID] == nil {
       stashedDrafts[conversationID] = draftText(conversationID)
@@ -726,7 +750,7 @@ final class RelayStore {
 
   /// Sort du mode correction — correction partie ou abandonnée : le composer
   /// redevient ce qu'il était.
-  func endEditing(_ conversationID: String) {
+  package func endEditing(_ conversationID: String) {
     guard editingTargets.removeValue(forKey: conversationID) != nil else { return }
     setDraft(stashedDrafts.removeValue(forKey: conversationID) ?? "", conversationID: conversationID)
   }
@@ -747,18 +771,18 @@ final class RelayStore {
     await editMessage(messageID: message.id, newText: corrected, conversationID: conversationID)
   }
 
-  func isSending(_ conversationID: String) -> Bool {
+  package func isSending(_ conversationID: String) -> Bool {
     sendingConversationIDs.contains(conversationID)
   }
 
-  func canSend(_ conversationID: String) -> Bool {
+  package func canSend(_ conversationID: String) -> Bool {
     !draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       || !attachments(conversationID).isEmpty
   }
 
   /// Le réseau où part le prochain message — celui du fil, celui du dernier
   /// message pour une ligne de fusion.
-  func sendingNetwork(_ conversationID: String) -> MessageNetwork? {
+  package func sendingNetwork(_ conversationID: String) -> MessageNetwork? {
     if MergedContact.isMergedID(conversationID) {
       return memberConversations(of: conversationID)
         .max { $0.lastMessageAt < $1.lastMessageAt }?.network
@@ -766,7 +790,7 @@ final class RelayStore {
     return conversation(conversationID)?.network
   }
 
-  func send(conversationID: String) async {
+  package func send(conversationID: String) async {
     // Le composer corrige une bulle : le bouton envoie la correction, pas un
     // message de plus.
     if editingTargets[conversationID] != nil {
@@ -859,12 +883,12 @@ final class RelayStore {
   private var pendingSends: [String: PendingSend] = [:]
 
   /// Les bulles encore rattrapables — ce qui met le « Annuler » sous la bulle.
-  private(set) var undoableSendIDs: Set<String> = []
+  package private(set) var undoableSendIDs: Set<String> = []
 
-  static let undoSendDelayKey = "correspondance.ios.undoSendDelay"
+  package static let undoSendDelayKey = "correspondance.ios.undoSendDelay"
 
   /// Le délai de grâce choisi dans Réglages.
-  var undoSendDelay: UndoSendDelay = UndoSendDelay.fromStored(
+  package var undoSendDelay: UndoSendDelay = UndoSendDelay.fromStored(
     UserDefaults.standard.object(forKey: RelayStore.undoSendDelayKey) as? Int
   ) {
     didSet {
@@ -873,7 +897,7 @@ final class RelayStore {
     }
   }
 
-  func canUndoSend(_ messageID: String) -> Bool { undoableSendIDs.contains(messageID) }
+  package func canUndoSend(_ messageID: String) -> Bool { undoableSendIDs.contains(messageID) }
 
   private func armUndoSend(
     conversationID: String, target: String, text: String,
@@ -904,7 +928,7 @@ final class RelayStore {
   /// « Annuler » sous la bulle : rien n'est parti, le texte revient au composer.
   /// Si le geste Focus avait archivé le fil, il revient dans la file — la
   /// décision d'archiver était celle d'un message envoyé, et il ne l'est plus.
-  func undoSend(_ localID: String) {
+  package func undoSend(_ localID: String) {
     guard let pending = pendingSends.removeValue(forKey: localID) else { return }
     pending.task?.cancel()
     undoableSendIDs.remove(localID)
@@ -919,7 +943,7 @@ final class RelayStore {
   }
 
   /// Marque l'envoi en sursis de ce fil comme « archivé par le geste Focus ».
-  func noteArchivedPendingSend(conversationID: String) {
+  package func noteArchivedPendingSend(conversationID: String) {
     guard let key = pendingSends.first(where: { $0.value.conversationID == conversationID })?.key
     else { return }
     pendingSends[key]?.archivedConversationID = conversationID
@@ -959,18 +983,18 @@ final class RelayStore {
   // MARK: - Transférer
 
   /// La bulle que le sélecteur de fil s'apprête à renvoyer ailleurs.
-  var forwardingMessage: ChatMessage?
+  package var forwardingMessage: ChatMessage?
 
-  func beginForwarding(_ message: ChatMessage) {
+  package func beginForwarding(_ message: ChatMessage) {
     guard canForward(message) else { return }
     forwardingMessage = message
   }
 
-  func cancelForwarding() { forwardingMessage = nil }
+  package func cancelForwarding() { forwardingMessage = nil }
 
   /// Transférer, c'est réécrire : il faut du texte, ou un fichier qu'on a
   /// encore sur l'appareil.
-  func canForward(_ message: ChatMessage) -> Bool {
+  package func canForward(_ message: ChatMessage) -> Bool {
     guard !message.isSystemEvent, !message.isRetracted, !message.isAgentProposal,
           message.poll == nil
     else { return false }
@@ -978,7 +1002,7 @@ final class RelayStore {
   }
 
   /// Les fils où déposer un transfert, la recherche du sélecteur appliquée.
-  func forwardTargets(_ query: String) -> [Conversation] {
+  package func forwardTargets(_ query: String) -> [Conversation] {
     let list = ConversationSearch.filter(
       mergedRows(conversations), query: query, index: searchIndex(query: query)
     )
@@ -987,7 +1011,7 @@ final class RelayStore {
 
   /// Renvoie le message dans un autre fil, par le chemin d'envoi de CE fil-là.
   /// Comme Beeper, rien n'annonce que c'est un transfert.
-  func forward(_ message: ChatMessage, to conversationID: String) async {
+  package func forward(_ message: ChatMessage, to conversationID: String) async {
     defer { forwardingMessage = nil }
     guard !isDemo, let target = sendingTarget(conversationID) else { return }
     let text = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1017,7 +1041,7 @@ final class RelayStore {
 
   // MARK: - Gestes sur une bulle
 
-  func react(conversationID: String, messageID: String, emoji: String) async {
+  package func react(conversationID: String, messageID: String, emoji: String) async {
     guard !isDemo, let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
     else { return }
     try? await matrix.toggleReaction(conversationID: target, messageID: messageID, emoji: emoji)
@@ -1025,7 +1049,7 @@ final class RelayStore {
   }
 
   /// Voter sur un sondage. Le geste bascule : retoucher sa réponse la retire.
-  func votePoll(conversationID: String, messageID: String, answerID: String) async {
+  package func votePoll(conversationID: String, messageID: String, answerID: String) async {
     guard !isDemo,
           let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
     else { return }
@@ -1038,7 +1062,7 @@ final class RelayStore {
   }
 
   /// Modifier un de mes messages, là où le réseau sait le faire.
-  func editMessage(messageID: String, newText: String, conversationID: String) async {
+  package func editMessage(messageID: String, newText: String, conversationID: String) async {
     guard !isDemo,
           let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
     else { return }
@@ -1054,7 +1078,7 @@ final class RelayStore {
   /// seulement là où le réseau sait le faire, et seulement dans la fenêtre
   /// qu'il laisse — quinze minutes chez Meta. Au-delà, le pont jette la
   /// correction sans le dire et elle n'existerait que sur cet iPhone.
-  func canEdit(_ message: ChatMessage) -> Bool {
+  package func canEdit(_ message: ChatMessage) -> Bool {
     message.isFromMe && !message.isPending && !message.isRetracted && !message.isSystemEvent
       && !message.text.isEmpty && message.network.acceptsEdit(sentAt: message.sentAt) && !isDemo
   }
@@ -1063,14 +1087,14 @@ final class RelayStore {
 
   /// Le réglage « répondre à voix haute par défaut ». Il part vers le Relais,
   /// où l'agent le relira à son prochain `/sync`.
-  func setAgentDefaultMode(_ mode: AgentSettings.Mode) {
+  package func setAgentDefaultMode(_ mode: AgentSettings.Mode) {
     guard mode != agentDefaultMode else { return }
     agentDefaultMode = mode
     relayNoteAgentSettings(AgentSettings(defaultMode: mode))
   }
 
   /// Adopté depuis le Relais : le Mac a pu trancher entre-temps.
-  func installAgentSettings(_ settings: AgentSettings?) {
+  package func installAgentSettings(_ settings: AgentSettings?) {
     let mode = settings?.defaultMode ?? AgentSettings.fallback.defaultMode
     if mode != agentDefaultMode { agentDefaultMode = mode }
   }
@@ -1080,7 +1104,7 @@ final class RelayStore {
   ///
   /// Le brouillon en cours est mis de côté et rendu si l'envoi échoue : on ne
   /// perd pas ce qu'on écrivait, et la carte reste là pour réessayer.
-  func sendAgentProposal(_ message: ChatMessage, conversationID: String) async {
+  package func sendAgentProposal(_ message: ChatMessage, conversationID: String) async {
     guard let proposal = message.agentProposal, !proposal.isEmpty else { return }
     let pending = draftText(conversationID)
     setDraft(proposal.text, conversationID: conversationID)
@@ -1095,7 +1119,7 @@ final class RelayStore {
 
   /// « Modifier » : le texte descend dans le composer et la carte disparaît.
   /// Ce qu'on avait déjà écrit n'est pas écrasé — la proposition se pose à la suite.
-  func editAgentProposal(_ message: ChatMessage, conversationID: String) {
+  package func editAgentProposal(_ message: ChatMessage, conversationID: String) {
     guard let proposal = message.agentProposal, !proposal.isEmpty else { return }
     let pending = draftText(conversationID).trimmingCharacters(in: .whitespacesAndNewlines)
     setDraft(pending.isEmpty ? proposal.text : pending + "\n" + proposal.text, conversationID: conversationID)
@@ -1104,17 +1128,17 @@ final class RelayStore {
 
   /// « Ignorer » : la carte s'en va, rien n'est envoyé. Le masquage rejoint le
   /// Relais (`fr.correspondance.hidden`) : le Mac ne la remontrera pas non plus.
-  func ignoreAgentProposal(_ message: ChatMessage, conversationID: String) {
+  package func ignoreAgentProposal(_ message: ChatMessage, conversationID: String) {
     hide(messageID: message.id, conversationID: conversationID)
   }
 
-  func hide(messageID: String, conversationID: String) {
+  package func hide(messageID: String, conversationID: String) {
     hiddenMessageIDs.insert(messageID)
     HiddenMessageStore.save(hiddenMessageIDs)
     relayNoteHidden(messageID: messageID, conversationID: conversationID)
   }
 
-  func deleteEverywhere(messageID: String, conversationID: String) async {
+  package func deleteEverywhere(messageID: String, conversationID: String) async {
     guard !isDemo,
           let target = messages.first(where: { $0.value.contains { $0.id == messageID } })?.key
     else { return }
@@ -1127,20 +1151,20 @@ final class RelayStore {
   /// Les miens seulement, et dans la fenêtre du réseau : Signal ferme à 24 h,
   /// WhatsApp à 48 h, Meta ne ferme pas. Au-delà, la redaction part, le pont la
   /// jette, et la bulle ne disparaîtrait que de cet iPhone.
-  func canDeleteEverywhere(_ message: ChatMessage) -> Bool {
+  package func canDeleteEverywhere(_ message: ChatMessage) -> Bool {
     message.isFromMe && !message.isPending && !message.isSystemEvent && !isDemo
       && message.network != .iMessage
       && message.network.acceptsDeleteForEveryone(sentAt: message.sentAt)
   }
 
   /// Les six réactions rapides — les mêmes que sur le Mac.
-  static let quickReactions = QuickReactions.base
+  package static let quickReactions = QuickReactions.base
 
   // MARK: - Gestes sur une ligne
 
   /// Ce qu'un « archiver tout ce qui est lu » emporterait — épingles et non
   /// lus épargnés (cf. `ArchiveSweep`).
-  var readArchivableConversations: [Conversation] {
+  package var readArchivableConversations: [Conversation] {
     ArchiveSweep.targets(
       conversations,
       pinned: viewState.pinned,
@@ -1151,25 +1175,25 @@ final class RelayStore {
   }
 
   /// Le geste de fin de journée : range d'un coup tout ce qui n'attend plus rien.
-  func archiveAllRead() {
+  package func archiveAllRead() {
     for conversation in readArchivableConversations {
       setArchived(true, conversationID: conversation.id)
     }
   }
 
-  func toggleArchived(_ conversationID: String) {
+  package func toggleArchived(_ conversationID: String) {
     setArchived(!isArchived(conversationID), conversationID: conversationID)
   }
 
-  func setArchived(_ value: Bool, conversationID: String) {
+  package func setArchived(_ value: Bool, conversationID: String) {
     apply(.archived, value: value, conversationID: conversationID)
   }
 
-  func togglePinned(_ conversationID: String) {
+  package func togglePinned(_ conversationID: String) {
     apply(.pinned, value: !isPinned(conversationID), conversationID: conversationID)
   }
 
-  func toggleMuted(_ conversationID: String) {
+  package func toggleMuted(_ conversationID: String) {
     apply(.muted, value: !isMuted(conversationID), conversationID: conversationID)
   }
 
@@ -1200,35 +1224,35 @@ final class RelayStore {
   /// Demande au pont d'ouvrir un fil. La commande part au bot du réseau ; le
   /// salon, lui, arrive par le `/sync` qui suit — c'est le pont qui décide
   /// quand, pas nous.
-  func startBridgeChat(network: MessageNetwork, identifier: String) async throws {
+  package func startBridgeChat(network: MessageNetwork, identifier: String) async throws {
     guard !isDemo else { return }
     try await matrix.startConversation(network: network, identifier: identifier)
   }
 
   // MARK: - La fiche d'un fil
 
-  struct ThreadMember: Identifiable, Hashable {
-    let userID: String
-    let displayName: String?
-    var id: String { userID }
-    var name: String { displayName ?? MatrixIdentity.localpart(userID) }
+  package struct ThreadMember: Identifiable, Hashable {
+    package let userID: String
+    package let displayName: String?
+    package var id: String { userID }
+    package var name: String { displayName ?? MatrixIdentity.localpart(userID) }
   }
 
   /// « Inviter cc » a-t-il un sens ici : un fil dont cc n'est pas déjà membre.
-  func agentInvitable(_ conversationID: String) async -> Bool {
+  package func agentInvitable(_ conversationID: String) async -> Bool {
     guard !isDemo, let target = relayTargets(of: conversationID).first else { return false }
     return await !matrix.hasAgent(conversationID: target)
   }
 
   /// Invite l'agent dans le fil ; « cc a rejoint la conversation » suivra.
-  func inviteAgent(_ conversationID: String) async throws {
+  package func inviteAgent(_ conversationID: String) async throws {
     guard let target = relayTargets(of: conversationID).first else { return }
     try await matrix.inviteAgent(conversationID: target)
   }
 
   /// Les correspondants d'un fil. En démonstration, il n'y a pas de salon :
   /// on relit les auteurs des messages, un par nom.
-  func members(_ conversationID: String) async -> [ThreadMember] {
+  package func members(_ conversationID: String) async -> [ThreadMember] {
     guard isDemo else {
       return await matrix.members(conversationID: conversationID)
         .map { ThreadMember(userID: $0.userID, displayName: $0.displayName) }
@@ -1243,35 +1267,35 @@ final class RelayStore {
   }
 
   /// Ajoute quelqu'un au groupe, par son numéro ou son pseudo selon le réseau.
-  func inviteMember(_ identifier: String, conversationID: String) async throws {
+  package func inviteMember(_ identifier: String, conversationID: String) async throws {
     guard !isDemo else { return }
     try await matrix.inviteMember(conversationID: conversationID, identifier: identifier)
   }
 
   /// Renomme le groupe. Le nouveau nom part sur le réseau là où le pont le
   /// relaie — c'est `NetworkCapabilities` qui décide si le geste est offert.
-  func renameGroup(_ name: String, conversationID: String) async throws {
+  package func renameGroup(_ name: String, conversationID: String) async throws {
     guard !isDemo else { return }
     try await matrix.renameGroup(conversationID: conversationID, name: name)
     await reloadFromRelay()
   }
 
   /// Retire quelqu'un du groupe. Le pont relaie le `kick` comme un retrait.
-  func removeMember(_ userID: String, conversationID: String) async throws {
+  package func removeMember(_ userID: String, conversationID: String) async throws {
     guard !isDemo else { return }
     try await matrix.removeMember(conversationID: conversationID, userID: userID)
   }
 
   /// Les trois gestes de groupe, chacun masqué là où le pont ne le porte pas.
-  func canRenameGroup(_ conversationID: String) -> Bool {
+  package func canRenameGroup(_ conversationID: String) -> Bool {
     groupCapability(conversationID) { $0.renamesGroup }
   }
 
-  func canRemoveMember(_ conversationID: String) -> Bool {
+  package func canRemoveMember(_ conversationID: String) -> Bool {
     groupCapability(conversationID) { $0.removesMember }
   }
 
-  func canInviteMember(_ conversationID: String) -> Bool {
+  package func canInviteMember(_ conversationID: String) -> Bool {
     isDemo || groupCapability(conversationID) { $0.addsMember }
   }
 
@@ -1285,7 +1309,7 @@ final class RelayStore {
 
   /// Les photos et vidéos du fil, la plus récente d'abord — celles qu'on a
   /// déjà sur l'appareil, ou qu'on sait retrouver dans le cache.
-  func media(_ conversationID: String) -> [MessageAttachment] {
+  package func media(_ conversationID: String) -> [MessageAttachment] {
     visibleMessages(conversationID).reversed().flatMap { message in
       message.attachments.map(AttachmentRepair.repaired).filter {
         ($0.isImage || $0.isVideo) && $0.resolvedFileURL != nil
@@ -1296,15 +1320,15 @@ final class RelayStore {
   // MARK: - Indicateurs de frappe
 
   /// « Alice écrit… » par fil, relu à chaque `/sync`. Vide = personne n'écrit.
-  private(set) var typingLabels: [String: String] = [:]
+  package private(set) var typingLabels: [String: String] = [:]
   /// « Vu par Alice et Bruno » par fil de groupe, relu au même rythme.
-  private(set) var seenByLabels: [String: String] = [:]
+  package private(set) var seenByLabels: [String: String] = [:]
   /// Depuis quand on a dit au Relais qu'on écrit — pour renouveler plutôt que
   /// de le lui redire à chaque touche.
   private var typingSentAt: [String: Date] = [:]
 
-  func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
-  func seenByLabel(_ conversationID: String) -> String? { seenByLabels[conversationID] }
+  package func typingLabel(_ conversationID: String) -> String? { typingLabels[conversationID] }
+  package func seenByLabel(_ conversationID: String) -> String? { seenByLabels[conversationID] }
 
   private func refreshTypingLabels() async {
     var labels: [String: String] = [:]
@@ -1337,7 +1361,7 @@ final class RelayStore {
 
   /// Ouvre la note à soi, en la créant au premier usage. Un salon du Relais
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur le Mac.
-  func openSelfNote() async {
+  package func openSelfNote() async {
     guard !isDemo, session == .connected else { return }
     do {
       _ = try await matrix.ensureSelfNote()
@@ -1354,25 +1378,25 @@ final class RelayStore {
 
   /// La conversation que Focus doit montrer : celle qu'on suivait si elle est
   /// encore dans la file, la tête de file sinon.
-  func focusConversation() -> Conversation? {
+  package func focusConversation() -> Conversation? {
     let queue = focusQueue
     if let id = focusConversationID, let match = queue.first(where: { $0.id == id }) { return match }
     focusConversationID = queue.first?.id
     return queue.first
   }
 
-  func focusNext() {
+  package func focusNext() {
     guard let id = focusConversationID else { return }
     focusConversationID = InboxOrdering.following(id, in: focusQueue) ?? id
   }
 
-  func focusPrevious() {
+  package func focusPrevious() {
     guard let id = focusConversationID else { return }
     focusConversationID = InboxOrdering.previous(before: id, in: focusQueue) ?? id
   }
 
   /// Archiver en Focus : la file d'AVANT le geste dit qui vient ensuite.
-  func focusArchiveAndAdvance() {
+  package func focusArchiveAndAdvance() {
     guard let id = focusConversationID else { return }
     let queue = focusQueue
     let next = InboxOrdering.next(after: id, in: queue)

@@ -1,4 +1,5 @@
 import CorrespondanceCore
+import CorrespondanceRelayStore
 import Foundation
 
 /// Correspondance pour Linux.

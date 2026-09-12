@@ -15,7 +15,7 @@ extension RelayStore {
 
   /// Programme ce que le composer contient, et le vide. Le brouillon devient un
   /// message en attente : il n'a plus rien à faire dans le champ.
-  func scheduleDraft(
+  package func scheduleDraft(
     conversationID: String,
     at date: Date,
     onlyIfNoReply: Bool
@@ -41,13 +41,13 @@ extension RelayStore {
     setReplyTarget(nil, conversationID: conversationID)
   }
 
-  func cancelScheduled(_ id: String) {
+  package func cancelScheduled(_ id: String) {
     scheduled.removeAll { $0.id == id }
     saveScheduled()
   }
 
   /// Remet le message dans le composer : le corriger, c'est le réécrire.
-  func editScheduled(_ id: String) {
+  package func editScheduled(_ id: String) {
     guard let message = scheduled.first(where: { $0.id == id }) else { return }
     setDraft(message.text, conversationID: message.conversationID)
     for path in message.attachmentPaths {
@@ -57,18 +57,18 @@ extension RelayStore {
     selectedConversationID = message.conversationID
   }
 
-  func reschedule(_ id: String, at date: Date) {
+  package func reschedule(_ id: String, at date: Date) {
     guard let index = scheduled.firstIndex(where: { $0.id == id }) else { return }
     scheduled[index].sendAt = date
     scheduled[index].lastError = nil
     saveScheduled()
   }
 
-  func scheduledMessages(for conversationID: String) -> [ScheduledMessage] {
+  package func scheduledMessages(for conversationID: String) -> [ScheduledMessage] {
     scheduled.filter { $0.conversationID == conversationID }
   }
 
-  func saveScheduled() {
+  package func saveScheduled() {
     scheduled = ScheduledMessageStore.sanitized(scheduled)
     ScheduledMessageStore.save(scheduled)
   }
@@ -77,7 +77,7 @@ extension RelayStore {
 
   /// Envoie ce qui est dû. Appelé au lancement et à chaque minute pendant que
   /// l'app est visible — jamais autrement, et c'est tout le contrat.
-  func flushDueScheduledMessages(now: Date = .now) async {
+  package func flushDueScheduledMessages(now: Date = .now) async {
     let due = scheduled.filter { $0.isDue(at: now) }
     guard !due.isEmpty else { return }
 

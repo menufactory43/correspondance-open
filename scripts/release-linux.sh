@@ -51,12 +51,22 @@ BIN="$(env ${ENV[@]+"${ENV[@]}"} PATH="$TC:$PATH" "$TC/swift" build --package-pa
 [ -f "$BIN" ] || { echo "✗ pas de binaire"; exit 1; }
 file "$BIN" | grep -q "ELF 64-bit.*x86-64.*statically linked" || { echo "✗ ce n'est pas un ELF statique x86_64 : $(file "$BIN")"; exit 1; }
 
+etape "La TUI (même magasin, dans le terminal)"
+env ${ENV[@]+"${ENV[@]}"} PATH="$TC:$PATH" "$TC/swift" build \
+  --package-path "$PKG" --swift-sdk "$SDK" -c release --product correspondance-tui --scratch-path "$SCRATCH" \
+  -Xswiftc -gnone -Xlinker -s 2>&1 | grep -E "error:|Build complete|Build of" | tail -3
+TUI_BIN="$(dirname "$BIN")/correspondance-tui"
+[ -f "$TUI_BIN" ] || { echo "✗ pas de binaire TUI"; exit 1; }
+
 etape "Archive $NOM"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/share/correspondance" "$STAGE/share/applications" "$STAGE/share/icons/hicolor/512x512/apps"
 cp -f "$BIN" "$STAGE/bin/correspondance"
 if [ -x "$TC/llvm-strip" ]; then "$TC/llvm-strip" "$STAGE/bin/correspondance"; fi
 chmod 755 "$STAGE/bin/correspondance"
+cp -f "$TUI_BIN" "$STAGE/bin/correspondance-tui"
+if [ -x "$TC/llvm-strip" ]; then "$TC/llvm-strip" "$STAGE/bin/correspondance-tui"; fi
+chmod 755 "$STAGE/bin/correspondance-tui"
 # Le mandataire Tailcat, embarqué comme dans l'app Mac (Contents/Helpers/tailcat) :
 # construit par infra/relais/construire.sh --quoi tailcat. Absent, l'archive se
 # fait quand même, et l'app dira que Tailcat n'est pas là.

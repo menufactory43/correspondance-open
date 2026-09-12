@@ -12,7 +12,7 @@ import Foundation
 @MainActor
 extension RelayStore {
   /// À appeler après chaque `/sync` : ce qui vient d'arriver sonne, le reste non.
-  func postLocalNotificationsForNewMessages() {
+  package func postLocalNotificationsForNewMessages() {
     let baseline = notificationBaseline
     defer {
       notificationBaseline = Dictionary(conversations.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -63,6 +63,10 @@ extension RelayStore {
       network: conversation.network,
       text: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count)
     )
+    if let notificationPresenter {
+      notificationPresenter(shown.title, shown.body)
+      return
+    }
     var arguments = ["notify-send", "--app-name=Correspondance", "--category=im.received"]
     // La MÊME rafale remplace sa notification au lieu d'en empiler une autre.
     arguments.append("--hint=string:x-dunst-stack-tag:\(burst.key)")

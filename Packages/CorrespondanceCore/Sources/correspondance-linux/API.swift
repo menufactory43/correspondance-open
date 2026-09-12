@@ -1,4 +1,5 @@
 import CorrespondanceCore
+import CorrespondanceRelayStore
 import CorrespondanceMatrixClient
 import Foundation
 import Observation

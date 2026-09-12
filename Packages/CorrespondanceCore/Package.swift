@@ -82,6 +82,9 @@ let package = Package(
         // L'app pour Linux : le même cœur, servi à un navigateur (voir
         // Sources/correspondance-linux/README.md).
         .executable(name: "correspondance-linux", targets: ["correspondance-linux"]),
+        // L'inbox dans le terminal : le même magasin que Linux, rendu en cellules
+        // (voir Sources/correspondance-tui/README.md).
+        .executable(name: "correspondance-tui", targets: ["correspondance-tui"]),
     ],
     dependencies: dependancesDuPaquet,
     targets: ciblesDuPaquet
@@ -130,10 +133,26 @@ var ciblesDuPaquet: [Target] {
         ),
         // L'app Linux : le magasin de l'iPhone porté au-dessus de Core, un
         // serveur HTTP local, et l'interface dans le navigateur.
+        // Le magasin de l'iPhone porté au-dessus de Core, sans interface : le
+        // navigateur de Linux et le terminal le partagent. Accès `package` —
+        // il ne sort pas du paquet.
+        .target(name: "CorrespondanceRelayStore", dependencies: ["CorrespondanceCore"]),
         .executableTarget(
             name: "correspondance-linux",
-            dependencies: ["CorrespondanceCore"] + moteurCrypto
+            dependencies: ["CorrespondanceCore", "CorrespondanceRelayStore"] + moteurCrypto
         ),
+        // La TUI : un rendu en cellules, différentiel et synchronisé, au-dessus
+        // du même magasin. Aucune dépendance au-delà du paquet.
+        // Le moteur de terminal seul — mode brut, lecture des touches, grille de
+        // cellules, largeur Unicode, images Kitty — sans rien savoir des
+        // conversations : testable, et réutilisable.
+        .target(name: "CorrespondanceTerminal"),
+        .executableTarget(
+            name: "correspondance-tui",
+            dependencies: ["CorrespondanceCore", "CorrespondanceRelayStore", "CorrespondanceTerminal"] + moteurCrypto,
+            exclude: ["README.md"]
+        ),
+        .testTarget(name: "CorrespondanceTerminalTests", dependencies: ["CorrespondanceTerminal"]),
         .target(name: "CorrespondanceUI", dependencies: ["CorrespondanceCore"]),
         // L'agent « cc » : un client Matrix ordinaire qui parle à Claude Code.
         // La logique (déclencheur, plafond, lecture de la sortie) vit dans le kit,
