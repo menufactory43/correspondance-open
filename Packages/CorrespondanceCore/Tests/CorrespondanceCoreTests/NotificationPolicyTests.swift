@@ -52,6 +52,32 @@ final class NotificationPolicyTests: XCTestCase {
     XCTAssertFalse(decide(current: conversation(at: 60), previous: conversation(at: 0), isMuted: true))
   }
 
+  /// Muet veut dire « plus de notifications », pas « plus rien » : être nommé,
+  /// ou se voir répondre, passe outre la sourdine.
+  func testMutedConversationStillNotifiesWhenItNamesMe() {
+    var current = conversation(at: 60)
+    current.lastMessageIsPersonal = true
+    XCTAssertTrue(decide(current: current, previous: conversation(at: 0), isMuted: true))
+  }
+
+  /// Et ce passe-droit ne lève aucune des autres règles : un fil archivé, un
+  /// message de moi ou un fil sous les yeux ne sonnent pas davantage.
+  func testPersonalDoesNotOverrideTheOtherRules() {
+    var archived = conversation(at: 60)
+    archived.lastMessageIsPersonal = true
+    archived.isArchived = true
+    XCTAssertFalse(decide(current: archived, previous: conversation(at: 0), isMuted: true))
+
+    var mine = conversation(at: 60, fromMe: true)
+    mine.lastMessageIsPersonal = true
+    XCTAssertFalse(decide(current: mine, previous: conversation(at: 0), isMuted: true))
+
+    var open = conversation(at: 60)
+    open.lastMessageIsPersonal = true
+    XCTAssertFalse(
+      decide(current: open, previous: conversation(at: 0), isMuted: true, isSelected: true))
+  }
+
   func testOpenConversationNeverNotifies() {
     XCTAssertFalse(decide(current: conversation(at: 60), previous: conversation(at: 0), isSelected: true))
   }

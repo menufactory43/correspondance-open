@@ -348,6 +348,27 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// Les noms sous lesquels on peut me désigner, tels que les salons me
+  /// nomment. L'extension de notification n'a pas de `/sync` : c'est l'app qui
+  /// les lui dépose, pour qu'elle reconnaisse une mention dans un fil muet.
+  public func myNames() -> [String] {
+    var names: [String] = []
+    var seen = Set<String>()
+    let localpart = MatrixIdentity.localpart(selfUserID)
+    for room in rooms.values {
+      for name in PersonalMessage.names(
+        displayName: room.members[selfUserID]?.displayName, userLocalpart: localpart
+      ) where !seen.contains(name) {
+        seen.insert(name)
+        names.append(name)
+      }
+    }
+    if names.isEmpty {
+      names = PersonalMessage.names(displayName: nil, userLocalpart: localpart)
+    }
+    return names
+  }
+
   public func conversations() -> [Conversation] {
     hydrateIfNeeded()
     var list = rooms.values

@@ -131,8 +131,15 @@ struct RootView: View {
   }
 
   /// Le badge de l'onglet Inbox : ce qui n'est pas lu dans la file.
+  ///
+  /// Les fils muets en sont exclus. Leur ligne porte bien son compte — couper
+  /// le son ne rend pas aveugle — mais une pastille rouge sur l'icône est une
+  /// sollicitation, et c'est très exactement ce que « muet » enlève. Signal et
+  /// WhatsApp font le même partage.
   private var unreadCount: Int {
-    store.conversations(in: .inbox).reduce(0) { $0 + $1.unreadCount }
+    store.conversations(in: .inbox)
+      .filter { !store.isMuted($0.id) }
+      .reduce(0) { $0 + $1.unreadCount }
   }
 
   /// Liste puis fil en compact, côte à côte en regular — un split view par

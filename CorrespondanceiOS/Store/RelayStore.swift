@@ -426,6 +426,13 @@ final class RelayStore {
   /// voyagent par l'account data du Relais : l'un et l'autre lisent la même liste.
   private func mergedRows(_ list: [Conversation]) -> [Conversation] {
     var list = list
+    // Sur un fil muet, le compte du serveur vaut zéro PAR CONSTRUCTION : la
+    // sourdine est une push rule `actions: []`, et Synapse compte des
+    // notifications, pas des messages. C'est donc le compte dérivé de mon
+    // propre accusé de lecture qui fait foi — muet ne veut pas dire aveugle.
+    for index in list.indices where isMuted(list[index].id) {
+      list[index].unreadCount = list[index].unreadSinceReceipt
+    }
     Self.enrichTitlesFromContacts(&list)
     guard !mergedContacts.isEmpty else { return list }
     // Les membres quittent la liste au profit de la ligne virtuelle : on les

@@ -33,6 +33,16 @@ public struct Conversation: Identifiable, Hashable, Sendable {
   /// L'algorithme de `m.room.encryption` du salon Matrix, s'il y en a un.
   /// Vide pour iMessage, qui a son propre chiffrement et sa propre histoire.
   public var encryptionAlgorithm: String? = nil
+  /// Ce qui attend depuis mon accusé de lecture, compté localement.
+  ///
+  /// `unreadCount` vient du serveur, qui compte des NOTIFICATIONS : il vaut
+  /// toujours zéro sur un fil muet, dont la push rule dit « ne notifie pas ».
+  /// Celui-ci se dérive de mon propre accusé et vaut muet ou pas — c'est lui
+  /// qu'une ligne muette affiche (cf. `MatrixRoomModel.unreadSinceMyReceipt`).
+  public var unreadSinceReceipt: Int = 0
+  /// Le dernier message me nomme, ou répond à un de mes messages. Un fil muet
+  /// notifie quand même pour ça — et pour ça seulement.
+  public var lastMessageIsPersonal: Bool = false
 
   public var hasUnread: Bool { unreadCount > 0 }
 

@@ -313,8 +313,20 @@ public enum PushNotification {
   /// l'iPhone dort arrive ici avant le `/sync` qui l'apprendrait. Dans ces
   /// trois cas, la notification est déjà sur l'appareil — c'est le dernier
   /// endroit où l'on peut encore la taire.
-  public static func shouldPresent(roomID: String, mutedRoomIDs: Set<String>) -> Bool {
-    !mutedRoomIDs.contains(roomID)
+  /// - Parameter isPersonal: le message me nomme. Muet veut dire « plus de
+  ///   notifications », pas « plus rien » : être nommé passe outre la sourdine.
+  ///   Le serveur pense pareil — ses règles de mention sont des règles
+  ///   `override`, qui priment sur la règle de salon portant la sourdine, et
+  ///   c'est bien pour ça qu'un tel push nous parvient malgré le muet.
+  ///
+  ///   Une CITATION de l'un de mes messages ne peut pas arriver ici : aucune
+  ///   push rule ne sait exprimer « en réponse à un événement que j'ai écrit »,
+  ///   donc le serveur ne pousse rien. L'app la voit quand elle tourne, et le
+  ///   compteur de non-lus la porte toujours.
+  public static func shouldPresent(
+    roomID: String, mutedRoomIDs: Set<String>, isPersonal: Bool = false
+  ) -> Bool {
+    !mutedRoomIDs.contains(roomID) || isPersonal
   }
 }
 
@@ -345,6 +357,21 @@ public enum SharedRelayState {
   public static func mutedRoomIDs(suiteName: String = appGroup) -> Set<String> {
     let stored = defaults(suiteName: suiteName)?.stringArray(forKey: mutedKey) ?? []
     return Set(stored)
+  }
+
+  private static let namesKey = "correspondance.shared.myNames"
+
+  /// Les noms sous lesquels on peut me désigner, laissés à l'extension.
+  ///
+  /// Elle ne tient pas de `/sync` : elle ne connaît ni mon nom affiché ni mon
+  /// identifiant. Sans eux, elle ne saurait pas qu'un push venu d'un salon
+  /// muet me nomme, et le tairait comme les autres.
+  public static func saveMyNames(_ names: [String], suiteName: String = appGroup) {
+    defaults(suiteName: suiteName)?.set(names, forKey: namesKey)
+  }
+
+  public static func myNames(suiteName: String = appGroup) -> [String] {
+    defaults(suiteName: suiteName)?.stringArray(forKey: namesKey) ?? []
   }
 
   /// L'extrait qu'on partage, tiré de l'instantané complet.

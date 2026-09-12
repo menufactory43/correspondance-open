@@ -20,7 +20,11 @@ public enum NotificationPolicy {
     guard !current.isArchived else { return false }
     // Un message que j'ai envoyé moi-même ne me prévient pas.
     guard !current.lastMessageIsFromMe else { return false }
-    guard !isMuted else { return false }
+    // Muet veut dire « plus de notifications », pas « plus rien ». Être nommé,
+    // ou se voir répondre, passe outre la sourdine — c'est la règle de Signal
+    // et de Slack, et celle de Matrix, dont les règles de mention priment sur
+    // la règle de salon qui porte la sourdine.
+    guard !isMuted || current.lastMessageIsPersonal else { return false }
     guard !isSelected else { return false }
     // Un aperçu « catalogue » (« Écrire sur Signal… ») n'est pas un message reçu.
     guard current.hasLivePreview, !current.preview.isEmpty else { return false }

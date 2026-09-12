@@ -296,6 +296,44 @@ public struct MatrixRoomModel: Sendable {
     }
   }
 
+  /// Ce qui attend depuis MON accusé de lecture, compté ici plutôt que par le
+  /// serveur.
+  ///
+  /// `notification_count` vaut toujours zéro sur un salon muet : la sourdine
+  /// est une push rule `actions: []`, et le serveur compte des NOTIFICATIONS,
+  /// pas des messages. Un fil muet ne pouvait donc structurellement pas porter
+  /// de compteur. Celui-ci se dérive de mon propre accusé — que le `/sync`
+  /// nous rend dans `m.receipt` — et vaut donc muet ou pas. Il voyage avec
+  /// l'accusé : le Mac et l'iPhone comptent la même chose.
+  ///
+  /// Zéro quand je n'ai pas d'accusé dans ce salon : on ne sait rien, et
+  /// annoncer tout l'historique comme non lu serait pire que se taire.
+  public func unreadSinceMyReceipt(selfUserID: String) -> Int {
+    guard let markerID = readMarkerByUser[selfUserID],
+      let marker = messagesByID[markerID]
+    else { return 0 }
+    return messagesByID.values.count {
+      $0.sentAt > marker.sentAt && !$0.isFromMe && !$0.isSystemEvent && !$0.isAgentProposal
+    }
+  }
+
+  /// Le dernier message me concerne PERSONNELLEMENT : il me nomme, ou il
+  /// répond à un message que j'ai écrit.
+  ///
+  /// C'est la seule chose qu'un fil muet laisse encore passer. Matrix dit la
+  /// même chose de son côté : les règles de mention sont des règles `override`
+  /// et `content`, qui priment sur la règle de salon portant la sourdine.
+  public func lastMessageIsPersonal(selfUserID: String) -> Bool {
+    guard let last = lastListedMessage, !last.isFromMe else { return false }
+    // Une réponse à l'un de mes messages : on remonte à la cible citée.
+    if let target = last.replyTo?.messageID, messagesByID[target]?.isFromMe == true { return true }
+    let names = PersonalMessage.names(
+      displayName: members[selfUserID]?.displayName,
+      userLocalpart: MatrixIdentity.localpart(selfUserID)
+    )
+    return PersonalMessage.mentions(last.text, names: names)
+  }
+
   /// « Vu par Alice et Bruno » : le détail des lecteurs de mon dernier message,
   /// dans un groupe seulement — en DM, le « Vu » simple dit déjà tout.
   /// `nil` tant que personne n'a lu : la vue n'a alors rien à réserver.
@@ -469,6 +507,8 @@ public struct MatrixRoomModel: Sendable {
       ? memberAvatarMXCs(selfUserID: selfUserID)
       : []
     conversation.lastMessageIsFromMe = last?.isFromMe ?? false
+    conversation.unreadSinceReceipt = unreadSinceMyReceipt(selfUserID: selfUserID)
+    conversation.lastMessageIsPersonal = lastMessageIsPersonal(selfUserID: selfUserID)
     conversation.lastDelivery = (last?.isFromMe == true) ? delivery(selfUserID: selfUserID) : nil
     if conversation.lastMessageAt == .distantPast {
       conversation.lastMessageAt = Date(timeIntervalSince1970: 0)

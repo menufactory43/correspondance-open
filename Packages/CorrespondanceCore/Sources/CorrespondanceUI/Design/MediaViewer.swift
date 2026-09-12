@@ -189,17 +189,29 @@ public struct StableVideoPlayer: View {
       }
   }
 
-  /// La session audio de l'iPhone, pour une vidéo : l'interrupteur silencieux
-  /// la coupe, et les boutons de volume la règlent pendant qu'elle joue — la
-  /// règle de Photos et de Safari. Un vocal, lui, passe outre le silencieux
-  /// (voir `AudioMessageView`) et laisse la catégorie « playback » derrière
-  /// lui : sans ça, une vidéo lue après un vocal aurait ignoré l'interrupteur.
+  /// La session audio de l'iPhone, pour une vidéo : « playback », donc SON
+  /// MÊME EN SILENCIEUX.
+  ///
+  /// C'est un revirement assumé. La visionneuse a d'abord pris « solo ambient »
+  /// — la règle de Photos, où l'interrupteur silencieux coupe le son — et ça
+  /// répondait à un vrai défaut : un vocal laissait « playback » derrière lui,
+  /// et la vidéo suivante ignorait l'interrupteur par ACCIDENT. Mais la
+  /// réponse confondait deux choses. Ce qu'il fallait empêcher, c'est
+  /// d'hériter d'une catégorie par mégarde ; pas de jouer le son d'une vidéo
+  /// qu'on vient d'ouvrir d'un doigt.
+  ///
+  /// Or ouvrir un reel, c'est demander à l'entendre : personne ne tape un
+  /// lecteur pour regarder des lèvres bouger. YouTube, Instagram et Messages
+  /// jouent tous le son dans ce cas. La catégorie est donc choisie ici
+  /// EXPRÈS, pas héritée — la session se rend en refermant la visionneuse, et
+  /// le vocal garde la sienne (voir `AudioMessageView`).
+  ///
   /// Hors de l'acteur principal : `setActive` attend le matériel.
   private static func claimPlaybackSession() {
     #if os(iOS)
     Task.detached(priority: .userInitiated) {
       let session = AVAudioSession.sharedInstance()
-      try? session.setCategory(.soloAmbient, mode: .moviePlayback)
+      try? session.setCategory(.playback, mode: .moviePlayback)
       try? session.setActive(true)
     }
     #endif

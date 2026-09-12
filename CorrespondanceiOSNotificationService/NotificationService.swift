@@ -47,31 +47,58 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     // Seconde garde du muet. La première est côté Relais (push rule vide), mais
     // une règle écrite à l'instant, ou depuis le Mac pendant que l'iPhone dort,
     // laisse passer un dernier push. C'est le dernier endroit où le taire.
-    guard PushNotification.shouldPresent(
-      roomID: reference.roomID,
-      mutedRoomIDs: SharedRelayState.mutedRoomIDs()
-    ) else {
-      // On ne peut pas la taire : sans l'entitlement de filtrage
-      // (`com.apple.developer.usernotifications.filtering`, accordé par Apple
-      // sur demande), un contenu vide fait afficher le repli du push tel quel,
-      // avec son son — vérifié le 3 sept. 2026. Alors on la rend discrète :
-      // pas de son, niveau passif, l'écran ne s'allume pas, et le repli
-      // générique plutôt que le texte d'un salon qu'on a voulu faire taire.
-      mutable.sound = nil
-      mutable.interruptionLevel = .passive
-      return contentHandler(mutable)
-    }
+    let isMuted = SharedRelayState.mutedRoomIDs().contains(reference.roomID)
 
     MatrixCredentialStore.accessGroup = SharedRelayState.keychainAccessGroup
     guard let credentials = MatrixCredentialStore.load() else {
+      if isMuted { silence(mutable) }
       return contentHandler(mutable)
     }
 
-    Task { [self, reference, credentials] in
+    Task { [self, reference, credentials, isMuted] in
       let (shown, avatar) = await Self.presentation(for: reference, credentials: credentials)
+      // Sur un fil muet, on ne décide qu'APRÈS avoir lu le message : être
+      // nommé passe outre la sourdine, et ça ne se sait qu'une fois le texte
+      // en main. Un tel push nous parvient malgré le muet parce que les règles
+      // de mention de Matrix priment sur la règle de salon (cf.
+      // `PushNotification.shouldPresent`) ; c'est rare, donc cet aller-retour
+      // de plus l'est aussi.
+      let isPersonal = PersonalMessage.mentions(shown.body, names: SharedRelayState.myNames())
+      guard PushNotification.shouldPresent(
+        roomID: reference.roomID,
+        mutedRoomIDs: isMuted ? [reference.roomID] : [],
+        isPersonal: isPersonal
+      ) else {
+        return finishSilently()
+      }
       finish(with: shown, avatar: avatar, threadIdentifier: reference.roomID)
     }
   }
+
+  /// Le fil est muet et le message ne me nomme pas : on rend la notification
+  /// discrète plutôt que de la laisser parler.
+  private func finishSilently() {
+    guard let handler, let content else { return }
+    Self.silence(content)
+    self.handler = nil
+    handler(content)
+  }
+
+  /// Une notification qu'on voudrait supprimer et qu'on ne peut que rendre
+  /// discrète : sans l'entitlement de filtrage
+  /// (`com.apple.developer.usernotifications.filtering`, accordé par Apple sur
+  /// demande), un contenu vide fait afficher le repli du push tel quel, avec
+  /// son son — vérifié le 3 sept. 2026. Alors : pas de son, niveau passif,
+  /// l'écran ne s'allume pas, et le repli générique plutôt que le texte d'un
+  /// salon qu'on a voulu faire taire.
+  private static func silence(_ content: UNMutableNotificationContent) {
+    content.title = PushNotification.fallbackTitle
+    content.body = PushNotification.fallbackBody
+    content.sound = nil
+    content.interruptionLevel = .passive
+  }
+
+  private func silence(_ content: UNMutableNotificationContent) { Self.silence(content) }
 
   /// Le passage du résultat au système, une fois et une seule.
   private func finish(

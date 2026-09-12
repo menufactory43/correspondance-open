@@ -228,6 +228,13 @@ extension RelayStore {
     // quels salons sont muets. Elle ne tient pas de `/sync` — c'est ce dépôt-là
     // qui lui permet de taire une notification déjà arrivée (SharedRelayState).
     SharedRelayState.saveMutedRoomIDs(SharedRelayState.mutedRoomIDs(in: snapshot))
+    // Et sous quels noms on peut me désigner : sans eux, l'extension ne
+    // saurait pas qu'un push venu d'un fil muet me NOMME, et le tairait comme
+    // les autres. Muet veut dire « plus de notifications », pas « plus rien ».
+    Task { [matrix] in
+      let names = await matrix.myNames()
+      SharedRelayState.saveMyNames(names)
+    }
     // Et ce que l'extension de partage a le droit de savoir : les fils, pour
     // sa liste (RelayStore+Partage).
     ecrireIndexDuPartage()
