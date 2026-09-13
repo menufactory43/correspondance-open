@@ -64,7 +64,7 @@ Les pratiques de Ghostty et Kitty, appliquées côté application :
   mode 1004).
 - **Collage entre crochets** : coller du texte ne déclenche aucun raccourci ;
   glisser un fichier dans la fenêtre le joint au message.
-- **Souris** SGR : molette, clic sur une conversation ou un message.
+- **Souris** SGR : molette, clic sur une conversation, un message ou un lien.
 - `^Z` suspend proprement, `^L` repeint tout, le titre de la fenêtre porte le
   nombre de non-lus.
 

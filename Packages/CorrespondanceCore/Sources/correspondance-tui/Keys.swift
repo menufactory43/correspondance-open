@@ -509,6 +509,14 @@ extension TUIApp {
 
   // MARK: - Souris
 
+  /// L'adresse portée par la cellule sous le pointeur, s'il y en a une.
+  private func linkURL(atX x: Int, y: Int) -> URL? {
+    guard x >= 0, y >= 0, x < canvas.width, y < canvas.height else { return nil }
+    let index = Int(canvas[x, y].style.link)
+    guard index > 0, index < canvas.links.count else { return nil }
+    return URL(string: canvas.links[index])
+  }
+
   func handleMouse(_ mouse: MouseEvent) {
     guard store.session == .connected, ui.overlay == nil else { return }
     switch mouse.kind {
@@ -523,6 +531,12 @@ extension TUIApp {
         ui.viewports[id] = viewport
       }
     case .press(button: 0):
+      // Un clic sur un lien l'ouvre, comme partout ailleurs. Le terminal ne
+      // peut pas le faire lui-même : la souris lui est retirée (mode 1000).
+      if let url = linkURL(atX: mouse.x, y: mouse.y) {
+        if Platform.open(url) { toast("Ouvert dans le navigateur") } else { toast("Rien n’a su ouvrir ce lien", isError: true) }
+        return
+      }
       if ui.mode == .inbox, let row = ui.listRowFrames.first(where: { $0.0.contains(x: mouse.x, y: mouse.y) }) {
         if ui.listSelectionID == row.1, store.selectedConversationID == row.1 {
           ui.pane = .thread

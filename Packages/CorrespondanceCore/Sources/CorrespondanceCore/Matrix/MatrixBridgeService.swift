@@ -232,7 +232,11 @@ public actor MatrixBridgeService {
     if selfUserID.isEmpty { selfUserID = try await client.whoami() }
     // Le chiffrement, s'il est compilé **et** demandé. Sans les deux, cet appel
     // ne fait rien et le /sync qui suit est celui d'avant.
-    if let ligne = await MatrixChiffrement.brancher(sur: client) { print("[Correspondance] \(ligne)") }
+    // Sur la sortie d'erreur, pas la standard : dans le terminal, la standard
+    // est l'écran, et cette ligne s'écrirait par-dessus.
+    if let ligne = await MatrixChiffrement.brancher(sur: client) {
+      FileHandle.standardError.write(Data("[Correspondance] \(ligne)\n".utf8))
+    }
     let response = try await client.sync(
       since: nextBatch, timeoutMilliseconds: timeoutMilliseconds, filter: Self.liveSyncFilter)
     let parser = MatrixSyncParser(selfUserID: selfUserID)

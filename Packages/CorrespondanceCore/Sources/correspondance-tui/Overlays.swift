@@ -203,7 +203,7 @@ extension TUIApp {
       ("Fil", [
         ("j k", "message suivant / précédent"), ("^D ^U", "demi-page"), ("g / G", "début / fin"),
         ("i  Entrée", "écrire"), ("r", "répondre"), ("e", "corriger"), ("+", "réagir"), ("F", "transférer"),
-        ("y", "copier le texte"), ("o", "ouvrir la pièce jointe"), ("D", "supprimer pour tous"), ("H", "masquer"),
+        ("y", "copier le texte"), ("o  clic", "ouvrir la pièce jointe ou le lien"), ("D", "supprimer pour tous"), ("H", "masquer"),
         ("u", "annuler l’envoi"), ("V", "voter"), ("S E X", "proposition de cc : envoyer, modifier, ignorer"),
         ("Échap  h", "retour à la liste"),
       ]),
