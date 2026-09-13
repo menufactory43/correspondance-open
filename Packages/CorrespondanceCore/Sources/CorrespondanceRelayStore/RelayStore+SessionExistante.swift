@@ -20,7 +20,7 @@ extension RelayStore {
 
   /// La session de l'app installée sur cette machine, si elle en a une : celle
   /// du dossier de données par défaut, quel que soit le dossier de ce processus.
-  package static func sessionDeLApp() -> MatrixCredentials? {
+  package nonisolated static func sessionDeLApp() -> MatrixCredentials? {
     var environment = ProcessInfo.processInfo.environment
     environment.removeValue(forKey: "CORRESPONDANCE_HOME")
     return MatrixCredentialStore.load(environment: environment)

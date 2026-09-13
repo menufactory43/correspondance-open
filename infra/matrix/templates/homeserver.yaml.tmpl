@@ -94,15 +94,15 @@ rc_admin_redaction:
   per_second: 1000
   burst_count: 10000
 
-# Un appareil déjà connecté peut en connecter un autre sans mot de passe : le
-# terminal (correspondance-tui) demande un jeton de connexion avec la session de
-# l'app du Mac (POST /login/get_token, Matrix 1.7). Sans ré-authentification :
-# un jeton d'accès volé donne déjà tout le compte, le mot de passe n'y ajoute
-# rien — et c'est ce qui rend le geste possible sans rien taper. Le jeton émis
-# ne vaut qu'une fois et deux minutes.
+# Un appareil déjà connecté peut en connecter un autre : le terminal
+# (correspondance-tui) demande un jeton de connexion avec la session de l'app du
+# Mac (POST /login/get_token, Matrix 1.7). Le mot de passe du compte est
+# redemandé une fois : sans lui, un jeton d'accès volé suffirait à installer un
+# appareil qui survivrait à la révocation de la session volée. Le jeton émis ne
+# vaut qu'une fois et deux minutes.
 login_via_existing_session:
   enabled: true
-  require_ui_auth: false
+  require_ui_auth: true
   token_timeout: "2m"
 
 # Pièces jointes des bridges : 100 Mo suffisent largement.

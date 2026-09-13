@@ -244,10 +244,6 @@ extension TUIApp {
   /// La connexion sans rien taper : la session de l'app demande au Relais un
   /// jeton pour ce terminal, qui devient un appareil à part entière.
   func linkFromAppSession() {
-    guard let parent = RelayStore.sessionDeLApp() else {
-      store.connectionError = "Aucune session d’app sur cette machine : connecte d’abord l’app Correspondance, ou utilise un code d’appairage."
-      return
-    }
     var password: String?
     var sessionUIA: String?
     if case .needsPassword(let uia, _) = ui.login.link {
@@ -255,9 +251,19 @@ extension TUIApp {
       password = ui.login.linkPassword.text
       sessionUIA = uia
     }
+    store.connectionError = nil
     ui.login.link = .working
     Task { @MainActor [weak self] in
+      // Le Trousseau peut demander l'autorisation à l'utilisateur et bloquer
+      // de longues secondes : jamais sur le fil de l'écran.
+      let found = await Task.detached(priority: .userInitiated) { RelayStore.sessionDeLApp() }.value
       guard let self else { return }
+      guard let parent = found else {
+        self.ui.login.link = .idle
+        self.store.connectionError = "Aucune session d’app lisible sur cette machine : connecte d’abord l’app Correspondance (ou autorise l’accès au Trousseau), ou utilise un code d’appairage."
+        self.setNeedsRender()
+        return
+      }
       let issue = await self.store.connecterDepuisSession(parent, motDePasse: password, sessionUIA: sessionUIA)
       self.ui.login.linkPassword = LineEditor()
       switch issue {
