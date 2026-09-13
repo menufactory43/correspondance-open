@@ -79,6 +79,8 @@ let package = Package(
         .executable(name: "correspondance-agent", targets: ["correspondance-agent"]),
         // L'inbox comme outil : un serveur MCP que Claude Desktop ou Zed lancent.
         .executable(name: "correspondance-mcp", targets: ["correspondance-mcp"]),
+        // La même inbox depuis un shell : cron, raccourci, script, agent sans MCP.
+        .executable(name: "correspondance-cli", targets: ["correspondance-cli"]),
         // L'app pour Linux : le même cœur, servi à un navigateur (voir
         // Sources/correspondance-linux/README.md).
         .executable(name: "correspondance-linux", targets: ["correspondance-linux"]),
@@ -168,6 +170,9 @@ var ciblesDuPaquet: [Target] {
                 + moteurCrypto
         ),
         .executableTarget(name: "correspondance-mcp", dependencies: ["CorrespondanceAgentKit", "CorrespondanceCore"]),
+        // La ligne de commande : mêmes outils, mêmes gardes, même amorce que le
+        // serveur MCP. Le manifeste ne fait que le dire deux fois.
+        .executableTarget(name: "correspondance-cli", dependencies: ["CorrespondanceAgentKit", "CorrespondanceCore"]),
         .testTarget(
             name: "CorrespondanceCoreTests",
             dependencies: ["CorrespondanceCore"],

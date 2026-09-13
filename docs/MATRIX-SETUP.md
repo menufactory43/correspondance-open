@@ -187,6 +187,30 @@ apparaît dans l'app **sans que rien ne parte**. Demande-lui d'envoyer pour de b
 Pour autoriser l'envoi dans une conversation précise, ajoute à `env` :
 `"CORRESPONDANCE_MCP_SEND": "!salon:correspondance.essai"`.
 
+### 5 bis. La même inbox depuis un shell : `correspondance-cli`
+
+Même amorce, mêmes outils, mêmes gardes que le serveur MCP — mais pour un cron, un
+raccourci macOS, un script, ou un agent qui ne parle pas MCP.
+
+```bash
+swift build --package-path Packages/CorrespondanceCore --product correspondance-cli -c release
+CLI="$(swift build --package-path Packages/CorrespondanceCore --product correspondance-cli -c release --show-bin-path)/correspondance-cli"
+$CLI --doctor                          # ✓ connecté comme @cc:… — N conversation(s)
+$CLI file                              # ce qui attend une réponse
+$CLI lire '!salon:correspondance.essai' --limite 5
+$CLI chercher relevé
+$CLI brouillon '!salon:correspondance.essai' "Oui, dimanche ça marche."
+$CLI --json file | jq .texte           # {"outil","ok","texte"} pour les scripts
+$CLI outil read_conversation '{"conversation":"!salon:correspondance.essai","limit":3}'
+```
+
+**Ce que tu dois voir** : `envoyer` refuse tant que la conversation n'est pas dans
+`CORRESPONDANCE_MCP_SEND`, et renvoie vers `brouillon` — code de sortie `1`. Avec la
+variable posée, `envoyer` envoie. Un processus est un tour : « lire puis envoyer »
+se fait en deux commandes, c'est la même séparation que la garde MCP impose.
+Codes de sortie : `0` fait, `1` refusé ou en erreur, `2` mauvaise commande, `3` pas
+de session. Sans texte, `brouillon` et `envoyer` lisent l'entrée standard.
+
 ### 6. Tout effacer
 
 ```bash

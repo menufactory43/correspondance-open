@@ -126,59 +126,15 @@ struct MCPInboxServer {
   }
 
   /// Le branchement au Relais. Sans session, chaque outil dit franchement ce
-  /// qui manque — jamais une réponse inventée.
+  /// qui manque — jamais une réponse inventée. L'aiguillage lui-même vit dans
+  /// Core (`MCPInboxTools.call`), partagé avec `correspondance-cli`.
   private func run(tool: String, arguments: [String: Any]) async -> (text: String, isError: Bool) {
     guard let relay else {
       return ("Pas de session sur le Relais : lance l'agent une fois, ou pointe "
         + "CORRESPONDANCE_MCP_CONFIG sur son config.json.", true)
     }
-    let outils = MCPInboxTools(relay: relay, agent: agent)
-    let conversation = arguments["conversation"] as? String
-    do {
-      switch tool {
-      case "list_queue":
-        return (try await outils.listQueue(), false)
-      case "read_conversation":
-        guard let conversation else { return ("Il manque la conversation à lire.", true) }
-        let limite = (arguments["limit"] as? Int) ?? 20
-        return (try await outils.readConversation(conversation, limit: min(limite, 100)), false)
-      case "search":
-        guard let query = arguments["query"] as? String else { return ("Il manque ce qu'on cherche.", true) }
-        return (try await outils.search(query), false)
-      case "archive":
-        guard let conversation else { return ("Il manque la conversation à archiver.", true) }
-        return (try await outils.archive(conversation, on: (arguments["on"] as? Bool) ?? true), false)
-      case "remind":
-        guard let conversation else { return ("Il manque la conversation.", true) }
-        guard let quand = date(in: arguments) else {
-          return ("Il manque l'heure du rappel (`at`, en ISO 8601 ou en minutes avec `in_minutes`).", true)
-        }
-        return (try await outils.remind(conversation, at: quand), false)
-      case "draft_reply":
-        guard let conversation else { return ("Il manque la conversation.", true) }
-        guard let text = arguments["text"] as? String else { return ("Il manque le texte.", true) }
-        return (try await outils.draftReply(conversation, text: text), false)
-      case "send_message":
-        guard let conversation else { return ("Il manque la conversation.", true) }
-        guard let text = arguments["text"] as? String else { return ("Il manque le texte.", true) }
-        return (try await outils.sendMessage(conversation, text: text), false)
-      default:
-        return ("\(tool) : outil inconnu.", true)
-      }
-    } catch {
-      return ("Le Relais n'a pas répondu : \(error.localizedDescription)", true)
-    }
-  }
-
-  /// L'heure d'un rappel : une date ISO 8601, ou un nombre de minutes.
-  private func date(in arguments: [String: Any]) -> Date? {
-    if let minutes = arguments["in_minutes"] as? Int {
-      return Date().addingTimeInterval(TimeInterval(minutes * 60))
-    }
-    guard let texte = arguments["at"] as? String else { return nil }
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter.date(from: texte) ?? ISO8601DateFormatter().date(from: texte)
+    let sortie = await MCPInboxTools(relay: relay, agent: agent).call(tool: tool, arguments: arguments)
+    return (sortie.text, sortie.isError)
   }
 
   // MARK: - JSON-RPC

@@ -58,6 +58,13 @@ env ${ENV[@]+"${ENV[@]}"} PATH="$TC:$PATH" "$TC/swift" build \
 TUI_BIN="$(dirname "$BIN")/correspondance-tui"
 [ -f "$TUI_BIN" ] || { echo "✗ pas de binaire TUI"; exit 1; }
 
+etape "La CLI (mêmes outils que le serveur MCP, depuis un shell)"
+env ${ENV[@]+"${ENV[@]}"} PATH="$TC:$PATH" "$TC/swift" build \
+  --package-path "$PKG" --swift-sdk "$SDK" -c release --product correspondance-cli --scratch-path "$SCRATCH" \
+  -Xswiftc -gnone -Xlinker -s 2>&1 | grep -E "error:|Build complete|Build of" | tail -3
+CLI_BIN="$(dirname "$BIN")/correspondance-cli"
+[ -f "$CLI_BIN" ] || { echo "✗ pas de binaire CLI"; exit 1; }
+
 etape "Archive $NOM"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/share/correspondance" "$STAGE/share/applications" "$STAGE/share/icons/hicolor/512x512/apps"
@@ -67,6 +74,9 @@ chmod 755 "$STAGE/bin/correspondance"
 cp -f "$TUI_BIN" "$STAGE/bin/correspondance-tui"
 if [ -x "$TC/llvm-strip" ]; then "$TC/llvm-strip" "$STAGE/bin/correspondance-tui"; fi
 chmod 755 "$STAGE/bin/correspondance-tui"
+cp -f "$CLI_BIN" "$STAGE/bin/correspondance-cli"
+if [ -x "$TC/llvm-strip" ]; then "$TC/llvm-strip" "$STAGE/bin/correspondance-cli"; fi
+chmod 755 "$STAGE/bin/correspondance-cli"
 # Le mandataire Tailcat, embarqué comme dans l'app Mac (Contents/Helpers/tailcat) :
 # construit par infra/relais/construire.sh --quoi tailcat. Absent, l'archive se
 # fait quand même, et l'app dira que Tailcat n'est pas là.

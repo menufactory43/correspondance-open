@@ -19,6 +19,7 @@
 | Dépôt lié à une room, dossier borné | **fait** | `Workspace.swift`, `RoomBinding.cwd` |
 | Config depuis la room console, champ par champ | **fait** | `AgentRemoteConfig`, `AgentConsoleConfig`, `MatrixBridgeService+AgentConsole` |
 | Outils MCP de l'inbox (file, lire un fil, chercher, brouillon, envoyer) | **fait** en partie | `Services/MCPInboxTools.swift`, cible `correspondance-mcp` |
+| La même inbox en ligne de commande (cron, raccourci, agent sans MCP) | **fait** | `Services/InboxCommandLine.swift`, cible `correspondance-cli` |
 | Push iPhone | **fait** | sygnal + cloudflared sur le Relais |
 
 ## Le contrat entre l'app et l'agent

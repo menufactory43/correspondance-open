@@ -19,7 +19,8 @@ cd Correspondance-*-linux-x86_64 && ./install.sh
 correspondance
 ```
 
-Tout va dans `~/.local` (binaire, interface, entrée de menu, icône). `./install.sh --uninstall`
+Tout va dans `~/.local` (binaire, interface, entrée de menu, icône), avec `correspondance-tui`
+(l'inbox dans le terminal) et `correspondance-cli` (l'inbox en ligne de commande, pour les scripts). `./install.sh --uninstall`
 retire tout et garde les données (`~/.local/share/Correspondance`).
 
 ## Se connecter

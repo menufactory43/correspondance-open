@@ -342,7 +342,8 @@ donne huit idées de plus, chacune rattachée à un chantier.
 8. **Une CLI JSON pour les agents** (`buzz-cli`, « agent-first, JSON in / JSON out ») à côté du
    serveur MCP. **Pour nous** (chantier 9) : `correspondance-mcp` et une commande `correspondance`
    partagent le même cœur ; la CLI coûte un après-midi de plus et rend l'inbox scriptable par
-   n'importe quoi — un cron, un raccourci macOS, un agent qui ne parle pas MCP.
+   n'importe quoi — un cron, un raccourci macOS, un agent qui ne parle pas MCP. **Fait** :
+   `correspondance-cli` (le nom `correspondance` est pris par l'app Linux), `docs/MATRIX-SETUP.md` § 5 bis.
 
 Deux idées qu'on regarde sans les prendre : la fenêtre de canal calculée côté relais
 (`bridge-channel-window.md`, métadonnées de fil à l'ingestion, overlays signés jamais stockés) — c'est

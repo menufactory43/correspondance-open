@@ -72,8 +72,19 @@ Matrix affiche un encart « Essai » quand elle est posée, pour qu'on ne croie 
 ses vraies conversations. Pour tout effacer : supprimer `…/Correspondance-essai` et l'entrée
 `app.correspondance.matrix.essai` du Trousseau.
 
-La marche à suivre complète (Relais d'essai, appairage, agent, MCP) est dans
+La marche à suivre complète (Relais d'essai, appairage, agent, MCP, CLI) est dans
 `docs/MATRIX-SETUP.md` § « Essayer de bout en bout ».
+
+## L'inbox comme outil
+
+Deux portes sur le même cœur, la même amorce (`~/.correspondance-agent/config.json`) et les
+mêmes gardes — l'envoi n'est permis que dans les conversations listées dans
+`CORRESPONDANCE_MCP_SEND`, sinon on propose un brouillon :
+
+- `correspondance-mcp` : un serveur MCP en stdio, pour Claude Desktop, Zed ou Claude Code.
+- `correspondance-cli` : la même inbox depuis un shell — `file`, `lire`, `chercher`, `archiver`,
+  `rappel`, `brouillon`, `envoyer`, et `--json` pour les scripts. Pour un cron, un raccourci
+  macOS, ou un agent qui ne parle pas MCP.
 
 ## Linux
 
