@@ -24,7 +24,7 @@ public enum MatrixCredentialStore {
   /// variable, pas un état qui circule.
   public nonisolated(unsafe) static var accessGroup: String?
 
-  private static func query(includeAccessGroup: Bool = true) -> [String: Any] {
+  private static func query(includeAccessGroup: Bool = true, service: String = service) -> [String: Any] {
     var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -37,10 +37,21 @@ public enum MatrixCredentialStore {
   }
 
   public static func load() -> MatrixCredentials? {
+    load(service: service)
+  }
+
+  /// La session enregistrée pour un **autre** dossier de données — celui de
+  /// l'app, vu depuis un essai ou depuis le terminal. Lecture seule : c'est de
+  /// quoi demander un jeton de connexion, jamais une session qu'on s'approprie.
+  public static func load(environment: [String: String]) -> MatrixCredentials? {
+    load(service: CorrespondanceHome.keychainService(environment: environment))
+  }
+
+  private static func load(service: String) -> MatrixCredentials? {
     // Le groupe partagé d'abord, le Trousseau nu ensuite : une session écrite
     // par une version antérieure (sans groupe) doit continuer d'ouvrir l'app.
     for shared in [true, false] where shared || accessGroup != nil {
-      var attributes = query(includeAccessGroup: shared)
+      var attributes = query(includeAccessGroup: shared, service: service)
       attributes[kSecReturnData as String] = true
       attributes[kSecMatchLimit as String] = kSecMatchLimitOne
       var item: CFTypeRef?

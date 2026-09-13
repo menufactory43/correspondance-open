@@ -107,6 +107,18 @@ public actor MatrixBridgeService {
     return creds
   }
 
+  /// Connexion par jeton — celui qu'une session existante a demandé pour cet
+  /// appareil (`MatrixClient.demanderJetonDeConnexion`). Même suite que le mot
+  /// de passe : persistance, base remise à zéro.
+  @discardableResult
+  public func connect(homeserver: URL, loginToken: String) async throws -> MatrixCredentials {
+    let creds = try await client.login(homeserver: homeserver, loginToken: loginToken)
+    MatrixCredentialStore.save(creds)
+    selfUserID = creds.userID
+    forgetEverything()
+    return creds
+  }
+
   public func disconnect() async {
     await client.logout()
     MatrixCredentialStore.clear()

@@ -22,6 +22,13 @@ enum LinuxSecrets {
     return load()[key].flatMap { Data(base64Encoded: $0) }
   }
 
+  /// Lit un secret du fichier d'un **autre** dossier de données.
+  static func read(_ key: String, environment: [String: String]) -> Data? {
+    lock.lock(); defer { lock.unlock() }
+    let other = CorrespondanceHome.directory(environment: environment).appendingPathComponent("secrets.json")
+    return load(from: other)[key].flatMap { Data(base64Encoded: $0) }
+  }
+
   @discardableResult
   static func write(_ key: String, _ data: Data) -> Bool {
     lock.lock(); defer { lock.unlock() }
@@ -37,8 +44,8 @@ enum LinuxSecrets {
     _ = save(all)
   }
 
-  private static func load() -> [String: String] {
-    guard let data = try? Data(contentsOf: url),
+  private static func load(from file: URL? = nil) -> [String: String] {
+    guard let data = try? Data(contentsOf: file ?? url),
           let dict = try? JSONDecoder().decode([String: String].self, from: data)
     else { return [:] }
     return dict
@@ -61,6 +68,13 @@ public enum MatrixCredentialStore {
 
   public static func load() -> MatrixCredentials? {
     guard let data = LinuxSecrets.read(key) else { return nil }
+    return try? JSONDecoder().decode(MatrixCredentials.self, from: data)
+  }
+
+  /// La session d'un autre dossier de données (cf. la version Apple).
+  public static func load(environment: [String: String]) -> MatrixCredentials? {
+    let otherKey = "matrix:" + CorrespondanceHome.keychainService(environment: environment)
+    guard let data = LinuxSecrets.read(otherKey, environment: environment) else { return nil }
     return try? JSONDecoder().decode(MatrixCredentials.self, from: data)
   }
 

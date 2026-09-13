@@ -34,7 +34,7 @@ package final class RelayStore {
 
   // MARK: - Session
 
-  package private(set) var session: Session = .unknown
+  package internal(set) var session: Session = .unknown
   /// Dernière erreur montrable, en français. `nil` = rien à dire.
   package var connectionError: String?
   /// Le `/sync` a échoué mais la session tient : bandeau discret, pas d'écran d'erreur.
@@ -302,7 +302,7 @@ package final class RelayStore {
 
   // MARK: - Boucle /sync
 
-  private func startSyncLoop() {
+  package func startSyncLoop() {
     guard !isDemo, syncTask == nil else { return }
     syncTask = Task { @MainActor [weak self] in
       while !Task.isCancelled {

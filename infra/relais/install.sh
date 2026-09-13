@@ -664,6 +664,12 @@ trusted_servers = []
 # l'URL déclarée avant que ruma ne le rajoute. L'URL du pusher DOIT donc finir
 # par /_matrix/push/v1/notify — ce que fait PushRegistration.defaultGateway.
 
+# Un appareil déjà connecté peut en connecter un autre sans mot de passe
+# (POST /login/get_token) : c'est ainsi que le terminal se branche sur la session
+# de l'app du Mac. Le jeton ne vaut qu'une fois et deux minutes.
+login_via_existing_session = true
+login_token_ttl = 120000
+
 log = "info"
 log_colors = false
 TOML

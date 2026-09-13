@@ -219,6 +219,10 @@ extension TUIApp {
   // MARK: - Connexion
 
   func handleLoginKey(_ key: KeyEvent) {
+    if ui.login.link == .working {
+      if key == .control("c") { quit() }
+      return
+    }
     switch key {
     case .control("c"):
       quit()
@@ -226,11 +230,48 @@ extension TUIApp {
       ui.login.field = (ui.login.field + 1) % UIState.LoginForm.fieldCount
     case KeyEvent(.tab, .shift), KeyEvent(.up):
       ui.login.field = (ui.login.field + UIState.LoginForm.fieldCount - 1) % UIState.LoginForm.fieldCount
+    case KeyEvent(.escape) where ui.login.field == 0:
+      ui.login.link = .idle
+      ui.login.linkPassword = LineEditor()
     case KeyEvent(.enter):
-      submitLogin()
+      if ui.login.field == 0 { linkFromAppSession() } else { submitLogin() }
     default:
-      var editor = ui.login[field: ui.login.field]
+      guard var editor = ui.login[field: ui.login.field] else { return }
       if editor.handle(key) { ui.login[field: ui.login.field] = editor }
+    }
+  }
+
+  /// La connexion sans rien taper : la session de l'app demande au Relais un
+  /// jeton pour ce terminal, qui devient un appareil à part entière.
+  func linkFromAppSession() {
+    guard let parent = RelayStore.sessionDeLApp() else {
+      store.connectionError = "Aucune session d’app sur cette machine : connecte d’abord l’app Correspondance, ou utilise un code d’appairage."
+      return
+    }
+    var password: String?
+    var sessionUIA: String?
+    if case .needsPassword(let uia, _) = ui.login.link {
+      guard !ui.login.linkPassword.isEmpty else { return }
+      password = ui.login.linkPassword.text
+      sessionUIA = uia
+    }
+    ui.login.link = .working
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let issue = await self.store.connecterDepuisSession(parent, motDePasse: password, sessionUIA: sessionUIA)
+      self.ui.login.linkPassword = LineEditor()
+      switch issue {
+      case .connecte:
+        self.ui.login.link = .idle
+        self.toast("Terminal connecté comme nouvel appareil")
+      case .motDePasseRequis(let uia):
+        self.ui.login.link = .needsPassword(sessionUIA: uia, user: MatrixIdentity.localpart(parent.userID))
+        self.ui.login.field = 0
+      case .echec(let message):
+        self.ui.login.link = .idle
+        self.store.connectionError = message
+      }
+      self.setNeedsRender()
     }
   }
 

@@ -431,7 +431,7 @@ extension TUIApp {
 
   func handlePaste(_ text: String) {
     if store.session == .disconnected {
-      var editor = ui.login[field: ui.login.field]
+      guard var editor = ui.login[field: ui.login.field] else { return }
       editor.insert(text.trimmingCharacters(in: .whitespacesAndNewlines))
       ui.login[field: ui.login.field] = editor
       return

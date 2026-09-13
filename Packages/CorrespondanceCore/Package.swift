@@ -136,7 +136,7 @@ var ciblesDuPaquet: [Target] {
         // Le magasin de l'iPhone porté au-dessus de Core, sans interface : le
         // navigateur de Linux et le terminal le partagent. Accès `package` —
         // il ne sort pas du paquet.
-        .target(name: "CorrespondanceRelayStore", dependencies: ["CorrespondanceCore"]),
+        .target(name: "CorrespondanceRelayStore", dependencies: ["CorrespondanceCore", "CorrespondanceMatrixClient"]),
         .executableTarget(
             name: "correspondance-linux",
             dependencies: ["CorrespondanceCore", "CorrespondanceRelayStore"] + moteurCrypto

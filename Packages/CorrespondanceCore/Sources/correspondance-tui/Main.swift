@@ -1,4 +1,5 @@
 import CorrespondanceCore
+import CorrespondanceMatrixClient
 import CorrespondanceRelayStore
 import CorrespondanceTerminal
 import Foundation
@@ -74,6 +75,8 @@ struct CorrespondanceTUI {
       setenv("CORRESPONDANCE_HOME", "terminal", 1)
     }
     redirectStandardError()
+    // Le nom sous lequel le Relais liste cette session, à côté du Mac et de l'iPhone.
+    MatrixClient.deviceDisplayName = "Correspondance (terminal · \(shortHostName()))"
 
     // Le mandataire Tailcat embarqué, à côté du binaire, comme sous Linux.
     if ProcessInfo.processInfo.environment["CORRESPONDANCE_TAILCAT"] == nil {
@@ -88,6 +91,14 @@ struct CorrespondanceTUI {
     let app = await MainActor.run { TUIApp(options: options, demo: demo ?? nil) }
     await app.run()
     exit(0)
+  }
+
+  /// Le nom court de la machine, sans passer par le DNS (`hostName` peut bloquer).
+  static func shortHostName() -> String {
+    var buffer = [CChar](repeating: 0, count: 256)
+    guard gethostname(&buffer, buffer.count) == 0 else { return "?" }
+    let name = String(decoding: buffer.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    return name.split(separator: ".").first.map(String.init) ?? name
   }
 
   /// Le journal du magasin écrit sur la sortie d'erreur ; dans une TUI, elle

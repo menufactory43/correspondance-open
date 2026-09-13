@@ -245,28 +245,43 @@ extension TUIApp {
       ui.login.didPrefill = true
       ui.login.homeserver.setText(store.rememberedHomeserver)
     }
-    let inner = drawPanel(title: "Correspondance · terminal", width: 72, height: 17, in: bounds)
+    let inner = drawPanel(title: "Correspondance · terminal", width: 76, height: 21, in: bounds)
     var y = inner.y
     canvas.put("Connecte ce terminal à ton Relais.", x: inner.x, y: y, style: Theme.strong)
-    y += 1
-    canvas.put("Un code d’appairage suffit ; sinon l’adresse et le compte.", x: inner.x, y: y, maxWidth: inner.width, style: Theme.muted)
     y += 2
-    drawField("Code d’appairage", editor: ui.login.code, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 0)
+
+    // Le chemin sans rien taper : la session de l'app de cette machine.
+    let linkSelected = ui.login.field == 0
+    let linkTitle: String = switch ui.login.link {
+    case .idle: "Utiliser la session de l’app de cette machine"
+    case .working: "Connexion depuis la session de l’app…"
+    case .needsPassword(_, let user): "Le Relais demande une fois le mot de passe de \(user)"
+    }
+    canvas.put(linkSelected ? "▌" : " ", x: inner.x, y: y, style: Theme.selectionMarker)
+    canvas.put(linkTitle, x: inner.x + 2, y: y, maxWidth: inner.width - 2, style: linkSelected ? Theme.accentStrong : Theme.text)
+    y += 1
+    if case .needsPassword = ui.login.link {
+      drawField("  Mot de passe", editor: ui.login.linkPassword, x: inner.x, y: y, width: inner.width, isActive: linkSelected, secure: true)
+    } else {
+      canvas.put("  Un nouvel appareil, sans code d’appairage — l’app reste ouverte.", x: inner.x, y: y, maxWidth: inner.width, style: Theme.muted)
+    }
     y += 2
     canvas.put("— ou —", x: inner.x + (inner.width - 6) / 2, y: y, style: Theme.muted)
     y += 2
-    drawField("Adresse du Relais", editor: ui.login.homeserver, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 1)
+    drawField("Code d’appairage", editor: ui.login.code, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 1)
+    y += 2
+    drawField("Adresse du Relais", editor: ui.login.homeserver, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 2)
     y += 1
-    drawField("Utilisateur", editor: ui.login.user, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 2)
+    drawField("Utilisateur", editor: ui.login.user, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 3)
     y += 1
-    drawField("Mot de passe", editor: ui.login.password, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 3, secure: true)
+    drawField("Mot de passe", editor: ui.login.password, x: inner.x, y: y, width: inner.width, isActive: ui.login.field == 4, secure: true)
     y += 2
     if let error = store.connectionError {
-      for line in TextLayout.wrap(error, width: inner.width).prefix(2) {
+      for line in TextLayout.wrap(error, width: inner.width).prefix(3) {
         canvas.put(line.text, x: inner.x, y: y, style: Theme.danger)
         y += 1
       }
     }
-    canvas.put("Tab champ suivant · Entrée se connecter · ^C quitter", x: inner.x, y: inner.maxY - 1, maxWidth: inner.width, style: Theme.muted)
+    canvas.put("↑↓/Tab choisir · Entrée se connecter · ^C quitter", x: inner.x, y: inner.maxY - 1, maxWidth: inner.width, style: Theme.muted)
   }
 }

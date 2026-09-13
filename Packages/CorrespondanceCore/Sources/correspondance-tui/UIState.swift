@@ -118,25 +118,41 @@ struct UIState {
     var homeserver = LineEditor()
     var user = LineEditor()
     var password = LineEditor()
+    /// 0 : « utiliser la session de l'app » ; 1 à 4 : code, adresse, utilisateur, mot de passe.
     var field = 0
     var didPrefill = false
-    static let fieldCount = 4
+    static let fieldCount = 5
 
-    subscript(field index: Int) -> LineEditor {
+    /// Où en est la connexion depuis la session de l'app.
+    enum Link: Equatable {
+      case idle
+      case working
+      /// Le Relais veut le mot de passe du compte, une fois.
+      case needsPassword(sessionUIA: String?, user: String)
+    }
+
+    var link: Link = .idle
+    var linkPassword = LineEditor()
+
+    /// L'éditeur du champ courant ; `nil` sur la ligne « session de l'app ».
+    subscript(field index: Int) -> LineEditor? {
       get {
         switch index {
-        case 0: code
-        case 1: homeserver
-        case 2: user
-        default: password
+        case 1: code
+        case 2: homeserver
+        case 3: user
+        case 4: password
+        default: if case .needsPassword = link { linkPassword } else { nil }
         }
       }
       set {
+        guard let newValue else { return }
         switch index {
-        case 0: code = newValue
-        case 1: homeserver = newValue
-        case 2: user = newValue
-        default: password = newValue
+        case 1: code = newValue
+        case 2: homeserver = newValue
+        case 3: user = newValue
+        case 4: password = newValue
+        default: linkPassword = newValue
         }
       }
     }
