@@ -124,6 +124,12 @@ public struct InboxState: Sendable, Equatable {
   /// Les conversations que le store a reconnues comme des demandes en attente.
   /// Calculé au-dessus de `RequestPolicy` : le tri, lui, ne fait que le lire.
   public var pendingRequests: Set<String>
+  /// L'ordre que j'ai donné aux épinglées à la main, de la première à la
+  /// dernière. Vide tant que je n'ai rien déplacé : la date décide. Une
+  /// conversation épinglée absente d'ici passe APRÈS celles qui y sont, par
+  /// date — un nouvel épinglé arrive en bas, pas au milieu de mon rangement.
+  /// Local à l'appareil : le Relais ne connaît que l'épingle, pas son rang.
+  public var pinnedOrder: [String]
 
   public init(
     pinned: Set<String> = [],
@@ -132,7 +138,8 @@ public struct InboxState: Sendable, Equatable {
     drafts: [String: String] = [:],
     reminders: [String: ConversationReminder] = [:],
     requestDecisions: [String: ConversationRequest.Decision] = [:],
-    pendingRequests: Set<String> = []
+    pendingRequests: Set<String> = [],
+    pinnedOrder: [String] = []
   ) {
     self.pinned = pinned
     self.muted = muted
@@ -141,6 +148,7 @@ public struct InboxState: Sendable, Equatable {
     self.reminders = reminders
     self.requestDecisions = requestDecisions
     self.pendingRequests = pendingRequests
+    self.pinnedOrder = pinnedOrder
   }
 
   public func isPinned(_ id: String) -> Bool { pinned.contains(id) }
@@ -278,9 +286,46 @@ public enum InboxOrdering {
     state: InboxState
   ) -> (pinned: [Conversation], others: [Conversation]) {
     (
-      pinned: list.filter { state.isPinned($0.id) },
+      pinned: rankedByHand(list.filter { state.isPinned($0.id) }, order: state.pinnedOrder),
       others: list.filter { !state.isPinned($0.id) }
     )
+  }
+
+  /// Les épinglées dans l'ordre de la main, puis celles que la main n'a pas
+  /// touchées, dans l'ordre où elles arrivent (la date). Stable : deux
+  /// conversations hors de l'ordre gardent leur ordre relatif.
+  static func rankedByHand(_ pinned: [Conversation], order: [String]) -> [Conversation] {
+    guard !order.isEmpty else { return pinned }
+    var rank: [String: Int] = [:]
+    for (i, id) in order.enumerated() where rank[id] == nil { rank[id] = i }
+    let placed = pinned.filter { rank[$0.id] != nil }
+      .sorted { rank[$0.id]! < rank[$1.id]! }
+    let rest = pinned.filter { rank[$0.id] == nil }
+    return placed + rest
+  }
+
+  /// Le rangement qui suit un glisser-déposer dans la section des épinglées.
+  ///
+  /// `visible` est la section telle qu'elle était à l'écran ; `moving` les
+  /// conversations soulevées, `before` celle devant laquelle on les pose
+  /// (`nil` : tout en bas). On repart de ce qui était visible — pas de
+  /// l'ancien `pinnedOrder`, qui peut ignorer des épinglées récentes — pour que
+  /// le résultat soit exactement ce que l'œil a vu se produire.
+  public static func reorderPinned(
+    visible: [String],
+    moving: [String],
+    before: String?
+  ) -> [String] {
+    let lifted = Set(moving)
+    var order = visible.filter { !lifted.contains($0) }
+    let insertAt: Int
+    if let before, let i = order.firstIndex(of: before) {
+      insertAt = i
+    } else {
+      insertAt = order.count
+    }
+    order.insert(contentsOf: moving.filter { visible.contains($0) }, at: insertAt)
+    return order
   }
 
   /// Ce qui fait qu'une conversation attend une action — la règle d'entrée

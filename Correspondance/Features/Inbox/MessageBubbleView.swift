@@ -199,9 +199,9 @@ struct MessageBubbleView: View {
       .padding(.horizontal, 4)
       .padding(.vertical, 2)
       .contentShape(Rectangle())
-      // L'heure a quitté le dessous de chaque bulle (elle noyait le fil) : elle
-      // reste accessible au survol, comme dans Messages.
-      .help(message.sentAt.formatted(date: .abbreviated, time: .shortened))
+      // L'heure a quitté le dessous de chaque bulle (elle noyait le fil). Plus
+      // d'infobulle au survol non plus : elle sortait dans la langue du système
+      // et se posait sur chaque bulle qu'on frôlait. VoiceOver la garde.
       .accessibilityElement(children: .combine)
       .accessibilityValue(message.sentAt.formatted(date: .omitted, time: .shortened))
       .contextMenu { bubbleMenu(full: true) }

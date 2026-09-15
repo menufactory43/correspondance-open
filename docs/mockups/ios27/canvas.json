@@ -1,0 +1,47 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 980,
+      "h": 1110,
+      "title": "1 · Épinglés réordonnables (iPhone)"
+    },
+    {
+      "file": "BalayageMac.dc.html",
+      "x": 1080,
+      "y": 0,
+      "w": 1240,
+      "h": 790,
+      "title": "2 · Balayage dans l'Inbox (Mac)"
+    },
+    {
+      "file": "BarreOutilsMac.dc.html",
+      "x": 0,
+      "y": 1240,
+      "w": 1300,
+      "h": 900,
+      "title": "3 · Barre d'outils qui rétrécit (Mac)"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "asyncimage",
+      "x": 1400,
+      "y": 1240,
+      "w": 420,
+      "text": "AsyncImage(urlRequest:) — pas de planche : aucun changement visible. Aujourd'hui MatrixClient.downloadMedia pose le Bearer lui-même et passe par notre cache ; avec iOS 27 une AsyncImage peut porter l'en-tête et charger un média authentifié directement. C'est du code en moins, pas une image en plus."
+    },
+    {
+      "id": "legende",
+      "x": 1400,
+      "y": 1420,
+      "w": 420,
+      "text": "Palette Papier (Rosé Pine Dawn) : parchemin #FAF4ED, encre #4A4462, accent #A4536A. Lignes de ConversationRow : avatar 46, 10 px vertical, 16 px horizontal, titre 16, aperçu 13. La police iA Writer Quattro n'est pas embarquée ici : Palatino en repli."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

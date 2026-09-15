@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #F3EFE8; font-family: "iA Writer Quattro", "Iowan Old Style", Palatino, "Palatino Linotype", serif; color: #4A4462; -webkit-font-smoothing: antialiased; }
+    a { color: #A4536A; } a:hover { color: #8E4459; }
+    .mono { font-family: "iA Writer Mono", ui-monospace, "SF Mono", Menlo, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; padding: 40px 48px 48px; display: flex; flex-direction: column; gap: 28px; background: #F3EFE8; box-sizing: border-box;">
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;">
+    <div style="display: flex; flex-direction: column; gap: 8px; max-width: 620px;">
+      <div class="mono" style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #8A8498;">macOS 27 · Inbox Mac</div>
+      <div style="font-size: 34px; letter-spacing: -0.03em; line-height: 1.08; color: #4A4462;">Balayer un fil au trackpad</div>
+      <div style="font-size: 16px; line-height: 1.45; color: #6B6580; text-wrap: pretty;">Les balayages existent déjà sur l'iPhone, dans une List. Sur Mac, la file est une vue custom et n'y avait pas droit. iOS 27 ouvre swipeActions à n'importe quelle vue posée dans un swipeActionsContainer.</div>
+    </div>
+    <div class="mono" style="font-size: 12px; color: #4A4462; background: #EDE7E0; border-radius: 6px; padding: 10px 14px; white-space: pre; line-height: 1.5; flex: none;">InboxListPane
+  .swipeActionsContainer()
+row(conversation)
+  .swipeActions(edge: .trailing) { archiver; rappel }</div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; align-items: start;">
+    <div style="display: flex; flex-direction: column; gap: 18px;"><div style="display: flex; flex-direction: column; gap: 6px; width: 520px;">
+      <div class="mono" style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #8A8498;">Avant</div>
+      <div style="font-size: 22px; letter-spacing: -0.02em; line-height: 1.15; color: #4A4462;">Clic droit, puis le menu</div>
+      <div style="font-size: 14px; line-height: 1.45; color: #6B6580; text-wrap: pretty;">Le menu contextuel réel de InboxListPane : huit entrées pour atteindre Archiver.</div>
+    </div><div style="width: 520px; height: 440px; background: #FAF4ED; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 0 0 1px rgba(43,43,43,0.12), 0 22px 44px rgba(43,43,43,0.16); flex: none;">
+      <div style="height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; flex: none;">
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></div>
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></div>
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></div>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; flex-grow: 1;"><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #A4536A; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">ML</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 600; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Marie Lemoine</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #A4536A; flex: none;">hier</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #6B6580; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">On se dit 19 h devant la librairie ?</div>
+          <div style="font-size: 12px; background: #A4536A; color: #FFF8F6; border-radius: 9px; padding: 2px 6px; line-height: 14px; margin-top: 1px; flex: none;">2</div>
+        </div>
+      </div>
+    </div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: rgba(164,83,106,0.10);">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #7B6F9E; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">AT</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Atelier typo</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">mar.</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Julien : la Quattro passe mieux en 17 que 18</div>
+          
+        </div>
+      </div>
+    </div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #B58A5A; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">SB</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sophie B.</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">09:40</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Tu as vu le mail de la mairie ?</div>
+          
+        </div>
+      </div>
+    </div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #6E7FA3; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">RC</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Rando du 21</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">dim.</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Camille : rendez-vous 8 h au parking</div>
+          
+        </div>
+      </div>
+    </div><div style="position: absolute; left: 230px; top: 120px; width: 290px; background: rgba(246,243,238,0.96); border-radius: 8px; padding: 6px 0; box-shadow: 0 0 0 0.5px rgba(0,0,0,0.18), 0 10px 30px rgba(0,0,0,0.18); z-index: 5;">
+  <div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Ouvrir la discussion</div><div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Détacher la conversation</div><div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Fusionner avec un autre chat…</div><div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Sélectionner plusieurs fils</div><div style="height: 1px; background: rgba(0,0,0,0.10); margin: 5px 10px;"></div>
+  <div style="padding: 4px 22px; font-size: 13px; color: #FFF8F6; background: #A4536A; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; margin: 0 5px; border-radius: 4px;">Archiver</div>
+  <div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Me le rappeler…</div><div style="height: 1px; background: rgba(0,0,0,0.10); margin: 5px 10px;"></div><div style="padding: 4px 22px; font-size: 13px; color: #2B2B2B; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;">Marquer comme lu</div>
+</div><div style="flex-grow: 1;"></div><div style="padding: 0 16px 16px; font-size: 12px; line-height: 1.4; color: #8A8498; text-wrap: pretty;">Sur Mac, archiver un fil demande un clic droit et un menu de huit entrées, ou ⌘E après l'avoir sélectionné.</div></div>
+    </div></div>
+    <div style="display: flex; flex-direction: column; gap: 18px;"><div style="display: flex; flex-direction: column; gap: 6px; width: 520px;">
+      <div class="mono" style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #8A8498;">Après</div>
+      <div style="font-size: 22px; letter-spacing: -0.02em; line-height: 1.15; color: #4A4462;">Le geste de l'iPhone, sur Mac</div>
+      <div style="font-size: 14px; line-height: 1.45; color: #6B6580; text-wrap: pretty;">Archiver en accent, rappel en encre tertiaire, 82 px chacun. Le balayage complet archive directement.</div>
+    </div><div style="width: 520px; height: 440px; background: #FAF4ED; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 0 0 1px rgba(43,43,43,0.12), 0 22px 44px rgba(43,43,43,0.16); flex: none;">
+      <div style="height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; flex: none;">
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #FF5F57;"></div>
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #FEBC2E;"></div>
+        <div style="width: 12px; height: 12px; border-radius: 50%; background: #28C840;"></div>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; flex-grow: 1;"><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #A4536A; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">ML</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 600; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Marie Lemoine</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #A4536A; flex: none;">hier</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #6B6580; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">On se dit 19 h devant la librairie ?</div>
+          <div style="font-size: 12px; background: #A4536A; color: #FFF8F6; border-radius: 9px; padding: 2px 6px; line-height: 14px; margin-top: 1px; flex: none;">2</div>
+        </div>
+      </div>
+    </div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="position: relative; overflow: hidden; display: flex;">
+  <div style="flex: none; width: 356px; transform: translateX(-164px);"><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #7B6F9E; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">AT</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Atelier typo</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">mar.</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Julien : la Quattro passe mieux en 17 que 18</div>
+          
+        </div>
+      </div>
+    </div></div>
+  <div style="position: absolute; right: 0; top: 0; bottom: 0; display: flex;">
+    <div style="width: 82px; background: #8A8498; color: #FFF8F6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFF8F6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex: none; color: #FFF8F6;"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Rappel</div>
+    <div style="width: 82px; background: #A4536A; color: #FFF8F6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFF8F6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex: none; color: #FFF8F6;"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>Archiver</div>
+  </div>
+</div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #B58A5A; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">SB</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Sophie B.</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">09:40</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Tu as vu le mail de la mairie ?</div>
+          
+        </div>
+      </div>
+    </div><div style="height: 1px; background: rgba(74,68,98,0.10); margin-left: 74px;"></div><div style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; ">
+      <div style="width: 46px; height: 46px; border-radius: 50%; background: #6E7FA3; color: #FFF8F6; display: flex; align-items: center; justify-content: center; font-size: 16px; letter-spacing: 0.02em; flex: none;">RC</div>
+      <div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 5px;">
+          <div style="font-size: 16px; font-weight: 400; color: #4A4462; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Rando du 21</div>
+          
+          <div style="flex-grow: 1;"></div>
+          <div class="mono" style="font-size: 12px; color: #8A8498; flex: none;">dim.</div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 5px;">
+          
+          <div style="font-size: 13px; line-height: 17px; color: #8A8498; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">Camille : rendez-vous 8 h au parking</div>
+          
+        </div>
+      </div>
+    </div><div style="flex-grow: 1;"></div><div style="padding: 0 16px 16px; font-size: 12px; line-height: 1.4; color: #8A8498; text-wrap: pretty;">Deux doigts vers la gauche sur le trackpad : les mêmes actions que sur l'iPhone, dans la même couleur. Le menu reste là pour le reste.</div></div>
+    </div></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

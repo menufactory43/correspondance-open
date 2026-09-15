@@ -47,7 +47,7 @@ struct InboxListView: View {
           List(selection: $store.selectedConversationID) {
             if !sections.pinned.isEmpty {
               Section {
-                ForEach(sections.pinned) { row($0) }
+                pinnedRows(sections.pinned)
               } header: {
                 sectionHeader("Épinglées")
               }
@@ -142,6 +142,27 @@ struct InboxListView: View {
   }
 
   // MARK: - Lignes
+
+  /// Les épinglées se rangent à la main depuis iOS 27 : un appui long soulève
+  /// la ligne, on la pose où on veut, et l'ordre reste (`RelayStore.pinnedOrder`).
+  /// Avant iOS 27, la section est la même, dans l'ordre de la date.
+  @ViewBuilder
+  private func pinnedRows(_ pinned: [Conversation]) -> some View {
+    if #available(iOS 27.0, *) {
+      ForEach(pinned) { row($0) }
+        .reorderable()
+        .reorderContainer(for: Conversation.self) { difference in
+          let before: String? =
+            switch difference.destination.position {
+            case .before(let id): id
+            case .end: nil
+            }
+          store.movePinned(visible: pinned.map(\.id), moving: difference.sources, before: before)
+        }
+    } else {
+      ForEach(pinned) { row($0) }
+    }
+  }
 
   @ViewBuilder
   private func row(_ conversation: Conversation) -> some View {

@@ -494,6 +494,41 @@ struct InboxListPane: View {
     .accessibilityAddTraits(
       store.isSelectionMode && store.isSelected(conversation.id) ? .isSelected : []
     )
+    // Les mêmes balayages que sur l'iPhone, au trackpad : deux doigts vers la
+    // gauche pour archiver (le balayage complet archive tout de suite), vers
+    // la droite pour épingler ou couper. Le menu contextuel garde le reste.
+    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+      Button {
+        Task { await store.toggleArchived(conversationID: conversation.id) }
+      } label: {
+        Label(
+          store.isArchived(conversation.id) ? "Désarchiver" : "Archiver",
+          systemImage: store.isArchived(conversation.id) ? "tray.and.arrow.up" : "archivebox"
+        )
+      }
+      .tint(theme.accent)
+    }
+    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+      Button {
+        store.togglePinned(conversationID: conversation.id)
+      } label: {
+        Label(
+          store.isPinned(conversation.id) ? "Désépingler" : "Épingler",
+          systemImage: store.isPinned(conversation.id) ? "pin.slash" : "pin"
+        )
+      }
+      .tint(theme.accentSoft)
+
+      Button {
+        store.toggleMuted(conversationID: conversation.id)
+      } label: {
+        Label(
+          store.isMuted(conversation.id) ? "Réactiver" : "Muet",
+          systemImage: store.isMuted(conversation.id) ? "bell" : "bell.slash"
+        )
+      }
+      .tint(theme.inkTertiary)
+    }
     .contextMenu {
       conversationContextMenu(conversation)
     }

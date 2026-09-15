@@ -707,7 +707,31 @@ final class RelayStore {
   var viewState: InboxState {
     var merged = state
     for (id, text) in localDrafts { merged.drafts[id] = text }
+    merged.pinnedOrder = pinnedOrder
     return merged
+  }
+
+  // MARK: - Ordre des épinglées
+
+  static let pinnedOrderKey = "correspondance.ios.pinnedOrder"
+
+  /// L'ordre que j'ai donné aux épinglées, de haut en bas. À côté de `state`
+  /// et non dedans : l'instantané du Relais remplace `state` d'un bloc, et il
+  /// ne connaît pas ce rangement, qui n'appartient qu'à cet iPhone.
+  private(set) var pinnedOrder: [String] =
+    UserDefaults.standard.stringArray(forKey: RelayStore.pinnedOrderKey) ?? []
+  {
+    didSet {
+      guard pinnedOrder != oldValue else { return }
+      UserDefaults.standard.set(pinnedOrder, forKey: RelayStore.pinnedOrderKey)
+    }
+  }
+
+  /// Le glisser-déposer dans la section des épinglées : `moving` posées devant
+  /// `before` (`nil` : en bas). `visible` est la section telle qu'elle était à
+  /// l'écran, pour que le résultat soit exactement ce que le geste a montré.
+  func movePinned(visible: [String], moving: [String], before: String?) {
+    pinnedOrder = InboxOrdering.reorderPinned(visible: visible, moving: moving, before: before)
   }
 
   // MARK: - Demandes

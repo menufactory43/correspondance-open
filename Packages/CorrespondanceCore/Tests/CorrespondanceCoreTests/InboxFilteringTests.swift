@@ -179,6 +179,49 @@ final class InboxFilteringTests: XCTestCase {
     XCTAssertEqual(sections.others.map(\.id), ["a", "c"])
   }
 
+  /// Sans ordre donné à la main, les épinglées suivent la date, comme avant.
+  func testPinnedSectionKeepsRecencyWithoutHandOrder() {
+    let list = [conversation("a", at: 10), conversation("b", at: 30), conversation("c", at: 20)]
+    let state = InboxState(pinned: ["a", "b", "c"])
+    let sorted = InboxOrdering.list(list, scope: .inbox, network: nil, filter: .all, state: state)
+    XCTAssertEqual(InboxOrdering.sections(sorted, state: state).pinned.map(\.id), ["b", "c", "a"])
+  }
+
+  /// L'ordre de la main passe devant la date ; un épinglé que la main n'a pas
+  /// rangé se met à la suite, par date, sans casser le rangement.
+  func testPinnedSectionFollowsHandOrderThenRecency() {
+    let list = [
+      conversation("a", at: 10), conversation("b", at: 30),
+      conversation("c", at: 20), conversation("nouveau", at: 40),
+    ]
+    let state = InboxState(pinned: ["a", "b", "c", "nouveau"], pinnedOrder: ["a", "c", "b", "disparu"])
+    let sorted = InboxOrdering.list(list, scope: .inbox, network: nil, filter: .all, state: state)
+    XCTAssertEqual(InboxOrdering.sections(sorted, state: state).pinned.map(\.id), ["a", "c", "b", "nouveau"])
+  }
+
+  func testReorderPinnedMovesBeforeATarget() {
+    XCTAssertEqual(
+      InboxOrdering.reorderPinned(visible: ["a", "b", "c"], moving: ["c"], before: "a"),
+      ["c", "a", "b"]
+    )
+  }
+
+  func testReorderPinnedMovesToTheEnd() {
+    XCTAssertEqual(
+      InboxOrdering.reorderPinned(visible: ["a", "b", "c"], moving: ["a"], before: nil),
+      ["b", "c", "a"]
+    )
+  }
+
+  /// Poser devant soi-même, ou devant une ligne inconnue, ne change rien
+  /// d'inattendu : la sélection retombe en bas, et rien d'étranger n'entre.
+  func testReorderPinnedIgnoresUnknownIDs() {
+    XCTAssertEqual(
+      InboxOrdering.reorderPinned(visible: ["a", "b"], moving: ["b", "x"], before: "y"),
+      ["a", "b"]
+    )
+  }
+
   // MARK: - File Focus
 
   func testFocusQueueIgnoresArchivedAndCatalogue() {
