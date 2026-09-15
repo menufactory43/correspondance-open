@@ -181,7 +181,11 @@ final class RelaisInstallateur {
   /// `SHA256SUMS` du même endroit : télécharger un script et le lancer sans
   /// ça, c'est offrir la machine à qui contrôle le réseau.
   func installer(appairer: @escaping @MainActor (RelayPairingCode) async -> Void) async {
-    await lancer(script: "relais-install.sh", arguments: ["--json"], appairer: appairer)
+    var arguments = ["--json"]
+    if let telegram = TelegramApplication.charger() {
+      arguments += ["--telegram-api-id", telegram.apiID, "--telegram-api-hash", telegram.apiHash]
+    }
+    await lancer(script: "relais-install.sh", arguments: arguments, appairer: appairer)
   }
 
   /// « Tout retirer » : le même chemin, le même contrôle de somme, l'autre
@@ -312,5 +316,73 @@ final class RelaisInstallateur {
     if processus.terminationStatus != 0, case .enCours = phase {
       throw Erreur.scriptTombe(processus.terminationStatus)
     }
+  }
+}
+
+
+// MARK: - Les clés d'API Telegram de l'app
+
+/// L'`api_id` / `api_hash` que le pont Telegram exige : ils identifient
+/// **l'application**, pas l'utilisateur — Telegram Desktop en embarque un, Beeper
+/// en a un pour tous ses clients. C'est donc Correspondance qui les porte, une
+/// fois pour toutes, et l'utilisateur n'en entend jamais parler : il donne son
+/// numéro, son code, et c'est tout.
+///
+/// Ils vivent dans `Contents/Resources/TelegramApp.json`, copié au build depuis
+/// `Correspondance/Resources/TelegramApp.json` — gitignoré, parce qu'un
+/// `api_id` **publié** finit repéré par Telegram (`API_ID_PUBLISHED_FLOOD`), qui
+/// ralentit alors les connexions de toute l'app. Extractible d'un `.app`, comme
+/// celui de Telegram Desktop : Telegram le tolère tant qu'il ne circule pas.
+/// `CORRESPONDANCE_TELEGRAM_API_ID` / `_HASH` dans l'environnement passent
+/// devant, pour éprouver un autre jeu sans rebâtir.
+struct TelegramApplication: Decodable, Equatable {
+  let apiID: String
+  let apiHash: String
+
+  enum CodingKeys: String, CodingKey {
+    case apiID = "api_id"
+    case apiHash = "api_hash"
+  }
+
+  /// Les clés, ou `nil` si l'app n'en porte pas — le pont est alors posé mais
+  /// pas configuré, et l'installeur le dit lui-même.
+  nonisolated static func charger(
+    environnement: [String: String] = ProcessInfo.processInfo.environment,
+    bundle: Bundle = .main
+  ) -> TelegramApplication? {
+    if let id = environnement["CORRESPONDANCE_TELEGRAM_API_ID"],
+       let hash = environnement["CORRESPONDANCE_TELEGRAM_API_HASH"]
+    {
+      return Self(apiID: id, apiHash: hash).valide
+    }
+    guard let url = bundle.url(forResource: "TelegramApp", withExtension: "json"),
+          let donnees = try? Data(contentsOf: url)
+    else { return nil }
+    return Self.lire(donnees)
+  }
+
+  /// Le JSON du fichier : `{"api_id": 12345, "api_hash": "…"}`. L'`api_id`
+  /// est un entier chez Telegram ; on accepte aussi une chaîne.
+  nonisolated static func lire(_ donnees: Data) -> TelegramApplication? {
+    guard let objet = try? JSONSerialization.jsonObject(with: donnees) as? [String: Any] else { return nil }
+    let id: String? = switch objet["api_id"] {
+    case let n as Int: String(n)
+    case let s as String: s
+    default: nil
+    }
+    guard let id, let hash = objet["api_hash"] as? String else { return nil }
+    return Self(apiID: id, apiHash: hash).valide
+  }
+
+  /// Un `api_id` est un entier, un `api_hash` trente-deux hexadécimaux ; et pas
+  /// la valeur d'exemple de l'amont, que le pont refuse aussi.
+  private var valide: TelegramApplication? {
+    let id = apiID.trimmingCharacters(in: .whitespaces)
+    let hash = apiHash.trimmingCharacters(in: .whitespaces).lowercased()
+    guard !id.isEmpty, id.allSatisfy(\.isNumber), id != "0",
+          hash.count == 32, hash.allSatisfy(\.isHexDigit),
+          hash != "tjyd5yge35lbodk1xwzw2jstp90k55qz"
+    else { return nil }
+    return TelegramApplication(apiID: id, apiHash: hash)
   }
 }

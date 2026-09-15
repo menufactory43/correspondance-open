@@ -26,6 +26,8 @@ build/
 
 # Local / secrets
 *.xcconfig.local
+# Les clés d'API Telegram de l'app (my.telegram.org) : jamais versionnées.
+Correspondance/Resources/TelegramApp.json
 .env
 .env.*
 

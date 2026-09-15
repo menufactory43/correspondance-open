@@ -17,6 +17,12 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
   /// ses DM de groupe, et ses canaux — qui arrivent comme des groupes, une ligne
   /// par canal, exactement comme un groupe WhatsApp. Rien de nouveau à l'écran.
   case slack
+  /// Telegram, par mautrix-telegram (le pont Go). Un compte, c'est un numéro :
+  /// on se connecte comme sur un nouvel appareil — le numéro, le code que
+  /// Telegram envoie dans l'app du téléphone, le mot de passe de validation en
+  /// deux étapes s'il y en a un. Ses groupes et ses canaux arrivent comme des
+  /// groupes ; rien de nouveau à l'écran.
+  case telegram
   /// La note à soi : le seul fil qui ne vienne d'aucun réseau. Il vit dans le
   /// Relais, dans un salon dont on est le seul membre — de quoi se laisser un
   /// mot, une adresse, une photo, et le retrouver sur l'autre appareil.
@@ -38,6 +44,7 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .messenger: "Messenger"
     case .twitter: "X"
     case .slack: "Slack"
+    case .telegram: "Telegram"
     case .selfNote: "Note à soi"
     case .agent: "Agent"
     }
@@ -57,6 +64,8 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .twitter: "xmark"
     // Le croisillon d'un canal : ce que Slack a de plus reconnaissable.
     case .slack: "number"
+    // L'avion en papier : le logo de Telegram, tel qu'SF Symbols sait le dire.
+    case .telegram: "paperplane.fill"
     case .selfNote: "note.text"
     case .agent: "sparkles"
     }

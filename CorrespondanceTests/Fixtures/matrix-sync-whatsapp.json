@@ -401,18 +401,18 @@
           "events": [
             {
               "type": "m.bridge",
-              "state_key": "fi.mau.telegram://telegram/1",
-              "sender": "@telegrambot:correspondance.local",
-              "event_id": "$state-bridge-telegram",
+              "state_key": "fi.mau.discord://discord/1",
+              "sender": "@discordbot:correspondance.local",
+              "event_id": "$state-bridge-discord",
               "origin_server_ts": 1756400000030,
               "content": {
                 "protocol": {
-                  "id": "telegram",
-                  "displayname": "Telegram"
+                  "id": "discord",
+                  "displayname": "Discord"
                 },
                 "channel": {
                   "id": "1",
-                  "displayname": "Un fil Telegram"
+                  "displayname": "Un fil Discord"
                 }
               }
             },

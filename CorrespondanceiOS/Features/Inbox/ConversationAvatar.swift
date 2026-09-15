@@ -168,6 +168,8 @@ struct ConversationAvatar: View {
     case .twitter: theme.ink
     // L'aubergine de Slack.
     case .slack: Color(red: 0.29, green: 0.12, blue: 0.35)
+    // Le bleu ciel de Telegram.
+    case .telegram: Color(red: 0.16, green: 0.63, blue: 0.87)
     }
   }
 

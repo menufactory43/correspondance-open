@@ -49,7 +49,7 @@ final class MatrixSyncParserTests: XCTestCase {
     XCTAssertEqual(rooms[groupRoomID]?.network, .whatsapp)
     // Salon de gestion du bot : pas d'état `m.bridge` → pas un portail.
     XCTAssertNil(rooms[managementRoomID]?.network)
-    // Protocole inconnu (`telegram`) : ignoré plutôt que mal classé.
+    // Protocole inconnu (`discord`) : ignoré plutôt que mal classé.
     XCTAssertNil(rooms[unknownBridgeRoomID]?.network)
   }
 
@@ -67,7 +67,7 @@ final class MatrixSyncParserTests: XCTestCase {
   func testBridgeProtocolMapping() {
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("whatsapp"), .whatsapp)
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("WhatsApp"), .whatsapp)
-    XCTAssertNil(MessageNetwork.fromBridgeProtocol("telegram"))
+    XCTAssertNil(MessageNetwork.fromBridgeProtocol("discord"))
     XCTAssertNil(MessageNetwork.fromBridgeProtocol(""))
   }
 

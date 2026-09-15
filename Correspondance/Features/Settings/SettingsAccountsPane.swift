@@ -26,7 +26,8 @@ struct SettingsAccountsPane: View {
       SettingsCard(
         title: "Par le Relais",
         footnote: "Chaque réseau se connecte comme sur un nouveau téléphone : un QR code pour WhatsApp "
-          + "et Signal, tes identifiants pour Instagram, Messenger, X et Slack. "
+          + "et Signal, tes identifiants pour Instagram, Messenger, X et Slack, ton numéro et le code "
+          + "reçu dans l'app pour Telegram. "
           + "Signal ne montre que les messages reçus après la liaison. "
           + "Déconnecter un compte ferme sa session côté réseau ; ses conversations restent ici, en historique."
       ) {

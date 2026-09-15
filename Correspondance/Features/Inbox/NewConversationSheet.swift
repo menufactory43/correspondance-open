@@ -99,9 +99,10 @@ struct NewConversationSheet: View {
       guard filter == nil || filter == .iMessage else { return nil }
       return Freeform(identifier: value.lowercased(), networks: [.iMessage])
     }
-    // Un pseudo : Instagram, Messenger ou X, et seulement quand on l'a choisi —
-    // deviner qu'un mot est un pseudo plutôt qu'un nom mal tapé, c'est deviner.
-    if let filter, filter == .instagram || filter == .messenger || filter == .twitter || filter == .slack {
+    // Un pseudo : Instagram, Messenger, X, Slack ou Telegram, et seulement quand
+    // on l'a choisi — deviner qu'un mot est un pseudo plutôt qu'un nom mal tapé,
+    // c'est deviner.
+    if let filter, [.instagram, .messenger, .twitter, .slack, .telegram].contains(filter) {
       let bare = value.hasPrefix("@") ? String(value.dropFirst()) : value
       guard !bare.isEmpty, !bare.contains(" "), !bare.contains("@") else { return nil }
       return Freeform(identifier: bare, networks: [filter])
@@ -200,6 +201,7 @@ struct NewConversationSheet: View {
     case .messenger: "Nom ou identifiant Messenger"
     case .twitter: "Pseudo X, sans l’arobase"
     case .slack: "Nom ou e-mail Slack"
+    case .telegram: "Pseudo ou numéro Telegram"
     case .iMessage: "Nom, numéro ou e-mail"
     default: "Nom, numéro, e-mail…"
     }
@@ -515,6 +517,8 @@ private struct NetworkChip: View {
     case .twitter: theme.ink
     // L'aubergine de Slack.
     case .slack: Color(red: 0.29, green: 0.12, blue: 0.35)
+    // Le bleu ciel de Telegram.
+    case .telegram: Color(red: 0.16, green: 0.63, blue: 0.87)
     }
   }
 }

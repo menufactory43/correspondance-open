@@ -40,8 +40,33 @@ final class NotificationPolicyTests: XCTestCase {
       previous: previous,
       isMuted: isMuted,
       isSelected: isSelected,
-      alreadyNotifiedAt: alreadyNotifiedAt
+      alreadyNotifiedAt: alreadyNotifiedAt,
+      // « Maintenant » : deux minutes après le message le plus récent des tests.
+      now: base.addingTimeInterval(180)
     )
+  }
+
+  /// Un pont qui rapatrie l'historique d'un compte fraîchement connecté verse
+  /// les messages un par un, avec leur date d'origine : chacun faisait bouger
+  /// le fil, donc une bannière, pour un message de trois semaines. Vieux de
+  /// plus de dix minutes à l'arrivée, un message ne sonne pas.
+  func testBackfilledHistoryDoesNotNotify() {
+    let now = base.addingTimeInterval(30 * 24 * 3600)
+    XCTAssertFalse(NotificationPolicy.shouldNotify(
+      current: conversation(at: 60), previous: conversation(at: 0),
+      isMuted: false, isSelected: false, alreadyNotifiedAt: nil, now: now
+    ))
+    // Juste sous la limite : un Relais qui rattrape un `/sync` en retard.
+    XCTAssertTrue(NotificationPolicy.shouldNotify(
+      current: conversation(at: 60), previous: conversation(at: 0),
+      isMuted: false, isSelected: false, alreadyNotifiedAt: nil,
+      now: base.addingTimeInterval(60 + NotificationPolicy.maxAge - 1)
+    ))
+    XCTAssertFalse(NotificationPolicy.shouldNotify(
+      current: conversation(at: 60), previous: conversation(at: 0),
+      isMuted: false, isSelected: false, alreadyNotifiedAt: nil,
+      now: base.addingTimeInterval(60 + NotificationPolicy.maxAge + 1)
+    ))
   }
 
   func testNewIncomingMessageNotifies() {

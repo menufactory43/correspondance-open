@@ -219,6 +219,7 @@ construire_ponts() {
   cloner https://github.com/mautrix/meta.git     "$MAUTRIX_TAG" mautrix-meta
   cloner https://github.com/mautrix/twitter.git  "$MAUTRIX_TAG" mautrix-twitter
   cloner https://github.com/mautrix/slack.git    "$MAUTRIX_TAG" mautrix-slack
+  cloner https://github.com/mautrix/telegram.git "$MAUTRIX_TAG" mautrix-telegram
   for cible in $CIBLES; do
     dire "— cible $cible"
     pont mautrix-whatsapp mautrix-whatsapp  "$cible" "mautrix-whatsapp-$cible"
@@ -230,6 +231,8 @@ construire_ponts() {
     # X : mautrix-twitter, du Go pur au-dessus de sqlite et webp comme les autres.
     pont mautrix-twitter  mautrix-twitter   "$cible" "mautrix-twitter-$cible"
     pont mautrix-slack    mautrix-slack     "$cible" "mautrix-slack-$cible"
+    # Telegram : le pont Go (gotd), du Go pur au-dessus de sqlite et webp comme les autres.
+    pont mautrix-telegram mautrix-telegram  "$cible" "mautrix-telegram-$cible"
     pont_signal "$cible" "mautrix-signal-$cible"
   done
 }

@@ -63,6 +63,13 @@ targets:
           if [ -f "${SRCROOT}/Correspondance/Resources/AppIcon.icns" ]; then
             cp -f "${SRCROOT}/Correspondance/Resources/AppIcon.icns" "${RES}/AppIcon.icns"
           fi
+          # Les clés d'API Telegram de l'app (my.telegram.org, une fois, jamais
+          # versionnées : Correspondance/Resources/TelegramApp.json est gitignoré).
+          # L'app les passe à l'installeur du Relais ; sans le fichier, le pont
+          # Telegram est posé mais pas configuré, et l'installeur le dit.
+          if [ -f "${SRCROOT}/Correspondance/Resources/TelegramApp.json" ]; then
+            cp -f "${SRCROOT}/Correspondance/Resources/TelegramApp.json" "${RES}/TelegramApp.json"
+          fi
           echo "Embedded fonts + AppIcon.icns into $RES"
           ls -la "$RES" || true
           ls -la "$DEST_FONTS" || true

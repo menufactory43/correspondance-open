@@ -1352,7 +1352,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nRES=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nDEST_FONTS=\"${RES}/Fonts\"\nmkdir -p \"$DEST_FONTS\"\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.ttf \"$DEST_FONTS/\" 2>/dev/null || true\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.md \"$DEST_FONTS/\" 2>/dev/null || true\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.txt \"$DEST_FONTS/\" 2>/dev/null || true\n# Icône Dock / Finder (secours si Assets.car absent)\nif [ -f \"${SRCROOT}/Correspondance/Resources/AppIcon.icns\" ]; then\n  cp -f \"${SRCROOT}/Correspondance/Resources/AppIcon.icns\" \"${RES}/AppIcon.icns\"\nfi\necho \"Embedded fonts + AppIcon.icns into $RES\"\nls -la \"$RES\" || true\nls -la \"$DEST_FONTS\" || true\n";
+			shellScript = "set -e\nRES=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nDEST_FONTS=\"${RES}/Fonts\"\nmkdir -p \"$DEST_FONTS\"\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.ttf \"$DEST_FONTS/\" 2>/dev/null || true\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.md \"$DEST_FONTS/\" 2>/dev/null || true\ncp -f \"${SRCROOT}/Correspondance/Resources/Fonts/\"*.txt \"$DEST_FONTS/\" 2>/dev/null || true\n# Icône Dock / Finder (secours si Assets.car absent)\nif [ -f \"${SRCROOT}/Correspondance/Resources/AppIcon.icns\" ]; then\n  cp -f \"${SRCROOT}/Correspondance/Resources/AppIcon.icns\" \"${RES}/AppIcon.icns\"\nfi\n# Les clés d'API Telegram de l'app (my.telegram.org, une fois, jamais\n# versionnées : Correspondance/Resources/TelegramApp.json est gitignoré).\n# L'app les passe à l'installeur du Relais ; sans le fichier, le pont\n# Telegram est posé mais pas configuré, et l'installeur le dit.\nif [ -f \"${SRCROOT}/Correspondance/Resources/TelegramApp.json\" ]; then\n  cp -f \"${SRCROOT}/Correspondance/Resources/TelegramApp.json\" \"${RES}/TelegramApp.json\"\nfi\necho \"Embedded fonts + AppIcon.icns into $RES\"\nls -la \"$RES\" || true\nls -la \"$DEST_FONTS\" || true\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1719,7 +1719,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1848,7 +1848,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AKMNXGVVGX;
 				ENABLE_HARDENED_RUNTIME = YES;

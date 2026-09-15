@@ -599,13 +599,13 @@ compte, un menu s'il y en a plusieurs. Déconnecter ferme la session côté rés
 conversations restent dans l'inbox, en historique.
 
 Chaque pont accepte **plusieurs comptes** par utilisateur ; ce qui change, c'est l'identité d'un
-compte : un numéro (WhatsApp, Signal), un compte (Instagram, Messenger, X), un espace de travail
+compte : un numéro (WhatsApp, Signal, Telegram), un compte (Instagram, Messenger, X), un espace de travail
 (Slack — plusieurs espaces possibles avec la même adresse). « Ajouter un compte… » relance le flow
 de connexion du réseau.
 
 Tout passe par l'**API de provisioning** de chaque pont (`whoami`, `logout/<id>`), publiée par
 docker-compose sur l'interface de Synapse aux ports `appservice.port` des surcouches : WhatsApp
-29318, Signal 29328, Instagram 29330, Messenger 29331, X 29332, Slack 29335. L'app s'y authentifie
+29318, Signal 29328, Instagram 29330, Messenger 29331, X 29332, Slack 29335, Telegram 29317. L'app s'y authentifie
 avec son jeton Matrix (`provisioning.allow_matrix_auth: true`). Sans ces ports, la ligne dit
 « Comptes inconnus » et le reste marche quand même.
 
@@ -662,6 +662,78 @@ en recevant un message ou via le pont ; il apparaît comme un groupe nommé (`#g
 **Commandes du bot Slack** : DM avec `@slackbot`, préfixe **`!slack`**. `login token` (puis la
 session), `login email` (code par mail, workspace, 2FA), `logout`, `ping`, `pm <identifiant>`,
 `resolve-identifier <identifiant>`.
+
+## 2 ter quater. Connecter Telegram — le numéro, le code, comme un nouvel appareil
+
+`mautrix-telegram` (v26.08, tag `v0.2608.0`) est le pont **Go** — l'amont a réécrit son vieux
+pont Python (Telethon), désormais « legacy ». Même famille bridgev2 que les six autres : bot
+`@telegrambot`, ghosts `@telegram_<id>`, préfixe `!tg`, API de provisioning. Un compte, c'est un
+numéro ; ses groupes et ses supergroupes arrivent comme des groupes, ses chaînes aussi (sans
+liste de membres).
+
+**Deux clés d'API, une fois — les nôtres, pas celles de l'utilisateur.** Le pont est un client
+MTProto : Telegram exige un `api_id` et un `api_hash`, qui identifient **l'application** — pas le
+compte. Telegram Desktop en embarque un, Beeper en a un pour tous ses clients. Correspondance a le
+sien, créé une fois sur https://my.telegram.org/apps ; l'utilisateur, lui, ne voit que son
+numéro et son code. Sans clés, le pont refuse de démarrer (`api_id is required`), et refuse aussi
+la valeur d'exemple de l'amont.
+
+Où elles vivent, et pourquoi jamais dans le dépôt : un `api_id` **publié** finit repéré par
+Telegram, qui répond alors `API_ID_PUBLISHED_FLOOD` et ralentit les connexions de toute l'app.
+
+- **L'app Mac** les porte dans `Contents/Resources/TelegramApp.json`, copié au build depuis
+  `Correspondance/Resources/TelegramApp.json` (gitignoré ; `{"api_id": 12345, "api_hash": "…"}`).
+  Quand la carte « Sur ce Mac » lance `install.sh`, elle lui passe `--telegram-api-id` et
+  `--telegram-api-hash` (`TelegramApplication`, dans `RelaisInstallation.swift`). Sans le
+  fichier, le pont est posé mais ni configuré ni démarré, et l'installeur le dit.
+- **Le NUC** les reçoit au bootstrap **une fois** ; elles atterrissent dans le `.env` et n'en
+  bougent plus :
+
+```bash
+TELEGRAM_API_ID=… TELEGRAM_API_HASH=… ./infra/matrix/bootstrap.sh
+```
+
+- **Un Relais posé à la main** : `--telegram-api-id` / `--telegram-api-hash`, ou
+  `CORRESPONDANCE_TELEGRAM_API_ID` / `_HASH` dans l'environnement.
+
+**Réglages › Comptes › Telegram › Connecter…** suit le flow `phone` du connecteur, par l'**API de
+provisioning** (`http://<relais>:29317/_matrix/provision/v3/login/…`), comme Slack : trois
+questions, un champ chacune.
+
+1. **Le numéro**, au format international (`+33 6…`) — étape `fi.mau.telegram.login.phone_number`.
+2. **Le code** que Telegram pousse dans l'app du téléphone (pas un SMS : il arrive dans une
+   conversation « Telegram » de l'app officielle) — `fi.mau.telegram.login.code`. Un mauvais code
+   revient en `….code.incorrect`, et la fenêtre le redemande.
+3. **Le mot de passe** de la validation en deux étapes, si le compte en a une —
+   `fi.mau.telegram.login.password` ; refusé, il revient en `….password.incorrect`.
+
+Au succès : « Successfully logged in as <nom> (`<id>`) », puis le backfill (`login_sync_limit`
+conversations, 30 chez nous). Ni QR, ni cookie, ni navigateur : rien à importer, rien à coller —
+la barre du bas n'offre que « Relancer » et « Fermer ». Le connecteur sait aussi `qr` (scanner
+depuis Réglages › Appareils de Telegram) et `bot` (un jeton BotFather) ; l'app ne les propose pas.
+
+Telegram refuse par des **codes** (`PHONE_NUMBER_INVALID`, `PHONE_CODE_EXPIRED`, `FLOOD_WAIT_23`…),
+que le connecteur renvoie dans le corps de l'erreur HTTP ; `TelegramLoginFrench` les traduit, délai
+compris. Un compte qui n'existe pas sur ce numéro n'est **pas** créé ici (`ErrSignUpNotSupported`) :
+Telegram a fermé l'inscription aux clients tiers en 2023.
+
+### Ouvrir un fil Telegram
+
+Les ghosts portent l'**identifiant numérique** du compte (`@telegram_777000`), jamais le pseudo
+ni le numéro. Mais `pm` prend l'un ou l'autre : `pm durov`, `pm @durov`, ou `pm +33612345678` —
+le connecteur résout le pseudo par `contacts.resolveUsername`, et le numéro parmi tes contacts
+Telegram (un numéro qui n'est pas dans tes contacts ne se résout pas : c'est la règle de Telegram,
+pas celle du pont).
+
+Ce que le pont porte (`capabilities.go`) : correction (Telegram la ferme à 48 heures — c'est sa
+règle, le pont ne la redit pas), suppression pour tout le monde sans délai, réactions (une par
+message, trois pour un compte Premium), réponses, vocal, nom et photo du groupe, invitation,
+retrait, **`create-group`** (un nom, jusqu'à 200 participants). Pas de sondages en émission, pas
+d'appels, pas de chats secrets.
+
+**Commandes du bot Telegram** : DM avec `@telegrambot`, préfixe **`!tg`**. `login phone` (puis le
+numéro, le code, le mot de passe), `login qr`, `logout`, `ping`, `pm <pseudo|numéro>`,
+`resolve-identifier <pseudo|numéro>`, `list-logins`.
 
 ## 2 quater. Connecter Signal — le QR, et ce qu'on laisse derrière
 

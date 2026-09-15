@@ -1,0 +1,112 @@
+# Surcouche appliquée par-dessus le config.yaml généré par l'image mautrix-telegram
+# (`dock.mau.dev/mautrix/telegram:v26.08` — le pont Go, pas le pont Python d'avant).
+# Fusion profonde (bootstrap.sh) : on ne fige pas le config amont, seulement nos choix.
+#
+# Le pont garde son nom d'origine partout où le Relais le voit — bot @telegrambot,
+# ghosts telegram_<id>, protocole `telegram` — c'est ce que l'app reconnaît
+# (MatrixBridgeDescriptor.telegram).
+homeserver:
+  address: http://synapse:8008
+  domain: correspondance.local
+  software: standard
+
+appservice:
+  address: http://mautrix-telegram:29317
+  # 0.0.0.0 dans le conteneur : Synapse appelle le bridge par le réseau Docker.
+  hostname: 0.0.0.0
+  # Le port par défaut du connecteur, libre chez nous (WhatsApp est à 29318).
+  port: 29317
+  id: telegram
+  bot:
+    username: telegrambot
+    displayname: Telegram bridge bot
+  username_template: telegram_{{.}}
+
+database:
+  type: postgres
+  uri: postgres://matrix:__POSTGRES_PASSWORD__@postgres/mautrix_telegram?sslmode=disable
+
+bridge:
+  command_prefix: '!tg'
+  # Un espace par compte : l'app filtre déjà, mais ça aide au dépannage dans Element.
+  personal_filtering_spaces: true
+  private_chat_portal_meta: true
+  permissions:
+    'correspondance.local': user
+    '__MATRIX_ADMIN__': admin
+
+# Mode relais : ce qu'un utilisateur du Relais non connecté au réseau — l'agent
+# « cc » — dit dans un portail part via MON compte, préfixé de son nom. Rien ne se
+# relaie tout seul : il faut, par room, `!tg set-relay` (admin).
+  relay:
+    enabled: true
+    admin_only: true
+    message_formats:
+      m.text: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+      m.notice: '🤖 {{ .Sender.DisambiguatedName }} : {{ .Message }}'
+
+# Historique initial : sans ça les salons arrivent vides côté Correspondance.
+backfill:
+  enabled: true
+  max_initial_messages: 50
+  max_catchup_messages: 500
+
+network:
+  # Les clés d'API Telegram, propres à cette installation — tirées sur
+  # https://my.telegram.org/apps (« API development tools »), passées au
+  # bootstrap en TELEGRAM_API_ID / TELEGRAM_API_HASH, et mémorisées dans le
+  # .env du NUC. Le pont refuse de démarrer sans (« api_id is required »), et
+  # refuse aussi la valeur d'exemple de l'amont.
+  api_id: __TELEGRAM_API_ID__
+  api_hash: "__TELEGRAM_API_HASH__"
+  # Ce que la liste « Appareils » de Telegram affiche pour cette session.
+  device_info:
+    device_model: Correspondance
+    system_version: Relais
+    app_version: auto
+    lang_code: fr
+    system_lang_code: fr
+  # Le nom des ghosts : celui du profil, sans suffixe — le défaut du pont, redit
+  # pour qu'on sache où le changer. « Deleted account » pour les comptes effacés.
+  displayname_template: "{{ if .Deleted }}Compte supprimé {{ .UserID }}{{ else }}{{ .FullName }}{{ end }}"
+  # Les chaînes (broadcast channels) : leurs membres ne se listent pas, on ne les
+  # synchronise pas — c'est le défaut.
+  member_list:
+    sync_broadcast_channels: false
+  # Combien de conversations le pont relit à la connexion.
+  sync:
+    login_sync_limit: 30
+    create_limit: 30
+
+# Double puppeting : sans lui, les messages que j'envoie depuis l'app Telegram du
+# téléphone remontent signés par mon propre ghost, et Correspondance les prend pour
+# ceux d'un correspondant. Le jeton est celui de `doublepuppet-registration.yaml`.
+double_puppet:
+  servers: {}
+  allow_discovery: false
+  secrets:
+    __remplacer__: true
+    __SERVER_NAME__: "as_token:__DOUBLEPUPPET_AS_TOKEN__"
+
+# L'API de provisioning : l'app y démarre le flow `phone` et y répond étape par
+# étape (numéro, code reçu dans l'app, mot de passe de la validation en deux
+# étapes), et y lit les comptes connectés. Authentifiée par le jeton Matrix de
+# l'utilisateur — pas de secret dans l'app. Le port 29317 est publié par
+# docker-compose sur l'interface de Synapse.
+provisioning:
+  allow_matrix_auth: true
+
+# Homeserver privé sur Tailscale, salons de bridge non chiffrés → E2EE inutile.
+encryption:
+  allow: false
+  default: false
+  require: false
+
+matrix:
+  federate_rooms: false
+
+logging:
+  min_level: info
+  writers:
+    - type: stdout
+      format: json

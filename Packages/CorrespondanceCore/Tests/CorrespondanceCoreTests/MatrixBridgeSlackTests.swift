@@ -29,7 +29,7 @@ final class MatrixBridgeSlackTests: XCTestCase {
     XCTAssertEqual(MessageNetwork.slack.labelFR, "Slack")
     XCTAssertEqual(
       MessageNetwork.matrixBridged,
-      [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack]
+      [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram]
     )
   }
 

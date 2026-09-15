@@ -19,6 +19,9 @@
 #   --hote CIBLE          force l'hôte (macos-arm64 | linux-x86_64 | linux-arm64),
 #                         pour éprouver le plan des trois cibles depuis une seule
 #   --sans-ponts          ne pose que le homeserver
+#   --telegram-api-id N   les clés d'API Telegram (https://my.telegram.org/apps) ;
+#   --telegram-api-hash H sans elles, le pont Telegram est posé mais pas configuré
+#                         (CORRESPONDANCE_TELEGRAM_API_ID / _HASH marchent aussi)
 #   --sans-tailcat        ne pose pas Tailcat sur Linux (l'adresse du code sera
 #                         alors celle de Tailscale, ou 127.0.0.1 et un tunnel ssh)
 #   --json                une ligne JSON par étape, et le code d'appairage en
@@ -49,6 +52,8 @@ HOTE=""
 PONTS=1
 TAILCAT=1
 JSON=0
+TG_API_ID="${CORRESPONDANCE_TELEGRAM_API_ID:-}"
+TG_API_HASH="${CORRESPONDANCE_TELEGRAM_API_HASH:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,6 +65,8 @@ while [ $# -gt 0 ]; do
     --bind) BIND="$2"; shift ;;
     --hote) HOTE="$2"; shift ;;
     --sans-ponts) PONTS=0 ;;
+    --telegram-api-id) TG_API_ID="$2"; shift ;;
+    --telegram-api-hash) TG_API_HASH="$2"; shift ;;
     --sans-tailcat) TAILCAT=0 ;;
     --json) JSON=1 ;;
     -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
@@ -104,6 +111,9 @@ TW_AMONT="https://github.com/mautrix/twitter/releases/download/$MAUTRIX_TAG"
 # Slack : mautrix-slack, même cadence. Comme les autres, le darwin-arm64 amont
 # charge libolm ; sur macOS on prend le NÔTRE, `-tags goolm`.
 SK_AMONT="https://github.com/mautrix/slack/releases/download/$MAUTRIX_TAG"
+# Telegram : mautrix-telegram, le pont Go, même cadence. Même règle que les
+# autres : l'amont pour Linux, le NÔTRE (`-tags goolm`) sur macOS.
+TG_AMONT="https://github.com/mautrix/telegram/releases/download/$MAUTRIX_TAG"
 # Tailcat : l'amont publie Linux (amd64/arm64/armv7) et Windows, **pas macOS** —
 # là-bas il passe par un tap Homebrew, que le spike s'interdit dans la pile
 # livrée. Le binaire macOS est donc le NÔTRE, construit au même tag par
@@ -133,6 +143,8 @@ case "$HOTE" in
     TW_SHA=4cac3a7f76de18c82656e9e36dcaef23a5ac442e3700152def6ee4f333588e50
     SK_URL="$RELEASES/mautrix-slack-darwin-arm64"
     SK_SHA=391260d8512c3b5aae7182c44433929b6ac3c8e7ea70f160d98f9705f29a86db
+    TG_URL="$RELEASES/mautrix-telegram-darwin-arm64"
+    TG_SHA=b84ac77758620a79e95b56166858145be94cbcf12f8476e60bb0a199faccee22
     TAILCAT_URL=""; TAILCAT_SHA=""; TAILCAT_ARCHIVE=""
     OLM_URL=""; OLM_SHA=""
     ;;
@@ -151,6 +163,8 @@ case "$HOTE" in
     TW_SHA=24924d7ae11510b6c6757d7f7d6d319b62ba784b1f4f5cddd5180031cbf04923
     SK_URL="$SK_AMONT/mautrix-slack-amd64"
     SK_SHA=6d5241a07be562e1c42c7c35886743baa83b4e554d426f09fcebf62a5918bf45
+    TG_URL="$TG_AMONT/mautrix-telegram-amd64"
+    TG_SHA=e8d6fed1deaec5d9bcb8eb93e084362309d5d454d6af2ec73de32ca0daaf3db5
     TAILCAT_ARCHIVE="tailcat_0.4.0_linux_amd64.tar.gz"
     TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
     TAILCAT_SHA=8b819c43dfdf806b5663e23535aba557bb106075b0b5839df289af9bba70bec2
@@ -171,6 +185,8 @@ case "$HOTE" in
     TW_SHA=87155351076f84fdcf397d327d99ad7a796cc853d5b3adacc47d2a183d5ac340
     SK_URL="$SK_AMONT/mautrix-slack-arm64"
     SK_SHA=943aee9b83fc46eed6cd65583bc1282ebbd12ac08eff2b7b67e1085f9a3c3669
+    TG_URL="$TG_AMONT/mautrix-telegram-arm64"
+    TG_SHA=b5e179fd6f1bba48e73102590f7c5e92599244ec6fae1740306a52c3bd5780b0
     TAILCAT_ARCHIVE="tailcat_0.4.0_linux_arm64.tar.gz"
     TAILCAT_URL="$TAILCAT_AMONT/$TAILCAT_ARCHIVE"
     TAILCAT_SHA=3b77322350f64d229d5b2119b159b863b4bcffa0a62a0294682423a19956dc76
@@ -185,6 +201,7 @@ IG_PORT=$((PORT + 21320))   # 8010 → 29330 : les ports du docker-compose de la
 MS_PORT=$((PORT + 21321))   # 8010 → 29331
 TW_PORT=$((PORT + 21322))   # 8010 → 29332
 SK_PORT=$((PORT + 21325))   # 8010 → 29335
+TG_PORT=$((PORT + 21307))   # 8010 → 29317 : le port par défaut du connecteur Telegram
 BIN="$PREFIX/bin"
 RELAIS_DIR="$PREFIX/relais"
 LOGS="$PREFIX/logs"
@@ -267,7 +284,7 @@ plan() {
   echo "  dossier           $PREFIX"
   echo "  serveur Matrix    $SERVER_NAME, propriétaire $MXID"
   echo "  écoute            $BIND:$PORT ; ponts sur $WA_PORT (WhatsApp), $SG_PORT (Signal),"
-  echo "                    $IG_PORT (Instagram), $MS_PORT (Messenger), $TW_PORT (X) et $SK_PORT (Slack)"
+  echo "                    $IG_PORT (Instagram), $MS_PORT (Messenger), $TW_PORT (X), $SK_PORT (Slack) et $TG_PORT (Telegram)"
   if [ "$TAILCAT_ACTIF" = 1 ]; then
     echo "  adresse du code   $PUBLIC, plus le jeton Tailcat (le chemin par défaut)"
   else
@@ -303,6 +320,14 @@ plan() {
     echo "       mautrix-slack $MAUTRIX_TAG"
     echo "         $SK_URL"
     echo "         sha256 $SK_SHA"
+    echo "       mautrix-telegram $MAUTRIX_TAG"
+    echo "         $TG_URL"
+    echo "         sha256 $TG_SHA"
+    if [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+      echo "         (api_id $TG_API_ID, api_hash fourni : le pont sera configuré)"
+    else
+      echo "         (sans --telegram-api-id / --telegram-api-hash : posé, mais pas configuré ni démarré)"
+    fi
     if [ -n "$OLM_URL" ]; then
       echo "       libolm.3.dylib"
       echo "         $OLM_URL"
@@ -336,7 +361,7 @@ plan() {
   echo "     n'écrit que dans son journal (celui du .toml ne marche pas sur une base neuve)."
   echo "     Le premier compte enregistré devient administrateur et rejoint #admins."
   if [ $PONTS = 1 ]; then
-    echo "  8. Configuration des quatre ponts (SQLite, chiffrement des portails allow+default),"
+    echo "  8. Configuration des ponts (SQLite, chiffrement des portails allow+default),"
     echo "     registration engendrée par le pont lui-même, puis déclarée au Relais par un message"
     echo "     « !admin appservices register » dans #admins — Continuwuity n'a pas de fichier de"
     echo "     registration, et la prend en compte à chaud."
@@ -426,6 +451,7 @@ if [ $PONTS = 1 ]; then
   poser mautrix-messenger "$MS_URL" "$MS_SHA"
   poser mautrix-twitter "$TW_URL" "$TW_SHA"
   poser mautrix-slack "$SK_URL" "$SK_SHA"
+  poser mautrix-telegram "$TG_URL" "$TG_SHA"
 fi
 etape binaires ok "posés dans $BIN, toutes les sommes conformes"
 
@@ -705,7 +731,7 @@ SUPERVISEUR_POSE=0
 # d'arrière-plan ne notifie rien.
 superviseur_purger_anciens() {
   local nom label plist
-  for nom in tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter mautrix-slack; do
+  for nom in tailcat mautrix-whatsapp mautrix-signal mautrix-instagram mautrix-messenger mautrix-twitter mautrix-slack mautrix-telegram; do
     label="app.correspondance.$nom"
     plist="$HOME/Library/LaunchAgents/$label.plist"
     [ -f "$plist" ] || continue
@@ -1051,9 +1077,12 @@ JETON_PROPRIO="$(jeton_session)"
 # ================================================================= 8. les ponts
 if [ $PONTS = 1 ]; then
   ETAPE_COURANTE=ponts
-  etape ponts debut "WhatsApp, Signal, Instagram, Messenger, X, Slack — portails chiffrés"
+  etape ponts debut "WhatsApp, Signal, Instagram, Messenger, X, Slack, Telegram — portails chiffrés"
+  # pont NOM PORT PREFIXE BOT [YAML-EN-PLUS] — le cinquième argument, s'il est là,
+  # est ajouté tel quel à la config : c'est la section `network:` de Telegram
+  # (ses clés d'API), le seul pont qui en ait besoin pour démarrer.
   pont() {
-    local nom="$1" port="$2" prefixe="$3" bot="$4"
+    local nom="$1" port="$2" prefixe="$3" bot="$4" en_plus="${5:-}"
     local dir="$PREFIX/mautrix-$nom"
     mkdir -p "$dir"
     if [ ! -f "$dir/config.yaml" ]; then
@@ -1113,6 +1142,7 @@ logging:
           format: pretty
 CFG
       )
+      [ -z "$en_plus" ] || ( umask 077; printf '%s\n' "$en_plus" >> "$dir/config.yaml" )
       dire "mautrix-$nom : configuration écrite"
     else
       dire "mautrix-$nom : configuration déjà là, conservée"
@@ -1148,7 +1178,16 @@ CFG
   # c'est ce que l'app reconnaît. Seul le nom lu à l'écran dit « X ».
   pont twitter "$TW_PORT" '!tw' twitterbot
   pont slack "$SK_PORT" '!slack' slackbot
-  etape ponts ok "six ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT, $TW_PORT, $SK_PORT)"
+  # Telegram : le pont exige un api_id / api_hash (my.telegram.org). Sans eux il
+  # s'arrête net (« api_id is required ») : on ne le configure ni ne le démarre,
+  # et on le dit — le reste de la pile ne doit pas attendre après lui.
+  if [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+    pont telegram "$TG_PORT" '!tg' telegrambot "$(printf 'network:\n    api_id: %s\n    api_hash: "%s"\n    device_info:\n        device_model: Correspondance\n        system_version: Relais\n        app_version: auto\n        lang_code: fr\n        system_lang_code: fr\n' "$TG_API_ID" "$TG_API_HASH")"
+    etape ponts ok "sept ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT, $TW_PORT, $SK_PORT, $TG_PORT)"
+  else
+    dire "mautrix-telegram : posé, mais sans --telegram-api-id / --telegram-api-hash — ni configuré ni démarré"
+    etape ponts ok "six ponts enregistrés et démarrés ($WA_PORT, $SG_PORT, $IG_PORT, $MS_PORT, $TW_PORT, $SK_PORT) ; Telegram attend ses clés d'API"
+  fi
 fi
 
 # ================================================== 9. la preuve, pas la promesse
@@ -1183,7 +1222,12 @@ etape preuve ok "connecté comme $QUI"
 echo
 echo "✓ le Relais répond, connecté comme $QUI (/login puis /account/whoami)."
 if [ $PONTS = 1 ]; then
-  echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT, X $TW_PORT, Slack $SK_PORT — portails chiffrés."
+  if [ -n "$TG_API_ID" ] && [ -n "$TG_API_HASH" ]; then
+    echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT, X $TW_PORT, Slack $SK_PORT, Telegram $TG_PORT — portails chiffrés."
+  else
+    echo "  Ponts : WhatsApp $WA_PORT, Signal $SG_PORT, Instagram $IG_PORT, Messenger $MS_PORT, X $TW_PORT, Slack $SK_PORT — portails chiffrés."
+    echo "  Telegram : relance avec --telegram-api-id et --telegram-api-hash (https://my.telegram.org/apps) pour le configurer."
+  fi
 fi
 echo "  $TS_MOT"
 

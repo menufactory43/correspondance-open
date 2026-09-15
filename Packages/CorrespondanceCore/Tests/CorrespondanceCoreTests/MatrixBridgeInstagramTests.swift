@@ -44,7 +44,7 @@ final class MatrixBridgeInstagramTests: XCTestCase {
     // « messenger » appartient désormais au pont Messenger : il ne doit surtout pas
     // retomber sur Instagram, avec qui il ne partage plus rien qu'une image Docker.
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("messenger"), .messenger)
-    XCTAssertNil(MessageNetwork.fromBridgeProtocol("telegram"))
+    XCTAssertNil(MessageNetwork.fromBridgeProtocol("discord"))
   }
 
   func testDirectConversationFromInstagramRoom() throws {
@@ -199,8 +199,8 @@ extension MatrixBridgeInstagramTests {
     )
 
     // Un pont qu'on ne gère pas ne doit pas se faire passer pour l'un des nôtres.
-    XCTAssertFalse(MatrixIdentity.isBridgeBot("@telegrambot:correspondance.local"))
-    XCTAssertFalse(MatrixIdentity.isGhost("@telegram_1234:correspondance.local"))
+    XCTAssertFalse(MatrixIdentity.isBridgeBot("@discordbot:correspondance.local"))
+    XCTAssertFalse(MatrixIdentity.isGhost("@discord_1234:correspondance.local"))
     XCTAssertFalse(MatrixIdentity.isBridgeBot("@meffysto:correspondance.local"))
   }
 
@@ -254,7 +254,7 @@ extension MatrixBridgeInstagramTests {
     XCTAssertEqual(MessageNetwork.fromBridgeProtocol("signal"), .signal)
 
     XCTAssertNil(MessageNetwork.iMessage.bridge)
-    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack])
+    XCTAssertEqual(MessageNetwork.matrixBridged, [.signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram])
   }
 
   /// Les réponses du bot pendant un login par cookies, telles que bridgev2 les écrit.

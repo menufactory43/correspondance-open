@@ -30,6 +30,7 @@ enum Theme {
     case .messenger: Style(foreground: .cyan)
     case .twitter: Style(attributes: .bold)
     case .slack: Style(foreground: .yellow)
+    case .telegram: Style(foreground: .brightCyan)
     case .iMessage: Style(foreground: .brightBlue)
     case .selfNote: Style(foreground: .brightBlack)
     case .agent: Style(foreground: .magenta)
@@ -44,6 +45,7 @@ enum Theme {
     case .messenger: "Messenger"
     case .twitter: "X"
     case .slack: "Slack"
+    case .telegram: "Telegram"
     case .iMessage: "iMessage"
     case .selfNote: "Note"
     case .agent: "cc"

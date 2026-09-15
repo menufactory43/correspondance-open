@@ -76,6 +76,7 @@ declare -a ATTENDUS=(
   "mautrix-instagram-darwin-arm64:"
   "mautrix-twitter-darwin-arm64:"
   "mautrix-slack-darwin-arm64:"
+  "mautrix-telegram-darwin-arm64:"
   "tailcat-darwin-arm64:"
   "correspondance-agent-linux-x86_64:"
   "correspondance-agent-macos-arm64:"

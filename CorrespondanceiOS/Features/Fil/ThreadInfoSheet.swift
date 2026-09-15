@@ -142,7 +142,7 @@ struct ThreadInfoSheet: View {
       Button("Ajouter") { invite() }
       Button("Annuler", role: .cancel) { newMember = "" }
     } message: {
-      Text([.instagram, .messenger, .twitter, .slack].contains(conversation?.network)
+      Text([.instagram, .messenger, .twitter, .slack, .telegram].contains(conversation?.network)
         ? "Son pseudo, ou son identifiant."
         : "Son numéro, avec l'indicatif du pays.")
     }
@@ -627,6 +627,7 @@ struct ThreadInfoSheet: View {
   private var addMemberPrompt: String {
     switch conversation?.network {
     case .instagram, .messenger, .twitter: "pseudo"
+    case .telegram: "pseudo ou numéro"
     case .slack: "e-mail Slack"
     case .signal: "identifiant Signal"
     default: "+33 6 12 34 56 78"

@@ -12,6 +12,8 @@ import CorrespondanceUI
 /// ouvrir —, la barre du bas offre deux autres portes : lire la session dans Brave
 /// ou Chrome (un clic, l'accord du Trousseau), ou la coller à la main. X demande
 /// ensuite son code PIN : le formulaire cède la place à un champ de quatre chiffres.
+/// Slack et Telegram, eux, posent des questions — un e-mail, un numéro, un code, un
+/// mot de passe — par l'API de provisioning du pont : une question, un champ.
 ///
 /// Une `Window` et non une feuille : le formulaire de X tient mal dans 360 points,
 /// et une fenêtre se redimensionne, se déplace, reste ouverte pendant qu'on va
@@ -77,10 +79,15 @@ struct BridgeLoginWindow: View {
             // Slack : l'API de provisioning décrit chaque étape — une saisie
             // (e-mail, code, espace de travail), ou une page à ouvrir avec le
             // script qui en tire la réponse (le captcha). Comme Beeper.
-            provisionedStepPanel
+            provisionedStepPanel(for: network)
           } else {
             webPanel(for: network)
           }
+        case .phoneCode:
+          // Telegram : le numéro, le code reçu dans l'app, le mot de passe de la
+          // validation en deux étapes. Rien d'autre — ni navigateur, ni session
+          // à coller.
+          provisionedStepPanel(for: network)
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -111,6 +118,8 @@ struct BridgeLoginWindow: View {
     switch flow {
     case .qrCode:
       "Comme un nouveau téléphone : scanne le code depuis \(network.labelFR), dans Appareils liés."
+    case .phoneCode:
+      "Comme un nouvel appareil : ton numéro, puis le code que Telegram envoie dans l'app de ton téléphone."
     case .webSession:
       if network == .slack {
         "Connecte-toi par e-mail : tu recevras un code, puis tu choisiras ton espace de travail."
@@ -250,12 +259,12 @@ struct BridgeLoginWindow: View {
     .padding(.bottom, Spacing.md)
   }
 
-  // MARK: - Les étapes de l'API de provisioning (Slack)
+  // MARK: - Les étapes de l'API de provisioning (Slack, Telegram)
 
   /// L'étape en cours, selon son type : une saisie, ou une page à ouvrir dont le
   /// script rend la réponse. Le captcha de Slack est de la seconde sorte.
   @ViewBuilder
-  private var provisionedStepPanel: some View {
+  private func provisionedStepPanel(for network: MessageNetwork) -> some View {
     if let step = store.bridgeLoginProcessStep, step.type == .cookies, let params = step.cookies {
       BridgeExtractionWebView(
         params: params,
@@ -272,14 +281,15 @@ struct BridgeLoginWindow: View {
       .padding(.horizontal, Spacing.lg)
       .padding(.bottom, Spacing.md)
     } else {
-      slackInputPanel
+      inputPanel(for: network)
     }
   }
 
   /// La question du pont et un champ pour y répondre : e-mail, code reçu par mail,
-  /// choix de l'espace de travail. L'instruction du pont est la question elle-même.
+  /// choix de l'espace de travail (Slack) ; numéro, code reçu dans l'app, mot de
+  /// passe (Telegram). L'instruction du pont est la question elle-même.
   @ViewBuilder
-  private var slackInputPanel: some View {
+  private func inputPanel(for network: MessageNetwork) -> some View {
     if let prompt = store.bridgeLoginInputPrompt {
       VStack(spacing: Spacing.md) {
         Spacer()
@@ -307,7 +317,7 @@ struct BridgeLoginWindow: View {
     } else {
       VStack(spacing: Spacing.md) {
         ProgressView()
-        Text("Préparation de la connexion Slack…")
+        Text("Préparation de la connexion \(network.labelFR)…")
           .font(Typography.meta(themes.typeface))
           .foregroundStyle(theme.inkSecondary)
       }

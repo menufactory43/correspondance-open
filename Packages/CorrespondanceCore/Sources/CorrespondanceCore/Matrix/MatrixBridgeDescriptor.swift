@@ -13,6 +13,11 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     /// L'utilisateur se connecte dans une fenêtre de navigation intégrée, et l'app
     /// transmet la session récoltée au bot (Instagram — Meta n'offre rien d'autre).
     case webSession
+    /// Le pont demande un numéro de téléphone, puis le code que le réseau envoie
+    /// dans son app, puis le mot de passe de validation en deux étapes s'il y en
+    /// a un — étape par étape, par l'API de provisioning (Telegram). Ni QR, ni
+    /// cookie, ni navigateur : une question, une réponse, comme Beeper.
+    case phoneCode
   }
 
   public let network: MessageNetwork
@@ -178,6 +183,45 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: false
   )
 
+  /// Telegram : par mautrix-telegram (v26.08, tag `v0.2608.0`) — le pont Go, qui a
+  /// remplacé le pont Python.
+  ///
+  /// Le connecteur annonce quatre flows : `phone`, `qr`, `bot`, `manual`. On suit
+  /// `phone` par l'API de provisioning, comme Slack : le numéro au format
+  /// international, le code à cinq chiffres que Telegram pousse dans l'app du
+  /// téléphone (`fi.mau.telegram.login.code`), et le mot de passe de la
+  /// validation en deux étapes si le compte en a un
+  /// (`fi.mau.telegram.login.password`). Chaque étape a un identifiant stable et
+  /// des phrases en nombre fini : `TelegramLoginFrench` les traduit.
+  ///
+  /// Pas de cookies : rien à importer d'un navigateur, rien à coller. Le pont
+  /// veut un `api_id` et un `api_hash` (my.telegram.org) dans sa config — c'est
+  /// l'affaire du Relais, pas de l'app.
+  public static let telegram = MatrixBridgeDescriptor(
+    network: .telegram,
+    botLocalpart: "telegrambot",
+    commandPrefix: "!tg",
+    // Les ghosts portent l'identifiant numérique du compte Telegram
+    // (`@telegram_777000`), jamais le pseudo ni le numéro.
+    ghostPrefix: "telegram_",
+    // `NetworkID` et `BeeperBridgeType` valent tous deux « telegram » ; on accepte
+    // aussi la forme en `-go`, par symétrie avec les autres ponts.
+    protocolIDs: ["telegram", "telegramgo"],
+    loginFlow: .phoneCode,
+    // Un compte Telegram s'identifie par un numéro, mais ses ghosts ne le
+    // portent pas : rien à fusionner avec le carnet d'adresses sur cette base.
+    identifiersArePhoneNumbers: false,
+    // `displayname_template` ne suffixe rien par défaut ; on nettoie quand même
+    // la forme qu'un déploiement pourrait poser.
+    displayNameSuffixes: [" (Telegram)"],
+    supportsPhonePairing: false,
+    webLoginFlowID: "phone",
+    // Quitter un groupe est porté par le pont (`MemberActionLeave`), mais on
+    // garde la même prudence que les autres tant que ce n'est pas vu sur un
+    // vrai compte.
+    relaysGroupLeave: false
+  )
+
   /// mautrix-signal se lie comme appareil secondaire, en scannant un QR depuis
   /// Réglages › Appareils liés. Le pont n'expose que ce flow : pas de code
   /// d'appairage, et l'enregistrement en appareil primaire n'existe plus.
@@ -200,17 +244,21 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
     relaysGroupLeave: true
   )
 
-  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .twitter, .slack, .signal]
+  public static let all: [MatrixBridgeDescriptor] = [.whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .signal]
 
   /// Port de l'API de provisioning du pont (`/_matrix/provision/v3`), publié par
   /// docker-compose sur la même interface que Synapse (jamais 0.0.0.0). C'est le
   /// port `appservice.port` de chaque surcouche (`infra/matrix/templates`).
   ///
   /// L'app y lit les comptes connectés (`whoami`) et en déconnecte un
-  /// (`logout/<id>`). Slack y suit aussi tout son flow de connexion : son captcha
-  /// n'est décrit que là — un JavaScript à exécuter dans une vue web.
+  /// (`logout/<id>`). Slack et Telegram y suivent aussi tout leur flow de
+  /// connexion : le captcha de Slack n'est décrit que là — un JavaScript à
+  /// exécuter dans une vue web — et le numéro, le code et le mot de passe de
+  /// Telegram y sont des étapes typées plutôt que de la prose dans le chat.
   public var provisioningPort: Int? {
     switch network {
+    // Telegram prend le port par défaut de son connecteur, libre chez nous.
+    case .telegram: 29317
     case .whatsapp: 29318
     case .signal: 29328
     case .instagram: 29330
@@ -222,10 +270,13 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   }
 
   /// Le flow de connexion à suivre par l'API de provisioning plutôt que par le
-  /// chat. Slack seulement : les autres ponts gardent le chat (QR posté dans le
-  /// salon, session collée), qui marche et que les tests couvrent.
+  /// chat. Slack et Telegram : les autres ponts gardent le chat (QR posté dans
+  /// le salon, session collée), qui marche et que les tests couvrent.
   public var provisionedLoginFlowID: String? {
-    network == .slack ? webLoginFlowID : nil
+    switch network {
+    case .slack, .telegram: webLoginFlowID
+    default: nil
+    }
   }
 
   /// Ce qu'est « un compte » sur ce réseau, et ce qu'il en est de plusieurs.
@@ -233,7 +284,7 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// c'est l'identité du compte qui change d'un réseau à l'autre.
   public var accountsHintFR: String {
     switch network {
-    case .whatsapp, .signal: "Un compte par numéro. Plusieurs numéros possibles."
+    case .whatsapp, .signal, .telegram: "Un compte par numéro. Plusieurs numéros possibles."
     case .slack: "Un compte par espace de travail. Plusieurs espaces possibles, même avec la même adresse."
     default: "Plusieurs comptes possibles."
     }
@@ -268,7 +319,9 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// `pm` est l'alias de `start-chat` dans bridgev2 : WhatsApp prend un numéro,
   /// Instagram et Messenger l'identifiant numérique Meta (les pseudos passent
   /// d'abord par `search`), X le pseudo tel quel — son connecteur le résout
-  /// lui-même, et n'expose pas de `search`.
+  /// lui-même, et n'expose pas de `search`. Telegram prend un pseudo (avec ou
+  /// sans arobase) ou un numéro au format international : son connecteur
+  /// résout les deux.
   public func startChatCommand(identifier: String) -> String { "pm \(identifier)" }
 
   public init(network: MessageNetwork, botLocalpart: String, commandPrefix: String, ghostPrefix: String, protocolIDs: Set<String>, loginFlow: LoginFlow, identifiersArePhoneNumbers: Bool, displayNameSuffixes: [String], supportsPhonePairing: Bool, webLoginFlowID: String? = nil, relaysGroupLeave: Bool) {

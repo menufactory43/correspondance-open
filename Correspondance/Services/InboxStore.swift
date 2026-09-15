@@ -178,13 +178,15 @@ final class InboxStore {
   /// Un import de session depuis un navigateur est en cours (la boîte du
   /// Trousseau est peut-être à l'écran) : les boutons attendent.
   var bridgeLoginImportBusy = false
-  /// Le flow conversationnel de Slack attend une saisie : ce que le bot demande,
-  /// s'il faut masquer le champ, et les choix (les espaces de travail).
+  /// Le flow conversationnel de Slack ou de Telegram attend une saisie : ce que
+  /// le pont demande, s'il faut masquer le champ, et les choix (les espaces de
+  /// travail de Slack).
   var bridgeLoginInputPrompt: (prompt: String, isSecret: Bool, options: [String])?
-  /// Slack passe par l'API de provisioning du pont, pas par le chat : l'étape en
-  /// cours, telle que le pont la décrit — une saisie, une page à ouvrir avec le
-  /// JavaScript qui en extrait la réponse (le captcha), ou la fin. `nil` hors
-  /// Slack, et tant que rien n'a démarré.
+  /// Slack et Telegram passent par l'API de provisioning du pont, pas par le
+  /// chat : l'étape en cours, telle que le pont la décrit — une saisie (numéro,
+  /// code, mot de passe, e-mail, espace de travail), une page à ouvrir avec le
+  /// JavaScript qui en extrait la réponse (le captcha de Slack), ou la fin.
+  /// `nil` ailleurs, et tant que rien n'a démarré.
   var bridgeLoginProcessStep: BridgeLoginProcessStep?
   /// Les comptes connectés par réseau, d'après l'API de provisioning de chaque
   /// pont. Absent = pas encore lu ; vide = aucun compte.
@@ -193,6 +195,11 @@ final class InboxStore {
   /// à la place de la liste, sans bloquer les autres réseaux.
   var bridgeAccountsErrors: [MessageNetwork: String] = [:]
   var bridgeAccountsBusy = false
+  /// Un compte qu'on vient de connecter, dont le pont rapatrie l'historique :
+  /// ses fils sont retenus hors de l'inbox, une carte dit où on en est, et tout
+  /// apparaît ensemble à la fin (`BridgeIntake`). `nil` hors de ces minutes-là.
+  var bridgeIntake: BridgeIntake?
+  @ObservationIgnored private var bridgeIntakeTask: Task<Void, Never>?
   var usingDemoData = false
   /// true tant que le premier plein chargement n’a pas fini (après hydrate cache).
   var isInitialSync = true
@@ -652,6 +659,12 @@ final class InboxStore {
   }
 
   private func matchesNetworkFilter(_ conversation: Conversation) -> Bool {
+    // Un compte en rapatriement : ses fils attendent derrière la carte, et
+    // sortent tous ensemble. Une ligne fusionnée avec un autre réseau, elle,
+    // existait déjà — elle reste.
+    if let intake = bridgeIntake, conversation.network == intake.network, !isMerged(conversation.id) {
+      return false
+    }
     guard let networkFilter else { return true }
     if conversation.network == networkFilter { return true }
     // Une ligne fusionnée porte le réseau de son dernier message : elle doit
@@ -1400,7 +1413,7 @@ final class InboxStore {
       // Accessibilité (Lot M2) qui pose le geste, Messages restant cachée.
       await sendTapbackViaAutomation(conversation: conversation, message: message, emoji: emoji)
 
-    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .selfNote, .agent:
       guard isMatrixConnected else {
         lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
         return
@@ -2090,7 +2103,8 @@ final class InboxStore {
 
   /// Ouvre la fenêtre de connexion d'un pont et lance la commande `login` auprès de son bot.
   /// Le flux dépend du pont : QR à scanner pour WhatsApp et Signal, fenêtre de connexion
-  /// intégrée pour Instagram, Messenger et X (dont la session part ensuite au bot).
+  /// intégrée pour Instagram, Messenger et X (dont la session part ensuite au bot),
+  /// questions par l'API de provisioning pour Slack et Telegram.
   func presentBridgeLogin(network: MessageNetwork, phoneNumber: String? = nil) {
     guard let bridge = network.bridge else { return }
     bridgeLoginQRData = nil
@@ -2105,8 +2119,8 @@ final class InboxStore {
     // refermerait sur un réseau absent.
     WindowOpener.shared.openBridgeLogin()
     if let flow = bridge.provisionedLoginFlowID {
-      // Slack : l'API de provisioning décrit chaque étape, captcha compris. Le
-      // chat, lui, n'en donnerait que l'URL — c'est là que ça bloquait.
+      // Slack, Telegram : l'API de provisioning décrit chaque étape, captcha
+      // compris. Le chat, lui, n'en donnerait que l'URL — c'est là que ça bloquait.
       startProvisionedLogin(network: network, flow: flow)
       return
     }
@@ -2124,6 +2138,11 @@ final class InboxStore {
     case .webSession:
       input = .webSession
       bridgeLoginStatusFR = "Préparation de la connexion…"
+    case .phoneCode:
+      // Toujours par l'API de provisioning (ci-dessus) : le chat du bot n'a pas
+      // de forme typée pour un numéro, un code, un mot de passe.
+      bridgeLoginStatusFR = "Ce réseau se connecte par l'API de provisioning du pont."
+      return
     }
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
@@ -2207,8 +2226,9 @@ final class InboxStore {
     }
   }
 
-  /// Envoie une réponse du flow conversationnel de Slack (e-mail, code, espace de
-  /// travail), puis reprend la lecture des réponses du bot.
+  /// Envoie une réponse du flow conversationnel (l'e-mail, le code, l'espace de
+  /// travail de Slack ; le numéro, le code, le mot de passe de Telegram), puis
+  /// reprend la lecture des réponses du bot.
   func submitBridgeLoginInput(_ text: String) {
     guard let network = bridgeLoginNetwork else { return }
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2242,7 +2262,7 @@ final class InboxStore {
     startProvisionedLogin(network: network, flow: "token")
   }
 
-  // MARK: - L'API de provisioning (Slack)
+  // MARK: - L'API de provisioning (Slack, Telegram)
 
   /// Démarre un processus de connexion par l'API de provisioning du pont, et
   /// affiche sa première étape. Une tentative encore ouverte est soldée avant.
@@ -2258,7 +2278,7 @@ final class InboxStore {
       } catch is CancellationError {
         return
       } catch {
-        self.bridgeLoginStatusFR = Self.provisioningErrorFR(error)
+        self.bridgeLoginStatusFR = Self.provisioningErrorFR(error, network: network)
       }
     }
   }
@@ -2277,7 +2297,7 @@ final class InboxStore {
         return
       } catch {
         // Le pont garde l'étape : on redemande la même chose, avec son reproche.
-        self.bridgeLoginStatusFR = Self.provisioningErrorFR(error)
+        self.bridgeLoginStatusFR = Self.provisioningErrorFR(error, network: network)
         self.apply(step, network: network, keepingStatus: true)
       }
     }
@@ -2298,7 +2318,7 @@ final class InboxStore {
   private func apply(_ step: BridgeLoginProcessStep, network: MessageNetwork, keepingStatus: Bool = false) {
     bridgeLoginProcessStep = step
     // Le pont parle anglais ; l'utilisateur, français. On traduit ce qu'on connaît.
-    let instructions = network == .slack ? SlackLoginFrench.instructions(for: step) : step.instructions
+    let instructions = BridgeLoginFrench.instructions(for: step, network: network)
     switch step.type {
     case .userInput:
       let field = step.firstInputField
@@ -2311,7 +2331,8 @@ final class InboxStore {
       bridgeLoginInputPrompt = nil
       finishBridgeLogin(network: network, detail: instructions)
     case .displayAndWait, .clientHTTP, .webauthn:
-      // Pas dans le flow Slack. On dit ce que le pont dit, sans prétendre savoir.
+      // Ni dans le flow Slack ni dans le flow Telegram par numéro. On dit ce que
+      // le pont dit, sans prétendre savoir.
       bridgeLoginInputPrompt = nil
       bridgeLoginStatusFR = instructions.isEmpty ? "Étape inattendue du pont." : instructions
     }
@@ -2355,7 +2376,7 @@ final class InboxStore {
   }
 
   private func recordBridgeAccountsError(_ error: Error, network: MessageNetwork) {
-    bridgeAccountsErrors[network] = Self.provisioningErrorFR(error)
+    bridgeAccountsErrors[network] = Self.provisioningErrorFR(error, network: network)
   }
 
   /// Déconnecte un compte, puis relit la liste — c'est le pont qui a le dernier mot.
@@ -2367,7 +2388,7 @@ final class InboxStore {
         try await self.matrix.logoutBridgeAccount(network: network, loginID: account.id)
         self.bridgeAccountsErrors[network] = nil
       } catch {
-        self.bridgeAccountsErrors[network] = Self.provisioningErrorFR(error)
+        self.bridgeAccountsErrors[network] = Self.provisioningErrorFR(error, network: network)
       }
       self.bridgeAccountsBusy = false
       await self.refreshBridgeAccounts()
@@ -2381,10 +2402,10 @@ final class InboxStore {
     Task { await matrix.cancelProvisionedLogin(network: network, loginID: step.loginID) }
   }
 
-  private static func provisioningErrorFR(_ error: Error) -> String {
+  private static func provisioningErrorFR(_ error: Error, network: MessageNetwork) -> String {
     if case MatrixError.http(let status, _, let message) = error {
       if status == 404 { return "Le pont ne répond pas sur son API de provisioning. Le Relais est-il à jour ?" }
-      if let message, !message.isEmpty { return "Slack : \(message)" }
+      if let message, !message.isEmpty { return BridgeLoginFrench.error(message, network: network) }
     }
     return error.localizedDescription
   }
@@ -2398,6 +2419,7 @@ final class InboxStore {
     bridgeLoginProcessStep = nil
     bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
     startMatrixSync()
+    beginBridgeIntake(network: network)
     Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(1.2))
       guard let self else { return }
@@ -2407,6 +2429,46 @@ final class InboxStore {
       self.bridgeLoginNetwork = nil
       WindowOpener.shared.openInbox()
     }
+  }
+
+  // MARK: - Le rapatriement d'un compte qu'on vient de connecter
+
+  /// Retient les fils du réseau hors de l'inbox tant que le pont les crée, et
+  /// les lâche tous ensemble quand plus rien n'arrive — ou quand le pont dit
+  /// lui-même qu'il a fini. Un relevé toutes les deux secondes ; le `whoami` du
+  /// pont toutes les dix, pour lire son `BACKFILLING`.
+  func beginBridgeIntake(network: MessageNetwork) {
+    bridgeIntakeTask?.cancel()
+    bridgeIntake = BridgeIntake(network: network, startedAt: Date())
+    bridgeIntakeTask = Task { @MainActor [weak self] in
+      var ticks = 0
+      var bridgeState: String?
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(2))
+        guard let self, var intake = self.bridgeIntake, intake.network == network else { return }
+        ticks += 1
+        let count = self.conversations.filter { $0.network == network && !MergedContact.isMergedID($0.id) }.count
+        intake.observe(count: count, at: Date())
+        if ticks % 5 == 0 {
+          let accounts = try? await self.matrix.bridgeAccounts(network: network)
+          bridgeState = accounts?.first(where: { $0.stateEvent == "BACKFILLING" })?.stateEvent
+            ?? accounts?.first?.stateEvent
+        }
+        guard !Task.isCancelled, self.bridgeIntake?.network == network else { return }
+        self.bridgeIntake = intake
+        if intake.isSettled(at: Date(), bridgeState: bridgeState) {
+          self.endBridgeIntake()
+          return
+        }
+      }
+    }
+  }
+
+  /// Les fils apparaissent — tous ensemble. « Voir maintenant » passe par ici aussi.
+  func endBridgeIntake() {
+    bridgeIntakeTask?.cancel()
+    bridgeIntakeTask = nil
+    bridgeIntake = nil
   }
 
   /// Lit la session du réseau dans un navigateur de la machine, et l'envoie au bot.
@@ -2818,7 +2880,7 @@ final class InboxStore {
       // chat.db est en lecture seule pour nous : c'est Messages qui pose `is_read`.
       // L'automatisation se contente de lui faire sélectionner le fil, cachée.
       markReadViaAutomation(conversation: conversation)
-    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .selfNote, .agent:
       guard isMatrixConnected else { return }
       let bridge = matrix
       let id = conversation.id
@@ -3739,7 +3801,7 @@ final class InboxStore {
           }
         }
       }
-    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .selfNote, .agent:
       // Un `.MOV` du Mac partait tel quel, et Signal le refusait (pas de
       // `video/quicktime` dans sa table) : la vidéo part en MP4, comme sur
       // l'iPhone.
@@ -4393,7 +4455,7 @@ final class InboxStore {
         lastErrorMessage = error.localizedDescription
         return []
       }
-    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .selfNote, .agent:
+    case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .selfNote, .agent:
       let began = ContinuousClock.now
       var cached = await matrix.messages(conversationID: conversation.id)
       if cached.count < Self.matrixBackfillThreshold {

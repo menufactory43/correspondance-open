@@ -292,7 +292,7 @@ struct NewConversationSheet: View {
     }
     // Un pseudo : Instagram, Messenger ou X, et seulement si on l'a choisi. Deviner
     // qu'un mot est un pseudo plutôt qu'un nom mal orthographié, c'est deviner.
-    if let network, network == .instagram || network == .messenger || network == .twitter || network == .slack {
+    if let network, [.instagram, .messenger, .twitter, .slack, .telegram].contains(network) {
       let bare = trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
       guard !bare.isEmpty, !bare.contains(" "), !bare.contains("@") else { return nil }
       return Freeform(network: network, identifier: bare)
@@ -350,7 +350,7 @@ struct NewConversationSheet: View {
         .foregroundStyle(theme.ink)
         .textInputAutocapitalization(.never)
         .autocorrectionDisabled()
-        .keyboardType(network == .instagram || network == .messenger || network == .twitter || network == .slack ? .default : .namePhonePad)
+        .keyboardType([.instagram, .messenger, .twitter, .slack, .telegram].contains(network) ? .default : .namePhonePad)
         .focused($isFocused)
         .submitLabel(.go)
         .onSubmit { if let composable { open(freeform: composable) } }
@@ -379,6 +379,7 @@ struct NewConversationSheet: View {
     case .messenger: "Nom ou identifiant Messenger"
     case .twitter: "Pseudo X, sans l'arobase"
     case .slack: "Nom ou e-mail Slack"
+    case .telegram: "Pseudo ou numéro Telegram"
     default: "Nom ou numéro"
     }
   }

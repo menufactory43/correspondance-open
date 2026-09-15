@@ -23,8 +23,8 @@ immédiats, renommage/retrait/ajout/création de groupe (WhatsApp et Signal), et
 locales iOS. Ce qui manque encore :
 **1) le réveil de l'iPhone** — le push de bout en bout attend trois gestes d'infra (clé APNs `.p8`,
 bootstrap avec Sygnal, bascule production) : sans eux l'iPhone ne notifie que l'app ouverte ;
-**2) les réseaux** — 7 chez nous (iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack) contre 14 chez
-Beeper ; Telegram reste le levier mautrix évident ; pas de multi-comptes par réseau ;
+**2) les réseaux** — 8 chez nous (iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack, Telegram) contre 14 chez
+Beeper ; les ponts mautrix évidents sont tous posés, restent Discord, LinkedIn, Google Messages ; pas de multi-comptes par réseau ;
 **3) l'écosystème** — Beeper 4.3.73 embarque un serveur MCP local et des intégrations agents prêtes
 à l'emploi (voir § « IA & écosystème ») ; nous avons l'agent cc *dans* les fils, mais aucune API locale.
 
@@ -39,7 +39,7 @@ Légende priorité : **P0** usage quotidien · **P1** confort · **P2** plus tar
 
 | Fonction | Beeper (preuve) | Correspondance | Effort | Prio |
 |---|---|---|---|---|
-| Réseaux supportés | 12 : Discord, Google Messages, Google Chat, Google Voice, Instagram, LinkedIn, Signal, Slack, Telegram, X, WhatsApp, LINE + iMessage macOS (help.beeper.com/en_US/chat-networks/which-chat-networks-can-you-connect-in-beeper). Bundle : chaînes `BridgeV2 <réseau> login flow name` pour Discord, Google Messages, Google Voice, LinkedIn, Signal, Telegram, WhatsApp, Instagram/Messenger, Facebook/Messenger, X/Twitter | **Partiel** : iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack (+ la note à soi) — manquent Telegram, Google Messages, LinkedIn, Discord, Google Chat, Google Voice, LINE. X (2026-09-03) : mautrix-twitter v26.08, cookies `auth_token`/`ct0` par la même fenêtre que Meta, puis le code PIN de X Chat. Slack (2026-09-03) : mautrix-slack v26.08, DM et canaux (un canal est un groupe), flow e-mail par l'**API de provisioning** du pont (port 29335, jeton Matrix) — e-mail, captcha rendu par le script du pont dans une vue web, code, espace de travail — comme Beeper ; repli « coller la session » (`auth_token` du localStorage + cookie `d`, ou un cURL). Tous les ponts publient leur API de provisioning : Réglages › Comptes liste les comptes connectés (état compris) et les déconnecte, plusieurs comptes par réseau. Telegram est désormais le pont mautrix évident qui reste | — | P1 (Telegram) |
+| Réseaux supportés | 12 : Discord, Google Messages, Google Chat, Google Voice, Instagram, LinkedIn, Signal, Slack, Telegram, X, WhatsApp, LINE + iMessage macOS (help.beeper.com/en_US/chat-networks/which-chat-networks-can-you-connect-in-beeper). Bundle : chaînes `BridgeV2 <réseau> login flow name` pour Discord, Google Messages, Google Voice, LinkedIn, Signal, Telegram, WhatsApp, Instagram/Messenger, Facebook/Messenger, X/Twitter | **Partiel** : iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack, Telegram (+ la note à soi) — manquent Google Messages, LinkedIn, Discord, Google Chat, Google Voice, LINE. X (2026-09-03) : mautrix-twitter v26.08, cookies `auth_token`/`ct0` par la même fenêtre que Meta, puis le code PIN de X Chat. Slack (2026-09-03) : mautrix-slack v26.08, DM et canaux (un canal est un groupe), flow e-mail par l'**API de provisioning** du pont (port 29335, jeton Matrix) — e-mail, captcha rendu par le script du pont dans une vue web, code, espace de travail — comme Beeper ; repli « coller la session » (`auth_token` du localStorage + cookie `d`, ou un cURL). Tous les ponts publient leur API de provisioning : Réglages › Comptes liste les comptes connectés (état compris) et les déconnecte, plusieurs comptes par réseau. Telegram (2026-09-15) : mautrix-telegram v26.08 (le pont Go), flow `phone` par l'API de provisioning — numéro, code reçu dans l'app, mot de passe 2FA — traduit étape par étape ; `api_id`/`api_hash` de my.telegram.org dans la config du pont | — | P2 (Discord, LinkedIn) |
 | Instagram / Messenger | `mautrix-meta`, chaînes `BridgeV2 Instagram/Messenger login flow name` | **Fait pour les deux.** Instagram : `dock.mau.dev/mautrix/meta:ig-v26.08`, `@instagrambot`, `!ig`. Messenger : la **même image** en `:v26.08` (binaire mautrix-facebook), `@messengerbot`, `!fb`, base et port séparés. Un seul type de session pour les deux (`BridgeSessionCookies` et ses profils), une seule fenêtre de connexion (`BridgeWebLoginView`) : instagram.com ou facebook.com selon le réseau. Le flow est nommé explicitement (`login facebook`) — mautrix-facebook en expose quatre, et bridgev2 ne choisit tout seul que quand il n'y en a qu'un | — | — |
 | Bridge on-device vs cloud | Chaînes `Beeper On-Device: this account runs on your device.` / `Beeper Cloud` / `Only one account per network can use Beeper Cloud.` ; blog 2025-07-16 « the app connects directly to the messaging networks » | **Fait par construction** : tout est local (chat.db, signal-cli, Synapse perso) — c'est notre avantage structurel | — | — |
 | Multi-comptes par réseau | `%d Account Per Network`, `SELECT_NEXT_ACCOUNT ⌘⇧]`, `FILTER_ACCOUNT ⌘⌥A` ; API `GET /v1/accounts` | **Absent** : `MatrixCredentialStore` a `account = "default"` en dur ; un seul `signal-cli` | M | P2 |
@@ -272,8 +272,8 @@ conteneur Synapse ; le pusher est déjà en base, redémarrer Synapse pour saute
 ### Lot E — réseaux (P1/P2, ≈ 2 L)
 
 **Messenger** (`mautrix-meta`) : ✅ fait — second conteneur de la même image, tag `v26.08` nu.
-Reste **Telegram** (`mautrix-telegram`) · Multi-comptes par réseau (sortir `account = "default"`
-de `MatrixCredentialStore`).
+**Telegram** (`mautrix-telegram`, le pont Go) : ✅ fait — septième pont, flow par numéro par l'API de
+provisioning. Reste : multi-comptes par réseau (sortir `account = "default"` de `MatrixCredentialStore`).
 
 ### Lot F — écosystème & finitions (P2)
 

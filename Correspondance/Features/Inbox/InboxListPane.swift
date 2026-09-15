@@ -52,6 +52,12 @@ struct InboxListPane: View {
 
       facetRow
 
+      if let intake = store.bridgeIntake, store.networkFilter == nil || store.networkFilter == intake.network {
+        BridgeIntakeCard(intake: intake)
+          .padding(.horizontal, Spacing.sm)
+          .padding(.vertical, Spacing.xs)
+      }
+
       List {
         if let facet = store.searchFacet, !facet.isConversationFacet {
           facetSection(facet)
@@ -454,6 +460,7 @@ struct InboxListPane: View {
   private var emptyStateTitle: String {
     if store.isShowingScheduled { return "Rien de programmé." }
     if store.isShowingArchived { return "Rien d’archivé." }
+    if let intake = store.bridgeIntake, store.networkFilter == intake.network { return "Les fils arrivent." }
     return store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter."
   }
 
@@ -671,5 +678,48 @@ private enum DisappearingOption: Int, CaseIterable, Identifiable {
     case .oneWeek: "1 semaine"
     case .fourWeeks: "4 semaines"
     }
+  }
+}
+
+
+/// « Telegram arrive » : la carte qui tient la place des fils d'un compte qu'on
+/// vient de connecter, le temps que le pont les rapatrie. Une barre qui a une
+/// vraie fin (le pont relit un nombre de conversations qu'on lui a fixé), le
+/// compte de ce qui est déjà là, et une porte pour qui ne veut pas attendre.
+private struct BridgeIntakeCard: View {
+  @Environment(InboxStore.self) private var store
+  @Environment(ThemePreferences.self) private var themes
+  let intake: BridgeIntake
+
+  private var theme: WritingTheme { themes.theme }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: Spacing.sm) {
+      HStack(spacing: Spacing.xs) {
+        Image(systemName: intake.network.systemImage)
+          .foregroundStyle(theme.accent)
+        Text("\(intake.network.labelFR) arrive")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(theme.ink)
+        Spacer()
+        Button("Voir maintenant") { store.endBridgeIntake() }
+          .buttonStyle(.link)
+          .font(Typography.meta)
+      }
+      ProgressView(value: intake.progress)
+        .tint(theme.accent)
+      Text("\(intake.countLabelFR) · les conversations apparaîtront ensemble, sans notification.")
+        .font(Typography.meta)
+        .foregroundStyle(theme.inkSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(theme.edge.opacity(0.8), lineWidth: 1)
+    )
+    .animation(.default, value: intake.count)
   }
 }

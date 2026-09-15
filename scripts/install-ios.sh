@@ -19,10 +19,16 @@ BUNDLE="com.correspondance.ios"
 etape() { printf '\n▸ %s\n' "$*"; }
 
 etape "Appareil"
+# Un UDID d'iPhone physique fait 8-16 hexadécimaux (00008140-000A7054…) ; un
+# simulateur porte un UUID 8-4-4-4-12. Le motif d'avant ne connaissait que le
+# second, et posait donc la build… sur un simulateur éteint (15 sept. 2026).
+UDID_RE='[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}|[0-9A-F]{8}-[0-9A-F]{16}'
 if [ -n "$WANTED" ]; then
-  DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -F "$WANTED" | grep -oE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)"
+  DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -F "$WANTED" | grep -oE "$UDID_RE" | head -1)"
 else
-  DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -i iphone | grep -oE '[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' | head -1)"
+  # Un vrai iPhone d'abord — `devicectl` liste aussi les simulateurs, et
+  # « iPhone » les attrape tous.
+  DEVICE="$(xcrun devicectl list devices 2>/dev/null | grep -i iphone | grep -w physical | grep -oE "$UDID_RE" | head -1)"
 fi
 [ -n "$DEVICE" ] || { echo "✗ aucun iPhone appairé (xcrun devicectl list devices)"; exit 1; }
 echo "  $DEVICE"

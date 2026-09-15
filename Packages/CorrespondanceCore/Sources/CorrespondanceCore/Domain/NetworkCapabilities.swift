@@ -162,6 +162,21 @@ public struct NetworkCapabilities: Sendable, Hashable {
         addsMember: true,
         sendsVoiceMessages: true
       )
+    // Telegram : lu dans `capabilities.go` de mautrix-telegram v26.08 — correction
+    // portée (Telegram, lui, la ferme à 48 heures : c'est sa règle, le pont ne
+    // la redit pas), suppression pour tout le monde sans délai, réactions,
+    // réponses, vocal, création de groupe (un nom, jusqu'à 200 participants),
+    // invitation, retrait (ban), nom du groupe.
+    case .telegram:
+      NetworkCapabilities(
+        editsSentMessages: true,
+        editWindow: 48 * 3600,
+        renamesGroup: true,
+        removesMember: true,
+        addsMember: true,
+        createsGroup: true,
+        sendsVoiceMessages: true
+      )
     case .selfNote:
       NetworkCapabilities(
         editsSentMessages: true,

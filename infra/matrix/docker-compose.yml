@@ -161,6 +161,32 @@ services:
     networks:
       - matrix
 
+  mautrix-telegram:
+    # Telegram, par le pont Go (le pont Python est devenu « legacy » en amont).
+    # Bot @telegrambot, ghosts telegram_…, préfixe !tg : ce que l'app reconnaît.
+    # Le pont exige un api_id / api_hash Telegram (my.telegram.org) : le
+    # bootstrap les lit dans TELEGRAM_API_ID / TELEGRAM_API_HASH et les mémorise
+    # dans le .env du NUC — sans eux, le conteneur s'arrête net au démarrage.
+    image: dock.mau.dev/mautrix/telegram:v26.08
+    container_name: correspondance-mautrix-telegram
+    restart: unless-stopped
+    depends_on:
+      - synapse
+      - postgres
+    environment:
+      UID: "1000"
+      GID: "1000"
+    volumes:
+      - ./data/mautrix-telegram:/data
+    ports:
+      # L'API de provisioning (/_matrix/provision/v3) : l'app y suit le flow de
+      # connexion — le numéro, le code reçu dans l'app, le mot de passe — et y
+      # lit les comptes connectés. Même interface que Synapse, jamais 0.0.0.0.
+      # 29317 est le port par défaut du connecteur, libre chez nous.
+      - "${SYNAPSE_BIND_IP}:29317:29317"
+    networks:
+      - matrix
+
   mautrix-signal:
     # Tag épinglé comme les autres ponts. libsignal est compilé dans le binaire et
     # l'image embarque ffmpeg : ni signald, ni dépendance à installer à côté.
