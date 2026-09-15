@@ -125,26 +125,30 @@ TAILCAT_AMONT="https://github.com/tailscale/tailcat/releases/download/$TAILCAT_T
 case "$HOTE" in
   macos-arm64)
     RELAIS_URL_BIN="$RELEASES/continuwuity-macos-arm64"
-    RELAIS_SHA=3851299c77ea1ecade76077d66f1646dca0237ee96753d1cb6364fa2b6ce2ff9
+    RELAIS_SHA=7c352e438b17e6fded9ce0819ccd81ae22fbb639743999d2b9505933ec907e1f
     # Les ponts macOS viennent de NOTRE publication depuis la phase 6 : mêmes
-    # sources, même tag, mais construits avec `-tags goolm`. libolm — abandonnée
+    # sources, même tag, mais construits avec `-tags goolm`. Les sommes sont
+    # celles des binaires **signés et notarisés** (publier.sh --signer) : signer
+    # change les octets, et l'installeur a épinglé douze jours durant celles
+    # d'avant signature — refusant tout ce que la release servait (15 sept.).
+    # libolm — abandonnée
     # amont en 2024 pour faiblesses cryptographiques, et retirée de Homebrew —
     # disparaît de la pile : `otool -L` ne la nomme plus, il n'y a plus de dylib
     # à poser, ni à signer, ni à notariser (infra/relais/construire.sh).
     WA_URL="$RELEASES/mautrix-whatsapp-darwin-arm64"
-    WA_SHA=0b4d4bde775c73f6b5803f9dc048d51acee9de4a7593e6af6473b18fff769b11
+    WA_SHA=8e245e82de6dddf8ad490ccb9de42d7c33c2da23a95b4309543ebf6b8e2fdbbe
     SG_URL="$RELEASES/mautrix-signal-darwin-arm64"
-    SG_SHA=d85c48ffd92b8deb28748b54409ac3cd71019fe099ab9ad10b8e98f4e846f6f4
+    SG_SHA=cc943a0a32ca3934bdf808f77df576c3d70de51b71fd9026fe2eb4ce4e3fc847
     IG_URL="$RELEASES/mautrix-instagram-darwin-arm64"
-    IG_SHA=763f1cab3fcddee73e8c96eb408d73afc2e2461a4db4d1c790b4ceab01254b31
+    IG_SHA=3f0d421a06a7d46105143324e2433c6c756135cde6eb2e4bdda4a38540853c74
     MS_URL="$RELEASES/mautrix-meta-darwin-arm64"
-    MS_SHA=bad1ef2d9e73d4e4a27f7def37070d2531aeddb95c57f3a9971c9baa6d3af5f1
+    MS_SHA=d252141fc1abb6075429310b08f8c8f965737bf7f2ff24c754d5f1ded05f0e1e
     TW_URL="$RELEASES/mautrix-twitter-darwin-arm64"
-    TW_SHA=4cac3a7f76de18c82656e9e36dcaef23a5ac442e3700152def6ee4f333588e50
+    TW_SHA=209969f02a1b0b4f70d3d25b844116c21eddf3986d2402947a11572633f9453d
     SK_URL="$RELEASES/mautrix-slack-darwin-arm64"
-    SK_SHA=391260d8512c3b5aae7182c44433929b6ac3c8e7ea70f160d98f9705f29a86db
+    SK_SHA=2b7c950885380828108c0bcbec780f4b61c5d9e1ad2cd8ae8b94c190fd5d340c
     TG_URL="$RELEASES/mautrix-telegram-darwin-arm64"
-    TG_SHA=b84ac77758620a79e95b56166858145be94cbcf12f8476e60bb0a199faccee22
+    TG_SHA=5fefe9bbffbc01f1bbb091870a2747ff58e14b5046ea38c655e2174309f2905c
     TAILCAT_URL=""; TAILCAT_SHA=""; TAILCAT_ARCHIVE=""
     OLM_URL=""; OLM_SHA=""
     ;;

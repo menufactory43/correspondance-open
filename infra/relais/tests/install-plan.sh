@@ -15,14 +15,19 @@ INSTALL="$HERE/install.sh"
 DESINSTALL="$HERE/uninstall.sh"
 echecs=0
 
+# Pas de `printf | grep -q` : `grep -q` ferme le tuyau dès qu'il trouve, `printf`
+# reçoit un SIGPIPE, et `pipefail` rend 141 — dès que l'installeur a dépassé la
+# taille d'un tuyau (64 Ko, le 15 sept.), une chaîne bien présente passait pour
+# introuvable. Une comparaison de motif en bash n'a pas de tuyau.
+contient() { case "$2" in *"$1"*) return 0 ;; *) return 1 ;; esac }
 verifier() {
   local nom="$1" attendu="$2" sortie="$3"
-  if printf '%s' "$sortie" | grep -qF -- "$attendu"; then echo "  ✓ $nom"
+  if contient "$attendu" "$sortie"; then echo "  ✓ $nom"
   else echo "  ✗ $nom — introuvable : $attendu"; echecs=$((echecs + 1)); fi
 }
 verifier_absent() {
   local nom="$1" interdit="$2" sortie="$3"
-  if printf '%s' "$sortie" | grep -qF -- "$interdit"; then
+  if contient "$interdit" "$sortie"; then
     echo "  ✗ $nom — présent alors qu'il ne devrait pas : $interdit"; echecs=$((echecs + 1))
   else echo "  ✓ $nom"; fi
 }
