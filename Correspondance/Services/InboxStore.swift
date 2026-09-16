@@ -3265,6 +3265,60 @@ final class InboxStore {
     session.pendingAttachmentPaths.append(contentsOf: urls.map(\.path))
   }
 
+  /// Ce que le glisser peut poser sur le fil. Un fichier du Finder, une image
+  /// nue — et une PROMESSE de fichier : la vignette de capture d'écran qui
+  /// flotte en bas à droite n'a encore rien écrit sur le disque quand on la
+  /// tire, elle promet d'écrire le PNG là où on lui dit. `dropDestination(for:
+  /// URL.self)` ne voyait que des URL, et la vignette tombait dans le vide.
+  nonisolated static let droppableTypes: [UTType] =
+    [.fileURL, .image] + NSFilePromiseReceiver.readableDraggedTypes.compactMap { UTType($0) }
+
+  /// Où les promesses s'honorent : hors du fil principal, le système y écrit.
+  private nonisolated static let promiseQueue: OperationQueue = {
+    let queue = OperationQueue()
+    queue.name = "correspondance.file-promises"
+    return queue
+  }()
+
+  /// Ce qui vient d'être DÉPOSÉ sur le fil, lu au tableau du glisser — valide
+  /// pendant le dépôt, c'est là que la promesse se lit. Fichiers d'abord ;
+  /// sinon la promesse, honorée dans le dossier d'envoi (le fichier arrive un
+  /// instant plus tard, sous son vrai nom) ; sinon une image nue, en PNG comme
+  /// au collage. Rend `false` quand rien de tout cela n'est posé.
+  @discardableResult
+  func attachFromDrag(into session: ConversationSession? = nil) -> Bool {
+    guard let session = session ?? primarySession else { return false }
+    let board = NSPasteboard(name: .drag)
+    if let urls = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+       !urls.isEmpty {
+      session.pendingAttachmentPaths.append(contentsOf: urls.map(\.path))
+      return true
+    }
+    if let promises = board.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver],
+       !promises.isEmpty {
+      let box = IMessageSender.outgoingDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+      guard (try? FileManager.default.createDirectory(at: box, withIntermediateDirectories: true)) != nil else {
+        return false
+      }
+      let conversationID = session.conversationID
+      for promise in promises {
+        promise.receivePromisedFiles(atDestination: box, options: [:], operationQueue: Self.promiseQueue) { url, error in
+          guard error == nil else { return }
+          let path = url.path
+          Task { @MainActor [weak self] in
+            self?.session(for: conversationID).pendingAttachmentPaths.append(path)
+          }
+        }
+      }
+      return true
+    }
+    let images = (board.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage]) ?? []
+    let paths = images.compactMap(Self.writePNG)
+    guard !paths.isEmpty else { return false }
+    session.pendingAttachmentPaths.append(contentsOf: paths)
+    return true
+  }
+
   /// Une image sans fichier devient un PNG nommé, pour qu'on la reconnaisse
   /// dans la bande d'aperçus comme dans la conversation d'en face.
   private nonisolated static func writePNG(_ image: NSImage) -> String? {

@@ -192,11 +192,12 @@ struct ThreadView: View {
           }
         }
         // Déposer un fichier n'importe où sur le fil vaut le joindre : c'est
-        // toute la colonne qui accueille, pas un rectangle à viser.
-        .dropDestination(for: URL.self) { urls, _ in
-          store.attach(urls: urls)
-          return true
-        } isTargeted: { isDropTargeted = $0 }
+        // toute la colonne qui accueille, pas un rectangle à viser. Lu au
+        // tableau du glisser plutôt qu'en `URL` : la vignette de capture
+        // d'écran ne porte qu'une promesse de fichier (cf. `attachFromDrag`).
+        .onDrop(of: InboxStore.droppableTypes, isTargeted: $isDropTargeted) { _ in
+          store.attachFromDrag()
+        }
         .onAppear(perform: watchQuickLook)
         .onDisappear {
           if let quickLookMonitor { NSEvent.removeMonitor(quickLookMonitor) }
