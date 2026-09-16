@@ -1448,8 +1448,12 @@ final class RelayStore {
   /// Envoie ce qu'on vient d'enregistrer. La bulle apparaît tout de suite, le
   /// fichier part ensuite — la même discipline que le texte.
   func sendVoiceMessage(_ url: URL, voice: VoiceNote, conversationID: String) async {
+    // Sur une ligne de fusion, le membre qui porte l'envoi a quitté la liste
+    // (`mergedRows`) : il ne vit plus que dans le cache — comme pour le texte
+    // (`showOptimistically`). Sans ce repli, un vocal sur un contact fusionné
+    // ne faisait rien du tout : ni bulle, ni envoi, ni erreur.
     guard let target = sendingTarget(conversationID),
-          let conversation = conversation(target)
+          let conversation = conversation(target) ?? mergedMemberCache[target]
     else { return }
     sendingConversationIDs.insert(conversationID)
     defer { sendingConversationIDs.remove(conversationID) }

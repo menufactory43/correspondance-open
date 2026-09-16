@@ -198,6 +198,10 @@ struct MessageBubble: View {
       }
       // C'est CE bord-là que le visage du groupe regarde — cf. `.bubbleBottom`.
       .bubbleBottomGuide(position)
+      // La prise de parole s'allonge : le coin du bas se resserre en glissant,
+      // pas d'un coup. `UnevenRoundedRectangle` interpole ses rayons ; la
+      // cellule est refaite sur place, donc l'identité de la vue tient.
+      .animation(reduceMotion ? nil : .snappy(duration: 0.28), value: position)
       // Le débord se réserve, sinon la suite passerait par-dessus.
       .padding(.bottom, message.reactions.isEmpty ? 0 : ReactionPills.overhang)
 

@@ -152,6 +152,10 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
   private var frontierRowID: String?
   /// Jusqu'à quand un ajout se suit en glissant : posé par mes propres envois.
   private var glidesUntil: Date?
+  /// Les bulles qui viennent d'arriver au bas d'un fil qu'on tenait par son
+  /// bas : elles montent en fondu à leur première pose, puis sortent d'ici.
+  /// Rien d'autre ne s'anime — ni l'ouverture, ni une page d'historique.
+  private var arrivingIDs: Set<String> = []
   /// La géométrie de la dernière mise en page : de quoi voir un dépliage venir.
   private var lastBounds: CGSize = .zero
   private var lastBottomInset: CGFloat = 0
@@ -211,8 +215,13 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     registration = UICollectionView.CellRegistration<UICollectionViewCell, ThreadRow> {
       [weak self] cell, _, row in
       guard let self else { return }
-      cell.contentConfiguration = UIHostingConfiguration { self.content(row) }
-        .margins(.all, 0)
+      // Une seule fois par arrivée : une cellule reposée après un défilement
+      // ne rejoue pas l'entrée.
+      let arrives = arrivingIDs.remove(row.id) != nil
+      cell.contentConfiguration = UIHostingConfiguration {
+        ArrivingRow(arrives: arrives, anchor: Self.arrivalAnchor(of: row)) { self.content(row) }
+      }
+      .margins(.all, 0)
       cell.backgroundConfiguration = UIBackgroundConfiguration.clear()
     }
 
@@ -258,6 +267,17 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     let pinned = holdsBottom
     let anchor = pinned ? nil : currentAnchor()
     let glides = pinned && (glidesUntil.map { Date() < $0 } ?? false)
+
+    // Ce qui ARRIVE : les bulles neuves posées après la dernière rangée déjà
+    // connue, sur un fil posé et tenu par son bas. Mon envoi comme la réponse
+    // qui suit. Une page d'historique entre en haut : elle ne compte pas.
+    if hasPlacedFirstLayout, pinned,
+      let lastKnown = next.lastIndex(where: { previous[$0.id] != nil })
+    {
+      for row in next[(lastKnown + 1)...] where previous[row.id] == nil {
+        if case .bubble = row.kind { arrivingIDs.insert(row.id) }
+      }
+    }
 
     var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
     snapshot.appendSections([0])
@@ -437,6 +457,12 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
 
   func expectOwnSend() { glidesUntil = Date().addingTimeInterval(0.6) }
 
+  /// D'où une bulle qui arrive se déploie : le coin bas du côté de son auteur.
+  private static func arrivalAnchor(of row: ThreadRow) -> UnitPoint {
+    if case .bubble(let bubble) = row.kind, bubble.isFromMe { return .bottomTrailing }
+    return .bottomLeading
+  }
+
   private func scroll(
     toRow id: String, at position: UICollectionView.ScrollPosition, animated: Bool
   ) {
@@ -613,5 +639,38 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     let start = max(frontier, lastVisible + 1)
     guard start < rows.count else { return 0 }
     return rows[start...].filter { $0.message != nil }.count
+  }
+}
+
+/// L'entrée d'une bulle qui vient d'arriver : elle monte de quelques points
+/// en s'ouvrant depuis son coin, et se pose. Sans `arrives`, la rangée est
+/// déjà là — pas d'état à jouer, pas de vue de plus.
+private struct ArrivingRow<Content: View>: View {
+  let anchor: UnitPoint
+  @ViewBuilder let content: () -> Content
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Vrai une fois posée. Part de `!arrives` : une rangée qui ne joue rien
+  /// naît posée, et un `rootView` remis à jour ne rejoue pas l'entrée.
+  @State private var hasSettled: Bool
+
+  init(arrives: Bool, anchor: UnitPoint, @ViewBuilder content: @escaping () -> Content) {
+    self.anchor = anchor
+    self.content = content
+    _hasSettled = State(initialValue: !arrives)
+  }
+
+  var body: some View {
+    content()
+      .opacity(hasSettled ? 1 : 0)
+      .scaleEffect(hasSettled || reduceMotion ? 1 : 0.92, anchor: anchor)
+      .offset(y: hasSettled || reduceMotion ? 0 : 10)
+      .onAppear {
+        guard !hasSettled else { return }
+        if reduceMotion {
+          withAnimation(.easeOut(duration: 0.2)) { hasSettled = true }
+        } else {
+          withAnimation(.spring(duration: 0.38, bounce: 0.22)) { hasSettled = true }
+        }
+      }
   }
 }
