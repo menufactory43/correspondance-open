@@ -733,6 +733,49 @@ public actor MatrixBridgeService {
     }
   }
 
+  /// La page d'ouverture de ce salon a-t-elle déjà été demandée au Relais cette
+  /// session ? Un salon inconnu du magasin répond oui : il n'y a rien à demander.
+  public func hasBackfilled(conversationID: String) -> Bool {
+    hydrateIfNeeded()
+    guard let roomID = roomID(forConversation: conversationID) else { return true }
+    return backfilledRoomIDs.contains(roomID)
+  }
+
+  /// Ce que le disque a déjà, sans rien télécharger : les chemins locaux se
+  /// posent sur les pièces jointes et vignettes présentes dans le cache, et
+  /// `missing` dit s'il en reste à descendre (`ensureLocalAttachments`).
+  public func resolveCachedAttachments(_ messages: [ChatMessage]) -> (resolved: [ChatMessage], missing: Bool) {
+    var result: [ChatMessage] = []
+    result.reserveCapacity(messages.count)
+    var missing = false
+    for message in messages {
+      guard !message.attachments.isEmpty || message.linkPreview?.imageMXC != nil else {
+        result.append(message)
+        continue
+      }
+      var updated = message
+      if var preview = updated.linkPreview, let mxc = preview.imageMXC, preview.imageLocalPath == nil {
+        if let path = MatrixAttachmentStore.existingLocalPath(forMXC: mxc, contentType: preview.imageContentType) {
+          preview.imageLocalPath = path
+          updated.linkPreview = preview
+        } else {
+          missing = true
+        }
+      }
+      for index in updated.attachments.indices {
+        let attachment = updated.attachments[index]
+        if attachment.resolvedFileURL != nil { continue }
+        if let path = MatrixAttachmentStore.existingLocalPath(forMXC: attachment.id, contentType: attachment.contentType) {
+          updated.attachments[index].localPath = path
+        } else {
+          missing = true
+        }
+      }
+      result.append(updated)
+    }
+    return (result, missing)
+  }
+
   /// Télécharge les pièces jointes manquantes et renvoie les messages avec chemins locaux.
   public func ensureLocalAttachments(_ messages: [ChatMessage]) async -> [ChatMessage] {
     // Les téléchargements manquants partent de front avant la passe message

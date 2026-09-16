@@ -353,6 +353,8 @@ final class InboxStore {
   /// Une session par fil ouvert, et une seule : l'inbox et la fenêtre détachée
   /// d'un même fil tiennent le même objet.
   @ObservationIgnored private var sessions: [String: ConversationSession] = [:]
+  /// Les fils dont les médias descendent en ce moment (`downloadAttachmentsInBackground`).
+  @ObservationIgnored private var attachmentDownloadsInFlight: Set<String> = []
   /// Le rang du dernier `select` : un chargement qui revient pour un clic
   /// dépassé ne publie rien.
   @ObservationIgnored private var selectGeneration = 0
@@ -4424,7 +4426,8 @@ final class InboxStore {
   /// Un message-repère (« Synchronisation… », « Pas encore de messages ») plutôt
   /// qu'une vraie prise de parole.
   private static func isPlaceholderMessageID(_ id: String) -> Bool {
-    id.hasPrefix("signal-empty-") || id.hasPrefix("signal-sync-") || id.hasPrefix("matrix-empty-")
+    id.hasPrefix("signal-empty-") || id.hasPrefix("signal-sync-")
+      || id.hasPrefix("matrix-empty-") || id.hasPrefix("matrix-sync-")
   }
 
   /// Le fil d'UNE conversation, réseau par réseau. Le fil fusionné les empile.
@@ -4463,9 +4466,30 @@ final class InboxStore {
         // on va chercher l'historique que le bridge a backfillé. Mais si le
         // magasin a déjà de quoi montrer, on le montre — la page remontée du
         // Relais viendra se poser au-dessus, sans retenir l'ouverture.
-        if cached.isEmpty {
-          cached = await matrix.backfill(conversationID: conversation.id)
-        } else {
+        //
+        // Rien au magasin non plus ? La page se demande QUAND MÊME en arrière-
+        // plan. Le clic attendait ici la réponse du Relais (jusqu'à 60 s de
+        // délai réseau) avant que la sélection soit publiée : rien ne se
+        // surlignait, le fil ne changeait pas, le clic paraissait perdu. Le
+        // fil s'ouvre sur « Synchronisation… » et se remplit quand la page
+        // arrive — ou dit « pas encore de messages » si elle revient vide.
+        let alreadyBackfilled = cached.isEmpty
+          ? await matrix.hasBackfilled(conversationID: conversation.id) : true
+        if cached.isEmpty, !alreadyBackfilled {
+          backfillInBackground(conversation.id)
+          LaunchTrace.event("fetch-store", Int((ContinuousClock.now - began).ms))
+          return [
+            ChatMessage(
+              id: "matrix-sync-\(conversation.id)",
+              conversationID: conversation.id,
+              network: conversation.network,
+              text: "Synchronisation du fil…",
+              sentAt: Date(),
+              isFromMe: false
+            )
+          ]
+        }
+        if !cached.isEmpty {
           backfillInBackground(conversation.id)
         }
       }
@@ -4489,14 +4513,24 @@ final class InboxStore {
         ]
       }
       let attachmentsBegan = ContinuousClock.now
-      let resolved = HiddenMessageStore.visible(
-        await matrix.ensureLocalAttachments(cached),
-        hiddenIDs: hiddenMessageIDs
-      )
+      // Les médias déjà sur le disque se posent tout de suite ; ceux qui
+      // manquent descendent en arrière-plan et le fil se relit à leur arrivée.
+      // Les télécharger ICI, c'était retenir le clic le temps du réseau — et un
+      // média que le Relais ne sert plus (ou sert en 60 s) refaisait le même
+      // clic mort à CHAQUE ouverture du groupe, rien ne mémorisant l'échec.
+      let (withCached, missing) = await matrix.resolveCachedAttachments(cached)
+      let resolved = HiddenMessageStore.visible(withCached, hiddenIDs: hiddenMessageIDs)
+      if missing { downloadAttachmentsInBackground(conversation.id) }
       LaunchTrace.event("fetch-attachments", Int((ContinuousClock.now - attachmentsBegan).ms))
       applySidebarPreview(conversationID: conversation.id, from: resolved)
       return resolved
     }
+  }
+
+  /// La session qui montre ce fil : la sienne, ou celle de la ligne fusionnée
+  /// qui l'a replié.
+  private func sessionShowing(_ conversationID: String) -> ConversationSession? {
+    sessions[conversationID] ?? sessions[displayRowID(for: conversationID)]
   }
 
   /// Remonte une page d'historique sans retenir le fil : une fois arrivée, le
@@ -4506,7 +4540,30 @@ final class InboxStore {
       guard let self else { return }
       let before = await matrix.messages(conversationID: conversationID).count
       let after = await matrix.backfill(conversationID: conversationID).count
-      guard after > before, let session = sessions[conversationID] else { return }
+      guard let session = sessionShowing(conversationID) else { return }
+      // Un fil ouvert sur « Synchronisation… » attend cette réponse, même
+      // vide : il doit passer à « pas encore de messages », pas rester à attendre.
+      let waiting = session.messages.contains { $0.id.hasPrefix("matrix-sync-") }
+      guard after > before || waiting else { return }
+      if after == 0 {
+        await loadMessages(into: session)
+      } else {
+        await refreshMatrixMessages(into: session)
+      }
+    }
+  }
+
+  /// Descend les médias manquants d'un fil sans le retenir, puis le relit.
+  /// Un seul téléchargement de front par fil : rouvrir le même groupe pendant
+  /// que ses photos descendent n'en relance pas un deuxième.
+  private func downloadAttachmentsInBackground(_ conversationID: String) {
+    guard attachmentDownloadsInFlight.insert(conversationID).inserted else { return }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      defer { self.attachmentDownloadsInFlight.remove(conversationID) }
+      let messages = await matrix.messages(conversationID: conversationID)
+      _ = await matrix.ensureLocalAttachments(messages)
+      guard let session = sessionShowing(conversationID) else { return }
       await refreshMatrixMessages(into: session)
     }
   }
