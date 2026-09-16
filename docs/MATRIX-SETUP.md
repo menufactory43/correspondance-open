@@ -288,7 +288,7 @@ Sur le NUC (`ssh nuc`, user `meff`, **pas de sudo**, `docker-compose` 1.29 — j
 | `correspondance-postgres` | `postgres:16-alpine` | base de Synapse et des bridges |
 | `correspondance-mautrix-whatsapp` | `dock.mau.dev/mautrix/whatsapp:v26.08` | pont WhatsApp (tag **épinglé**) |
 | `correspondance-mautrix-meta` | `dock.mau.dev/mautrix/meta:ig-v26.08` | pont Instagram (tag **épinglé**, préfixe `ig-`) |
-| `correspondance-mautrix-messenger` | `dock.mau.dev/mautrix/meta:v26.08` | pont Messenger (tag **épinglé**, **sans** `ig-`) |
+| `correspondance-mautrix-messenger` | `dock.mau.dev/mautrix/meta:v26.08.1` | pont Messenger (tag **épinglé**, **sans** `ig-` ; la v26.08 ne se connecte plus depuis le changement de protocole Messenger de septembre 2026) |
 | `correspondance-mautrix-twitter` | `dock.mau.dev/mautrix/twitter:v26.08` | pont X (tag **épinglé** ; le pont, son bot et ses ghosts gardent le nom `twitter`) |
 | `correspondance-mautrix-slack` | `dock.mau.dev/mautrix/slack:v26.08` | pont Slack (tag **épinglé** ; DM et canaux) |
 | `correspondance-mautrix-signal` | `dock.mau.dev/mautrix/signal:v26.08` | pont Signal (tag **épinglé**) |

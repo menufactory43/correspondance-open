@@ -26,7 +26,7 @@ META_IMAGE_TAG="${META_IMAGE_TAG:-ig-v26.08}"
 # Messenger : la même image, tag nu. C'est le binaire mautrix-facebook — un second
 # conteneur, une seconde base, un second bot. Les deux réseaux de Meta ne se
 # partagent plus rien depuis que chacun a son binaire.
-MESSENGER_IMAGE_TAG="${MESSENGER_IMAGE_TAG:-v26.08}"
+MESSENGER_IMAGE_TAG="${MESSENGER_IMAGE_TAG:-v26.08.1}"
 # X : mautrix-twitter, même cadence de versions.
 TWITTER_IMAGE_TAG="${TWITTER_IMAGE_TAG:-v26.08}"
 # Slack : mautrix-slack, même cadence.

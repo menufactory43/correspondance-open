@@ -92,11 +92,15 @@ services:
       - matrix
 
   mautrix-messenger:
-    # Le jumeau du service ci-dessus, à un tag près : `v26.08` nu, c'est le binaire
-    # Messenger. Depuis cette version mautrix-meta ne fait plus qu'un réseau — d'où
+    # Le jumeau du service ci-dessus, à un tag près : sans `ig-`, c'est le binaire
+    # Messenger. Depuis v26.08 mautrix-meta ne fait plus qu'un réseau — d'où
     # deux conteneurs de la même image, deux bases, deux salons de gestion. Rien ne
     # se partage entre Instagram et Messenger, pas même la session Meta.
-    image: dock.mau.dev/mautrix/meta:v26.08
+    # v26.08.1 (10 septembre) : Messenger a changé son protocole de synchronisation
+    # (executeFirstBlockForSyncTransactionV4) ; la v26.08 ne se connecte plus —
+    # « timeout waiting for database sync response » en boucle, et chaque message
+    # envoyé finit en « not connected ». Instagram (`ig-v26.08`) n'est pas touché.
+    image: dock.mau.dev/mautrix/meta:v26.08.1
     container_name: correspondance-mautrix-messenger
     restart: unless-stopped
     depends_on:
