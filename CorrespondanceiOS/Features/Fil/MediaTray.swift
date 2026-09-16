@@ -42,8 +42,11 @@ struct MediaTray: View {
 
   var body: some View {
     VStack(spacing: 0) {
+      // Rognée à sa place : si le plateau est plus court que prévu, la
+      // pellicule ne déborde pas par le haut, derrière le composer.
       strip
         .frame(maxHeight: .infinity)
+        .clipped()
       doors
         .padding(.bottom, Spacing.md)
         .safeAreaPadding(.bottom)
@@ -52,6 +55,11 @@ struct MediaTray: View {
     .background(theme.paperSecondary, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     .padding(.horizontal, 4)
     .background(theme.paper)
+    // La carte descend jusqu'au bord de l'écran, comme le clavier ; les
+    // pastilles, elles, gardent leur marge au-dessus de l'indicateur
+    // (`safeAreaPadding` plus haut). Sans ça, la carte s'arrêtait à la zone
+    // sûre et le fond de page se voyait dessous.
+    .ignoresSafeArea(.container, edges: .bottom)
     .task { await library.load() }
     .onChange(of: store.attachments(conversationID)) { _, paths in
       // Retirée depuis la bande du composer : la tuile se déselectionne.

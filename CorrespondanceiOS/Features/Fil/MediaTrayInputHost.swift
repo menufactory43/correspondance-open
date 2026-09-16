@@ -45,10 +45,24 @@ struct MediaTrayInputHost<Content: View>: UIViewRepresentable {
   final class ResponderView: UIView {
     var hosting: UIHostingController<AnyView>?
     var onResponderChange: ((Bool) -> Void)?
+    /// La hauteur du plateau, en contrainte : le système ignore le cadre
+    /// d'un `inputView` posé en Auto Layout et le laisse se dimensionner
+    /// d'après son contenu — mesuré sur l'iPhone : 233 points face à un
+    /// clavier de 328, et le composer sautait à l'échange (16 sept. 2026).
+    private var heightConstraint: NSLayoutConstraint?
     private lazy var tray: UIView = {
-      let container = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 300))
-      container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      // Une `UIInputView` qui se dimensionne par ses contraintes : c'est le
+      // seul chemin que le système respecte pour la hauteur d'un input view
+      // (le mécanisme de Signal). Une `UIView` ordinaire, cadre ou contrainte,
+      // était posée à 233 points face à un clavier de 328 (iOS 27, 16 sept.).
+      let container = TrayContainer(frame: CGRect(x: 0, y: 0, width: 320, height: trayHeight), inputViewStyle: .default)
+      container.allowsSelfSizing = true
+      container.translatesAutoresizingMaskIntoConstraints = false
       container.backgroundColor = .clear
+      let height = container.heightAnchor.constraint(equalToConstant: trayHeight)
+      height.priority = .required
+      height.isActive = true
+      heightConstraint = height
       if let hosted = hosting?.view {
         hosted.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosted)
@@ -70,11 +84,13 @@ struct MediaTrayInputHost<Content: View>: UIViewRepresentable {
       guard height > 0, height != trayHeight else { return }
       trayHeight = height
       tray.frame.size.height = height
+      heightConstraint?.constant = height
       if isFirstResponder { reloadInputViews() }
     }
 
     override func becomeFirstResponder() -> Bool {
       tray.frame.size.height = trayHeight
+      heightConstraint?.constant = trayHeight
       MediaTrayPresence.count += 1
       let ok = super.becomeFirstResponder()
       if ok { onResponderChange?(true) } else { MediaTrayPresence.count -= 1 }
@@ -101,3 +117,8 @@ enum MediaTrayPresence {
   static var count = 0
   static var isPresentingTray: Bool { count > 0 }
 }
+
+/// Le conteneur du plateau : une `UIInputView` qui se dimensionne par ses
+/// contraintes (`allowsSelfSizing`), la seule que le système laisse fixer
+/// sa hauteur.
+final class TrayContainer: UIInputView {}

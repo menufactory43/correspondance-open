@@ -22,8 +22,13 @@ final class KeyboardHeightMemory {
 
   @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
+  /// La dernière hauteur mesurée, d'un lancement à l'autre : le premier « + »
+  /// d'une session n'a pas à deviner ce que le clavier a déjà dit hier.
+  private static let storageKey = "keyboardHeight.last"
+
   private init() {
-    height = Self.estimate()
+    let remembered = UserDefaults.standard.double(forKey: Self.storageKey)
+    height = remembered > 150 ? remembered : Self.estimate()
     for name in [UIResponder.keyboardWillShowNotification, UIResponder.keyboardWillChangeFrameNotification] {
       observers.append(
         NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { note in
@@ -45,20 +50,20 @@ final class KeyboardHeightMemory {
     // Un clavier en train de se ranger « change de cadre » vers le bas de
     // l'écran : sa hauteur est toujours la sienne, on peut la garder.
     height = frame.height
+    UserDefaults.standard.set(Double(frame.height), forKey: Self.storageKey)
   }
 
   /// Le clavier portrait avec sa barre de suggestions, à défaut d'en avoir
-  /// vu un : Pro Max et Plus (346), iPhone sans encoche (260), les autres (336).
+  /// vu un : Pro Max et Plus (346), iPhone à bouton d'accueil (260), les
+  /// autres (336). Dans le doute, 336 : un plateau trop court fait déborder
+  /// la pellicule derrière le composer, un plateau trop haut ne gêne personne.
   private static func estimate() -> CGFloat {
-    let scene = UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .first { $0.activationState == .foregroundActive } ?? UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }.first
-    guard let scene else { return 336 }
-    let bounds = scene.screen.bounds
-    let longSide = max(bounds.width, bounds.height)
-    let hasHomeIndicator = (scene.keyWindow?.safeAreaInsets.bottom ?? 0) > 0
-    if !hasHomeIndicator { return 260 }
+    let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+    guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first,
+          let window = scene.keyWindow ?? scene.windows.first
+    else { return 336 }
+    if window.safeAreaInsets.bottom == 0 { return 260 }
+    let longSide = max(scene.screen.bounds.width, scene.screen.bounds.height)
     return longSide >= 920 ? 346 : 336
   }
 }
