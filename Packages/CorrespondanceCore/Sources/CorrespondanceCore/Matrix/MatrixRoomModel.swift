@@ -50,11 +50,25 @@ public struct MatrixRoomModel: Sendable {
   public var latestEventID: String?
   public var latestEventAt: Date = .distantPast
 
-  /// Note un événement du fil ; le plus récent (par horodatage serveur) gagne.
+  /// Note un événement d'une page d'historique ; le plus récent (par horodatage
+  /// serveur) gagne — une page remontée à l'envers ne fait pas reculer le repère.
   public mutating func noteEvent(id: String, at date: Date) {
     guard latestEventID == nil || date >= latestEventAt else { return }
     latestEventID = id
     latestEventAt = date
+  }
+
+  /// Note un événement du `/sync` : la chronologie du sync est dans l'ORDRE DU
+  /// SERVEUR, et c'est cet ordre que suit le compteur de non-lus — pas
+  /// l'horodatage. Un pont qui remonte l'historique d'un groupe (Signal,
+  /// WhatsApp, Telegram) envoie des messages datés d'hier APRÈS ceux
+  /// d'aujourd'hui ; l'accusé posé sur le message le plus récent par
+  /// horodatage les laissait tous derrière lui, comptés non lus à chaque
+  /// `/sync`, et rouvrir le fil reposait l'accusé au même endroit. Le dernier
+  /// événement reçu gagne donc toujours, quelle que soit sa date.
+  public mutating func noteSyncedEvent(id: String, at date: Date) {
+    latestEventID = id
+    latestEventAt = max(date, latestEventAt)
   }
   /// Les modifications reçues avant le message qu'elles corrigent — une page
   /// remontée à l'envers en livre. La dernière par cible seulement : c'est

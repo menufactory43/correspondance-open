@@ -1177,18 +1177,21 @@ public actor MatrixBridgeService {
     rooms[roomID]?.unreadCount = 0
   }
 
-  /// Le dernier événement connu du fil ; à défaut (fil vide relu du magasin
-  /// local, où seuls les messages survivent), le serveur le dit. Un écho local
-  /// (`local-…`) n'est pas un événement : le serveur refuserait l'accusé.
+  /// Le dernier événement du fil DANS L'ORDRE DU SERVEUR — c'est lui, et pas
+  /// le plus récent par horodatage, qui remet le compteur de non-lus à zéro.
+  /// On le demande au serveur (`/messages` à l'envers, un seul événement) :
+  /// c'est la seule source qui connaît cet ordre après un relancement, où le
+  /// magasin local ne garde que des messages datés. Sans réseau, le dernier
+  /// événement vu au `/sync` ; à défaut, le dernier message connu. Un écho
+  /// local (`local-…`) n'est pas un événement : le serveur refuserait l'accusé.
   private func latestEventID(of room: MatrixRoomModel) async -> String? {
-    let lastMessage = room.sortedMessages.last(where: { !$0.id.hasPrefix("local-") })
-    if let known = room.latestEventID {
-      if let lastMessage, lastMessage.sentAt > room.latestEventAt { return lastMessage.id }
-      return known
+    if let page = try? await client.roomMessages(roomID: room.roomID, direction: "b", limit: 1),
+       let latest = page.chunk.first?.eventID
+    {
+      return latest
     }
-    if let lastMessage { return lastMessage.id }
-    let page = try? await client.roomMessages(roomID: room.roomID, direction: "b", limit: 1)
-    return page?.chunk.first?.eventID
+    if let known = room.latestEventID { return known }
+    return room.sortedMessages.last(where: { !$0.id.hasPrefix("local-") })?.id
   }
 
   /// Quitte le salon d'un fil, et l'oublie côté cache : quitter le portail d'un

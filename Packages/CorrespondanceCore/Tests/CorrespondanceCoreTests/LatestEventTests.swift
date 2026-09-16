@@ -51,4 +51,15 @@ final class LatestEventTests: XCTestCase {
     model.noteEvent(id: "$0", at: Date(timeIntervalSince1970: 0.5))
     XCTAssertEqual(model.latestEventID, "$2")
   }
+
+  /// Un pont qui remonte l'historique d'un groupe livre, au `/sync`, des
+  /// messages datés d'hier APRÈS ceux d'aujourd'hui. Le serveur les compte
+  /// dans son ordre à lui : c'est le dernier reçu qui doit porter l'accusé,
+  /// sinon « 3 non lus » revenaient à chaque `/sync` malgré les ouvertures.
+  func testLHistoriqueRemonteParLePontEstLeDernierEvenementMemeDateDHier() throws {
+    var rooms: [String: MatrixRoomModel] = [:]
+    try parse([message("$aujourdhui", at: 2_000_000)], into: &rooms)
+    try parse([message("$hier-1", at: 1_000), message("$hier-2", at: 2_000)], into: &rooms)
+    XCTAssertEqual(rooms["!a:relais"]?.latestEventID, "$hier-2")
+  }
 }
