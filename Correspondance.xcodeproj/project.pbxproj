@@ -181,6 +181,7 @@
 		D715DF3EF9D0387064702836 /* IMessageAttachmentSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FC3F1E40A4E2675638C619E /* IMessageAttachmentSendTests.swift */; };
 		D8A18886BD05DE3FFF76475C /* BridgeWebLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 112FDCFA4DE486B589FB165E /* BridgeWebLoginView.swift */; };
 		D91D4B35B2A3A6F8A4C99B2B /* ThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16D2CE4167125A5E3D61756E /* ThreadView.swift */; };
+		D954A561339D63306504CEF1 /* KeyboardHeightMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E06DAF049092165C4F84547 /* KeyboardHeightMemory.swift */; };
 		DA616E7027C048BDBFFD8BA3 /* NewGroupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75FE8F29C63BB7A4379AADA /* NewGroupSheet.swift */; };
 		DBB325F9306CED3C8C8B92B8 /* MessageActionsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0634DA54B9CFDB4819269093 /* MessageActionsOverlay.swift */; };
 		DBF7ADC763E0050F008E9FE1 /* IMessageDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A76281A77D503D61B245BB0 /* IMessageDatabase.swift */; };
@@ -373,6 +374,7 @@
 		6B20CF559D458C18AD551AE1 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		6C2362886157441127E0488B /* SettingsAppearancePane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAppearancePane.swift; sourceTree = "<group>"; };
 		6D1082B493A62A4C90B46EB8 /* ComposerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBar.swift; sourceTree = "<group>"; };
+		6E06DAF049092165C4F84547 /* KeyboardHeightMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeightMemory.swift; sourceTree = "<group>"; };
 		6ED6F4C2276CC3788BBBE29D /* ForwardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardSheet.swift; sourceTree = "<group>"; };
 		70003B06F876183A6C85B0DE /* PermissionBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionBanner.swift; sourceTree = "<group>"; };
 		729C28DC628ACA371751E703 /* ReadReceiptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadReceiptTests.swift; sourceTree = "<group>"; };
@@ -644,6 +646,7 @@
 				9384301E31F1A80261DB76C0 /* AttachmentImport.swift */,
 				9EA8F1CF8DC543061AE69B1F /* CameraCapture.swift */,
 				BA644DD9DE334A8E18E401B5 /* ForwardSheet.swift */,
+				6E06DAF049092165C4F84547 /* KeyboardHeightMemory.swift */,
 				CB1750C6DA8BFB154724240F /* MediaTray.swift */,
 				3666F68368A7FB9AF8EA8635 /* MediaTrayInputHost.swift */,
 				22F0D6FD4354164DFDF76784 /* MemberProfileView.swift */,
@@ -1410,6 +1413,7 @@
 				FB34CFA8433F52B2B957C903 /* FocusView.swift in Sources */,
 				39CE0B9C7ECCB9A014588EC9 /* ForwardSheet.swift in Sources */,
 				1A09B518E7B07C14A042C7B8 /* InboxListView.swift in Sources */,
+				D954A561339D63306504CEF1 /* KeyboardHeightMemory.swift in Sources */,
 				FA85E8772F42D9347070E7B7 /* MediaTray.swift in Sources */,
 				5B5DD29544FC1FFEC77A18F4 /* MediaTrayInputHost.swift in Sources */,
 				8DC858E01F1B9FF90FD14B85 /* MemberProfileView.swift in Sources */,

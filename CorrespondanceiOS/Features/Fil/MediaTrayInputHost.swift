@@ -75,15 +75,29 @@ struct MediaTrayInputHost<Content: View>: UIViewRepresentable {
 
     override func becomeFirstResponder() -> Bool {
       tray.frame.size.height = trayHeight
+      MediaTrayPresence.count += 1
       let ok = super.becomeFirstResponder()
-      if ok { onResponderChange?(true) }
+      if ok { onResponderChange?(true) } else { MediaTrayPresence.count -= 1 }
       return ok
     }
 
     override func resignFirstResponder() -> Bool {
       let ok = super.resignFirstResponder()
-      if ok { onResponderChange?(false) }
+      if ok {
+        MediaTrayPresence.count = max(0, MediaTrayPresence.count - 1)
+        onResponderChange?(false)
+      }
       return ok
     }
   }
+}
+
+/// Un plateau est à l'écran, ou en train d'y monter. Compté AVANT que le
+/// système annonce son « clavier », décompté APRÈS qu'il l'a rendu : c'est ce
+/// qui permet à `KeyboardHeightMemory` de ne mesurer que les vrais claviers.
+/// Hors du type générique, qui ne peut pas porter de stockage statique.
+@MainActor
+enum MediaTrayPresence {
+  static var count = 0
+  static var isPresentingTray: Bool { count > 0 }
 }

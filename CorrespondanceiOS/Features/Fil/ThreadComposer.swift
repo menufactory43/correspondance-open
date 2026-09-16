@@ -44,9 +44,12 @@ struct ThreadComposer: View {
   /// `inputView` (`MediaTrayInputHost`) : le système l'échange avec le
   /// clavier, et le fil qui défile le range comme lui.
   @State private var isTrayOpen = false
-  /// La hauteur du dernier clavier vu, bord d'écran compris : celle que le
-  /// plateau prend pour le remplacer sans que rien ne bouge.
-  @State private var keyboardHeight: CGFloat = 336
+  /// La hauteur du dernier clavier vu dans l'app, bord d'écran compris :
+  /// celle que le plateau prend pour le remplacer sans que rien ne bouge.
+  /// Partagée entre les fils : un « + » tapé avant tout clavier dans ce fil
+  /// prenait 336 points, la hauteur d'un iPhone standard, et la croix
+  /// faisait sauter le composer en rendant le vrai clavier.
+  private var keyboardHeight: CGFloat { KeyboardHeightMemory.shared.height }
   /// La pellicule, gardée le temps du fil : ses vignettes déjà rendues.
   @State private var recentLibrary = RecentLibrary()
   @State private var isPickingSendLater = false
@@ -191,15 +194,6 @@ struct ThreadComposer: View {
       }
       .frame(width: 0, height: 0)
       .accessibilityHidden(true)
-    }
-    // La hauteur du vrai clavier, pour que le plateau la prenne. Pas celle
-    // du plateau lui-même, qui se déclare aussi en clavier.
-    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
-      guard !isTrayOpen,
-            let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-            frame.height > 150
-      else { return }
-      keyboardHeight = frame.height
     }
     // Le seul canal d'haptique du composer, posé sur une vue qui ne change
     // jamais d'identité : le micro, lui, se transforme sous le doigt.
