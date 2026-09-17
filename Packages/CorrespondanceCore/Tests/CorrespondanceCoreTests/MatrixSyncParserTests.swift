@@ -257,17 +257,6 @@ extension MatrixSyncParserTests {
   }
 
 
-  // MARK: - Repli de citation par réseau
-
-  func testSignalRepliesCarryNoFallback() {
-    // mautrix-signal relaie le corps tel quel : le repli « > <@x> … » y serait
-    // du bruit, MXID compris — le bug vu sur iPhone.
-    XCTAssertFalse(MatrixBridgeService.sendsReplyFallback(on: .signal))
-    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: .whatsapp))
-    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: .instagram))
-    XCTAssertTrue(MatrixBridgeService.sendsReplyFallback(on: nil))
-  }
-
   /// Le pont renomme un fantôme (« +33675993742 » → « Maman maison ») : les
   /// messages déjà rangés portent l'ancien nom, le salon porte le nouveau.
   /// Le fil et l'aperçu se lisent avec le nom du moment.

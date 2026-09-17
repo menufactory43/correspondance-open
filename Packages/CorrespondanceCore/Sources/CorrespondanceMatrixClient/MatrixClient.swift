@@ -375,12 +375,16 @@ public actor MatrixClient {
   // MARK: - Envoi
 
   /// `txnId` idempotent : deux appels avec le même identifiant n'envoient qu'un message.
+  ///
+  /// Une réponse ne porte que `m.in_reply_to`, jamais le repli « > <@x> … »
+  /// dans le corps : les ponts mautrix ne le retirent que d'un `formatted_body`
+  /// HTML, et un corps texte seul arrivait tel quel chez le correspondant,
+  /// MXID `@whatsapp_lid-…:correspondance.local` compris.
   @discardableResult
   public func sendText(
     roomID: String,
     body text: String,
     replyToEventID: String? = nil,
-    replyFallback: (sender: String, text: String)? = nil,
     transactionID: String = UUID().uuidString
   ) async throws -> String? {
     guard !ledger.isUsed(transactionID) else { return nil }
@@ -392,11 +396,6 @@ public actor MatrixClient {
       content["m.relates_to"] = .object([
         "m.in_reply_to": .object(["event_id": .string(replyToEventID)])
       ])
-      // Repli de citation : les clients qui ne comprennent pas `m.in_reply_to`
-      // (et le bridge, pour composer la citation WhatsApp) lisent le corps.
-      if let replyFallback {
-        content["body"] = .string("> <\(replyFallback.sender)> \(replyFallback.text)\n\n\(text)")
-      }
     }
     // Sans moteur crypto, le chemin d'avant, inchangé. Avec, on passe par
     // `sendEvent`, qui sait chiffrer.
