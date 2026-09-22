@@ -225,9 +225,11 @@ extension RelayStore {
     if let stored = snapshot.mergedContacts { adoptMergedContacts(stored) }
 
     // Ce que l'extension de notification a le droit de savoir, et rien d'autre :
-    // quels salons sont muets. Elle ne tient pas de `/sync` — c'est ce dépôt-là
-    // qui lui permet de taire une notification déjà arrivée (SharedRelayState).
+    // quels salons sont muets, lesquels sont archivés. Elle ne tient pas de
+    // `/sync` — c'est ce dépôt-là qui lui permet de taire une notification
+    // déjà arrivée (SharedRelayState).
     SharedRelayState.saveMutedRoomIDs(SharedRelayState.mutedRoomIDs(in: snapshot))
+    SharedRelayState.saveArchivedRoomIDs(SharedRelayState.archivedRoomIDs(in: snapshot))
     // Et sous quels noms on peut me désigner : sans eux, l'extension ne
     // saurait pas qu'un push venu d'un fil muet me NOMME, et le tairait comme
     // les autres. Muet veut dire « plus de notifications », pas « plus rien ».

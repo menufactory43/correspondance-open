@@ -164,6 +164,11 @@ public enum PushNotification {
     if event.string(at: "content.m.relates_to.m.in_reply_to.event_id") != nil {
       text = QuotedMessage.strippingReplyFallback(text)
     }
+    // Un média se nomme, il ne s'épelle pas : « 🎤 Message vocal · 0:12 »
+    // plutôt que « PTT-20260922-WA0003.opus ».
+    if let content = event.value(at: "content"), let media = mediaBody(in: content) {
+      text = media
+    }
 
     let sender = event.string(at: "sender")
     let room = await RoomFacts.load(roomID: reference.roomID, sender: sender, client: client)
@@ -301,6 +306,55 @@ public enum PushNotification {
     }
   }
 
+  // MARK: - Nommer un média
+
+  /// Ce qu'on dit d'un média sur l'écran verrouillé, ou `nil` si l'événement
+  /// n'en est pas un.
+  ///
+  /// Le `body` d'un `m.image`, `m.video`, `m.audio` ou `m.file` est le **nom du
+  /// fichier** — « VID_1234.mp4 », « PTT-20260922-WA0003.opus » — ce qui
+  /// n'apprend rien à qui regarde son téléphone. On le nomme avec les mêmes
+  /// mots que l'inbox (`ChatMessage.sidebarPreviewText`) : photo, GIF, vidéo,
+  /// vocal avec sa durée, audio ; un fichier garde son nom, un PDF se
+  /// reconnaît à ça. La légende (MSC2530 : `filename` posé, `body` différent)
+  /// suit le libellé — « 📷 Photo : regarde ça », comme dans le fil.
+  public static func mediaBody(in content: MatrixJSON) -> String? {
+    guard let msgtype = content.string(at: "msgtype"),
+          ["m.image", "m.video", "m.audio", "m.file"].contains(msgtype)
+    else { return nil }
+    let body = content.string(at: "body") ?? ""
+    let filename = content.string(at: "filename")
+    let attachment = MessageAttachment(
+      id: content.string(at: "url") ?? content.string(at: "file.url") ?? "",
+      contentType: content.string(at: "info.mimetype") ?? "",
+      filename: filename ?? (body.isEmpty ? nil : body),
+      voice: MatrixSyncParser.voiceNote(in: content, msgtype: msgtype)
+    )
+    let label: String
+    switch msgtype {
+    case "m.image":
+      label = attachment.isGIF ? "GIF" : "📷 Photo"
+    case "m.video":
+      label = "🎥 Vidéo"
+    case "m.audio":
+      if let voice = attachment.voice {
+        label = voice.duration > 0 ? "🎤 Message vocal · \(voice.durationLabel)" : "🎤 Message vocal"
+      } else {
+        label = "🎤 Message audio"
+      }
+    default:
+      let name = (attachment.filename ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      label = name.isEmpty ? "📎 Pièce jointe" : "📎 \(name)"
+    }
+    // La légende : seulement quand `filename` porte le nom, et que `body` dit
+    // autre chose. Certains ponts répètent le nom dans `body` — pas une légende.
+    let caption = body.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let filename, !filename.isEmpty, !caption.isEmpty, caption != filename {
+      return "\(label) : \(caption)"
+    }
+    return label
+  }
+
   // MARK: - Le muet, deux fois plutôt qu'une
 
   /// Le muet est appliqué par le Relais : un salon muet porte une push rule
@@ -323,10 +377,20 @@ public enum PushNotification {
   ///   push rule ne sait exprimer « en réponse à un événement que j'ai écrit »,
   ///   donc le serveur ne pousse rien. L'app la voit quand elle tourne, et le
   ///   compteur de non-lus la porte toujours.
+  ///
+  /// - Parameter archivedRoomIDs: les fils archivés. Archiver, c'est ne plus
+  ///   rien voir : ni bannière, ni son, même quand le message me nomme. Un
+  ///   fil archivé ne notifie déjà pas dans l'app (`NotificationPolicy`) ; le
+  ///   push doit se taire pareil, sinon l'écran verrouillé annonce un message
+  ///   que l'inbox, elle, ne montre pas.
   public static func shouldPresent(
-    roomID: String, mutedRoomIDs: Set<String>, isPersonal: Bool = false
+    roomID: String,
+    mutedRoomIDs: Set<String>,
+    archivedRoomIDs: Set<String> = [],
+    isPersonal: Bool = false
   ) -> Bool {
-    !mutedRoomIDs.contains(roomID) || isPersonal
+    guard !archivedRoomIDs.contains(roomID) else { return false }
+    return !mutedRoomIDs.contains(roomID) || isPersonal
   }
 }
 
@@ -359,6 +423,20 @@ public enum SharedRelayState {
     return Set(stored)
   }
 
+  private static let archivedKey = "correspondance.shared.archivedRoomIDs"
+
+  /// Les fils archivés, pour que l'extension taise leur push. Le Relais ne
+  /// filtre que les salons muets (push rule vide) : un fil archivé, lui, est
+  /// poussé comme les autres, et c'est ici qu'il se tait.
+  public static func saveArchivedRoomIDs(_ ids: Set<String>, suiteName: String = appGroup) {
+    defaults(suiteName: suiteName)?.set(Array(ids).sorted(), forKey: archivedKey)
+  }
+
+  public static func archivedRoomIDs(suiteName: String = appGroup) -> Set<String> {
+    let stored = defaults(suiteName: suiteName)?.stringArray(forKey: archivedKey) ?? []
+    return Set(stored)
+  }
+
   private static let namesKey = "correspondance.shared.myNames"
 
   /// Les noms sous lesquels on peut me désigner, laissés à l'extension.
@@ -377,5 +455,9 @@ public enum SharedRelayState {
   /// L'extrait qu'on partage, tiré de l'instantané complet.
   public static func mutedRoomIDs(in snapshot: ConversationStateSnapshot) -> Set<String> {
     snapshot.muted
+  }
+
+  public static func archivedRoomIDs(in snapshot: ConversationStateSnapshot) -> Set<String> {
+    snapshot.archived
   }
 }

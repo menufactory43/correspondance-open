@@ -335,6 +335,7 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     // Le GIF passe avant la photo : c'en est une, mais on la nomme autrement.
     if attachments.contains(where: \.isGIF) { return "GIF" }
     if attachments.contains(where: \.isImage) { return "📷 Photo" }
+    if attachments.contains(where: \.isVideo) { return "🎥 Vidéo" }
     if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
     if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }
     if !attachments.isEmpty { return "Pièce jointe" }

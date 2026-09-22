@@ -232,6 +232,15 @@ final class GIFAttachmentTests: XCTestCase {
     XCTAssertEqual(message.sidebarPreviewText, "GIF")
   }
 
+  func testUneVideoSeNommeDansLaListe() {
+    let video = MessageAttachment(id: "mxc://a/v", contentType: "video/mp4", filename: "VID_1234.mp4")
+    let message = ChatMessage(
+      id: "$1", conversationID: "whatsapp:!a:relais", network: .whatsapp, text: "",
+      sentAt: .init(timeIntervalSince1970: 1), isFromMe: false, attachments: [video]
+    )
+    XCTAssertEqual(message.sidebarPreviewText, "🎥 Vidéo")
+  }
+
   func testUnGIFTombeDansLOngletImages() {
     let gif = MessageAttachment(id: "mxc://a/b", contentType: "image/gif", filename: "rire.gif")
     let message = ChatMessage(

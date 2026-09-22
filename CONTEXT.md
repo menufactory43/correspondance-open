@@ -38,7 +38,7 @@ Le mode d'affichage par défaut : une seule conversation de la file, avec suivan
 Le mode d'affichage liste + fil, pour balayer, chercher, multitâcher. Un mode, pas la file elle-même.
 
 **Archiver** :
-Sortir une conversation de la file parce qu'elle est traitée. Elle revient dans la file si un nouveau message arrive.
+Sortir une conversation de la file parce qu'elle est traitée. On n'en voit plus rien : ni dans la file, ni dans le badge, ni en notification — un nouveau message la laisse dans l'archive, où il attend qu'on aille le chercher.
 _Avoid_ : supprimer, masquer, fermer, low priority
 
 **Épingler** :

@@ -280,6 +280,7 @@ final class RelayStore {
     focusConversationID = nil
     openedConversationIDs = []
     SharedRelayState.saveMutedRoomIDs([])
+    SharedRelayState.saveArchivedRoomIDs([])
     session = .disconnected
   }
 

@@ -48,6 +48,12 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     // une règle écrite à l'instant, ou depuis le Mac pendant que l'iPhone dort,
     // laisse passer un dernier push. C'est le dernier endroit où le taire.
     let isMuted = SharedRelayState.mutedRoomIDs().contains(reference.roomID)
+    // Archivé, c'est fini : on ne voit plus rien, pas même une mention. Pas
+    // besoin d'aller lire le message pour le savoir — on se tait tout de suite.
+    if SharedRelayState.archivedRoomIDs().contains(reference.roomID) {
+      silence(mutable)
+      return contentHandler(mutable)
+    }
 
     MatrixCredentialStore.accessGroup = SharedRelayState.keychainAccessGroup
     guard let credentials = MatrixCredentialStore.load() else {
@@ -75,8 +81,8 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     }
   }
 
-  /// Le fil est muet et le message ne me nomme pas : on rend la notification
-  /// discrète plutôt que de la laisser parler.
+  /// Le fil est muet et le message ne me nomme pas, ou il est archivé : on
+  /// rend la notification discrète plutôt que de la laisser parler.
   private func finishSilently() {
     guard let handler, let content else { return }
     Self.silence(content)
