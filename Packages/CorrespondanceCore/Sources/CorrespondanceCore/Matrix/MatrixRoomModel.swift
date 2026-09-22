@@ -25,6 +25,13 @@ public struct MatrixRoomModel: Sendable {
   /// chiffré ment aussi.
   public var encryptionAlgorithm: String?
   public var members: [String: Member] = [:]
+  /// Quand chaque événement d'état a été écrit chez le Relais, par
+  /// `type + state_key`. Une page d'historique remontée plus tard rejoue des
+  /// événements d'état plus VIEUX que ce qu'on sait : l'invitation d'un
+  /// fantôme encore nommé « +262… », d'avant son renommage. Sans cette date,
+  /// elle écrasait le nom courant — l'iPhone montrait les numéros du 5 sept.
+  /// dans un groupe que le Mac lisait avec les noms du carnet (22 sept.).
+  public var stateAppliedAt: [String: Date] = [:]
   public var heroes: [String] = []
   public var unreadCount: Int = 0
   public var messagesByID: [String: ChatMessage] = [:]
@@ -402,6 +409,18 @@ public struct MatrixRoomModel: Sendable {
   /// le `m.room.member` met les membres à jour, pas les messages déjà rangés.
   /// Un fil se lit avec les noms du moment.
   func refreshSenderName(_ message: inout ChatMessage) {
+    // La citation aussi : son nom est figé à l'arrivée de la réponse, avec
+    // celui que le fantôme cité portait alors.
+    if var quote = message.replyTo, let targetID = quote.messageID,
+       let quoted = messagesByID[targetID]
+    {
+      if quoted.isFromMe {
+        quote.senderName = "Moi"
+      } else if let senderID = quoted.senderID, let name = members[senderID]?.displayName, !name.isEmpty {
+        quote.senderName = name
+      }
+      message.replyTo = quote
+    }
     guard !message.isFromMe, let senderID = message.senderID,
           let name = members[senderID]?.displayName, !name.isEmpty
     else { return }

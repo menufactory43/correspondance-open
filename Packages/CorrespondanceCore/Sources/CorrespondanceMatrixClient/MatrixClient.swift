@@ -160,15 +160,18 @@ public actor MatrixClient {
 
   // MARK: - Sync
 
+  /// - Parameter fullState: relire tout l'état des salons malgré `since` —
+  ///   la réparation d'une base dont l'état a été écrasé par de l'historique.
   public func sync(
     since: String?,
     timeoutMilliseconds: Int = 30_000,
-    filter: String? = nil
+    filter: String? = nil,
+    fullState: Bool = false
   ) async throws -> MatrixSyncResponse {
     var items = [
       URLQueryItem(name: "timeout", value: String(timeoutMilliseconds)),
       // Sans `since`, on veut l'état complet mais peu d'historique : le backfill du bridge fera le reste.
-      URLQueryItem(name: "full_state", value: since == nil ? "true" : "false"),
+      URLQueryItem(name: "full_state", value: (since == nil || fullState) ? "true" : "false"),
     ]
     if let since { items.append(URLQueryItem(name: "since", value: since)) }
     if let filter { items.append(URLQueryItem(name: "filter", value: filter)) }

@@ -257,6 +257,53 @@ extension MatrixSyncParserTests {
   }
 
 
+  /// Une page d'historique remontée APRÈS le présent rejoue l'invitation d'un
+  /// fantôme, encore nommé par son numéro : elle ne doit pas écraser le nom
+  /// courant ni ramener l'adhésion à « invite » — c'est ce que l'iPhone
+  /// montrait le 22 sept. (« +262692090323 » pour « Grand mere »).
+  func testOlderStateFromHistoryNeverOverwritesNewerState() {
+    var model = MatrixRoomModel(roomID: "!groupe:correspondance.local")
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    let ghost = "@whatsapp_lid-1:correspondance.local"
+    // Le présent : le renommage du 11 septembre, lu dans la timeline.
+    _ = parser.applyMessages(
+      [memberEvent(ghost, membership: "join", id: "$rename", displayName: "Grand mere (WA)", at: 1_789_112_391_000)],
+      roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.members[ghost]?.displayName, "Grand mere")
+    // Le passé : l'invitation du 5 septembre, dans une page `/messages`.
+    _ = parser.applyMessages(
+      [memberEvent(ghost, membership: "invite", id: "$invite", displayName: "+262692090323 (WA)", at: 1_788_619_664_000)],
+      roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.members[ghost]?.displayName, "Grand mere")
+    XCTAssertEqual(model.members[ghost]?.membership, "join")
+    // Un état plus récent, lui, passe toujours.
+    _ = parser.applyMessages(
+      [memberEvent(ghost, membership: "join", id: "$rename2", displayName: "Mamie (WA)", at: 1_790_000_000_000)],
+      roomID: model.roomID, to: &model)
+    XCTAssertEqual(model.members[ghost]?.displayName, "Mamie")
+  }
+
+  /// Les dates d'état survivent au magasin : sans elles, la première page
+  /// d'historique après un relancement referait le dégât.
+  func testStateTimestampsSurviveTheStore() throws {
+    var model = MatrixRoomModel(roomID: "!groupe:correspondance.local")
+    model.network = .whatsapp
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    let ghost = "@whatsapp_lid-1:correspondance.local"
+    _ = parser.applyMessages(
+      [memberEvent(ghost, membership: "join", id: "$rename", displayName: "Grand mere (WA)", at: 1_789_112_391_000)],
+      roomID: model.roomID, to: &model)
+    let stored = StoredRoom(model: model, selfUserID: selfUserID)
+    let data = try JSONEncoder().encode(stored.state)
+    let restored = try JSONDecoder().decode(StoredRoom.State.self, from: data)
+    XCTAssertEqual(restored.stateAppliedAt?.count, 1)
+    // Une ligne d'avant, sans la clé, se relit encore.
+    var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    json.removeValue(forKey: "stateAppliedAt")
+    let legacy = try JSONDecoder().decode(StoredRoom.State.self, from: JSONSerialization.data(withJSONObject: json))
+    XCTAssertNil(legacy.stateAppliedAt)
+  }
+
   /// Le pont renomme un fantôme (« +33675993742 » → « Maman maison ») : les
   /// messages déjà rangés portent l'ancien nom, le salon porte le nouveau.
   /// Le fil et l'aperçu se lisent avec le nom du moment.
@@ -271,5 +318,15 @@ extension MatrixSyncParserTests {
     )
     XCTAssertEqual(model.sortedMessages.first?.senderName, "Maman maison")
     XCTAssertEqual(model.lastListedMessage?.senderName, "Maman maison")
+
+    // La citation d'une réponse relit le nom du message cité, pas celui figé
+    // à l'arrivée de la réponse.
+    model.messagesByID["$2"] = ChatMessage(
+      id: "$2", conversationID: "whatsapp:!groupe:correspondance.local", network: .whatsapp,
+      text: "Oui", sentAt: Date(timeIntervalSince1970: 2_000),
+      isFromMe: false, senderID: "@whatsapp_lid-2:correspondance.local", senderName: "Papa",
+      replyTo: QuotedMessage(messageID: "$1", senderName: "+33675993742", text: "Il lui faudrait un garage")
+    )
+    XCTAssertEqual(model.sortedMessages.last?.replyTo?.senderName, "Maman maison")
   }
 }

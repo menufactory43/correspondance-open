@@ -32,6 +32,9 @@ public struct StoredRoom: Sendable, Equatable {
     public var encryptionAlgorithm: String?
     public var isNetworkFlaggedRequest: Bool = false
     public var members: [String: MatrixRoomModel.Member] = [:]
+    /// Optionnel : une base d'avant le 22 sept. n'a pas la clé, et le
+    /// `Decodable` synthétisé refuserait la ligne entière.
+    public var stateAppliedAt: [String: Date]?
     public var heroes: [String] = []
     public var readMarkerByUser: [String: String] = [:]
     public var unresolvedQuoteMessageIDs: [String] = []
@@ -84,6 +87,7 @@ public extension StoredRoom {
     state.encryptionAlgorithm = model.encryptionAlgorithm
     state.isNetworkFlaggedRequest = model.isNetworkFlaggedRequest
     state.members = model.members
+    state.stateAppliedAt = model.stateAppliedAt.isEmpty ? nil : model.stateAppliedAt
     state.heroes = model.heroes
     state.readMarkerByUser = model.readMarkerByUser
     state.unresolvedQuoteMessageIDs = model.unresolvedQuoteMessageIDs.sorted()
@@ -145,6 +149,7 @@ public extension StoredRoom {
     model.avatarMXC = avatarMXC
     model.isNetworkFlaggedRequest = state.isNetworkFlaggedRequest
     model.members = state.members
+    model.stateAppliedAt = state.stateAppliedAt ?? [:]
     model.heroes = state.heroes
     model.unreadCount = unreadCount
     model.readMarkerByUser = state.readMarkerByUser

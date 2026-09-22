@@ -237,6 +237,7 @@ public actor MatrixBridgeService {
     if let ligne = await MatrixChiffrement.brancher(sur: client) {
       FileHandle.standardError.write(Data("[Correspondance] \(ligne)\n".utf8))
     }
+    await repairStateIfNeeded()
     let response = try await client.sync(
       since: nextBatch, timeoutMilliseconds: timeoutMilliseconds, filter: Self.liveSyncFilter)
     let parser = MatrixSyncParser(selfUserID: selfUserID)
@@ -261,6 +262,34 @@ public actor MatrixBridgeService {
     persist(cursor: response.nextBatch, leftRoomIDs: Array(left))
     return conversations()
   }
+
+  /// Relit l'état courant de tous les salons, **une fois par base**, sans
+  /// toucher au curseur.
+  ///
+  /// Jusqu'au 22 sept., une page d'historique rejouait ses événements d'état
+  /// par-dessus l'état courant (cf. `MatrixRoomModel.stateAppliedAt`) : une
+  /// base d'avant garde des fantômes nommés par leur numéro, en « invite »,
+  /// alors que le Relais les connaît par le carnet. Aucun `/sync` incrémental
+  /// ne le corrigera — les renommages sont passés. Un seul appel :
+  /// `full_state=true` depuis le curseur, timeline vide, rend l'état de
+  /// chaque salon tel qu'il est. On n'adopte PAS son `next_batch` : avec une
+  /// timeline vide, les événements entre le curseur et maintenant seraient
+  /// perdus ; le `/sync` ordinaire qui suit les livre.
+  private func repairStateIfNeeded() async {
+    guard let store, store.flag(Self.stateRepairFlag) == nil, nextBatch != nil else { return }
+    let filter = #"{"room":{"timeline":{"limit":0}},"presence":{"types":[]}}"#
+    guard let response = try? await client.sync(
+      since: nextBatch, timeoutMilliseconds: 0, filter: filter, fullState: true)
+    else { return }
+    let parser = MatrixSyncParser(selfUserID: selfUserID)
+    parser.apply(response, to: &rooms)
+    dirtyRoomIDs.formUnion(response.rooms?.join?.keys ?? [:].keys)
+    store.setFlag(Self.stateRepairFlag, to: ISO8601DateFormatter().string(from: Date()))
+    FileHandle.standardError.write(
+      Data("[Correspondance] état des salons relu en entier : \(response.rooms?.join?.count ?? 0) salons\n".utf8))
+  }
+
+  private static let stateRepairFlag = "state.repaired.2026-09-22"
 
   /// Comble les trous de timeline laissés par `/sync` : remonte `/messages` depuis
   /// `prev_batch`, page par page, tant qu'une page apporte encore du nouveau —

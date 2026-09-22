@@ -213,6 +213,16 @@ public struct MatrixSyncParser: Sendable {
 
   private func applyState(_ event: MatrixEvent, to model: inout MatrixRoomModel) {
     guard let content = event.content else { return }
+    // Un événement d'état ne remplace que ce qui est plus vieux que lui. Les
+    // mêmes événements arrivent par trois chemins — le bloc `state`, la
+    // timeline, et les pages d'historique remontées en arrière — et le
+    // troisième livre le passé APRÈS le présent : l'invitation d'un fantôme
+    // (« +262692090323 »), puis, jamais, son renommage déjà connu.
+    if let stateKey = event.stateKey {
+      let key = Self.stateKey(type: event.type, stateKey: stateKey)
+      if let known = model.stateAppliedAt[key], event.sentAt < known { return }
+      model.stateAppliedAt[key] = event.sentAt
+    }
     switch event.type {
     case "m.room.topic":
       // mautrix-signal, avec `number_in_topic`, écrit le numéro du correspondant
@@ -354,6 +364,8 @@ public struct MatrixSyncParser: Sendable {
   /// ou sort d'un salon. Les ghosts vont et viennent au rythme du réseau
   /// distant et n'ont rien à annoncer ici ; moi non plus.
   ///
+  static func stateKey(type: String, stateKey: String) -> String { type + "\u{1F}" + stateKey }
+
   /// À jouer **avant** `applyState` : c'est l'adhésion précédente, encore en
   /// mémoire, qui dit si quelque chose a changé. Un `join` qui suit un `join`
   /// n'est qu'un changement de nom ou de photo.
