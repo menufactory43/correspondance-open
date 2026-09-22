@@ -42,6 +42,9 @@ struct MessageBubble: View {
   @State private var dragOffset: CGFloat = 0
   /// Le seuil de citation est franchi : le doigt l'a senti, on ne le redit pas.
   @State private var hasCrossedThreshold = false
+  /// Le geste en cours a été refusé : il était vertical au départ, c'est un
+  /// défilement. On l'ignore jusqu'au relâcher, quoi que fasse le doigt ensuite.
+  @State private var dragRefused = false
   /// Le média sur lequel la visionneuse s'ouvre. `nil` = elle est fermée.
   @State private var opened: OpenedMedia?
   /// Le fichier joint dont on regarde l'aperçu Quick Look.
@@ -264,22 +267,44 @@ struct MessageBubble: View {
   /// Répondre en citant se fait par balayage vers la droite sur la bulle — le
   /// geste de WhatsApp, de Signal et de Beeper. Le retour au repos est animé,
   /// sauf sous « Réduire les animations ».
+  ///
+  /// L'axe se décide UNE fois, au premier mouvement franc : un doigt qui
+  /// défile le fil dérive toujours un peu de côté, et sans cette décision la
+  /// bulle partait avec lui à chaque scroll. Un geste né vertical reste un
+  /// défilement jusqu'au relâcher ; seul un geste né franchement horizontal —
+  /// deux fois plus large que haut — vaut citation. C'est le comportement de
+  /// Signal : rien ne bouge tant que l'intention n'est pas nette.
   private var replyDrag: some Gesture {
-    DragGesture(minimumDistance: 18)
+    DragGesture(minimumDistance: Self.replyEngageDistance)
       .onChanged { value in
-        guard onReply != nil, value.translation.width > 0 else { return }
-        dragOffset = min(value.translation.width * 0.5, 56)
+        guard onReply != nil, !dragRefused else { return }
+        let width = value.translation.width
+        let height = abs(value.translation.height)
+        if dragOffset == 0, !hasCrossedThreshold {
+          // Premier mouvement : c'est ici que l'axe se tranche.
+          guard width > 0, width >= height * 2 else {
+            dragRefused = true
+            return
+          }
+        }
+        // La distance d'engagement est retirée : la bulle part du repos, pas
+        // d'un saut.
+        let travel = max(width - Self.replyEngageDistance, 0)
+        dragOffset = min(travel * 0.5, 56)
         if dragOffset > Self.replyThreshold { hasCrossedThreshold = true }
       }
       .onEnded { _ in
         let triggered = dragOffset > Self.replyThreshold
         hasCrossedThreshold = false
+        dragRefused = false
         if reduceMotion { dragOffset = 0 }
         else { withAnimation(.spring(duration: 0.28)) { dragOffset = 0 } }
         if triggered { onReply?() }
       }
   }
 
+  /// Avant, le doigt n'a rien dit : ni citation ni mouvement de bulle.
+  private static let replyEngageDistance: CGFloat = 24
   /// Au-delà, le geste vaut citation.
   private static let replyThreshold: CGFloat = 34
 
