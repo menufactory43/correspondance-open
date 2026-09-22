@@ -136,7 +136,8 @@ struct PartageVue: View {
   private var pied: some View {
     HStack {
       TextField(
-        modele.contenu.fichiers.isEmpty ? "Un message" : "Ajouter un mot",
+        modele.contenu.fichiers.isEmpty
+          ? String(localized: "Un message") : String(localized: "Ajouter un mot"),
         text: $modele.mot,
         axis: .vertical
       )

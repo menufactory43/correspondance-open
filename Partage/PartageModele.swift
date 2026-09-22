@@ -70,12 +70,20 @@ final class PartageModele {
     let videos = fichiers.filter { Self.type(de: $0)?.conforms(to: .movie) ?? false }.count
     let autres = fichiers.count - images - videos
     var parts: [String] = []
-    if images > 0 { parts.append(images == 1 ? "une photo" : "\(images) photos") }
-    if videos > 0 { parts.append(videos == 1 ? "une vidéo" : "\(videos) vidéos") }
-    if autres > 0 { parts.append(autres == 1 ? "un fichier" : "\(autres) fichiers") }
+    if images > 0 {
+      parts.append(images == 1 ? String(localized: "une photo") : String(localized: "\(images) photos"))
+    }
+    if videos > 0 {
+      parts.append(videos == 1 ? String(localized: "une vidéo") : String(localized: "\(videos) vidéos"))
+    }
+    if autres > 0 {
+      parts.append(autres == 1 ? String(localized: "un fichier") : String(localized: "\(autres) fichiers"))
+    }
     let texte = contenu.texte.trimmingCharacters(in: .whitespacesAndNewlines)
     if !texte.isEmpty {
-      parts.append(URL(string: texte)?.scheme?.hasPrefix("http") == true ? "un lien" : "un texte")
+      parts.append(
+        URL(string: texte)?.scheme?.hasPrefix("http") == true
+          ? String(localized: "un lien") : String(localized: "un texte"))
     }
     return parts.joined(separator: ", ")
   }
@@ -116,7 +124,7 @@ final class PartageModele {
       choisi = trouve
     }
     etat = destinataires.isEmpty
-      ? .echec("Ouvre Correspondance une fois pour que tes conversations apparaissent ici.")
+      ? .echec(String(localized: "Ouvre Correspondance une fois pour que tes conversations apparaissent ici."))
       : .pret
   }
 
@@ -236,7 +244,7 @@ final class PartageModele {
     case .directe(let roomID):
       do {
         try await envoyerDirectement(roomID: roomID, message: message)
-        etat = .fini("Envoyé à \(choisi.title)")
+        etat = .fini(String(localized: "Envoyé à \(choisi.title)"))
         return true
       } catch {
         journal.error("envoi direct impossible : \(error.localizedDescription, privacy: .public)")
@@ -264,24 +272,24 @@ final class PartageModele {
 
   private func deposer(pour choisi: Partage.Destinataire, message: String, apres erreur: Error?) -> Bool {
     guard let boite else {
-      etat = .echec("Le dossier partagé avec Correspondance n'est pas accessible.")
+      etat = .echec(String(localized: "Le dossier partagé avec Correspondance n'est pas accessible."))
       return false
     }
     do {
       try boite.deposer(
         conversationID: choisi.id, network: choisi.network, text: message, fichiers: contenu.fichiers)
     } catch {
-      etat = .echec("Impossible de poser le partage : \(error.localizedDescription)")
+      etat = .echec(String(localized: "Impossible de poser le partage : \(error.localizedDescription)"))
       return false
     }
     let reveille = reveillerLApp()
     switch (reveille, erreur) {
     case (true, _):
-      etat = .fini("Correspondance l'envoie à \(choisi.title)")
+      etat = .fini(String(localized: "Correspondance l'envoie à \(choisi.title)"))
     case (false, nil):
-      etat = .fini("Partira à l'ouverture de Correspondance")
+      etat = .fini(String(localized: "Partira à l'ouverture de Correspondance"))
     case (false, .some):
-      etat = .fini("Le Relais n'a pas répondu : partira à l'ouverture de Correspondance")
+      etat = .fini(String(localized: "Le Relais n'a pas répondu : partira à l'ouverture de Correspondance"))
     }
     return true
   }
