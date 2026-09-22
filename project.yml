@@ -16,7 +16,7 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     PRODUCT_BUNDLE_IDENTIFIER: app.correspondance.Correspondance
     MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: "12"
+    CURRENT_PROJECT_VERSION: "13"
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Correspondance
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
