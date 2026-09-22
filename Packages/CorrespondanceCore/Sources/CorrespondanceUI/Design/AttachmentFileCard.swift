@@ -58,7 +58,7 @@ public struct AttachmentFileCard: View {
     }
   }
 
-  private var name: String { attachment.filename ?? "Pièce jointe" }
+  private var name: String { attachment.filename ?? String(localized: "Pièce jointe") }
 
   private var weight: String? {
     guard let url = attachment.resolvedFileURL,

@@ -51,10 +51,10 @@ public enum CheminDuRelais: Equatable, Sendable {
   /// Ce qui s'affiche à côté du code, en une ligne.
   public var titreFR: String {
     switch self {
-    case .tailcat: "via Tailcat"
-    case .tailscale: "via Tailscale"
-    case .memeMachine: "sur cette machine"
-    case .adresse: "par son adresse"
+    case .tailcat: String(localized: "via Tailcat")
+    case .tailscale: String(localized: "via Tailscale")
+    case .memeMachine: String(localized: "sur cette machine")
+    case .adresse: String(localized: "par son adresse")
     }
   }
 
@@ -62,13 +62,15 @@ public enum CheminDuRelais: Equatable, Sendable {
   public var detailFR: String {
     switch self {
     case .tailcat:
-      "Ce Mac rejoint le Relais directement, sans Tailscale. L’iPhone, lui, en a encore besoin."
+      String(
+        localized:
+          "Ce Mac rejoint le Relais directement, sans Tailscale. L’iPhone, lui, en a encore besoin.")
     case .tailscale:
-      "Il faut Tailscale sur ce Mac et sur l’iPhone."
+      String(localized: "Il faut Tailscale sur ce Mac et sur l’iPhone.")
     case .memeMachine:
-      "Le Relais est sur cette machine."
+      String(localized: "Le Relais est sur cette machine.")
     case .adresse:
-      "Cette adresse ne marche que depuis le réseau du Relais."
+      String(localized: "Cette adresse ne marche que depuis le réseau du Relais.")
     }
   }
 }

@@ -9,21 +9,21 @@ public enum IMessageExpressiveEffect {
   /// Effets de bulle (le texte lui-même est rendu autrement) et effets d'écran.
   private static let names: [String: String] = [
     // Bulles
-    "com.apple.MobileSMS.expressivesend.gentle": "Léger",
-    "com.apple.MobileSMS.expressivesend.loud": "Fort",
-    "com.apple.MobileSMS.expressivesend.impact": "Choc",
-    "com.apple.MobileSMS.expressivesend.invisibleink": "Encre invisible",
+    "com.apple.MobileSMS.expressivesend.gentle": String(localized: "Léger"),
+    "com.apple.MobileSMS.expressivesend.loud": String(localized: "Fort"),
+    "com.apple.MobileSMS.expressivesend.impact": String(localized: "Choc"),
+    "com.apple.MobileSMS.expressivesend.invisibleink": String(localized: "Encre invisible"),
     // Écran
-    "com.apple.messages.effect.CKConfettiEffect": "Confettis",
-    "com.apple.messages.effect.CKHappyBirthdayEffect": "Ballons",
-    "com.apple.messages.effect.CKFireworksEffect": "Feux d’artifice",
-    "com.apple.messages.effect.CKSparklesEffect": "Étincelles",
-    "com.apple.messages.effect.CKLasersEffect": "Lasers",
-    "com.apple.messages.effect.CKShootingStarEffect": "Étoile filante",
-    "com.apple.messages.effect.CKHeartEffect": "Cœur",
-    "com.apple.messages.effect.CKSpotlightEffect": "Projecteur",
-    "com.apple.messages.effect.CKEchoEffect": "Écho",
-    "com.apple.messages.effect.CKCelebrationEffect": "Célébration",
+    "com.apple.messages.effect.CKConfettiEffect": String(localized: "Confettis"),
+    "com.apple.messages.effect.CKHappyBirthdayEffect": String(localized: "Ballons"),
+    "com.apple.messages.effect.CKFireworksEffect": String(localized: "Feux d’artifice"),
+    "com.apple.messages.effect.CKSparklesEffect": String(localized: "Étincelles"),
+    "com.apple.messages.effect.CKLasersEffect": String(localized: "Lasers"),
+    "com.apple.messages.effect.CKShootingStarEffect": String(localized: "Étoile filante"),
+    "com.apple.messages.effect.CKHeartEffect": String(localized: "Cœur"),
+    "com.apple.messages.effect.CKSpotlightEffect": String(localized: "Projecteur"),
+    "com.apple.messages.effect.CKEchoEffect": String(localized: "Écho"),
+    "com.apple.messages.effect.CKCelebrationEffect": String(localized: "Célébration"),
   ]
 
   /// Nom lisible de l'effet, ou `nil` s'il n'y a pas d'effet.
@@ -39,7 +39,7 @@ public enum IMessageExpressiveEffect {
 
   /// Étiquette affichée sous la bulle.
   public static func label(for rawID: String?) -> String? {
-    name(for: rawID).map { "envoyé avec \($0)" }
+    name(for: rawID).map { String(localized: "envoyé avec \($0)") }
   }
 }
 
@@ -62,24 +62,24 @@ public enum IMessageGroupEvent {
     target: String?,
     isFromMe: Bool = false
   ) -> String? {
-    let who = isFromMe ? "Vous" : (cleaned(actor) ?? "Quelqu’un")
+    let who = isFromMe ? String(localized: "Vous") : (cleaned(actor) ?? String(localized: "Quelqu’un"))
     let whom = cleaned(target)
 
     switch itemType {
     case 1:
-      let verb = conjugated(actionType == 1 ? "retiré" : "ajouté", isFromMe: isFromMe)
-      return "\(who) \(verb) \(whom ?? "une personne")"
+      let verb = conjugated(actionType == 1 ? String(localized: "retiré") : String(localized: "ajouté"), isFromMe: isFromMe)
+      return String(localized: "\(who) \(verb) \(whom ?? String(localized: "une personne"))")
     case 2:
       guard let title = cleaned(groupTitle) else {
-        return "\(who) \(conjugated("renommé", isFromMe: isFromMe)) la conversation"
+        return String(localized: "\(who) \(conjugated(String(localized: "renommé"), isFromMe: isFromMe)) la conversation")
       }
-      return "\(who) \(conjugated("nommé", isFromMe: isFromMe)) la conversation « \(title) »"
+      return String(localized: "\(who) \(conjugated(String(localized: "nommé"), isFromMe: isFromMe)) la conversation « \(title) »")
     case 3:
       // `group_action_type` 1 sur un `item_type` 3 = la photo du groupe a changé,
       // pas un départ : Messages range les deux sous le même type d'élément.
       return actionType == 1
-        ? "\(who) \(conjugated("changé", isFromMe: isFromMe)) la photo de la conversation"
-        : "\(who) \(conjugated("quitté", isFromMe: isFromMe)) la conversation"
+        ? String(localized: "\(who) \(conjugated(String(localized: "changé"), isFromMe: isFromMe)) la photo de la conversation")
+        : String(localized: "\(who) \(conjugated(String(localized: "quitté"), isFromMe: isFromMe)) la conversation")
     default:
       return nil
     }
@@ -88,7 +88,7 @@ public enum IMessageGroupEvent {
   /// « a ajouté » pour les autres, « avez ajouté » pour moi — les quatre verbes
   /// employés ici se conjuguent tous avec l'auxiliaire avoir.
   private static func conjugated(_ participle: String, isFromMe: Bool) -> String {
-    isFromMe ? "avez \(participle)" : "a \(participle)"
+    isFromMe ? String(localized: "avez \(participle)") : String(localized: "a \(participle)")
   }
 
   private static func cleaned(_ raw: String?) -> String? {

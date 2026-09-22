@@ -218,7 +218,7 @@ final class AgentProcessHost {
       // remplir le journal, en donnant l'illusion d'un plantage à répétition
       // alors que rien ne plante — c'est une configuration à refaire.
       guard AgentExit.shouldRestart(after: code) else {
-        abandon = AgentExit.raisonFR(code) ?? "\(agent) s'est arrêté (code \(code))."
+        abandon = AgentExit.raisonFR(code) ?? String(localized: "\(agent) s'est arrêté (code \(code)).")
         AgentProcessHost.log.error(
           "\(self.agent, privacy: .public) : arrêt définitif (code \(code)) — pas de redémarrage"
         )
@@ -227,8 +227,8 @@ final class AgentProcessHost {
 
       redemarrages += 1
       guard !backoff.renonce(apres: redemarrages) else {
-        abandon = "\(agent) s'est arrêté \(redemarrages) fois de suite (dernier code \(code)). "
-          + "Son journal dira pourquoi."
+        abandon = String(localized: "\(agent) s'est arrêté \(redemarrages) fois de suite (dernier code \(code)). ")
+          + String(localized: "Son journal dira pourquoi.")
         AgentProcessHost.log.error(
           "\(self.agent, privacy: .public) : abandon après \(self.redemarrages) redémarrages"
         )

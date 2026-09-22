@@ -198,17 +198,17 @@ public struct AgentConsoleConfig: Sendable, Equatable {
 
     public var labelFR: String {
       switch self {
-      case .lire: "Lire"
-      case .ecrire: "Lire et écrire"
-      case .executer: "Tout, exécution comprise"
+      case .lire: String(localized: "Lire")
+      case .ecrire: String(localized: "Lire et écrire")
+      case .executer: String(localized: "Tout, exécution comprise")
       }
     }
 
     public var subtitleFR: String {
       switch self {
-      case .lire: "Lecture de fichiers et du web. Rien qui modifie."
-      case .ecrire: "Peut écrire dans le dossier de la conversation."
-      case .executer: "Peut aussi lancer des commandes. Le dossier de la conversation reste sa limite."
+      case .lire: String(localized: "Lecture de fichiers et du web. Rien qui modifie.")
+      case .ecrire: String(localized: "Peut écrire dans le dossier de la conversation.")
+      case .executer: String(localized: "Peut aussi lancer des commandes. Le dossier de la conversation reste sa limite.")
       }
     }
   }

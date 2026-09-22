@@ -62,21 +62,21 @@ struct InboxListPane: View {
         if let facet = store.searchFacet, !facet.isConversationFacet {
           facetSection(facet)
         } else if store.searchFacet == .drafts {
-          section(title: "Brouillons", items: store.facetDrafts)
+          section(title: String(localized: "Brouillons"), items: store.facetDrafts)
         } else if store.isShowingScheduled {
           scheduledSection
         } else if store.isShowingArchived {
-          section(title: "Archivés", items: store.archivedQueue)
+          section(title: String(localized: "Archivés"), items: store.archivedQueue)
         } else {
           // Les inconnus qui ont écrit les premiers : rien n'entre dans la
           // file avant qu'on l'ait accepté.
-          section(title: "Demandes", items: store.requestsQueue)
-          section(title: "Récents", items: store.inboxRecents)
-          section(title: "Groupes", items: store.inboxGroups)
-          section(title: "Contacts", items: store.inboxContacts)
+          section(title: String(localized: "Demandes"), items: store.requestsQueue)
+          section(title: String(localized: "Récents"), items: store.inboxRecents)
+          section(title: String(localized: "Groupes"), items: store.inboxGroups)
+          section(title: String(localized: "Contacts"), items: store.inboxContacts)
           // Ce qu'on a mis de côté : hors de la file, mais jamais hors de vue.
           // Chaque ligne revient d'elle-même à l'heure dite.
-          section(title: "Rappels", items: store.remindersQueue)
+          section(title: String(localized: "Rappels"), items: store.remindersQueue)
         }
       }
       .listStyle(.sidebar)
@@ -339,8 +339,8 @@ struct InboxListPane: View {
 
   private var selectionLabel: String {
     let count = store.selectedConversationIDs.count
-    if count == 0 { return "Choisir des fils" }
-    return count == 1 ? "1 fil sélectionné" : "\(count) fils sélectionnés"
+    if count == 0 { return String(localized: "Choisir des fils") }
+    return count == 1 ? String(localized: "1 fil sélectionné") : String(localized: "\(count) fils sélectionnés")
   }
 
   /// La rangée d'onglets — Images · Vidéos · Liens · Fichiers · Brouillons.
@@ -425,7 +425,7 @@ struct InboxListPane: View {
       HStack(spacing: 6) {
         Image(systemName: store.isShowingArchived ? "tray.full" : "archivebox")
           .font(.system(size: 11))
-        Text(store.isShowingArchived ? "Retour à l’inbox" : "Archivés")
+        Text(store.isShowingArchived ? String(localized: "Retour à l’inbox") : String(localized: "Archivés"))
           .font(Typography.meta(themes.typeface))
         Spacer()
         if !store.isShowingArchived, !store.archivedQueue.isEmpty {
@@ -440,7 +440,7 @@ struct InboxListPane: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(store.isShowingArchived ? "Revenir à l’inbox" : "Voir les fils archivés")
+    .accessibilityLabel(store.isShowingArchived ? String(localized: "Revenir à l’inbox") : String(localized: "Voir les fils archivés"))
   }
 
   private var emptyState: some View {
@@ -458,10 +458,10 @@ struct InboxListPane: View {
   }
 
   private var emptyStateTitle: String {
-    if store.isShowingScheduled { return "Rien de programmé." }
-    if store.isShowingArchived { return "Rien d’archivé." }
-    if let intake = store.bridgeIntake, store.networkFilter == intake.network { return "Les fils arrivent." }
-    return store.networkFilter.map { "Rien sur \($0.labelFR)." } ?? "Rien à traiter."
+    if store.isShowingScheduled { return String(localized: "Rien de programmé.") }
+    if store.isShowingArchived { return String(localized: "Rien d’archivé.") }
+    if let intake = store.bridgeIntake, store.networkFilter == intake.network { return String(localized: "Les fils arrivent.") }
+    return store.networkFilter.map { String(localized: "Rien sur \($0.labelFR).") } ?? String(localized: "Rien à traiter.")
   }
 
   @ViewBuilder
@@ -509,7 +509,7 @@ struct InboxListPane: View {
         Task { await store.toggleArchived(conversationID: conversation.id) }
       } label: {
         Label(
-          store.isArchived(conversation.id) ? "Désarchiver" : "Archiver",
+          store.isArchived(conversation.id) ? String(localized: "Désarchiver") : String(localized: "Archiver"),
           systemImage: store.isArchived(conversation.id) ? "tray.and.arrow.up" : "archivebox"
         )
       }
@@ -520,7 +520,7 @@ struct InboxListPane: View {
         store.togglePinned(conversationID: conversation.id)
       } label: {
         Label(
-          store.isPinned(conversation.id) ? "Désépingler" : "Épingler",
+          store.isPinned(conversation.id) ? String(localized: "Désépingler") : String(localized: "Épingler"),
           systemImage: store.isPinned(conversation.id) ? "pin.slash" : "pin"
         )
       }
@@ -530,7 +530,7 @@ struct InboxListPane: View {
         store.toggleMuted(conversationID: conversation.id)
       } label: {
         Label(
-          store.isMuted(conversation.id) ? "Réactiver" : "Muet",
+          store.isMuted(conversation.id) ? String(localized: "Réactiver") : String(localized: "Muet"),
           systemImage: store.isMuted(conversation.id) ? "bell" : "bell.slash"
         )
       }
@@ -585,17 +585,17 @@ struct InboxListPane: View {
     }
 
     if !conversation.isGroup, conversation.network != .selfNote, conversation.network != .agent {
-      Button(store.isMerged(conversation.id) ? "Ajouter un chat à cette personne…" : "Fusionner avec un autre chat…") {
+      Button(store.isMerged(conversation.id) ? String(localized: "Ajouter un chat à cette personne…") : String(localized: "Fusionner avec un autre chat…")) {
         store.mergePickerConversationID = conversation.id
       }
     }
 
-    Button(store.isSelectionMode ? "Quitter la sélection" : "Sélectionner plusieurs fils") {
+    Button(store.isSelectionMode ? String(localized: "Quitter la sélection") : String(localized: "Sélectionner plusieurs fils")) {
       store.toggleSelectionMode()
       if store.isSelectionMode { store.toggleSelection(conversation.id) }
     }
 
-    Button(store.isArchived(conversation.id) ? "Désarchiver" : "Archiver") {
+    Button(store.isArchived(conversation.id) ? String(localized: "Désarchiver") : String(localized: "Archiver")) {
       Task { await store.toggleArchived(conversationID: conversation.id) }
     }
 
@@ -614,7 +614,7 @@ struct InboxListPane: View {
     Divider()
 
     if conversation.network.livesOnRelay {
-      Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
+      Button(conversation.hasUnread ? String(localized: "Marquer comme lu") : String(localized: "Marquer comme non lu")) {
         if conversation.hasUnread {
           Task { await store.markRead(conversationID: conversation.id) }
         } else {
@@ -622,11 +622,11 @@ struct InboxListPane: View {
         }
       }
 
-      Button(store.isPinned(conversation.id) ? "Désépingler la discussion" : "Épingler la discussion") {
+      Button(store.isPinned(conversation.id) ? String(localized: "Désépingler la discussion") : String(localized: "Épingler la discussion")) {
         store.togglePinned(conversationID: conversation.id)
       }
 
-      Button(store.isMuted(conversation.id) ? "Réactiver les notifications" : "Couper les notifications") {
+      Button(store.isMuted(conversation.id) ? String(localized: "Réactiver les notifications") : String(localized: "Couper les notifications")) {
         store.toggleMuted(conversationID: conversation.id)
       }
 
@@ -642,14 +642,14 @@ struct InboxListPane: View {
         }
       }
     } else {
-      Button(conversation.hasUnread ? "Marquer comme lu" : "Marquer comme non lu") {
+      Button(conversation.hasUnread ? String(localized: "Marquer comme lu") : String(localized: "Marquer comme non lu")) {
         if conversation.hasUnread {
           Task { await store.markRead(conversationID: conversation.id) }
         } else {
           store.markUnread(conversationID: conversation.id)
         }
       }
-      Button(store.isPinned(conversation.id) ? "Désépingler" : "Épingler") {
+      Button(store.isPinned(conversation.id) ? String(localized: "Désépingler") : String(localized: "Épingler")) {
         store.togglePinned(conversationID: conversation.id)
       }
     }

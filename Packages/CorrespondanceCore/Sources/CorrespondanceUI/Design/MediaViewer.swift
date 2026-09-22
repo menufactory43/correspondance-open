@@ -62,7 +62,7 @@ public struct MediaViewer: View {
       StableVideoPlayer(url: url, autoplays: true)
     } else if let url = attachment.resolvedFileURL {
       ZoomableImage(url: url, scale: $scale)
-        .accessibilityLabel(attachment.filename ?? "Photo")
+        .accessibilityLabel(attachment.filename ?? String(localized: "Photo"))
     } else {
       Label("Média indisponible", systemImage: "photo")
         .foregroundStyle(.white)

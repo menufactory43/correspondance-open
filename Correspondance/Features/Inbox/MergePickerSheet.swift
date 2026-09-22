@@ -82,7 +82,9 @@ struct MergePickerSheet: View {
   private var header: some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack {
-        Text(store.isMerged(source.id) ? "Ajouter un chat à \(source.title)" : "Fusionner \(source.title) avec…")
+        Text(store.isMerged(source.id)
+          ? String(localized: "Ajouter un chat à \(source.title)")
+          : String(localized: "Fusionner \(source.title) avec…"))
           .font(Typography.letterHeading(typeface, 17))
           .foregroundStyle(theme.ink)
           .lineLimit(1)
@@ -167,8 +169,8 @@ struct MergePickerSheet: View {
         }
         if candidates.isEmpty && suggested.isEmpty {
           Text(trimmed.isEmpty
-            ? "Aucun autre fil à réunir : tous les réseaux de cette personne sont déjà là."
-            : "Personne ne répond à « \(trimmed) ».")
+            ? String(localized: "Aucun autre fil à réunir : tous les réseaux de cette personne sont déjà là.")
+            : String(localized: "Personne ne répond à « \(trimmed) »."))
             .font(Typography.body(typeface))
             .foregroundStyle(theme.inkSecondary)
             .frame(maxWidth: .infinity)
@@ -196,8 +198,10 @@ struct MergePickerSheet: View {
   private var footer: some View {
     HStack {
       Text(selectedIDs.isEmpty
-        ? "Aucun fil coché"
-        : "\(selectedIDs.count) fil\(selectedIDs.count > 1 ? "s" : "") coché\(selectedIDs.count > 1 ? "s" : "")")
+        ? String(localized: "Aucun fil coché")
+        : (selectedIDs.count > 1
+            ? String(localized: "\(selectedIDs.count) fils cochés")
+            : String(localized: "\(selectedIDs.count) fil coché")))
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)
       Spacer()
@@ -213,9 +217,11 @@ struct MergePickerSheet: View {
   private var actionLabel: String {
     let count = selectedIDs.count
     if store.isMerged(source.id) || selection.contains(where: { store.isMerged($0.id) }) {
-      return count <= 1 ? "Ajouter à cette personne" : "Ajouter \(count) chats"
+      return count <= 1
+        ? String(localized: "Ajouter à cette personne")
+        : String(localized: "Ajouter \(count) chats")
     }
-    return "Fusionner \(count + 1) chats"
+    return String(localized: "Fusionner \(count + 1) chats")
   }
 
   private func toggle(_ conversation: Conversation) {

@@ -26,10 +26,10 @@ public struct SharedPost: Equatable, Sendable {
   /// Ce que la liste des fils annonce à la place du Markdown brut.
   public var previewText: String {
     switch (kind, author) {
-    case (.reel, let author?): "Reel de \(author)"
-    case (.reel, nil): "Reel Instagram"
-    case (.story, _): "Story Instagram"
-    case (.post, _): "Publication Instagram"
+    case (.reel, let author?): String(localized: "Reel de \(author)")
+    case (.reel, nil): String(localized: "Reel Instagram")
+    case (.story, _): String(localized: "Story Instagram")
+    case (.post, _): String(localized: "Publication Instagram")
     }
   }
 

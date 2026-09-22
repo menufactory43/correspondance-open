@@ -25,11 +25,11 @@ struct SettingsAppearancePane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
-        title: "Ouverture",
-        footnote: "Focus montre une conversation à la fois, Inbox toute la liste. "
-          + "⌘1 et ⌘2 pour passer de l’un à l’autre, ⌘⇧D pour détacher une conversation."
+        title: String(localized: "Ouverture"),
+        footnote: String(localized: "Focus montre une conversation à la fois, Inbox toute la liste. ")
+          + String(localized: "⌘1 et ⌘2 pour passer de l’un à l’autre, ⌘⇧D pour détacher une conversation.")
       ) {
-        SettingsRow(label: "Mode au démarrage", systemImage: "rectangle.split.2x1") {
+        SettingsRow(label: String(localized: "Mode au démarrage"), systemImage: "rectangle.split.2x1") {
           Picker("", selection: Binding(
             get: { store.mode },
             set: { store.setMode($0) }
@@ -44,7 +44,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Ouvrir les notifications en fenêtre détachée", systemImage: "macwindow.on.rectangle") {
+        SettingsRow(label: String(localized: "Ouvrir les notifications en fenêtre détachée"), systemImage: "macwindow.on.rectangle") {
           Toggle("", isOn: $notificationsOpenDetached)
             .labelsHidden()
             .toggleStyle(.switch)
@@ -52,11 +52,11 @@ struct SettingsAppearancePane: View {
       }
 
       SettingsCard(
-        title: "Réponse rapide",
-        footnote: "Un petit panneau pour répondre sans ouvrir l’app. "
-          + "⌘↑ et ⌘↓ changent de conversation, ⌘K en cherche une, Échap ferme."
+        title: String(localized: "Réponse rapide"),
+        footnote: String(localized: "Un petit panneau pour répondre sans ouvrir l’app. ")
+          + String(localized: "⌘↑ et ⌘↓ changent de conversation, ⌘K en cherche une, Échap ferme.")
       ) {
-        SettingsRow(label: "Raccourci global", systemImage: "bolt") {
+        SettingsRow(label: String(localized: "Raccourci global"), systemImage: "bolt") {
           Toggle("", isOn: $quickReplyEnabled)
             .labelsHidden()
             .toggleStyle(.switch)
@@ -67,7 +67,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Combinaison", systemImage: "command") {
+        SettingsRow(label: String(localized: "Combinaison"), systemImage: "command") {
           Picker("", selection: $quickReplyHotKey) {
             ForEach(QuickReplyHotKey.allCases) { combo in
               Text(combo.labelFR).tag(combo)
@@ -83,7 +83,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Fermer après envoi", systemImage: "paperplane") {
+        SettingsRow(label: String(localized: "Fermer après envoi"), systemImage: "paperplane") {
           Toggle("", isOn: $quickReplyClosesAfterSend)
             .labelsHidden()
             .toggleStyle(.switch)
@@ -91,7 +91,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Icône dans la barre des menus", systemImage: "menubar.arrow.up.rectangle") {
+        SettingsRow(label: String(localized: "Icône dans la barre des menus"), systemImage: "menubar.arrow.up.rectangle") {
           Toggle("", isOn: $quickReplyMenuBarExtra)
             .labelsHidden()
             .toggleStyle(.switch)
@@ -99,7 +99,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Jamais au-dessus d’une app plein écran", systemImage: "arrow.up.left.and.arrow.down.right") {
+        SettingsRow(label: String(localized: "Jamais au-dessus d’une app plein écran"), systemImage: "arrow.up.left.and.arrow.down.right") {
           Toggle("", isOn: $quickReplyAvoidsFullScreen)
             .labelsHidden()
             .toggleStyle(.switch)
@@ -107,10 +107,10 @@ struct SettingsAppearancePane: View {
       }
 
       SettingsCard(
-        title: "Police",
-        footnote: "⌘+ et ⌘− changent la taille, ⌘0 revient à la normale."
+        title: String(localized: "Police"),
+        footnote: String(localized: "⌘+ et ⌘− changent la taille, ⌘0 revient à la normale.")
       ) {
-        SettingsRow(label: "Famille", systemImage: "textformat") {
+        SettingsRow(label: String(localized: "Famille"), systemImage: "textformat") {
           Picker("", selection: Binding(
             get: { themes.typeface },
             set: { themes.typeface = $0 }
@@ -124,7 +124,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Longueur de ligne", systemImage: "arrow.left.and.right.text.vertical") {
+        SettingsRow(label: String(localized: "Longueur de ligne"), systemImage: "arrow.left.and.right.text.vertical") {
           Picker("", selection: Binding(
             get: { themes.lineLength },
             set: { themes.lineLength = $0 }
@@ -140,7 +140,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Taille du texte", systemImage: "textformat.size") {
+        SettingsRow(label: String(localized: "Taille du texte"), systemImage: "textformat.size") {
           HStack(spacing: Spacing.xs) {
             Slider(
               value: Binding(
@@ -175,10 +175,10 @@ struct SettingsAppearancePane: View {
       }
 
       SettingsCard(
-        title: "Fil",
-        footnote: "En mode Inbox seulement. Focus reste sans photos, comme une lettre."
+        title: String(localized: "Fil"),
+        footnote: String(localized: "En mode Inbox seulement. Focus reste sans photos, comme une lettre.")
       ) {
-        SettingsRow(label: "Photo de l'expéditeur", systemImage: "person.crop.circle") {
+        SettingsRow(label: String(localized: "Photo de l'expéditeur"), systemImage: "person.crop.circle") {
           Toggle("", isOn: Binding(
             get: { themes.showsMessageAvatars },
             set: { themes.showsMessageAvatars = $0 }
@@ -188,7 +188,7 @@ struct SettingsAppearancePane: View {
 
         SettingsDivider()
 
-        SettingsRow(label: "Aperçu des liens", systemImage: "link") {
+        SettingsRow(label: String(localized: "Aperçu des liens"), systemImage: "link") {
           Toggle("", isOn: Binding(
             get: { themes.showsLinkPreviews },
             set: { themes.showsLinkPreviews = $0 }
@@ -198,10 +198,10 @@ struct SettingsAppearancePane: View {
       }
 
       SettingsCard(
-        title: "Arrivée d'un message",
-        footnote: "En mode Focus seulement."
+        title: String(localized: "Arrivée d'un message"),
+        footnote: String(localized: "En mode Focus seulement.")
       ) {
-        SettingsRow(label: "Animation", systemImage: "wand.and.sparkles") {
+        SettingsRow(label: String(localized: "Animation"), systemImage: "wand.and.sparkles") {
           Picker("", selection: Binding(
             get: { themes.messageArrival },
             set: { themes.messageArrival = $0 }
@@ -214,7 +214,7 @@ struct SettingsAppearancePane: View {
         }
       }
 
-      SettingsCard(title: "Ambiance") {
+      SettingsCard(title: String(localized: "Ambiance")) {
         ThemePickerView(selection: Binding(
           get: { themes.themeID },
           set: { themes.themeID = $0 }

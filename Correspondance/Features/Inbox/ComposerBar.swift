@@ -147,12 +147,12 @@ struct ComposerBar: View {
   }
 
   private var placeholder: String {
-    if isEditing { return "Corriger le message" }
+    if isEditing { return String(localized: "Corriger le message") }
     guard let member = activeMember, let merged = mergedID,
           let contact = store.mergedContact(for: merged)
-    else { return Self.placeholder(base: "Message", asideAgents: store.primarySession?.asideAgents ?? []) }
+    else { return Self.placeholder(base: String(localized: "Message"), asideAgents: store.primarySession?.asideAgents ?? []) }
     return Self.placeholder(
-      base: "Écrire à \(contact.title) sur \(member.network.labelFR)",
+      base: String(localized: "Écrire à \(contact.title) sur \(member.network.labelFR)"),
       asideAgents: store.primarySession?.asideAgents ?? []
     )
   }
@@ -162,7 +162,7 @@ struct ComposerBar: View {
   /// peut le nommer — ni que ce sera un aparté, que les autres ne verront pas.
   static func placeholder(base: String, asideAgents: [String]) -> String {
     guard let premier = asideAgents.first else { return base }
-    return "\(base) · @\(premier) pour un aparté"
+    return String(localized: "\(base) · @\(premier) pour un aparté")
   }
 
   /// Le composer suit l'échelle de lecture (⌘+ / ⌘−), comme les bulles.
@@ -230,7 +230,7 @@ struct ComposerBar: View {
       // seulement qu'elle existe.
       ComposerCircleButton(
         systemImage: "face.smiling",
-        helpText: "Emoji et symboles (⌘⌃Espace)",
+        helpText: String(localized: "Emoji et symboles (⌘⌃Espace)"),
         theme: theme,
         size: ComposerMetrics.innerControl,
         iconSize: 14,
@@ -240,7 +240,7 @@ struct ComposerBar: View {
       if showsVoiceButton {
         ComposerCircleButton(
           systemImage: "waveform",
-          helpText: "Enregistrer un message vocal",
+          helpText: String(localized: "Enregistrer un message vocal"),
           theme: theme,
           size: ComposerMetrics.innerControl,
           iconSize: 14,
@@ -307,7 +307,7 @@ struct ComposerBar: View {
     .fixedSize()
     .padding(.bottom, 3)
     .help("Écrire sur un autre réseau")
-    .accessibilityLabel("Chat actif : \(active.network.labelFR). Changer de réseau d'envoi.")
+    .accessibilityLabel(String(localized: "Chat actif : \(active.network.labelFR). Changer de réseau d'envoi."))
   }
 
   private func send() {

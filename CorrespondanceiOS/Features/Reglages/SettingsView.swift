@@ -81,12 +81,12 @@ struct SettingsView: View {
 
   private var relaySection: some View {
     Section {
-      row("Adresse", credentials?.homeserver.absoluteString ?? store.rememberedHomeserver)
-      row("Identifiant", credentials?.userID ?? "—")
-      row("Session", sessionLabel)
+      row(String(localized: "Adresse"), credentials?.homeserver.absoluteString ?? store.rememberedHomeserver)
+      row(String(localized: "Identifiant"), credentials?.userID ?? "—")
+      row(String(localized: "Session"), sessionLabel)
       // La même phrase que sur le Mac, au mot près : c'est le même état, il n'a
       // pas à se raconter de deux façons.
-      row("Archives, épingles, brouillons", relayStateLabel)
+      row(String(localized: "Archives, épingles, brouillons"), relayStateLabel)
     } header: {
       Text("Relais")
     } footer: {
@@ -101,17 +101,21 @@ struct SettingsView: View {
 
   private var sessionLabel: String {
     switch store.session {
-    case .connected: store.syncError == nil ? "Connectée" : "Connectée, mise à jour en échec"
-    case .connecting: "Connexion…"
-    case .disconnected: "Déconnectée"
-    case .unknown: "Inconnue"
+    case .connected:
+      store.syncError == nil
+        ? String(localized: "Connectée") : String(localized: "Connectée, mise à jour en échec")
+    case .connecting: String(localized: "Connexion…")
+    case .disconnected: String(localized: "Déconnectée")
+    case .unknown: String(localized: "Inconnue")
     }
   }
 
   private var relayStateLabel: String {
     let pending = store.relayQueue.count
-    guard pending > 0 else { return "À jour" }
-    return pending == 1 ? "1 modification en attente" : "\(pending) modifications en attente"
+    guard pending > 0 else { return String(localized: "À jour") }
+    return pending == 1
+      ? String(localized: "1 modification en attente")
+      : String(localized: "\(pending) modifications en attente")
   }
 
   // MARK: - Ponts
@@ -144,7 +148,9 @@ struct SettingsView: View {
 
   private func countLabel(_ network: MessageNetwork) -> String {
     let count = store.conversations.count { $0.network == network }
-    return count == 1 ? "1 conversation" : "\(count) conversations"
+    return count == 1
+      ? String(localized: "1 conversation")
+      : String(localized: "\(count) conversations")
   }
 
   // MARK: - Thème
@@ -238,13 +244,15 @@ struct SettingsView: View {
 
   private var notificationsSection: some View {
     Section {
-      row("Autorisation", push.authorizationLabelFR)
-      row("Enregistré sur le Relais", push.isRegistered ? "Oui" : "Pas encore")
+      row(String(localized: "Autorisation"), push.authorizationLabelFR)
+      row(
+        String(localized: "Enregistré sur le Relais"),
+        push.isRegistered ? String(localized: "Oui") : String(localized: "Pas encore"))
       // La passerelle est publique et partagée : la montrer, c'est dire où part
       // le réveil. Et l'app_id avec, parce que c'est lui qui choisit
       // l'environnement APNs — le seul réglage dont l'erreur est silencieuse.
-      row("Passerelle", PushRegistration.sygnalURL.absoluteString)
-      row("Environnement", PushRegistration.pusherAppID)
+      row(String(localized: "Passerelle"), PushRegistration.sygnalURL.absoluteString)
+      row(String(localized: "Environnement"), PushRegistration.pusherAppID)
       if push.authorization == .notDetermined {
         Button("Autoriser les notifications") {
           Task { await push.requestAuthorizationIfNeeded() }

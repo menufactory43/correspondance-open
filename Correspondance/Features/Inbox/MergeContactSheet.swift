@@ -61,8 +61,8 @@ struct MergeContactSheet: View {
       .pickerStyle(.menu)
       .frame(maxWidth: 260)
 
-      Text("Les deux fils se liront ensemble, du plus ancien au plus récent. "
-        + "Le chat par défaut est celui où part le prochain message.")
+      Text(String(localized: "Les deux fils se liront ensemble, du plus ancien au plus récent. ")
+        + String(localized: "Le chat par défaut est celui où part le prochain message."))
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
@@ -128,7 +128,7 @@ struct MergeContactSheet: View {
     guard defaultConversationID.isEmpty else { return }
     title = candidates.first { !$0.hasPlaceholderTitle }?.title
       ?? candidates.first?.title
-      ?? "Contact"
+      ?? String(localized: "Contact")
     avatarConversationID = candidates.first { !$0.hasPlaceholderTitle }?.id ?? candidates.first?.id
     defaultConversationID = candidates.first { $0.network == .iMessage }?.id
       ?? candidates.max(by: { $0.lastMessageAt < $1.lastMessageAt })?.id

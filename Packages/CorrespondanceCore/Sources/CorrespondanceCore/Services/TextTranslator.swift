@@ -24,8 +24,8 @@ public actor TextTranslator {
 
     public var errorDescription: String? {
       switch self {
-      case .unavailable: "Traduction indisponible pour cette langue sur cet appareil."
-      case .empty: "Rien à traduire."
+      case .unavailable: String(localized: "Traduction indisponible pour cette langue sur cet appareil.")
+      case .empty: String(localized: "Rien à traduire.")
       }
     }
   }

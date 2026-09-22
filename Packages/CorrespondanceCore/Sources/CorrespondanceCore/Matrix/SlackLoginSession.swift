@@ -102,11 +102,18 @@ public struct SlackLoginSession: Equatable, Sendable {
   /// pas un cookie, on ne peut pas le prendre dans l'onglet Cookies.
   public static var manualStepsFR: [String] {
     [
-      "Connecte-toi sur ton espace Slack dans ton navigateur (l’app web, pas l’app native).",
-      "Ouvre les outils de développement : ⌥⌘I, ou Affichage › Développeur.",
-      "Onglet Réseau. Recharge la page, clique une requête vers `slack.com/api/…`.",
-      "Clic droit sur la requête › Copier › Copier comme cURL, et colle la commande entière ci-dessous.",
-      "Ou, à la main : le jeton `auth_token` (`xoxc-…`) est dans Application › Local Storage › `localConfig_v2` ; le `cookie_token` (`xoxd-…`) est le cookie `d`.",
+      String(
+        localized: "Connecte-toi sur ton espace Slack dans ton navigateur (l’app web, pas l’app native)."),
+      String(localized: "Ouvre les outils de développement : ⌥⌘I, ou Affichage › Développeur."),
+      String(localized: "Onglet Réseau. Recharge la page, clique une requête vers `slack.com/api/…`."),
+      String(
+        localized:
+          "Clic droit sur la requête › Copier › Copier comme cURL, et colle la commande entière ci-dessous."
+      ),
+      String(
+        localized:
+          "Ou, à la main : le jeton `auth_token` (`xoxc-…`) est dans Application › Local Storage › `localConfig_v2` ; le `cookie_token` (`xoxd-…`) est le cookie `d`."
+      ),
     ]
   }
 

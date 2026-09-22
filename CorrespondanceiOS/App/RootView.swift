@@ -15,10 +15,10 @@ enum PhoneMode: String, CaseIterable, Identifiable, Sendable {
 
   var labelFR: String {
     switch self {
-    case .inbox: "Inbox"
-    case .archive: "Archive"
-    case .focus: "Focus"
-    case .search: "Rechercher"
+    case .inbox: String(localized: "Inbox")
+    case .archive: String(localized: "Archive")
+    case .focus: String(localized: "Focus")
+    case .search: String(localized: "Rechercher")
     }
   }
 

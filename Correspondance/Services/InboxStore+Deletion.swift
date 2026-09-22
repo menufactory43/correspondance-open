@@ -32,22 +32,22 @@ extension InboxStore {
   /// Ce qui empêche la suppression réseau, pour le dire plutôt que de griser sans raison.
   func deleteEverywhereBlocker(for message: ChatMessage) -> String? {
     guard let conversation = conversation(ofMessage: message) else {
-      return "Ce message n’appartient à aucun fil connu."
+      return String(localized: "Ce message n’appartient à aucun fil connu.")
     }
     if conversation.network == .iMessage {
-      return "Messages ne sait pas supprimer un message envoyé — seulement annuler "
-        + "l’envoi dans les deux minutes. Ici, il ne disparaîtra que de Correspondance."
+      return String(localized: "Messages ne sait pas supprimer un message envoyé — seulement annuler ")
+        + String(localized: "l’envoi dans les deux minutes. Ici, il ne disparaîtra que de Correspondance.")
     }
     if !isMatrixConnected {
-      return "Matrix n’est pas connecté — vérifie Réglages → Matrix."
+      return String(localized: "Matrix n’est pas connecté — vérifie Réglages → Matrix.")
     }
     if !message.isFromMe {
-      return "On ne supprime pour tout le monde que ses propres messages."
+      return String(localized: "On ne supprime pour tout le monde que ses propres messages.")
     }
     if !conversation.network.acceptsDeleteForEveryone(sentAt: message.sentAt),
        let delai = conversation.network.deleteWindowLabelFR {
-      return "Trop tard : \(conversation.network.labelFR) ne retire un message de partout "
-        + "que dans les \(delai). Ici, il ne disparaîtra que de Correspondance."
+      return String(localized: "Trop tard : \(conversation.network.labelFR) ne retire un message de partout ")
+        + String(localized: "que dans les \(delai). Ici, il ne disparaîtra que de Correspondance.")
     }
     return nil
   }

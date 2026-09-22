@@ -23,9 +23,9 @@ public actor VoiceTranscriber {
 
     public var errorDescription: String? {
       switch self {
-      case .denied: "La reconnaissance vocale est refusée. Réglages › Correspondance."
-      case .unavailable: "La reconnaissance vocale n'est pas disponible pour le français ici."
-      case .empty: "Rien de compréhensible dans ce message."
+      case .denied: String(localized: "La reconnaissance vocale est refusée. Réglages › Correspondance.")
+      case .unavailable: String(localized: "La reconnaissance vocale n'est pas disponible pour le français ici.")
+      case .empty: String(localized: "Rien de compréhensible dans ce message.")
       case .failed(let reason): reason
       }
     }
@@ -155,7 +155,7 @@ private final class Collecteur: NSObject, SFSpeechRecognitionTaskDelegate, @unch
     // compris : un vocal à demi transcrit vaut mieux qu'un message d'échec.
     if !successfully, texte.isEmpty {
       let raison = task.error?.localizedDescription ?? self.task?.error?.localizedDescription
-      pending.resume(throwing: VoiceTranscriber.Failure.failed(raison ?? "Transcription interrompue."))
+      pending.resume(throwing: VoiceTranscriber.Failure.failed(raison ?? String(localized: "Transcription interrompue.")))
       return
     }
     pending.resume(returning: texte)

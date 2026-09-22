@@ -92,7 +92,7 @@ struct FocusConversationView: View {
   /// ouvert n'est pas dans la file (archivé, filtré par le rail).
   private var queueLabel: String? {
     guard isPrimary, let index = store.focusIndex else { return nil }
-    return "\(index + 1) sur \(store.activeQueue.count)"
+    return String(localized: "\(index + 1) sur \(store.activeQueue.count)")
   }
 
   var body: some View {
@@ -138,7 +138,8 @@ struct FocusConversationView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
           VStack(alignment: .leading, spacing: Spacing.sm) {
-            Text(store.isLoading ? "Chargement…" : "Rien à lire pour l’instant.")
+            Text(store.isLoading ? String(localized: "Chargement…")
+                                 : String(localized: "Rien à lire pour l’instant."))
               .font(Typography.emptyState(themes.typeface))
               .foregroundStyle(theme.inkSecondary)
             Text(store.matrixStatusFR)
@@ -226,8 +227,13 @@ struct FocusEdgeTurn: View {
     case previous, next
 
     var systemImage: String { self == .next ? "chevron.right" : "chevron.left" }
-    var label: String { self == .next ? "Conversation suivante" : "Conversation précédente" }
-    var hint: String { self == .next ? "suivante ⌘↓" : "⌘↑ précédente" }
+    var label: String {
+      self == .next ? String(localized: "Conversation suivante")
+                    : String(localized: "Conversation précédente")
+    }
+    var hint: String {
+      self == .next ? String(localized: "suivante ⌘↓") : String(localized: "⌘↑ précédente")
+    }
   }
 
   var direction: Direction
@@ -439,7 +445,7 @@ struct FocusTranscriptView: View {
                         cornerRadius: 8,
                         placeholder: theme.paperSecondary,
                         border: nil,
-                        label: attachment.filename ?? "Image"
+                        label: attachment.filename ?? String(localized: "Image")
                       ) {
                         EmptyView()
                       }
@@ -451,7 +457,7 @@ struct FocusTranscriptView: View {
                         cornerRadius: 8,
                         placeholder: theme.paperSecondary,
                         border: nil,
-                        label: attachment.filename ?? "Vidéo"
+                        label: attachment.filename ?? String(localized: "Vidéo")
                       )
                     }
                   }
@@ -765,7 +771,7 @@ struct FocusTranscriptView: View {
   /// page se lit comme une lettre — l'encre plus pâle dit déjà que c'est moi.
   private func focusLabel(for group: MessageGroup) -> String? {
     guard isGroup else { return nil }
-    return group.isFromMe ? "Toi" : group.senderLabel
+    return group.isFromMe ? String(localized: "Toi") : group.senderLabel
   }
 }
 
@@ -878,7 +884,7 @@ struct FocusPageEditor: View {
         GrowingTextEditor(
           text: text,
           isFocused: $isFocused,
-          placeholder: showsChrome ? "Répondre…" : "",
+          placeholder: showsChrome ? String(localized: "Répondre…") : "",
           font: themes.typeface.nsFont(size: pageBodySize),
           textColor: NSColor(theme.ink),
           placeholderColor: NSColor(theme.inkTertiary),
@@ -950,8 +956,9 @@ struct FocusPageEditor: View {
     }
     .buttonStyle(.plain)
     .disabled(!canSend || isSending)
-    .help(isScheduling ? "Programmer l’envoi" : "Envoyer")
-    .accessibilityLabel(isScheduling ? "Programmer l’envoi" : "Envoyer")
+    .help(isScheduling ? String(localized: "Programmer l’envoi") : String(localized: "Envoyer"))
+    .accessibilityLabel(isScheduling ? String(localized: "Programmer l’envoi")
+                                     : String(localized: "Envoyer"))
   }
 
   private func noteTyping() {

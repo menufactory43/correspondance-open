@@ -91,13 +91,13 @@ extension InboxStore {
   /// n'est pas offert ici.
   func invitePromptFR(for network: MessageNetwork) -> String {
     switch network {
-    case .whatsapp: "Numéro au format international"
-    case .instagram: "Pseudo ou identifiant Instagram"
-    case .messenger: "Nom ou identifiant Messenger"
-    case .twitter: "Pseudo X"
-    case .slack: "Nom ou e-mail Slack"
-    case .telegram: "Pseudo ou numéro Telegram"
-    case .signal: "Identifiant Signal (UUID)"
+    case .whatsapp: String(localized: "Numéro au format international")
+    case .instagram: String(localized: "Pseudo ou identifiant Instagram")
+    case .messenger: String(localized: "Nom ou identifiant Messenger")
+    case .twitter: String(localized: "Pseudo X")
+    case .slack: String(localized: "Nom ou e-mail Slack")
+    case .telegram: String(localized: "Pseudo ou numéro Telegram")
+    case .signal: String(localized: "Identifiant Signal (UUID)")
     default: ""
     }
   }

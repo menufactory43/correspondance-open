@@ -70,6 +70,9 @@ let nomDeLaBibliotheque: String =
 
 let package = Package(
     name: "CorrespondanceCore",
+    // Le français est la langue de développement du paquet, comme dans les deux
+    // apps : les clés des catalogues SONT le texte français.
+    defaultLocalization: "fr",
     platforms: [.macOS(.v14), .iOS(.v18)],
     products: [
         .library(name: "CorrespondanceMatrixClient", targets: ["CorrespondanceMatrixClient"]),

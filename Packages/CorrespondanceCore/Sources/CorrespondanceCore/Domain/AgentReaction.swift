@@ -25,9 +25,9 @@ public enum AgentReaction: String, CaseIterable, Sendable {
   /// Ce que le sélecteur dit au survol.
   public var helpFR: String {
     switch self {
-    case .propose: "Demander un brouillon à cc"
-    case .retiens: "cc retient ceci sur cette personne"
-    case .traduis: "cc traduit ce message"
+    case .propose: String(localized: "Demander un brouillon à cc")
+    case .retiens: String(localized: "cc retient ceci sur cette personne")
+    case .traduis: String(localized: "cc traduit ce message")
     }
   }
 

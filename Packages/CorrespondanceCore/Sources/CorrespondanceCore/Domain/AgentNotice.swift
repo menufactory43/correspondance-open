@@ -25,8 +25,8 @@ public struct AgentNotice: Hashable, Codable, Sendable {
 
     public var labelFR: String {
       switch self {
-      case .rescan: "Relancer"
-      case .retry: "Réessayer"
+      case .rescan: String(localized: "Relancer")
+      case .retry: String(localized: "Réessayer")
       }
     }
   }

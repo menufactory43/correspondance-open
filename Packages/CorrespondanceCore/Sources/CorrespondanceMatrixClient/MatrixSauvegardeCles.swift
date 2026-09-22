@@ -194,9 +194,9 @@ public struct MatrixAppareil: Sendable, Equatable {
 
   /// Ce que l'écran affiche, en une ligne.
   public var etatFR: String {
-    if verifieParSignature { return "vérifié" }
-    if deConfianceLocalement { return "de confiance sur cet appareil" }
-    return "non vérifié"
+    if verifieParSignature { return String(localized: "vérifié") }
+    if deConfianceLocalement { return String(localized: "de confiance sur cet appareil") }
+    return String(localized: "non vérifié")
   }
 }
 
@@ -219,9 +219,13 @@ public struct MatrixEtatChiffrement: Sendable, Equatable {
   }
 
   public var resumeFR: String {
-    guard actif else { return "Inactif." }
-    return "Actif. Cet appareil est \(appareilVerifie ? "vérifié" : "non vérifié"), "
-      + "\(sauvegardeVersion == nil ? "sans sauvegarde" : "sauvegarde faite")."
+    guard actif else { return String(localized: "Inactif.") }
+    let verifie =
+      appareilVerifie ? String(localized: "vérifié") : String(localized: "non vérifié")
+    let sauvegarde =
+      sauvegardeVersion == nil
+      ? String(localized: "sans sauvegarde") : String(localized: "sauvegarde faite")
+    return String(localized: "Actif. Cet appareil est \(verifie), \(sauvegarde).")
   }
 }
 

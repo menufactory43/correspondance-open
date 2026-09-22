@@ -49,11 +49,11 @@ extension InboxStore {
   func sendTapbackViaAutomation(conversation: Conversation, message: ChatMessage, emoji: String) async {
     guard let blocker = automationBlocker(for: conversation) else {
       guard let tapback = IMessageTapback.matching(emoji: emoji) else {
-        lastErrorMessage = "iMessage n’accepte que ❤️ 👍 👎 😂 ‼️ ❓ en tapback."
+        lastErrorMessage = String(localized: "iMessage n’accepte que ❤️ 👍 👎 😂 ‼️ ❓ en tapback.")
         return
       }
       guard let target = automationTarget(conversation: conversation, message: message) else {
-        lastErrorMessage = "Message iMessage sans GUID — tapback impossible."
+        lastErrorMessage = String(localized: "Message iMessage sans GUID — tapback impossible.")
         return
       }
       let removing = message.myReactionEmoji == emoji
@@ -77,7 +77,7 @@ extension InboxStore {
     guard let quoted = messages.first(where: { $0.id == quotedID }),
           let target = automationTarget(conversation: conversation, message: quoted)
     else {
-      lastErrorMessage = "Le message cité n’existe plus — réponse annulée."
+      lastErrorMessage = String(localized: "Le message cité n’existe plus — réponse annulée.")
       return false
     }
     do {
@@ -99,11 +99,11 @@ extension InboxStore {
       return
     }
     guard message.isFromMe else {
-      lastErrorMessage = "On ne modifie que ses propres messages."
+      lastErrorMessage = String(localized: "On ne modifie que ses propres messages.")
       return
     }
     guard let target = automationTarget(conversation: conversation, message: message) else {
-      lastErrorMessage = "Message iMessage sans GUID — modification impossible."
+      lastErrorMessage = String(localized: "Message iMessage sans GUID — modification impossible.")
       return
     }
     do {
@@ -124,11 +124,11 @@ extension InboxStore {
       return
     }
     guard message.isFromMe else {
-      lastErrorMessage = "On n’annule que ses propres envois."
+      lastErrorMessage = String(localized: "On n’annule que ses propres envois.")
       return
     }
     guard let target = automationTarget(conversation: conversation, message: message) else {
-      lastErrorMessage = "Message iMessage sans GUID — annulation impossible."
+      lastErrorMessage = String(localized: "Message iMessage sans GUID — annulation impossible.")
       return
     }
     do {
@@ -181,11 +181,11 @@ extension InboxStore {
   func automationBlocker(for conversation: Conversation) -> String? {
     guard conversation.network == .iMessage else { return nil }
     guard isMessagesAutomationEnabled else {
-      return "Les tapbacks, réponses citées et modifications iMessage passent par "
-        + "l’automatisation Messages : active-la dans Réglages → Automatisation Messages."
+      return String(localized: "Les tapbacks, réponses citées et modifications iMessage passent par ")
+        + String(localized: "l’automatisation Messages : active-la dans Réglages → Automatisation Messages.")
     }
     if usingDemoData {
-      return "Données démo — accorde l’accès disque pour piloter Messages."
+      return String(localized: "Données démo — accorde l’accès disque pour piloter Messages.")
     }
     guard messagesAutomationHealth.allowsActions else {
       return messagesAutomationHealth.labelFR()

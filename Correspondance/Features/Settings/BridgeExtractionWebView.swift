@@ -121,7 +121,7 @@ struct BridgeExtractionWebView: NSViewRepresentable {
       }
       let missing = params.requiredFieldIDs.filter { values[$0] == nil }
       guard missing.isEmpty else {
-        onError("Il manque encore : \(missing.joined(separator: ", ")).")
+        onError(String(localized: "Il manque encore : \(missing.joined(separator: ", "))."))
         return
       }
       hasDelivered = true

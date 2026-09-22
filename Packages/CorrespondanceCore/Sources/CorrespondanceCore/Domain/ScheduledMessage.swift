@@ -48,7 +48,7 @@ public struct ScheduledMessage: Codable, Identifiable, Sendable, Equatable {
   /// Texte affiché dans le fil et la liste (une photo seule a droit à un mot).
   public var displayText: String {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    if trimmed.isEmpty, !attachmentPaths.isEmpty { return "📷 Photo" }
+    if trimmed.isEmpty, !attachmentPaths.isEmpty { return String(localized: "📷 Photo") }
     return trimmed
   }
 }

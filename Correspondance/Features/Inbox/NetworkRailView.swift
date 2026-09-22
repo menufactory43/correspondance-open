@@ -42,7 +42,7 @@ struct NetworkRailView: View {
   private func railButton(_ network: MessageNetwork?, shortcutIndex: Int) -> some View {
     let isSelected = store.networkFilter == network
     let unread = store.unreadCount(for: network)
-    let label = network?.labelFR ?? "Tous"
+    let label = network?.labelFR ?? String(localized: "Tous")
 
     return Button {
       withAnimation(reduceMotion ? nil : .smooth(duration: 0.28)) {
@@ -70,7 +70,7 @@ struct NetworkRailView: View {
     }
     .buttonStyle(ComposerPressStyle())
     .help("\(label) (⌘\(shortcutIndex))")
-    .accessibilityLabel(unread > 0 ? "\(label), \(unread) non lus" : label)
+    .accessibilityLabel(unread > 0 ? String(localized: "\(label), \(unread) non lus") : label)
     .accessibilityAddTraits(isSelected ? [.isSelected] : [])
   }
 
@@ -104,7 +104,10 @@ struct NetworkRailView: View {
     }
     .buttonStyle(ComposerPressStyle())
     .help("Messages programmés")
-    .accessibilityLabel(count == 0 ? "Messages programmés" : "\(count) message\(count > 1 ? "s" : "") programmé\(count > 1 ? "s" : "")")
+    .accessibilityLabel(count == 0
+      ? String(localized: "Messages programmés")
+      : (count > 1 ? String(localized: "\(count) messages programmés")
+                   : String(localized: "\(count) message programmé")))
     .accessibilityAddTraits(isSelected ? [.isSelected] : [])
   }
 

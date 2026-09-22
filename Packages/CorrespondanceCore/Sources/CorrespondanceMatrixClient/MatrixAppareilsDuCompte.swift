@@ -67,23 +67,23 @@ public struct MatrixAppareilVu: Sendable, Equatable, Identifiable {
 
   /// Ce que l'écran affiche à droite du nom.
   public var etatFR: String {
-    if estMoi && verifieParSignature { return "cet appareil · vérifié" }
-    if estMoi { return "cet appareil" }
-    if verifieParSignature { return "vérifié" }
-    if deConfianceLocalement { return "de confiance sur cet appareil" }
-    if etatCryptoInconnu { return "état inconnu" }
-    return "non vérifié"
+    if estMoi && verifieParSignature { return String(localized: "cet appareil · vérifié") }
+    if estMoi { return String(localized: "cet appareil") }
+    if verifieParSignature { return String(localized: "vérifié") }
+    if deConfianceLocalement { return String(localized: "de confiance sur cet appareil") }
+    if etatCryptoInconnu { return String(localized: "état inconnu") }
+    return String(localized: "non vérifié")
   }
 
   /// « il y a 3 min », « il y a 2 j », ou rien quand le serveur ne l'a jamais vu.
   public func activiteFR(maintenant: Date = Date()) -> String? {
     guard let derniereActivite else { return nil }
     let secondes = Int(maintenant.timeIntervalSince(derniereActivite))
-    if secondes < 0 { return "à l'instant" }
-    if secondes < 120 { return "à l'instant" }
-    if secondes < 3600 { return "il y a \(secondes / 60) min" }
-    if secondes < 86_400 { return "il y a \(secondes / 3600) h" }
-    return "il y a \(secondes / 86_400) j"
+    if secondes < 0 { return String(localized: "à l'instant") }
+    if secondes < 120 { return String(localized: "à l'instant") }
+    if secondes < 3600 { return String(localized: "il y a \(secondes / 60) min") }
+    if secondes < 86_400 { return String(localized: "il y a \(secondes / 3600) h") }
+    return String(localized: "il y a \(secondes / 86_400) j")
   }
 
   /// Recolle les deux moitiés. L'ordre est celui de l'écran : cet appareil en

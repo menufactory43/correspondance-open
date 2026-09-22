@@ -25,7 +25,7 @@ final class NotificationService: NSObject {
   /// « Ouvrir en réponse rapide » : le panneau paraît sur ce fil.
   var onOpenQuickReply: ((String) -> Void)?
 
-  private(set) var authorizationStatusFR = "État inconnu."
+  private(set) var authorizationStatusFR = String(localized: "État inconnu.")
   private(set) var isAuthorized = false
   /// `false` tant que l'app n'est pas empaquetée (aperçus SwiftUI, tests) : on ne touche
   /// pas à `UNUserNotificationCenter`, qui lève une exception Objective-C hors bundle.
@@ -50,7 +50,7 @@ final class NotificationService: NSObject {
   /// Sans effet (hors mise à jour du libellé) si l'utilisateur a déjà refusé.
   func requestAuthorization() async {
     guard isAvailable else {
-      authorizationStatusFR = "Indisponibles dans cette version."
+      authorizationStatusFR = String(localized: "Indisponibles dans cette version.")
       return
     }
     let center = UNUserNotificationCenter.current()
@@ -62,17 +62,17 @@ final class NotificationService: NSObject {
       let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
       isAuthorized = granted
       authorizationStatusFR = granted
-        ? "Autorisées."
-        : "Refusées. Autorise Correspondance dans Réglages Système, Notifications."
+        ? String(localized: "Autorisées.")
+        : String(localized: "Refusées. Autorise Correspondance dans Réglages Système, Notifications.")
     case .denied:
       isAuthorized = false
-      authorizationStatusFR = "Refusées. Autorise Correspondance dans Réglages Système, Notifications."
+      authorizationStatusFR = String(localized: "Refusées. Autorise Correspondance dans Réglages Système, Notifications.")
     case .authorized, .provisional, .ephemeral:
       isAuthorized = true
-      authorizationStatusFR = "Autorisées."
+      authorizationStatusFR = String(localized: "Autorisées.")
     @unknown default:
       isAuthorized = false
-      authorizationStatusFR = "État inconnu."
+      authorizationStatusFR = String(localized: "État inconnu.")
     }
   }
 
@@ -81,14 +81,14 @@ final class NotificationService: NSObject {
   private func registerCategories(on center: UNUserNotificationCenter) {
     let reply = UNTextInputNotificationAction(
       identifier: Self.replyAction,
-      title: "Répondre",
+      title: String(localized: "Répondre"),
       options: [],
-      textInputButtonTitle: "Envoyer",
-      textInputPlaceholder: "Répondre…"
+      textInputButtonTitle: String(localized: "Envoyer"),
+      textInputPlaceholder: String(localized: "Répondre…")
     )
     let quick = UNNotificationAction(
       identifier: Self.quickReplyAction,
-      title: "Ouvrir en réponse rapide",
+      title: String(localized: "Ouvrir en réponse rapide"),
       options: []
     )
     let category = UNNotificationCategory(

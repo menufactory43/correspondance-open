@@ -267,8 +267,8 @@ struct ContentView: View {
       .disabled(store.isSummaryCoolingDown)
       .help(
         store.isSummaryCoolingDown
-          ? "cc prépare le résumé…"
-          : "Demander à cc un résumé des \(store.selectedConversation?.unreadCount ?? 0) messages non lus"
+          ? String(localized: "cc prépare le résumé…")
+          : String(localized: "Demander à cc un résumé des \(store.selectedConversation?.unreadCount ?? 0) messages non lus")
       )
     }
 
@@ -281,7 +281,8 @@ struct ContentView: View {
 
     if !isFocus {
       Button(
-        store.isLoading || store.isLiveSyncing ? "Synchronisation…" : "Actualiser",
+        store.isLoading || store.isLiveSyncing
+          ? String(localized: "Synchronisation…") : String(localized: "Actualiser"),
         systemImage: store.isLoading || store.isLiveSyncing ? "hourglass" : "arrow.clockwise"
       ) {
         Task { await store.refresh() }
@@ -293,6 +294,7 @@ struct ContentView: View {
     Button("Focus", systemImage: isFocus ? "rectangle.split.2x1" : "text.aligncenter") {
       store.setMode(isFocus ? .inbox : .focus)
     }
-    .help(isFocus ? "Revenir à l’inbox (⌘⇧F)" : "Mode Focus (⌘⇧F)")
+    .help(isFocus ? String(localized: "Revenir à l’inbox (⌘⇧F)")
+                  : String(localized: "Mode Focus (⌘⇧F)"))
   }
 }

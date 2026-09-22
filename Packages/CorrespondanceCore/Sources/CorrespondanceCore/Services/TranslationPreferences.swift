@@ -83,28 +83,28 @@ public struct TranslationPreferences: @unchecked Sendable {
     /// « Français », pour un sélecteur.
     public var titleFR: String {
       switch self {
-      case .french: "Français"
-      case .english: "Anglais"
-      case .spanish: "Espagnol"
-      case .portuguese: "Portugais"
-      case .german: "Allemand"
-      case .italian: "Italien"
-      case .arabic: "Arabe"
-      case .chinese: "Chinois"
+      case .french: String(localized: "Français")
+      case .english: String(localized: "Anglais")
+      case .spanish: String(localized: "Espagnol")
+      case .portuguese: String(localized: "Portugais")
+      case .german: String(localized: "Allemand")
+      case .italian: String(localized: "Italien")
+      case .arabic: String(localized: "Arabe")
+      case .chinese: String(localized: "Chinois")
       }
     }
 
     /// « en portugais », pour une phrase.
     public var enFR: String {
       switch self {
-      case .french: "en français"
-      case .english: "en anglais"
-      case .spanish: "en espagnol"
-      case .portuguese: "en portugais"
-      case .german: "en allemand"
-      case .italian: "en italien"
-      case .arabic: "en arabe"
-      case .chinese: "en chinois"
+      case .french: String(localized: "en français")
+      case .english: String(localized: "en anglais")
+      case .spanish: String(localized: "en espagnol")
+      case .portuguese: String(localized: "en portugais")
+      case .german: String(localized: "en allemand")
+      case .italian: String(localized: "en italien")
+      case .arabic: String(localized: "en arabe")
+      case .chinese: String(localized: "en chinois")
       }
     }
 
@@ -120,6 +120,6 @@ public struct TranslationPreferences: @unchecked Sendable {
 
   /// « en portugais » pour un code connu, « en pt » sinon.
   public static func enFR(_ code: String) -> String {
-    Language.named(code)?.enFR ?? "en \(code)"
+    Language.named(code)?.enFR ?? String(localized: "en \(code)")
   }
 }

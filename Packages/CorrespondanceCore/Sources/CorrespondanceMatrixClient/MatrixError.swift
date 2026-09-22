@@ -17,21 +17,27 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
   public var errorDescription: String? {
     switch self {
     case .notConfigured:
-      "Matrix : pas encore connecté. Renseigne le homeserver dans Réglages."
+      String(localized: "Matrix : pas encore connecté. Renseigne le homeserver dans Réglages.")
     case .invalidHomeserver(let raw):
-      "Adresse de homeserver invalide : \(raw)"
+      String(localized: "Adresse de homeserver invalide : \(raw)")
     case .http(let status, let errcode, let message):
       Self.humanHTTP(status: status, errcode: errcode, message: message)
     case .decoding(let detail):
-      "Réponse Matrix incompréhensible : \(detail)"
+      String(localized: "Réponse Matrix incompréhensible : \(detail)")
     case .transport(let detail):
-      "Le homeserver ne répond pas : \(detail)"
+      String(localized: "Le homeserver ne répond pas : \(detail)")
     case .bridgeBotSilent(let label):
-      "Le bot \(label) ne répond pas. Vérifie le pont sur le NUC."
+      String(localized: "Le bot \(label) ne répond pas. Vérifie le pont sur le NUC.")
     case .bridgeBotNotJoined(let label):
-      "Le bot \(label) n'a pas rejoint le salon : Synapse n'a pas chargé la registration du pont. Sur le NUC : docker-compose restart synapse, puis Relancer."
+      String(
+        localized:
+          "Le bot \(label) n'a pas rejoint le salon : Synapse n'a pas chargé la registration du pont. Sur le NUC : docker-compose restart synapse, puis Relancer."
+      )
     case .administrationIndisponible(let operation):
-      "Pas disponible sur ce Relais : \(operation). C'est une fonction propre à Synapse ; ce Relais administre par son salon #admins, qui ne sait pas la faire."
+      String(
+        localized:
+          "Pas disponible sur ce Relais : \(operation). C'est une fonction propre à Synapse ; ce Relais administre par son salon #admins, qui ne sait pas la faire."
+      )
     }
   }
 
@@ -40,17 +46,17 @@ public enum MatrixError: LocalizedError, Sendable, Equatable {
     case "M_FORBIDDEN":
       // Le même code couvre « mauvais mot de passe » et « pas membre du salon » :
       // on relaie la raison du serveur plutôt qu'un diagnostic inventé.
-      if let message, !message.isEmpty { return "Refusé par le homeserver : \(message)" }
-      return "Identifiants Matrix refusés."
+      if let message, !message.isEmpty { return String(localized: "Refusé par le homeserver : \(message)") }
+      return String(localized: "Identifiants Matrix refusés.")
     case "M_UNKNOWN_TOKEN":
-      return "Session Matrix expirée — reconnecte-toi dans Réglages."
+      return String(localized: "Session Matrix expirée — reconnecte-toi dans Réglages.")
     case "M_LIMIT_EXCEEDED":
-      return "Le homeserver limite les requêtes — réessaie dans un instant."
+      return String(localized: "Le homeserver limite les requêtes — réessaie dans un instant.")
     case "M_NOT_FOUND":
-      return "Ressource Matrix introuvable."
+      return String(localized: "Ressource Matrix introuvable.")
     default:
       let detail = message ?? errcode ?? "code \(status)"
-      return "Matrix (\(status)) : \(detail)"
+      return String(localized: "Matrix (\(status)) : \(detail)")
     }
   }
 }

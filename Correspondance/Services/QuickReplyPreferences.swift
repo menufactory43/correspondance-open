@@ -13,10 +13,10 @@ enum QuickReplyHotKey: String, CaseIterable, Identifiable, Sendable {
 
   var labelFR: String {
     switch self {
-    case .controlOptionSpace: "⌃⌥Espace"
+    case .controlOptionSpace: String(localized: "⌃⌥Espace")
     case .controlOptionR: "⌃⌥R"
-    case .controlShiftSpace: "⌃⇧Espace"
-    case .optionSpace: "⌥Espace"
+    case .controlShiftSpace: String(localized: "⌃⇧Espace")
+    case .optionSpace: String(localized: "⌥Espace")
     }
   }
 

@@ -64,8 +64,8 @@ public struct AgentProposalCard: View {
   /// Ce que la carte dit d'elle-même, à droite de l'en-tête.
   private var privacyNote: String {
     switch proposal.kind {
-    case .summary: "visible par vous seul"
-    default: "visible ici seulement"
+    case .summary: String(localized: "visible par vous seul")
+    default: String(localized: "visible ici seulement")
     }
   }
 
@@ -130,7 +130,7 @@ public struct AgentProposalCard: View {
         )
     )
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("\(proposal.headerFR) : \(proposal.text)")
+    .accessibilityLabel(String(localized: "\(proposal.headerFR) : \(proposal.text)"))
   }
 
   /// Un résumé arrive balisé (listes, gras) : on le lit en Markdown léger.

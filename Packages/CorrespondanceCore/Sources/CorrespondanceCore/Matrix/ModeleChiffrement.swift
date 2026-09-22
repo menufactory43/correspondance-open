@@ -74,12 +74,12 @@ public enum EtapeDeLaPhrase: Sendable, Equatable {
 
   public var titreFR: String {
     switch self {
-    case .inconnue: "Phrase de récupération"
-    case .indisponible: "Phrase de récupération"
-    case .aProposer: "Note ta phrase de récupération"
-    case .aNoter: "Voici ta phrase, note-la maintenant"
-    case .aEntrer: "Entre ta phrase de récupération"
-    case .enPlace: "Phrase de récupération"
+    case .inconnue: String(localized: "Phrase de récupération")
+    case .indisponible: String(localized: "Phrase de récupération")
+    case .aProposer: String(localized: "Note ta phrase de récupération")
+    case .aNoter: String(localized: "Voici ta phrase, note-la maintenant")
+    case .aEntrer: String(localized: "Entre ta phrase de récupération")
+    case .enPlace: String(localized: "Phrase de récupération")
     }
   }
 
@@ -90,17 +90,21 @@ public enum EtapeDeLaPhrase: Sendable, Equatable {
     case let .indisponible(raison):
       raison
     case .aProposer:
-      "Douze mots à recopier sur un papier. C’est le seul moyen de retrouver tes conversations "
-        + "sur un nouvel appareil. Personne d’autre ne les connaît."
+      String(
+        localized:
+          "Douze mots à recopier sur un papier. C’est le seul moyen de retrouver tes conversations sur un nouvel appareil. Personne d’autre ne les connaît."
+      )
     case .aNoter:
-      "Recopie-les maintenant, ils ne seront pas remontrés."
+      String(localized: "Recopie-les maintenant, ils ne seront pas remontrés.")
     case .aEntrer:
-      "Une sauvegarde existe déjà. Entre tes douze mots pour retrouver l’historique sur cet appareil."
+      String(
+        localized:
+          "Une sauvegarde existe déjà. Entre tes douze mots pour retrouver l’historique sur cet appareil.")
     case let .enPlace(version, phraseConnue):
-      "Sauvegarde \(version) en place."
+      String(localized: "Sauvegarde \(version) en place.")
         + (phraseConnue
-          ? " La phrase est gardée ici, tu peux la revoir."
-          : " La phrase n’est pas gardée ici. Tu peux en créer une nouvelle.")
+          ? String(localized: " La phrase est gardée ici, tu peux la revoir.")
+          : String(localized: " La phrase n’est pas gardée ici. Tu peux en créer une nouvelle."))
     }
   }
 }
@@ -152,8 +156,8 @@ public final class ModeleChiffrement {
     guard etat.actif else {
       etape = .indisponible(
         raison: MatrixChiffrement.disponible
-          ? "Pas encore connecté."
-          : "Le chiffrement n’est pas disponible dans cette version.")
+          ? String(localized: "Pas encore connecté.")
+          : String(localized: "Le chiffrement n’est pas disponible dans cette version."))
       appareils = []
       return
     }
@@ -192,10 +196,16 @@ public final class ModeleChiffrement {
       let poussees = try await service.creerSauvegarde(phrase: phrase, remplacer: true)
       try await service.deposerLesSignatures(phrase: phrase)
       magasin.ecrire(phrase, compte: compte)
-      message = "Sauvegarde créée · \(poussees) clé\(poussees > 1 ? "s" : "") envoyée\(poussees > 1 ? "s" : "")."
+      // Deux phrases entières plutôt qu'un « s » interpolé : l'accord du
+      // français ne se transpose pas, et un suffixe hors catalogue serait resté
+      // français. Sortie française identique, mot pour mot.
+      message =
+        poussees > 1
+        ? String(localized: "Sauvegarde créée · \(poussees) clés envoyées.")
+        : String(localized: "Sauvegarde créée · \(poussees) clé envoyée.")
       await sonderApresChangement()
     } catch {
-      message = "La sauvegarde n'a pas pu être créée : \(error.localizedDescription)"
+      message = String(localized: "La sauvegarde n'a pas pu être créée : \(error.localizedDescription)")
     }
   }
 
@@ -205,13 +215,13 @@ public final class ModeleChiffrement {
   /// (piège de la phase 5), donc remplacer veut dire retirer toutes les autres.
   public func changerLaPhrase() {
     proposerUnePhrase()
-    message = "L’ancienne phrase ne servira plus une fois celle-ci notée."
+    message = String(localized: "L’ancienne phrase ne servira plus une fois celle-ci notée.")
   }
 
   /// « Revoir la phrase » : seulement si cet appareil la garde encore.
   public func revoirLaPhrase() {
     guard let phrase = magasin.lire(compte: compte) else {
-      message = "Cette phrase n'est pas gardée sur cet appareil."
+      message = String(localized: "Cette phrase n'est pas gardée sur cet appareil.")
       return
     }
     phraseRevelee = phrase
@@ -226,7 +236,7 @@ public final class ModeleChiffrement {
   public func entrerLaPhrase(_ saisie: String) async {
     let phrase = PhraseDeRecuperation.normaliser(saisie)
     guard PhraseDeRecuperation.semblePlausible(phrase) else {
-      message = "Une phrase de récupération fait douze mots séparés par des espaces."
+      message = String(localized: "Une phrase de récupération fait douze mots séparés par des espaces.")
       return
     }
     occupe = true
@@ -234,10 +244,13 @@ public final class ModeleChiffrement {
     do {
       let import_ = try await service.rejoindreSauvegarde(phrase: phrase)
       magasin.ecrire(phrase, compte: compte)
-      message = "\(import_.importees) clé\(import_.importees > 1 ? "s" : "") sur \(import_.total) reprise\(import_.importees > 1 ? "s" : "")."
+      message =
+        import_.importees > 1
+        ? String(localized: "\(import_.importees) clés sur \(import_.total) reprises.")
+        : String(localized: "\(import_.importees) clé sur \(import_.total) reprise.")
       await sonderApresChangement()
     } catch {
-      message = "Cette phrase n'ouvre pas la sauvegarde."
+      message = String(localized: "Cette phrase n'ouvre pas la sauvegarde.")
     }
   }
 
@@ -255,7 +268,8 @@ public final class ModeleChiffrement {
   @discardableResult
   public func deconnecter(_ deviceID: String, motDePasse: String? = nil) async -> Bool {
     guard deviceID != etat.appareilID else {
-      message = "C’est cet appareil. Pour le déconnecter, passe par « Déconnecter » plus bas."
+      message = String(
+        localized: "C’est cet appareil. Pour le déconnecter, passe par « Déconnecter » plus bas.")
       return true
     }
     occupe = true
@@ -264,14 +278,15 @@ public final class ModeleChiffrement {
       switch try await service.deconnecterAppareil(deviceID, motDePasse: motDePasse) {
       case .faite:
         appareils = await service.appareils()
-        message = "\(deviceID) est déconnecté."
+        message = String(localized: "\(deviceID) est déconnecté.")
         return true
       case .motDePasseRequis:
-        message = "Le Relais demande le mot de passe du compte pour déconnecter \(deviceID)."
+        message = String(
+          localized: "Le Relais demande le mot de passe du compte pour déconnecter \(deviceID).")
         return false
       }
     } catch {
-      message = "Déconnexion refusée : \(error.localizedDescription)"
+      message = String(localized: "Déconnexion refusée : \(error.localizedDescription)")
       return true
     }
   }

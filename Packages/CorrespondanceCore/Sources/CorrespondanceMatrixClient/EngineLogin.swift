@@ -24,15 +24,18 @@ public enum EngineLogin {
 
   static let claude = Proof(
     file: ".claude.json", jsonKey: "oauthAccount",
-    gesture: "lance `claude` une fois dans un terminal et connecte-toi avec ton abonnement — jamais de clé."
+    gesture: String(
+      localized:
+        "lance `claude` une fois dans un terminal et connecte-toi avec ton abonnement — jamais de clé.")
   )
   static let codex = Proof(
     file: ".codex/auth.json", jsonKey: nil,
-    gesture: "`codex login` dans un terminal — le compte ChatGPT, jamais de clé."
+    gesture: String(localized: "`codex login` dans un terminal — le compte ChatGPT, jamais de clé.")
   )
   static let grok = Proof(
     file: ".grok/auth.json", jsonKey: nil,
-    gesture: "`grok login` dans un terminal — l'abonnement SuperGrok ou X Premium, jamais de clé."
+    gesture: String(
+      localized: "`grok login` dans un terminal — l'abonnement SuperGrok ou X Premium, jamais de clé.")
   )
 
   /// Par nom de moteur ou d'adaptateur. Un adaptateur se connecte par la CLI

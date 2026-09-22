@@ -83,9 +83,9 @@ public struct MediaAlbumView: View {
   }
 
   private func label(_ attachment: MessageAttachment?, tile: MediaAlbumLayout.Tile) -> String {
-    let kind = attachment?.isVideo == true ? "Vidéo" : "Photo"
-    let rank = "\(kind) \(tile.index + 1) sur \(media.count)"
-    return tile.hiddenCount > 0 ? "\(rank), et \(tile.hiddenCount) de plus" : rank
+    let kind = attachment?.isVideo == true ? String(localized: "Vidéo") : String(localized: "Photo")
+    let rank = String(localized: "\(kind) \(tile.index + 1) sur \(media.count)")
+    return tile.hiddenCount > 0 ? String(localized: "\(rank), et \(tile.hiddenCount) de plus") : rank
   }
 }
 

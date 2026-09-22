@@ -733,8 +733,8 @@ struct ThreadTimeSeparator: View {
     .padding(.bottom, Spacing.xxs)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
-      network.map { "Reprise de la conversation sur \($0.labelFR), \(label)" }
-        ?? "Reprise de la conversation, \(label)"
+      network.map { String(localized: "Reprise de la conversation sur \($0.labelFR), \(label)") }
+        ?? String(localized: "Reprise de la conversation, \(label)")
     )
   }
 
@@ -744,7 +744,7 @@ struct ThreadTimeSeparator: View {
     let calendar = Calendar.current
     let time = date.formatted(date: .omitted, time: .shortened)
     if calendar.isDateInToday(date) { return time }
-    if calendar.isDateInYesterday(date) { return "Hier \(time)" }
+    if calendar.isDateInYesterday(date) { return String(localized: "Hier \(time)") }
     if let days = calendar.dateComponents([.day], from: date, to: .now).day, days < 7 {
       return "\(date.formatted(.dateTime.weekday(.wide))) \(time)"
     }
@@ -780,9 +780,9 @@ private struct ThreadSearchBar: View {
   private var countLabel: String {
     let total = store.threadSearchMatchIDs.count
     guard total > 0 else {
-      return store.threadSearchQuery.isEmpty ? "" : "Aucun résultat"
+      return store.threadSearchQuery.isEmpty ? "" : String(localized: "Aucun résultat")
     }
-    return "\(store.threadSearchCursor + 1) sur \(total)"
+    return String(localized: "\(store.threadSearchCursor + 1) sur \(total)")
   }
 
   var body: some View {
@@ -854,7 +854,7 @@ private struct ReplyBanner: View {
   /// message bridgé sans nom retombe sur le titre du fil : c'est toujours
   /// à quelqu'un qu'on répond.
   private var targetNameFR: String {
-    message.displayedSenderName ?? store.selectedThreadFacts?.row.title ?? "ce message"
+    message.displayedSenderName ?? store.selectedThreadFacts?.row.title ?? String(localized: "ce message")
   }
 
   var body: some View {
@@ -863,7 +863,7 @@ private struct ReplyBanner: View {
         .fill(theme.accent)
         .frame(width: 2, height: 26)
       VStack(alignment: .leading, spacing: 1) {
-        Text(message.isFromMe ? "Réponse à moi-même" : "En réponse à \(targetNameFR)")
+        Text(message.isFromMe ? String(localized: "Réponse à moi-même") : String(localized: "En réponse à \(targetNameFR)"))
           .font(Typography.meta(typeface))
           .foregroundStyle(theme.accent)
         Text(message.sidebarPreviewText)

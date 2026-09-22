@@ -143,18 +143,20 @@ struct ThreadInfoSheet: View {
       Button("Annuler", role: .cancel) { newMember = "" }
     } message: {
       Text([.instagram, .messenger, .twitter, .slack, .telegram].contains(conversation?.network)
-        ? "Son pseudo, ou son identifiant."
-        : "Son numéro, avec l'indicatif du pays.")
+        ? String(localized: "Son pseudo, ou son identifiant.")
+        : String(localized: "Son numéro, avec l'indicatif du pays."))
     }
     .alert("Renommer le groupe", isPresented: $isRenaming) {
       TextField("Nom du groupe", text: $newName)
       Button("Renommer") { rename() }
       Button("Annuler", role: .cancel) { newName = "" }
     } message: {
-      Text("Le nouveau nom part sur \(conversation?.network.labelFR ?? "le réseau") : tout le groupe le verra.")
+      Text(
+        "Le nouveau nom part sur \(conversation?.network.labelFR ?? String(localized: "le réseau")) : tout le groupe le verra."
+      )
     }
     .confirmationDialog(
-      pendingRemoval.map { "Retirer \($0.name) du groupe ?" } ?? "",
+      pendingRemoval.map { String(localized: "Retirer \($0.name) du groupe ?") } ?? "",
       isPresented: Binding(
         get: { pendingRemoval != nil },
         set: { if !$0 { pendingRemoval = nil } }
@@ -230,17 +232,18 @@ struct ThreadInfoSheet: View {
     }
     guard conversation.isGroup else { return conversation.network.labelFR }
     let count = members.count
-    if count == 0 { return "\(conversation.network.labelFR) · groupe" }
-    return "\(conversation.network.labelFR) · \(count) membre\(count > 1 ? "s" : "")"
+    if count == 0 { return String(localized: "\(conversation.network.labelFR) · groupe") }
+    return String(localized: "\(conversation.network.labelFR) · \(count) membre\(count > 1 ? "s" : "")")
   }
 
   // MARK: - Les trois gestes
 
   private func actionRow(_ conversation: Conversation) -> some View {
     HStack(spacing: Spacing.sm) {
-      actionButton("Rechercher", systemImage: "magnifyingglass") { isSearching = true }
+      actionButton(String(localized: "Rechercher"), systemImage: "magnifyingglass") { isSearching = true }
       actionButton(
-        store.isArchived(conversationID) ? "Désarchiver" : "Archiver",
+        store.isArchived(conversationID)
+          ? String(localized: "Désarchiver") : String(localized: "Archiver"),
         systemImage: store.isArchived(conversationID) ? "tray.and.arrow.up" : "archivebox"
       ) {
         store.toggleArchived(conversationID)
@@ -250,7 +253,8 @@ struct ThreadInfoSheet: View {
           store.togglePinned(conversationID)
         } label: {
           Label(
-            store.isPinned(conversationID) ? "Désépingler" : "Épingler",
+            store.isPinned(conversationID)
+              ? String(localized: "Désépingler") : String(localized: "Épingler"),
             systemImage: store.isPinned(conversationID) ? "pin.slash" : "pin"
           )
         }
@@ -258,7 +262,8 @@ struct ThreadInfoSheet: View {
           store.toggleMuted(conversationID)
         } label: {
           Label(
-            store.isMuted(conversationID) ? "Réactiver les notifications" : "Mettre en muet",
+            store.isMuted(conversationID)
+              ? String(localized: "Réactiver les notifications") : String(localized: "Mettre en muet"),
             systemImage: store.isMuted(conversationID) ? "bell" : "bell.slash"
           )
         }
@@ -278,7 +283,7 @@ struct ThreadInfoSheet: View {
           }
         }
       } label: {
-        actionLabel("Plus", systemImage: "ellipsis")
+        actionLabel(String(localized: "Plus"), systemImage: "ellipsis")
       }
       .buttonStyle(.plain)
       // Le même cadre que les deux boutons à côté : sans lui, le menu prend
@@ -317,7 +322,7 @@ struct ThreadInfoSheet: View {
 
   private var mediaSection: some View {
     VStack(alignment: .leading, spacing: Spacing.xs) {
-      sectionTitle("Médias")
+      sectionTitle(String(localized: "Médias"))
       if media.isEmpty {
         Text("Aucune photo ni vidéo dans ce fil pour l'instant.")
           .font(Typography.meta(typeface))
@@ -362,16 +367,17 @@ struct ThreadInfoSheet: View {
     let photos = media.filter(\.isImage).count
     let videos = media.count - photos
     var parts: [String] = []
-    if photos > 0 { parts.append("\(photos) photo\(photos > 1 ? "s" : "")") }
-    if videos > 0 { parts.append("\(videos) vidéo\(videos > 1 ? "s" : "")") }
-    return parts.joined(separator: " et ")
+    if photos > 0 { parts.append(String(localized: "\(photos) photo\(photos > 1 ? "s" : "")")) }
+    if videos > 0 { parts.append(String(localized: "\(videos) vidéo\(videos > 1 ? "s" : "")")) }
+    return parts.joined(separator: String(localized: " et "))
   }
 
   // MARK: - Les membres
 
   private func membersSection(_ conversation: Conversation) -> some View {
     VStack(alignment: .leading, spacing: Spacing.xs) {
-      sectionTitle(conversation.isGroup ? "Membres" : "Contact")
+      sectionTitle(
+        conversation.isGroup ? String(localized: "Membres") : String(localized: "Contact"))
       VStack(spacing: 0) {
         if canAddMember {
           Button {
@@ -472,7 +478,7 @@ struct ThreadInfoSheet: View {
   private func mergedSection(_ conversation: Conversation) -> some View {
     let active = store.activeMember(of: conversationID)
     return VStack(alignment: .leading, spacing: Spacing.xs) {
-      sectionTitle("Chats réunis")
+      sectionTitle(String(localized: "Chats réunis"))
       VStack(spacing: 0) {
         ForEach(Array(mergedMembers.enumerated()), id: \.element.id) { index, member in
           Button {
@@ -486,7 +492,8 @@ struct ThreadInfoSheet: View {
                   .foregroundStyle(theme.ink)
                   .lineLimit(1)
                   .truncationMode(.middle)
-                Text(member.id == active?.id ? "Le prochain message part ici" : member.title)
+                Text(member.id == active?.id
+                  ? String(localized: "Le prochain message part ici") : member.title)
                   .font(Typography.meta(typeface))
                   .foregroundStyle(member.id == active?.id ? theme.accent : theme.inkTertiary)
                   .lineLimit(1)
@@ -550,12 +557,16 @@ struct ThreadInfoSheet: View {
           .frame(width: 40, height: 40)
           .background(Circle().fill(theme.accent.opacity(0.12)))
         VStack(alignment: .leading, spacing: 1) {
-          Text(mergedMembers.isEmpty ? "Fusionner avec un autre chat…" : "Ajouter un chat à cette personne…")
+          Text(mergedMembers.isEmpty
+            ? String(localized: "Fusionner avec un autre chat…")
+            : String(localized: "Ajouter un chat à cette personne…"))
             .font(Typography.body(typeface, size: 16))
             .foregroundStyle(theme.ink)
             .fixedSize(horizontal: false, vertical: true)
           if let suggested {
-            Text("\(suggested.count - 1) chat\(suggested.count > 2 ? "s" : "") repéré\(suggested.count > 2 ? "s" : "") — même numéro ou même nom")
+            Text(suggested.count > 2
+              ? String(localized: "\(suggested.count - 1) chats repérés — même numéro ou même nom")
+              : String(localized: "\(suggested.count - 1) chat repéré — même numéro ou même nom"))
               .font(Typography.meta(typeface))
               .foregroundStyle(theme.accent)
               .fixedSize(horizontal: false, vertical: true)
@@ -580,7 +591,9 @@ struct ThreadInfoSheet: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(mergedMembers.isEmpty ? "Fusionner avec un autre chat" : "Ajouter un chat à cette personne")
+    .accessibilityLabel(mergedMembers.isEmpty
+      ? String(localized: "Fusionner avec un autre chat")
+      : String(localized: "Ajouter un chat à cette personne"))
   }
 
   private func memberRow(name: String, detail: String?, avatarUserID: String?, showsChevron: Bool = false) -> some View {
@@ -626,10 +639,10 @@ struct ThreadInfoSheet: View {
 
   private var addMemberPrompt: String {
     switch conversation?.network {
-    case .instagram, .messenger, .twitter: "pseudo"
-    case .telegram: "pseudo ou numéro"
-    case .slack: "e-mail Slack"
-    case .signal: "identifiant Signal"
+    case .instagram, .messenger, .twitter: String(localized: "pseudo")
+    case .telegram: String(localized: "pseudo ou numéro")
+    case .slack: String(localized: "e-mail Slack")
+    case .signal: String(localized: "identifiant Signal")
     default: "+33 6 12 34 56 78"
     }
   }
@@ -740,7 +753,9 @@ struct MediaTile: View {
       .contentShape(Rectangle())
       .onTapGesture { onOpen?() }
       .accessibilityAddTraits(onOpen == nil ? [] : .isButton)
-      .accessibilityLabel(attachment.filename ?? (attachment.isVideo ? "Vidéo" : "Photo"))
+      .accessibilityLabel(
+        attachment.filename
+          ?? (attachment.isVideo ? String(localized: "Vidéo") : String(localized: "Photo")))
   }
 }
 

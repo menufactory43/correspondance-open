@@ -71,7 +71,7 @@ extension InboxStore {
       return true
     }
     guard conversation.network.livesOnRelay, isMatrixConnected else {
-      lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
+      lastErrorMessage = String(localized: "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.")
       return false
     }
     do {
@@ -105,7 +105,7 @@ extension InboxStore {
   /// « Relancer » sur un avis de cc : l'agent rescane sa machine.
   func rescanAgent(named agent: String) async {
     guard let console = await loadAgentConsole(agent: agent) else {
-      lastErrorMessage = "la console de \(agent) n'est pas joignable"
+      lastErrorMessage = String(localized: "la console de \(agent) n'est pas joignable")
       return
     }
     _ = await requestAgentRescan(console)

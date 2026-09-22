@@ -195,22 +195,22 @@ struct NewConversationSheet: View {
 
   private var placeholder: String {
     switch filter {
-    case .whatsapp: "Nom ou numéro WhatsApp"
-    case .signal: "Nom ou numéro Signal"
-    case .instagram: "Nom d’utilisateur Instagram"
-    case .messenger: "Nom ou identifiant Messenger"
-    case .twitter: "Pseudo X, sans l’arobase"
-    case .slack: "Nom ou e-mail Slack"
-    case .telegram: "Pseudo ou numéro Telegram"
-    case .iMessage: "Nom, numéro ou e-mail"
-    default: "Nom, numéro, e-mail…"
+    case .whatsapp: String(localized: "Nom ou numéro WhatsApp")
+    case .signal: String(localized: "Nom ou numéro Signal")
+    case .instagram: String(localized: "Nom d’utilisateur Instagram")
+    case .messenger: String(localized: "Nom ou identifiant Messenger")
+    case .twitter: String(localized: "Pseudo X, sans l’arobase")
+    case .slack: String(localized: "Nom ou e-mail Slack")
+    case .telegram: String(localized: "Pseudo ou numéro Telegram")
+    case .iMessage: String(localized: "Nom, numéro ou e-mail")
+    default: String(localized: "Nom, numéro, e-mail…")
     }
   }
 
   private var filterChips: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 6) {
-        chip(label: "Tous", value: nil)
+        chip(label: String(localized: "Tous"), value: nil)
         ForEach(filterNetworks) { network in
           chip(label: network.labelFR, value: network)
         }
@@ -246,7 +246,7 @@ struct NewConversationSheet: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
         if let freeform {
-          section("Écrire à") {
+          section(String(localized: "Écrire à")) {
             ForEach(freeform.networks) { network in
               PersonRow(
                 person: freeformPerson(freeform, network: network),
@@ -259,7 +259,7 @@ struct NewConversationSheet: View {
         }
 
         if showsSelfNote || !agents.isEmpty {
-          section("Sur le Relais") {
+          section(String(localized: "Sur le Relais")) {
             if showsSelfNote { selfNoteRow }
             ForEach(agents, id: \.self) { agent in
               agentRow(agent)
@@ -268,7 +268,9 @@ struct NewConversationSheet: View {
         }
 
         if !knownPeople.isEmpty {
-          section(filter == nil ? "Déjà en conversation" : "Déjà en conversation sur \(filter?.labelFR ?? "")") {
+          section(filter == nil
+            ? String(localized: "Déjà en conversation")
+            : String(localized: "Déjà en conversation sur \(filter?.labelFR ?? "")")) {
             ForEach(knownPeople) { person in
               PersonRow(person: person, theme: theme, typeface: typeface, onOpen: { open($0) })
             }
@@ -276,7 +278,7 @@ struct NewConversationSheet: View {
         }
 
         if !bookPeople.isEmpty {
-          section("Dans vos contacts") {
+          section(String(localized: "Dans vos contacts")) {
             ForEach(bookPeople) { person in
               PersonRow(person: person, theme: theme, typeface: typeface, onOpen: { open($0) })
             }
@@ -305,12 +307,14 @@ struct NewConversationSheet: View {
 
   private var emptyState: some View {
     VStack(spacing: 6) {
-      Text(trimmedQuery.isEmpty ? "Personne à joindre pour l'instant." : "Personne ne répond à « \(trimmedQuery) ».")
+      Text(trimmedQuery.isEmpty
+        ? String(localized: "Personne à joindre pour l'instant.")
+        : String(localized: "Personne ne répond à « \(trimmedQuery) »."))
         .font(Typography.body(typeface))
         .foregroundStyle(theme.inkSecondary)
       Text(filter == nil
-        ? "Tape un numéro ou une adresse pour ouvrir un fil neuf."
-        : "Un numéro ouvre un fil neuf ici ; « Tous » montre les autres réseaux.")
+        ? String(localized: "Tape un numéro ou une adresse pour ouvrir un fil neuf.")
+        : String(localized: "Un numéro ouvre un fil neuf ici ; « Tous » montre les autres réseaux."))
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)
     }
@@ -375,7 +379,7 @@ struct NewConversationSheet: View {
     ReachablePerson(
       id: "freeform:\(network.rawValue):\(freeform.identifier)",
       name: freeform.identifier,
-      detail: "nouveau fil \(network.labelFR)",
+      detail: String(localized: "nouveau fil \(network.labelFR)"),
       avatar: Conversation(
         id: "freeform:\(freeform.identifier)",
         network: network,
@@ -458,8 +462,8 @@ private struct PersonRow: View {
           }
           .buttonStyle(.plain)
           .help(reach.isExisting
-            ? "Ouvrir le fil \(reach.network.labelFR)"
-            : "Ouvrir un nouveau fil \(reach.network.labelFR) vers \(reach.handle)")
+            ? String(localized: "Ouvrir le fil \(reach.network.labelFR)")
+            : String(localized: "Ouvrir un nouveau fil \(reach.network.labelFR) vers \(reach.handle)"))
         }
       }
     }
@@ -499,7 +503,7 @@ private struct NetworkChip: View {
     .overlay(
       Capsule().strokeBorder(isExisting ? Color.clear : theme.edge, style: StrokeStyle(lineWidth: 1, dash: isExisting ? [] : [3, 2]))
     )
-    .accessibilityLabel(isExisting ? network.labelFR : "Nouveau fil \(network.labelFR)")
+    .accessibilityLabel(isExisting ? network.labelFR : String(localized: "Nouveau fil \(network.labelFR)"))
   }
 
   /// La même teinte que la pastille des avatars : un réseau, une couleur, partout.

@@ -45,11 +45,11 @@ public struct AgentProposal: Hashable, Codable, Sendable {
   /// « ✏️ cc propose » — l'en-tête de la carte, sur les deux plateformes.
   public var headerFR: String {
     let name = agent.trimmingCharacters(in: .whitespacesAndNewlines)
-    let qui = name.isEmpty ? "L'agent" : name
+    let qui = name.isEmpty ? String(localized: "L'agent") : name
     switch kind {
-    case .reply, .suggest: return "\(qui) propose"
-    case .summary: return "Résumé de \(qui)"
-    case .handover: return "\(qui) te passe la main"
+    case .reply, .suggest: return String(localized: "\(qui) propose")
+    case .summary: return String(localized: "Résumé de \(qui)")
+    case .handover: return String(localized: "\(qui) te passe la main")
     }
   }
 
@@ -81,7 +81,7 @@ public struct AgentAside: Hashable, Codable, Sendable {
   /// deux plateformes.
   public var footnoteFR: String {
     let noms = agents.filter { !$0.isEmpty }
-    let avec = noms.isEmpty ? "Aparté" : "Aparté avec \(noms.joined(separator: ", "))"
-    return "\(avec) · invisible pour les autres"
+    let avec = noms.isEmpty ? String(localized: "Aparté") : String(localized: "Aparté avec \(noms.joined(separator: ", "))")
+    return String(localized: "\(avec) · invisible pour les autres")
   }
 }

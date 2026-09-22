@@ -19,7 +19,7 @@ public enum TelegramLoginFrench {
     if english.hasPrefix("Successfully logged in as ") {
       var who = english.dropFirst("Successfully logged in as ".count)
       if let paren = who.range(of: " (`", options: .backwards) { who = who[..<paren.lowerBound] }
-      return "Connecté en tant que \(who)."
+      return String(localized: "Connecté en tant que \(who).")
     }
     if let byStep = byStepID[step.stepID] {
       // Une phrase inconnue sur une étape connue : le français de l'étape, et
@@ -42,51 +42,51 @@ public enum TelegramLoginFrench {
     if let range = upper.range(of: #"FLOOD_WAIT_(\d+)"#, options: .regularExpression) {
       let seconds = Int(upper[range].dropFirst("FLOOD_WAIT_".count)) ?? 0
       if seconds >= 3600 {
-        return "Telegram limite les essais : réessaie dans \(seconds / 3600) h."
+        return String(localized: "Telegram limite les essais : réessaie dans \(seconds / 3600) h.")
       }
       if seconds >= 60 {
-        return "Telegram limite les essais : réessaie dans \(seconds / 60) min."
+        return String(localized: "Telegram limite les essais : réessaie dans \(seconds / 60) min.")
       }
-      return "Telegram limite les essais : réessaie dans \(seconds) s."
+      return String(localized: "Telegram limite les essais : réessaie dans \(seconds) s.")
     }
     return nil
   }
 
   static let byStepID: [String: String] = [
-    "fi.mau.telegram.login.phone_number": "Ton numéro Telegram, avec l'indicatif du pays (+33 6…).",
-    "fi.mau.telegram.login.code": "Telegram t'a envoyé un code dans l'app, sur ton téléphone. Saisis-le.",
-    "fi.mau.telegram.login.code.incorrect": "Code refusé. Vérifie-le dans l'app Telegram et réessaie.",
-    "fi.mau.telegram.login.password": "Ce compte a la validation en deux étapes : son mot de passe.",
+    "fi.mau.telegram.login.phone_number": String(localized: "Ton numéro Telegram, avec l'indicatif du pays (+33 6…)."),
+    "fi.mau.telegram.login.code": String(localized: "Telegram t'a envoyé un code dans l'app, sur ton téléphone. Saisis-le."),
+    "fi.mau.telegram.login.code.incorrect": String(localized: "Code refusé. Vérifie-le dans l'app Telegram et réessaie."),
+    "fi.mau.telegram.login.password": String(localized: "Ce compte a la validation en deux étapes : son mot de passe."),
     "fi.mau.telegram.login.password.incorrect":
-      "Mot de passe refusé. Réessaie — si tu l'as oublié, l'app Telegram officielle sait le réinitialiser.",
+      String(localized: "Mot de passe refusé. Réessaie — si tu l'as oublié, l'app Telegram officielle sait le réinitialiser."),
   ]
 
   static let phrases: [String: String] = [
     "The code was sent to the Telegram app on your phone":
-      "Telegram t'a envoyé un code dans l'app, sur ton téléphone. Saisis-le.",
-    "Incorrect code": "Code refusé. Vérifie-le dans l'app Telegram et réessaie.",
-    "You have two-factor authentication enabled.": "Ce compte a la validation en deux étapes : son mot de passe.",
+      String(localized: "Telegram t'a envoyé un code dans l'app, sur ton téléphone. Saisis-le."),
+    "Incorrect code": String(localized: "Code refusé. Vérifie-le dans l'app Telegram et réessaie."),
+    "You have two-factor authentication enabled.": String(localized: "Ce compte a la validation en deux étapes : son mot de passe."),
     "Incorrect password, please try again. Use the official Telegram app to reset your password if you've forgotten it.":
-      "Mot de passe refusé. Réessaie — si tu l'as oublié, l'app Telegram officielle sait le réinitialiser.",
+      String(localized: "Mot de passe refusé. Réessaie — si tu l'as oublié, l'app Telegram officielle sait le réinitialiser."),
   ]
 
   /// Les codes d'erreur de Telegram qu'on peut croiser en se connectant
   /// (`core.telegram.org/method/auth.sendCode`, `auth.signIn`,
   /// `auth.checkPassword`), et ce qu'ils veulent dire ici.
   static let errorCodes: [(String, String)] = [
-    ("PHONE_NUMBER_INVALID", "Ce numéro n'a pas l'air valide. Au format international, avec l'indicatif : +33 6…"),
-    ("PHONE_NUMBER_UNOCCUPIED", "Aucun compte Telegram sur ce numéro. Crée-le d'abord dans l'app officielle."),
-    ("PHONE_NUMBER_BANNED", "Telegram a banni ce numéro."),
-    ("PHONE_NUMBER_FLOOD", "Trop de demandes de code sur ce numéro. Attends un peu avant de réessayer."),
-    ("PHONE_PASSWORD_FLOOD", "Trop d'essais de mot de passe. Attends un peu avant de réessayer."),
-    ("PHONE_CODE_EXPIRED", "Ce code a expiré. Relance la connexion pour en recevoir un nouveau."),
-    ("PHONE_CODE_INVALID", "Code refusé. Vérifie-le dans l'app Telegram et réessaie."),
-    ("PHONE_CODE_EMPTY", "Le code est vide."),
-    ("PASSWORD_HASH_INVALID", "Mot de passe refusé. Réessaie."),
-    ("SESSION_PASSWORD_NEEDED", "Ce compte a la validation en deux étapes : son mot de passe."),
-    ("AUTH_RESTART", "Telegram demande de recommencer la connexion depuis le début."),
-    ("API_ID_INVALID", "Le Relais n'a pas d'api_id / api_hash Telegram valides dans la config du pont."),
-    ("SIGN UP", "Aucun compte Telegram sur ce numéro. Crée-le d'abord dans l'app officielle."),
+    ("PHONE_NUMBER_INVALID", String(localized: "Ce numéro n'a pas l'air valide. Au format international, avec l'indicatif : +33 6…")),
+    ("PHONE_NUMBER_UNOCCUPIED", String(localized: "Aucun compte Telegram sur ce numéro. Crée-le d'abord dans l'app officielle.")),
+    ("PHONE_NUMBER_BANNED", String(localized: "Telegram a banni ce numéro.")),
+    ("PHONE_NUMBER_FLOOD", String(localized: "Trop de demandes de code sur ce numéro. Attends un peu avant de réessayer.")),
+    ("PHONE_PASSWORD_FLOOD", String(localized: "Trop d'essais de mot de passe. Attends un peu avant de réessayer.")),
+    ("PHONE_CODE_EXPIRED", String(localized: "Ce code a expiré. Relance la connexion pour en recevoir un nouveau.")),
+    ("PHONE_CODE_INVALID", String(localized: "Code refusé. Vérifie-le dans l'app Telegram et réessaie.")),
+    ("PHONE_CODE_EMPTY", String(localized: "Le code est vide.")),
+    ("PASSWORD_HASH_INVALID", String(localized: "Mot de passe refusé. Réessaie.")),
+    ("SESSION_PASSWORD_NEEDED", String(localized: "Ce compte a la validation en deux étapes : son mot de passe.")),
+    ("AUTH_RESTART", String(localized: "Telegram demande de recommencer la connexion depuis le début.")),
+    ("API_ID_INVALID", String(localized: "Le Relais n'a pas d'api_id / api_hash Telegram valides dans la config du pont.")),
+    ("SIGN UP", String(localized: "Aucun compte Telegram sur ce numéro. Crée-le d'abord dans l'app officielle.")),
   ]
 }
 

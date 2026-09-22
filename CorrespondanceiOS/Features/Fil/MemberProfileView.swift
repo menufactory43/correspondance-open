@@ -85,7 +85,11 @@ struct MemberProfileView: View {
         write()
       } label: {
         actionLabel(
-          isStarting ? "Ouverture…" : (profile?.directConversation == nil ? "Écrire" : "Ouvrir le fil"),
+          isStarting
+            ? String(localized: "Ouverture…")
+            : (profile?.directConversation == nil
+              ? String(localized: "Écrire")
+              : String(localized: "Ouvrir le fil")),
           systemImage: "square.and.pencil"
         )
       }
@@ -95,7 +99,7 @@ struct MemberProfileView: View {
         Button {
           Platform.copyToPasteboard(phone)
         } label: {
-          actionLabel("Copier le numéro", systemImage: "doc.on.doc")
+          actionLabel(String(localized: "Copier le numéro"), systemImage: "doc.on.doc")
         }
         .buttonStyle(.plain)
       }
@@ -133,7 +137,8 @@ struct MemberProfileView: View {
         if let id = try await store.startDirectChat(with: member, network: profile.network, phone: profile.phone) {
           openConversation(store.displayRowID(for: id))
         } else {
-          failure = "Le pont n'a pas encore ouvert le fil. Il apparaîtra dans l'inbox dès qu'il l'aura fait."
+          failure = String(
+            localized: "Le pont n'a pas encore ouvert le fil. Il apparaîtra dans l'inbox dès qu'il l'aura fait.")
         }
       } catch {
         failure = RelayStore.readable(error)

@@ -51,7 +51,7 @@ extension RelayStore {
       case .motDePasseRequis(let uia):
         return .motDePasseRequis(sessionUIA: uia)
       case .motDePasseRefuse:
-        return .echec("Mot de passe refusé par le Relais.")
+        return .echec(String(localized: "Mot de passe refusé par le Relais."))
       case .nonProposee:
         return .echec("Le Relais ne permet pas encore de se connecter depuis une session existante (login_via_existing_session).")
       }

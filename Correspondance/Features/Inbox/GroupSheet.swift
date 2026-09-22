@@ -41,7 +41,7 @@ struct GroupSheet: View {
     .background(theme.paper)
     .task { members = await store.members(of: conversationID) }
     .confirmationDialog(
-      pendingRemoval.map { "Retirer \($0.name) du groupe ?" } ?? "",
+      pendingRemoval.map { String(localized: "Retirer \($0.name) du groupe ?") } ?? "",
       isPresented: Binding(
         get: { pendingRemoval != nil },
         set: { if !$0 { pendingRemoval = nil } }
@@ -58,7 +58,7 @@ struct GroupSheet: View {
 
   private var header: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(conversation?.title ?? "Groupe")
+      Text(conversation?.title ?? String(localized: "Groupe"))
         .font(Typography.body(themes.typeface, size: 15).weight(.semibold))
         .foregroundStyle(theme.ink)
       Text("\(network.labelFR) · \(members.count) membres")
@@ -73,7 +73,7 @@ struct GroupSheet: View {
         .font(Typography.meta(themes.typeface))
         .foregroundStyle(theme.inkSecondary)
       HStack(spacing: 6) {
-        TextField(conversation?.title ?? "Nom", text: $name)
+        TextField(conversation?.title ?? String(localized: "Nom"), text: $name)
           .textFieldStyle(.roundedBorder)
           .onSubmit { rename() }
         Button("Renommer", action: rename)

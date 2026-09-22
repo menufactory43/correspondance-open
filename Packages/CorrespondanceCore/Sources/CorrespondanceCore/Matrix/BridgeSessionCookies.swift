@@ -55,12 +55,22 @@ public struct BridgeSessionCookies: Equatable, Sendable {
         ? names.joined(separator: " et ")
         : names.dropLast().joined(separator: ", ") + " et " + (names.last ?? "")
       return [
-        "Connecte-toi sur \(site) dans ton navigateur (Brave, Chrome, Safari…).",
-        "Ouvre les outils de développement : ⌥⌘I, ou Affichage › Développeur › Outils de développement.",
-        "Onglet Application (s'il est caché, clique sur » dans la barre d'onglets). Dans Safari : onglet Stockage.",
-        "Colonne de gauche : Storage › Cookies › https://\(cookieDomain).",
-        "Dans le tableau, trouve les lignes \(liste). Double-clic sur la case Value pour la sélectionner en entier, puis copie.",
-        "Colle les valeurs dans le champ ci-dessous, dans le modèle proposé, puis Envoyer.",
+        String(localized: "Connecte-toi sur \(site) dans ton navigateur (Brave, Chrome, Safari…)."),
+        String(
+          localized:
+            "Ouvre les outils de développement : ⌥⌘I, ou Affichage › Développeur › Outils de développement."
+        ),
+        String(
+          localized:
+            "Onglet Application (s'il est caché, clique sur » dans la barre d'onglets). Dans Safari : onglet Stockage."
+        ),
+        String(localized: "Colonne de gauche : Storage › Cookies › https://\(cookieDomain)."),
+        String(
+          localized:
+            "Dans le tableau, trouve les lignes \(liste). Double-clic sur la case Value pour la sélectionner en entier, puis copie."
+        ),
+        String(
+          localized: "Colle les valeurs dans le champ ci-dessous, dans le modèle proposé, puis Envoyer."),
       ]
     }
 

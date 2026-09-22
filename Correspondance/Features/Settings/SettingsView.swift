@@ -28,7 +28,7 @@ struct SettingsView: View {
       SettingsWindowSizer(
         minSize: NSSize(width: 840, height: 620),
         idealSize: NSSize(width: 900, height: 680),
-        title: "Réglages",
+        title: String(localized: "Réglages"),
         isDark: theme.id.prefersDarkChrome
       )
       .frame(width: 0, height: 0)
@@ -137,27 +137,27 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
   var labelFR: String {
     switch self {
-    case .comptes: "Comptes"
+    case .comptes: String(localized: "Comptes")
     case .matrix: "Relais"
-    case .envoi: "Envoi"
-    case .automatisation: "Automatisation"
-    case .agent: "Agents"
-    case .autorisations: "Autorisations"
-    case .apparence: "Apparence"
-    case .dictee: "Dictée"
+    case .envoi: String(localized: "Envoi")
+    case .automatisation: String(localized: "Automatisation")
+    case .agent: String(localized: "Agents")
+    case .autorisations: String(localized: "Autorisations")
+    case .apparence: String(localized: "Apparence")
+    case .dictee: String(localized: "Dictée")
     }
   }
 
   var subtitleFR: String {
     switch self {
-    case .comptes: "Tes réseaux, et si chacun est bien connecté."
-    case .matrix: "Ton serveur, celui qui porte WhatsApp, Instagram, Messenger et Signal."
-    case .envoi: "Le délai pour rattraper un message, et la lecture discrète."
-    case .automatisation: "Ce que Correspondance peut faire à ta place dans Messages."
-    case .agent: "Tes agents, et où ils tournent."
-    case .autorisations: "Ce que le Mac autorise, et comment le changer."
-    case .apparence: "Mode d’ouverture, police, thème."
-    case .dictee: "Comment le micro transforme ta voix en texte."
+    case .comptes: String(localized: "Tes réseaux, et si chacun est bien connecté.")
+    case .matrix: String(localized: "Ton serveur, celui qui porte WhatsApp, Instagram, Messenger et Signal.")
+    case .envoi: String(localized: "Le délai pour rattraper un message, et la lecture discrète.")
+    case .automatisation: String(localized: "Ce que Correspondance peut faire à ta place dans Messages.")
+    case .agent: String(localized: "Tes agents, et où ils tournent.")
+    case .autorisations: String(localized: "Ce que le Mac autorise, et comment le changer.")
+    case .apparence: String(localized: "Mode d’ouverture, police, thème.")
+    case .dictee: String(localized: "Comment le micro transforme ta voix en texte.")
     }
   }
 

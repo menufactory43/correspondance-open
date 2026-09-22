@@ -20,11 +20,11 @@ public enum MessageFacet: String, CaseIterable, Identifiable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .images: "Images"
-    case .videos: "Vidéos"
-    case .links: "Liens"
-    case .files: "Fichiers"
-    case .drafts: "Brouillons"
+    case .images: String(localized: "Images")
+    case .videos: String(localized: "Vidéos")
+    case .links: String(localized: "Liens")
+    case .files: String(localized: "Fichiers")
+    case .drafts: String(localized: "Brouillons")
     }
   }
 

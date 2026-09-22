@@ -93,14 +93,14 @@ enum EngineCatalog {
     var labelFR: String {
       switch self {
       case .pret(let version):
-        version.map { "prêt — \($0)" } ?? "prêt"
+        version.map { String(localized: "prêt — \($0)") } ?? String(localized: "prêt")
       case .nonInstalle:
-        "pas installé sur ce Mac"
+        String(localized: "pas installé sur ce Mac")
       case .adaptateurPerime(let version, let epinglee):
-        "version \(version) — l'installation en pose \(epinglee), "
-          + "et le régime de permission d'un adaptateur change d'une version à l'autre"
+        String(localized: "version \(version) — l'installation en pose \(epinglee), ")
+          + String(localized: "et le régime de permission d'un adaptateur change d'une version à l'autre")
       case .nonConnecte:
-        "installé, mais pas connecté"
+        String(localized: "installé, mais pas connecté")
       }
     }
   }
@@ -124,8 +124,8 @@ enum EngineCatalog {
       backend: .claude,
       acpCommand: nil,
       nomAgentPropose: "cc",
-      indiceInstallation: "npm install -g @anthropic-ai/claude-code, puis `claude` une fois "
-        + "pour ouvrir la session — l'abonnement, jamais de clé.",
+      indiceInstallation: String(localized: "npm install -g @anthropic-ai/claude-code, puis `claude` une fois ")
+        + String(localized: "pour ouvrir la session — l'abonnement, jamais de clé."),
       commandeInstallation: "npm install -g @anthropic-ai/claude-code",
       versionEpinglee: nil
     ),
@@ -135,9 +135,9 @@ enum EngineCatalog {
       backend: .hermes,
       acpCommand: nil,
       nomAgentPropose: "hermes",
-      indiceInstallation: "L'installeur d'Hermes (hermes-agent.nousresearch.com) pose son binaire "
-        + "dans ~/.local/bin. Ses outils se règlent chez lui (`hermes tools`), pas ici : "
-        + "configure-le serré avant de l'inviter où que ce soit.",
+      indiceInstallation: String(localized: "L'installeur d'Hermes (hermes-agent.nousresearch.com) pose son binaire ")
+        + String(localized: "dans ~/.local/bin. Ses outils se règlent chez lui (`hermes tools`), pas ici : ")
+        + String(localized: "configure-le serré avant de l'inviter où que ce soit."),
       versionEpinglee: nil
     ),
     Entry(
@@ -158,8 +158,8 @@ enum EngineCatalog {
       backend: .acp,
       acpCommand: "codex-acp",
       nomAgentPropose: "codex",
-      indiceInstallation: "npm install -g @agentclientprotocol/codex-acp, puis `codex login` une fois "
-        + "— le compte ChatGPT, jamais de clé.",
+      indiceInstallation: String(localized: "npm install -g @agentclientprotocol/codex-acp, puis `codex login` une fois ")
+        + String(localized: "— le compte ChatGPT, jamais de clé."),
       commandeInstallation: "npm install -g @agentclientprotocol/codex-acp",
       versionEpinglee: nil
     ),
@@ -172,8 +172,8 @@ enum EngineCatalog {
       acpCommand: "grok",
       acpArguments: ["agent", "stdio"],
       nomAgentPropose: "grok",
-      indiceInstallation: "curl -fsSL https://x.ai/cli/install.sh | bash, puis `grok login` une fois "
-        + "— l'abonnement SuperGrok ou X Premium, jamais de clé.",
+      indiceInstallation: String(localized: "curl -fsSL https://x.ai/cli/install.sh | bash, puis `grok login` une fois ")
+        + String(localized: "— l'abonnement SuperGrok ou X Premium, jamais de clé."),
       versionEpinglee: nil
     ),
     Entry(
@@ -183,7 +183,7 @@ enum EngineCatalog {
       acpCommand: "goose",
       acpArguments: ["acp"],
       nomAgentPropose: "goose",
-      indiceInstallation: "brew install block-goose-cli — puis `goose acp` sert d'adaptateur.",
+      indiceInstallation: String(localized: "brew install block-goose-cli — puis `goose acp` sert d'adaptateur."),
       commandeInstallation: "brew install block-goose-cli",
       versionEpinglee: nil
     ),
@@ -222,7 +222,7 @@ enum EngineCatalog {
       // qu'elle est la bonne, on ne peut pas affirmer qu'elle ne l'est pas.
       // On le dit comme « périmé » plutôt que « prêt » : c'est le sens strict —
       // ce régime de permission n'a pas été éprouvé.
-      return .adaptateurPerime(version: version ?? "version inconnue", epinglee: epinglee)
+      return .adaptateurPerime(version: version ?? String(localized: "version inconnue"), epinglee: epinglee)
     }
     return lue == epinglee ? .pret(version: version) : .adaptateurPerime(version: lue, epinglee: epinglee)
   }

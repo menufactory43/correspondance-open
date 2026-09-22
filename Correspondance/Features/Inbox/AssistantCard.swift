@@ -91,23 +91,23 @@ struct AssistantAgentSection: View {
 
     var labelFR: String {
       switch self {
-      case .onDemand: "Sur demande"
-      case .propose: "Propose"
-      case .pilot: "Répond seul"
+      case .onDemand: String(localized: "Sur demande")
+      case .propose: String(localized: "Propose")
+      case .pilot: String(localized: "Répond seul")
       }
     }
 
     func subtitleFR(agent: String) -> String {
       switch self {
       case .onDemand:
-        "\(agent) ne fait rien tant que tu ne lui demandes pas — @\(agent) dans le fil, ou en aparté. "
-          + "Ce qu'il écrit reste un brouillon que toi seul vois."
+        String(localized: "\(agent) ne fait rien tant que tu ne lui demandes pas — @\(agent) dans le fil, ou en aparté. ")
+          + String(localized: "Ce qu'il écrit reste un brouillon que toi seul vois.")
       case .propose:
-        "À chaque message reçu, \(agent) prépare une réponse que toi seul vois. "
-          + "Tu l'envoies, la retouches ou l'ignores."
+        String(localized: "À chaque message reçu, \(agent) prépare une réponse que toi seul vois. ")
+          + String(localized: "Tu l'envoies, la retouches ou l'ignores.")
       case .pilot:
-        "\(agent) répond lui-même, en ton nom, dans le cadre ci-dessous. "
-          + "Chaque réponse est marquée. Hors cadre, il te passe la main."
+        String(localized: "\(agent) répond lui-même, en ton nom, dans le cadre ci-dessous. ")
+          + String(localized: "Chaque réponse est marquée. Hors cadre, il te passe la main.")
       }
     }
 
@@ -200,7 +200,7 @@ struct AssistantAgentSection: View {
         }
       } label: {
         HStack(spacing: 3) {
-          Text(currentTemplate?.title ?? (frame.isEmpty ? "Choisir un modèle" : "Le mien"))
+          Text(currentTemplate?.title ?? (frame.isEmpty ? String(localized: "Choisir un modèle") : String(localized: "Le mien")))
           Image(systemName: "chevron.up.chevron.down")
             .font(.system(size: 8, weight: .semibold))
         }

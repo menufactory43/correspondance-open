@@ -29,6 +29,6 @@ public enum ArchiveSweep {
   /// La question qu'on pose avant de le faire. Le compte y est, toujours :
   /// c'est lui qui dit si l'on s'apprête à ranger trois fils ou quarante.
   public static func confirmationFR(count: Int) -> String {
-    count == 1 ? "Archiver 1 fil lu ?" : "Archiver \(count) fils lus ?"
+    count == 1 ? String(localized: "Archiver 1 fil lu ?") : String(localized: "Archiver \(count) fils lus ?")
   }
 }

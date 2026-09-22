@@ -58,9 +58,9 @@ public struct BridgeIntake: Equatable, Sendable {
   /// « 12 fils rapatriés », « Un fil rapatrié », « Le pont relit tes conversations… ».
   public var countLabelFR: String {
     switch count {
-    case 0: "Le pont relit tes conversations…"
-    case 1: "Un fil rapatrié"
-    default: "\(count) fils rapatriés"
+    case 0: String(localized: "Le pont relit tes conversations…")
+    case 1: String(localized: "Un fil rapatrié")
+    default: String(localized: "\(count) fils rapatriés")
     }
   }
 }

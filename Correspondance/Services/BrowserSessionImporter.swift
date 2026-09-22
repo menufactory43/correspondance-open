@@ -38,13 +38,13 @@ enum BrowserSessionImporter {
     var errorDescription: String? {
       switch self {
       case .keychainRefused(let name):
-        "Sans l’accord du Trousseau, la session de \(name) reste illisible."
+        String(localized: "Sans l’accord du Trousseau, la session de \(name) reste illisible.")
       case .keychainMissing(let name):
-        "\(name) n’a pas encore de clé dans le Trousseau : ouvre-le une fois, puis réessaie."
+        String(localized: "\(name) n’a pas encore de clé dans le Trousseau : ouvre-le une fois, puis réessaie.")
       case .noSession(let browser, let site):
-        "Aucune session \(site) dans \(browser) : connecte-toi d’abord sur \(site) dans \(browser)."
+        String(localized: "Aucune session \(site) dans \(browser) : connecte-toi d’abord sur \(site) dans \(browser).")
       case .unreadable(let detail):
-        "Les cookies du navigateur n’ont pas pu être lus : \(detail)"
+        String(localized: "Les cookies du navigateur n’ont pas pu être lus : \(detail)")
       }
     }
   }
@@ -123,7 +123,7 @@ enum BrowserSessionImporter {
 
     var db: OpaquePointer?
     guard sqlite3_open_v2(copy.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else {
-      throw ImportError.unreadable("ouverture SQLite impossible")
+      throw ImportError.unreadable(String(localized: "ouverture SQLite impossible"))
     }
     defer { sqlite3_close(db) }
 
@@ -133,7 +133,7 @@ enum BrowserSessionImporter {
       """
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-      throw ImportError.unreadable("table des cookies inconnue")
+      throw ImportError.unreadable(String(localized: "table des cookies inconnue"))
     }
     defer { sqlite3_finalize(statement) }
     let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
@@ -175,7 +175,7 @@ enum BrowserSessionImporter {
     switch status {
     case errSecSuccess:
       guard let data = item as? Data, let password = String(data: data, encoding: .utf8) else {
-        throw ImportError.unreadable("clé du Trousseau illisible")
+        throw ImportError.unreadable(String(localized: "clé du Trousseau illisible"))
       }
       return password
     case errSecItemNotFound:
@@ -183,7 +183,7 @@ enum BrowserSessionImporter {
     case errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed:
       throw ImportError.keychainRefused(browserName)
     default:
-      throw ImportError.unreadable("Trousseau : erreur \(status)")
+      throw ImportError.unreadable(String(localized: "Trousseau : erreur \(status)"))
     }
   }
 }

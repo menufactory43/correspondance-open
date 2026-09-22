@@ -14,12 +14,15 @@ struct CorrespondanceCommands: Commands {
   private var detachedFront: String? { store.frontDetachedConversationID }
 
   private var detachTitle: String {
-    detachedFront != nil ? "Ramener dans l’inbox" : "Détacher la conversation"
+    detachedFront != nil ? String(localized: "Ramener dans l’inbox")
+                         : String(localized: "Détacher la conversation")
   }
 
   private var pinTitle: String {
-    guard let id = detachedFront, store.isPinnedDetached(id) else { return "Épingler au-dessus" }
-    return "Ne plus épingler"
+    guard let id = detachedFront, store.isPinnedDetached(id) else {
+      return String(localized: "Épingler au-dessus")
+    }
+    return String(localized: "Ne plus épingler")
   }
 
   /// ⌘E vise ce qu'on a sous les yeux : la fenêtre détachée si elle est
@@ -29,8 +32,8 @@ struct CorrespondanceCommands: Commands {
   }
 
   private var archiveTitle: String {
-    guard let id = archiveTarget else { return "Archiver" }
-    return store.isArchived(id) ? "Désarchiver" : "Archiver"
+    guard let id = archiveTarget else { return String(localized: "Archiver") }
+    return store.isArchived(id) ? String(localized: "Désarchiver") : String(localized: "Archiver")
   }
 
   var body: some Commands {
@@ -115,7 +118,8 @@ struct CorrespondanceCommands: Commands {
 
       // Même touche que Beeper (TOGGLE_FILTER_UNREAD ⌘⇧Y), élargie à toute la
       // rangée de pilules : « non lus » n'est qu'un filtre parmi cinq.
-      Button(store.isFilterBarVisible ? "Masquer les filtres" : "Filtrer la liste") {
+      Button(store.isFilterBarVisible ? String(localized: "Masquer les filtres")
+                                      : String(localized: "Filtrer la liste")) {
         store.toggleFilterBar()
       }
       .keyboardShortcut("y", modifiers: [.command, .shift])
@@ -164,11 +168,13 @@ struct CorrespondanceCommands: Commands {
       .keyboardShortcut("e", modifiers: [.command, .option])
       .disabled(store.readArchivableConversations.isEmpty)
 
-      Button(store.isSelectionMode ? "Quitter la sélection" : "Sélectionner plusieurs fils") {
+      Button(store.isSelectionMode ? String(localized: "Quitter la sélection")
+                                  : String(localized: "Sélectionner plusieurs fils")) {
         store.toggleSelectionMode()
       }
 
-      Button(store.isShowingArchived ? "Retour à l’inbox" : "Voir les archivés") {
+      Button(store.isShowingArchived ? String(localized: "Retour à l’inbox")
+                                     : String(localized: "Voir les archivés")) {
         store.setShowingArchived(!store.isShowingArchived)
       }
       .keyboardShortcut("e", modifiers: [.command, .shift])
@@ -181,7 +187,8 @@ struct CorrespondanceCommands: Commands {
       .keyboardShortcut("n", modifiers: [.command, .shift])
       .disabled(!store.isMatrixConnected)
 
-      Button(store.isShowingScheduled ? "Retour à l’inbox" : "Voir les programmés") {
+      Button(store.isShowingScheduled ? String(localized: "Retour à l’inbox")
+                                      : String(localized: "Voir les programmés")) {
         store.setShowingScheduled(!store.isShowingScheduled)
       }
       .disabled(!store.isShowingScheduled && store.scheduledMessages.isEmpty)
@@ -257,7 +264,7 @@ private struct NetworkFilterCommand: View {
   let position: Int
 
   var body: some View {
-    Button(network?.labelFR ?? "Tous les réseaux") {
+    Button(network?.labelFR ?? String(localized: "Tous les réseaux")) {
       store.setNetworkFilter(network)
     }
     .keyboardShortcut(shortcut)

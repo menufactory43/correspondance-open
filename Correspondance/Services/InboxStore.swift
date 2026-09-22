@@ -962,9 +962,9 @@ final class InboxStore {
       // Noms depuis cache Contacts — immédiat, sans permission.
       ContactDirectoryDisk.enrichIMessageTitles(&iMessage)
       list.append(contentsOf: iMessage)
-      iMessageStatusFR = "\(iMessage.count) conversations, mise à jour…"
+      iMessageStatusFR = String(localized: "\(iMessage.count) conversations, mise à jour…")
     } else {
-      iMessageStatusFR = "Premier chargement…"
+      iMessageStatusFR = String(localized: "Premier chargement…")
     }
 
     // La base locale se lit sans passer par l'actor : au lancement, l'inbox
@@ -974,9 +974,9 @@ final class InboxStore {
     let matrixConversations = storedRooms.compactMap { $0.conversation() }
     if !matrixConversations.isEmpty {
       list.append(contentsOf: matrixConversations)
-      matrixStatusFR = "\(MatrixBridgeService.bridgedCountFR(matrixConversations)), mise à jour…"
+      matrixStatusFR = String(localized: "\(MatrixBridgeService.bridgedCountFR(matrixConversations)), mise à jour…")
     } else {
-      matrixStatusFR = "Non connecté."
+      matrixStatusFR = String(localized: "Non connecté.")
     }
 
     guard !list.isEmpty else { return }
@@ -1059,7 +1059,7 @@ final class InboxStore {
       await self?.refreshIMessageIncrementally()
     }
     if !armed, !usingDemoData {
-      iMessageStatusFR += " (pas de temps réel, vérifie l’accès au disque)"
+      iMessageStatusFR += String(localized: " (pas de temps réel, vérifie l’accès au disque)")
     }
   }
 
@@ -1323,8 +1323,8 @@ final class InboxStore {
     // La fenêtre a pu se fermer pendant qu'on écrivait la correction : mieux
     // vaut le dire que laisser partir un `m.replace` que le pont jettera.
     guard isEditWindowOpen(message) else {
-      lastErrorMessage = "Trop tard pour corriger : passé \(Self.editWindowLabel(message)), "
-        + "\(message.network.labelFR) n’accepte plus de modification."
+      lastErrorMessage = String(localized: "Trop tard pour corriger : passé \(Self.editWindowLabel(message)), ")
+        + String(localized: "\(message.network.labelFR) n’accepte plus de modification.")
       return
     }
     if canEditViaAutomation(message) {
@@ -1347,8 +1347,8 @@ final class InboxStore {
   /// Le délai à annoncer quand on refuse : celui du réseau, ou celui de
   /// Messages pour un iMessage — son chemin ne passe pas par la table.
   private static func editWindowLabel(_ message: ChatMessage) -> String {
-    if message.network == .iMessage { return "15 minutes" }
-    return message.network.editWindowLabelFR ?? "le délai"
+    if message.network == .iMessage { return String(localized: "15 minutes") }
+    return message.network.editWindowLabelFR ?? String(localized: "le délai")
   }
 
   /// « Modifier » sur un iMessage : c'est le menu de Messages que l'on
@@ -1378,7 +1378,7 @@ final class InboxStore {
   /// dont on est le seul membre : ce qu'on s'y écrit se retrouve sur l'iPhone.
   func openSelfNote() async {
     guard isMatrixConnected else {
-      lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
+      lastErrorMessage = String(localized: "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.")
       return
     }
     do {
@@ -1417,7 +1417,7 @@ final class InboxStore {
 
     case .signal, .whatsapp, .instagram, .messenger, .twitter, .slack, .telegram, .selfNote, .agent:
       guard isMatrixConnected else {
-        lastErrorMessage = "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
+        lastErrorMessage = String(localized: "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.")
         return
       }
       do {
@@ -1727,7 +1727,7 @@ final class InboxStore {
     guard members.count >= 2 else { return }
     let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let contact = MergedContact(
-      title: cleanTitle.isEmpty ? (members.first?.title ?? "Contact") : cleanTitle,
+      title: cleanTitle.isEmpty ? (members.first?.title ?? String(localized: "Contact")) : cleanTitle,
       memberIDs: members.map(\.id),
       avatarConversationID: avatarConversationID,
       defaultConversationID: members.contains { $0.id == defaultConversationID }
@@ -1912,8 +1912,8 @@ final class InboxStore {
   func requestMessagesAutomation() -> Bool {
     let ok = iMessageSender.requestAutomationAccess()
     messagesAutomationStatusFR = ok
-      ? "Messages : automatisation autorisée."
-      : "Messages : autorise Correspondance dans Confidentialité → Automatisation."
+      ? String(localized: "Messages : automatisation autorisée.")
+      : String(localized: "Messages : autorise Correspondance dans Confidentialité → Automatisation.")
     return ok
   }
 
@@ -1945,11 +1945,11 @@ final class InboxStore {
       matrixStatusFR = MatrixError.invalidHomeserver(trimmed).localizedDescription
       return
     }
-    matrixStatusFR = "Connexion…"
+    matrixStatusFR = String(localized: "Connexion…")
     do {
       let creds = try await matrix.connect(homeserver: url, user: user, password: password)
       isMatrixConnected = true
-      matrixStatusFR = "Connecté, \(creds.userID)."
+      matrixStatusFR = String(localized: "Connecté, \(creds.userID).")
       // Un Relais neuf n'a aucune conversation : l'inbox serait vide, et on
       // n'aurait nulle part où parler à cc. La note à soi est cette porte
       // d'entrée — on la crée une fois, elle est ensuite désignée par
@@ -1980,7 +1980,7 @@ final class InboxStore {
     if let id = selectedConversationID, !conversations.contains(where: { $0.id == id }) {
       await select(activeQueue.first?.id)
     }
-    matrixStatusFR = "Déconnecté."
+    matrixStatusFR = String(localized: "Déconnecté.")
   }
 
   /// « Recharger depuis le Relais » : on jette la base locale et on repart d'un
@@ -1992,7 +1992,7 @@ final class InboxStore {
     await matrix.reloadFromRelay()
     conversations.removeAll { $0.network.livesOnRelay }
     messages = []
-    matrixStatusFR = "Rechargement…"
+    matrixStatusFR = String(localized: "Rechargement…")
     didSettleInitialMatrixSync = false
     startMatrixSync()
   }
@@ -2041,10 +2041,10 @@ final class InboxStore {
       do {
         let port = try await ouvrirTailcat(jeton: jeton)
         adresse = "http://server.tailcat:\(code.homeserver.port ?? 8010)"
-        note = "Relais joint via Tailcat (mandataire local \(port))."
+        note = String(localized: "Relais joint via Tailcat (mandataire local \(port)).")
       } catch {
-        note = "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription) "
-          + "— on tente l'adresse du code."
+        note = String(localized: "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription) ")
+          + String(localized: "— on tente l'adresse du code.")
       }
     }
     await connectMatrix(homeserver: adresse, user: code.userID, password: code.password)
@@ -2089,18 +2089,18 @@ final class InboxStore {
   /// sauvegarde perd quand même l'historique le jour où on le remplace.
   private func chiffrementLigneFR() async -> String {
     guard MatrixChiffrement.disponible else {
-      return "Indisponible dans cette version."
+      return String(localized: "Indisponible dans cette version.")
     }
     if MatrixChiffrement.eteintParLEnvironnement {
-      return "Désactivé."
+      return String(localized: "Désactivé.")
     }
-    guard isMatrixConnected else { return "En attente de connexion." }
+    guard isMatrixConnected else { return String(localized: "En attente de connexion.") }
     let etat = await matrix.etatDuChiffrement()
     // Le partage de clés reste `TrustRequirement.untrusted` : on déchiffre ce
     // qui arrive d'un appareil non vérifié plutôt que de rendre l'inbox
     // aveugle. C'est une décision, pas un oubli, et elle se dit à l'écran.
     return etat.resumeFR
-      + (etat.appareilVerifie ? "" : " Il peut quand même lire.")
+      + (etat.appareilVerifie ? "" : String(localized: " Il peut quand même lire."))
   }
 
   /// Ouvre la fenêtre de connexion d'un pont et lance la commande `login` auprès de son bot.
@@ -2136,14 +2136,14 @@ final class InboxStore {
       } else {
         input = .qrCode
       }
-      bridgeLoginStatusFR = "Préparation du QR code…"
+      bridgeLoginStatusFR = String(localized: "Préparation du QR code…")
     case .webSession:
       input = .webSession
-      bridgeLoginStatusFR = "Préparation de la connexion…"
+      bridgeLoginStatusFR = String(localized: "Préparation de la connexion…")
     case .phoneCode:
       // Toujours par l'API de provisioning (ci-dessus) : le chat du bot n'a pas
       // de forme typée pour un numéro, un code, un mot de passe.
-      bridgeLoginStatusFR = "Ce réseau se connecte par l'API de provisioning du pont."
+      bridgeLoginStatusFR = String(localized: "Ce réseau se connecte par l'API de provisioning du pont.")
       return
     }
     bridgeLoginTask?.cancel()
@@ -2191,10 +2191,10 @@ final class InboxStore {
     }
     guard bridgeLoginCommandSent else {
       pendingWebSessionPayload = payload
-      bridgeLoginStatusFR = "Connexion en cours…"
+      bridgeLoginStatusFR = String(localized: "Connexion en cours…")
       return
     }
-    bridgeLoginStatusFR = "Connexion en cours…"
+    bridgeLoginStatusFR = String(localized: "Connexion en cours…")
     submitBridgeLoginCookies(payload)
   }
 
@@ -2206,13 +2206,13 @@ final class InboxStore {
       // Le collage de Slack — l'objet JSON ou un cURL — répond à l'étape
       // « cookies » du flow `token`, par l'API de provisioning.
       guard let session = SlackLoginSession(pasted: raw) else {
-        bridgeLoginStatusFR = "Il manque le jeton `xoxc-…` ou le cookie `xoxd-…` dans ce que tu as collé."
+        bridgeLoginStatusFR = String(localized: "Il manque le jeton `xoxc-…` ou le cookie `xoxd-…` dans ce que tu as collé.")
         return
       }
       submitBridgeLoginExtractedValues(session.values)
       return
     }
-    bridgeLoginStatusFR = "Connexion en cours…"
+    bridgeLoginStatusFR = String(localized: "Connexion en cours…")
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2242,7 +2242,7 @@ final class InboxStore {
       return
     }
     bridgeLoginInputPrompt = nil
-    bridgeLoginStatusFR = "Envoi…"
+    bridgeLoginStatusFR = String(localized: "Envoi…")
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2270,7 +2270,7 @@ final class InboxStore {
   /// affiche sa première étape. Une tentative encore ouverte est soldée avant.
   private func startProvisionedLogin(network: MessageNetwork, flow: String) {
     cancelBridgeLoginProcess()
-    bridgeLoginStatusFR = "Préparation de la connexion…"
+    bridgeLoginStatusFR = String(localized: "Préparation de la connexion…")
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2288,7 +2288,7 @@ final class InboxStore {
   /// Répond à l'étape en cours (saisie ou valeurs extraites) et affiche la suivante.
   private func submitProvisionedStep(values: [String: String]) {
     guard let network = bridgeLoginNetwork, let step = bridgeLoginProcessStep else { return }
-    bridgeLoginStatusFR = "Envoi…"
+    bridgeLoginStatusFR = String(localized: "Envoi…")
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2310,7 +2310,7 @@ final class InboxStore {
   /// répondent qu'à une étape « cookies » ; sinon on les garde pour elle.
   func submitBridgeLoginExtractedValues(_ values: [String: String]) {
     guard let step = bridgeLoginProcessStep, step.type == .cookies else {
-      bridgeLoginStatusFR = "Connexion en cours…"
+      bridgeLoginStatusFR = String(localized: "Connexion en cours…")
       return
     }
     submitProvisionedStep(values: values)
@@ -2336,7 +2336,7 @@ final class InboxStore {
       // Ni dans le flow Slack ni dans le flow Telegram par numéro. On dit ce que
       // le pont dit, sans prétendre savoir.
       bridgeLoginInputPrompt = nil
-      bridgeLoginStatusFR = instructions.isEmpty ? "Étape inattendue du pont." : instructions
+      bridgeLoginStatusFR = instructions.isEmpty ? String(localized: "Étape inattendue du pont.") : instructions
     }
   }
 
@@ -2406,7 +2406,7 @@ final class InboxStore {
 
   private static func provisioningErrorFR(_ error: Error, network: MessageNetwork) -> String {
     if case MatrixError.http(let status, _, let message) = error {
-      if status == 404 { return "Le pont ne répond pas sur son API de provisioning. Le Relais est-il à jour ?" }
+      if status == 404 { return String(localized: "Le pont ne répond pas sur son API de provisioning. Le Relais est-il à jour ?") }
       if let message, !message.isEmpty { return BridgeLoginFrench.error(message, network: network) }
     }
     return error.localizedDescription
@@ -2419,7 +2419,7 @@ final class InboxStore {
     bridgeLoginPasscodePrompt = nil
     bridgeLoginInputPrompt = nil
     bridgeLoginProcessStep = nil
-    bridgeLoginStatusFR = "\(network.labelFR) connecté. \(detail)"
+    bridgeLoginStatusFR = String(localized: "\(network.labelFR) connecté. \(detail)")
     startMatrixSync()
     beginBridgeIntake(network: network)
     Task { @MainActor [weak self] in
@@ -2481,7 +2481,7 @@ final class InboxStore {
   func importBrowserSession(from browser: InstalledBrowser, network: MessageNetwork) {
     guard let profile = BridgeSessionCookies.Profile.of(network), !bridgeLoginImportBusy else { return }
     bridgeLoginImportBusy = true
-    bridgeLoginStatusFR = "Lecture de la session dans \(browser.name)… Le Trousseau peut demander ton accord."
+    bridgeLoginStatusFR = String(localized: "Lecture de la session dans \(browser.name)… Le Trousseau peut demander ton accord.")
     Task { @MainActor [weak self] in
       defer { self?.bridgeLoginImportBusy = false }
       let result = await Task.detached(priority: .userInitiated) {
@@ -2502,7 +2502,7 @@ final class InboxStore {
   /// nombre d'essais qui restent — c'est `bridgeLoginPasscodePrompt.hint`.
   func submitBridgeLoginPasscode(_ pin: String) {
     guard let network = bridgeLoginNetwork else { return }
-    bridgeLoginStatusFR = "Vérification du code…"
+    bridgeLoginStatusFR = String(localized: "Vérification du code…")
     bridgeLoginTask?.cancel()
     bridgeLoginTask = Task { @MainActor [weak self] in
       guard let self else { return }
@@ -2541,12 +2541,12 @@ final class InboxStore {
         case .qrCode(let data):
           bridgeLoginQRData = data
           bridgeLoginPairingCode = nil
-          bridgeLoginStatusFR = "Scanne ce code depuis \(network.labelFR), dans Réglages puis Appareils liés."
+          bridgeLoginStatusFR = String(localized: "Scanne ce code depuis \(network.labelFR), dans Réglages puis Appareils liés.")
         case .pairingCode(let code):
           bridgeLoginPairingCode = code
-          bridgeLoginStatusFR = "Saisis ce code dans \(network.labelFR), dans Appareils liés."
+          bridgeLoginStatusFR = String(localized: "Saisis ce code dans \(network.labelFR), dans Appareils liés.")
         case .awaitingCookies:
-          bridgeLoginStatusFR = "Connecte-toi à \(network.labelFR) dans la fenêtre."
+          bridgeLoginStatusFR = String(localized: "Connecte-toi à \(network.labelFR) dans la fenêtre.")
         case .awaitingInput(let prompt, let isSecret, let options):
           // Le flow e-mail de Slack : on affiche la question du bot et on attend
           // la réponse. On arrête la boucle ; l'envoi la relancera.
@@ -2556,15 +2556,15 @@ final class InboxStore {
         case .awaitingPasscode(let isSetup, let hint):
           bridgeLoginPasscodePrompt = (isSetup, hint)
           bridgeLoginStatusFR = isSetup
-            ? "Choisis un code PIN à quatre chiffres : il protège tes messages privés chiffrés sur X."
-            : "Le code PIN de X Chat — celui qui déverrouille tes messages privés dans l’app X."
+            ? String(localized: "Choisis un code PIN à quatre chiffres : il protège tes messages privés chiffrés sur X.")
+            : String(localized: "Le code PIN de X Chat — celui qui déverrouille tes messages privés dans l’app X.")
         case .success(let detail):
           // La fenêtre de connexion a fait son travail : on laisse le message de
           // succès s'afficher une seconde, puis on referme.
           finishBridgeLogin(network: network, detail: detail)
           return
         case .failure(let detail):
-          bridgeLoginStatusFR = "Échec : \(detail)"
+          bridgeLoginStatusFR = String(localized: "Échec : \(detail)")
           return
         case .waiting:
           break
@@ -2588,7 +2588,7 @@ final class InboxStore {
   func startBridgeConversation(network: MessageNetwork, identifier: String) async {
     do {
       try await matrix.startConversation(network: network, identifier: identifier)
-      matrixStatusFR = "\(network.labelFR) : ouverture du fil vers \(identifier)…"
+      matrixStatusFR = String(localized: "\(network.labelFR) : ouverture du fil vers \(identifier)…")
       mode = .inbox
     } catch {
       lastErrorMessage = error.localizedDescription
@@ -2616,7 +2616,7 @@ final class InboxStore {
       network: network,
       address: trimmed,
       title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? trimmed : title,
-      preview: "Nouvelle conversation",
+      preview: String(localized: "Nouvelle conversation"),
       lastMessageAt: Date(),
       unreadCount: 0,
       isArchived: false,
@@ -2639,12 +2639,12 @@ final class InboxStore {
 
     // Reset TCC local de l’ancienne signature / état coincé (aide au debug).
     let statusBefore = ContactDirectory.shared.authorizationStatus
-    contactsStatusFR = "Demande en cours…"
+    contactsStatusFR = String(localized: "Demande en cours…")
 
     // Si déjà refusé, macOS ne réaffiche plus la boîte — ouvrir Réglages.
     if statusBefore == .denied || statusBefore == .restricted {
       needsContactsPermission = true
-      contactsStatusFR = "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts."
+      contactsStatusFR = String(localized: "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts.")
       openContactsPrivacySettings()
       return
     }
@@ -2654,19 +2654,19 @@ final class InboxStore {
     needsContactsPermission = !granted
 
     if granted {
-      contactsStatusFR = "Autorisé. Les noms et les photos viennent de tes contacts."
+      contactsStatusFR = String(localized: "Autorisé. Les noms et les photos viennent de tes contacts.")
       Task { await enrichIMessageContactsInBackground() }
       return
     }
 
     switch statusAfter {
     case .denied, .restricted:
-      contactsStatusFR = "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts."
+      contactsStatusFR = String(localized: "Refusé. Coche Correspondance dans Réglages Système, Confidentialité, Contacts.")
       openContactsPrivacySettings()
     case .notDetermined:
-      contactsStatusFR = "Le Mac n’a pas affiché la demande. Réessaie."
+      contactsStatusFR = String(localized: "Le Mac n’a pas affiché la demande. Réessaie.")
     default:
-      contactsStatusFR = "Non autorisé."
+      contactsStatusFR = String(localized: "Non autorisé.")
     }
   }
 
@@ -2701,7 +2701,7 @@ final class InboxStore {
       guard let self else { return }
       guard await self.matrix.restoreCursorAndCheckSession() else {
         self.isMatrixConnected = false
-        self.matrixStatusFR = "Non connecté."
+        self.matrixStatusFR = String(localized: "Non connecté.")
         self.didSettleInitialMatrixSync = true
         return
       }
@@ -2746,7 +2746,7 @@ final class InboxStore {
           await self.noteKnownCorrespondents(in: updated)
           self.networkFlaggedRequestIDs = await self.matrix.networkFlaggedRequestIDs()
           self.mergeMatrixConversations(updated)
-          self.matrixStatusFR = "Connecté · \(MatrixBridgeService.bridgedCountFR(updated))"
+          self.matrixStatusFR = String(localized: "Connecté · \(MatrixBridgeService.bridgedCountFR(updated))")
           await self.refreshLiveMatrixMessages()
           await self.refreshTypingLabels()
           // Le Relais a raison : son état remplace le nôtre pour les fils bridgés,
@@ -2761,7 +2761,7 @@ final class InboxStore {
         } catch is CancellationError {
           return
         } catch {
-          self.matrixStatusFR = "Problème : \(error.localizedDescription)"
+          self.matrixStatusFR = String(localized: "Problème : \(error.localizedDescription)")
           // Coupure réseau ou homeserver au tapis : on ralentit au lieu de marteler.
           try? await Task.sleep(for: .seconds(backoffSeconds))
           backoffSeconds = min(backoffSeconds * 2, 60)
@@ -3230,7 +3230,7 @@ final class InboxStore {
     panel.canChooseDirectories = false
     // Les trois réseaux acceptent n'importe quel fichier (iMessage passe par
     // `send POSIX file`) : ne pas restreindre aux images.
-    panel.message = "Choisir un ou plusieurs fichiers"
+    panel.message = String(localized: "Choisir un ou plusieurs fichiers")
     guard panel.runModal() == .OK else { return }
     let paths = panel.urls.map(\.path)
     session.pendingAttachmentPaths.append(contentsOf: paths)
@@ -3394,9 +3394,9 @@ final class InboxStore {
         }
         return
       }
-      lastErrorMessage = "Répondre en citant n’existe pas sur iMessage depuis "
-        + "l’automatisation AppleScript : le message part sans citation. "
-        + "Active « Automatisation Messages » dans Réglages pour citer."
+      lastErrorMessage = String(localized: "Répondre en citant n’existe pas sur iMessage depuis ")
+        + String(localized: "l’automatisation AppleScript : le message part sans citation. ")
+        + String(localized: "Active « Automatisation Messages » dans Réglages pour citer.")
       session.replyingToMessageID = nil
     }
 
@@ -3758,9 +3758,9 @@ final class InboxStore {
   /// et à l'échéance d'un message programmé ; `interactive` autorise à demander
   /// l'automatisation Messages (jamais depuis la boucle d'échéance).
   private func sendBlocker(for conversation: Conversation, attachments: [String], interactive: Bool) -> String? {
-    if isDemo { return "Démonstration : rien ne part." }
+    if isDemo { return String(localized: "Démonstration : rien ne part.") }
     if usingDemoData && conversation.network == .iMessage {
-      return "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages."
+      return String(localized: "Données de démonstration. Autorise l’accès au disque pour envoyer par Messages.")
     }
     if conversation.network == .iMessage, iMessageSender.automationRefused() {
       guard interactive, requestMessagesAutomation() else {
@@ -3769,7 +3769,7 @@ final class InboxStore {
       }
     }
     if conversation.network.livesOnRelay, !isMatrixConnected {
-      return "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."
+      return String(localized: "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.")
     }
     return nil
   }
@@ -3790,7 +3790,7 @@ final class InboxStore {
       id: "local-\(UUID().uuidString)",
       conversationID: conversation.id,
       network: conversation.network,
-      text: text.isEmpty && !attachments.isEmpty ? "📷 Photo" : text,
+      text: text.isEmpty && !attachments.isEmpty ? String(localized: "📷 Photo") : text,
       sentAt: Date(),
       isFromMe: true,
       isPending: true,
@@ -3800,7 +3800,7 @@ final class InboxStore {
           messageID: $0.id,
           // Le NOM, jamais l'identifiant technique : un « @signal_…:local »
           // n'est pas quelqu'un. À défaut, le titre du fil dit à qui l'on parle.
-          senderName: $0.isFromMe ? "Moi" : ($0.displayedSenderName ?? conversation.title),
+          senderName: $0.isFromMe ? String(localized: "Moi") : ($0.displayedSenderName ?? conversation.title),
           text: $0.sidebarPreviewText
         )
       }
@@ -3849,9 +3849,9 @@ final class InboxStore {
             }
             guard landed else {
               throw IMessageSendError.appleScript(
-                "Messages n’a pas pu lire « \(url.lastPathComponent) ». "
-                + "Active « Automatisation Messages » dans Réglages : les pièces "
-                + "jointes passent par là."
+                String(localized: "Messages n’a pas pu lire « \(url.lastPathComponent) ». ")
+                + String(localized: "Active « Automatisation Messages » dans Réglages : les pièces ")
+                + String(localized: "jointes passent par là.")
               )
             }
           }
@@ -3997,14 +3997,14 @@ final class InboxStore {
   private func fire(_ message: ScheduledMessage) async {
     guard scheduledMessages.contains(where: { $0.id == message.id }) else { return }
     guard let conversation = conversations.first(where: { $0.id == message.conversationID }) else {
-      markScheduledFailed(message.id, "Conversation introuvable.")
+      markScheduledFailed(message.id, String(localized: "Conversation introuvable."))
       return
     }
     // Relance conditionnelle : l'autre a parlé depuis → le message n'a plus lieu d'être.
     if message.onlyIfNoReply, !conversation.lastMessageIsFromMe, conversation.lastMessageAt > message.createdAt {
       scheduledMessages.removeAll { $0.id == message.id }
       scheduledDidChange()
-      lastErrorMessage = "Relance pour \(conversation.title) annulée : une réponse est arrivée entre-temps."
+      lastErrorMessage = String(localized: "Relance pour \(conversation.title) annulée : une réponse est arrivée entre-temps.")
       return
     }
     // Une ligne fusionnée n'est pas un transport : l'échéance part sur le
@@ -4046,7 +4046,7 @@ final class InboxStore {
       failed.lastError = error.localizedDescription
       scheduledMessages.append(failed)
       scheduledDidChange()
-      lastErrorMessage = "Message programmé pour \(conversation.title) non envoyé : \(error.localizedDescription)"
+      lastErrorMessage = String(localized: "Message programmé pour \(conversation.title) non envoyé : \(error.localizedDescription)")
     }
   }
 
@@ -4288,7 +4288,7 @@ final class InboxStore {
       isInitialSync = false
     }
 
-    iMessageStatusFR = "Actualisation…"
+    iMessageStatusFR = String(localized: "Actualisation…")
 
     // iMessage est le seul réseau que `load()` va encore chercher : les fils
     // bridgés arrivent par la boucle `/sync`, qui ne s'arrête jamais.
@@ -4318,14 +4318,14 @@ final class InboxStore {
       IMessageConversationCache.save(fresh)
       shouldEnrichIMessage = !fresh.isEmpty
       iMessageStatusFR = fresh.isEmpty
-        ? "Messages est accessible, mais sans conversation récente."
-        : "\(fresh.count) conversations iMessage."
+        ? String(localized: "Messages est accessible, mais sans conversation récente.")
+        : String(localized: "\(fresh.count) conversations iMessage.")
     case .denied(let message):
       // Garde le cache si on l’a — mieux que la démo vide.
       let cached = realConversations(on: .iMessage)
       if !cached.isEmpty {
         merged.append(contentsOf: cached)
-        iMessageStatusFR = "\(cached.count) conversations en mémoire, accès au disque refusé."
+        iMessageStatusFR = String(localized: "\(cached.count) conversations en mémoire, accès au disque refusé.")
       } else {
         iMessageStatusFR = message
         merged.append(contentsOf: Self.demoConversations())
@@ -4335,7 +4335,7 @@ final class InboxStore {
       let cached = conversations.filter { $0.network == .iMessage }
       if !cached.isEmpty {
         merged.append(contentsOf: cached)
-        iMessageStatusFR = "\(cached.count) conversations en mémoire. \(message)"
+        iMessageStatusFR = String(localized: "\(cached.count) conversations en mémoire. \(message)")
       } else {
         iMessageStatusFR = message
         merged.append(contentsOf: Self.demoConversations())
@@ -4397,7 +4397,7 @@ final class InboxStore {
       IMessageConversationCache.save(realConversations(on: .iMessage))
     }
     let named = list.filter { !$0.hasPlaceholderTitle }.count
-    iMessageStatusFR = "\(list.count) conversations, \(named) avec un nom de contact."
+    iMessageStatusFR = String(localized: "\(list.count) conversations, \(named) avec un nom de contact.")
   }
 
   private enum IMessageLoad: Sendable {
@@ -4421,7 +4421,7 @@ final class InboxStore {
         }
         return .failure(error.localizedDescription)
       } catch is CancellationError {
-        return .failure("La lecture de Messages prend trop de temps. Vérifie l’accès au disque.")
+        return .failure(String(localized: "La lecture de Messages prend trop de temps. Vérifie l’accès au disque."))
       } catch {
         return .failure(error.localizedDescription)
       }
@@ -4436,7 +4436,7 @@ final class InboxStore {
     case .success(let value):
       return value
     case .failure:
-      return .failure("La lecture de Messages prend trop de temps. Vérifie l’accès au disque.")
+      return .failure(String(localized: "La lecture de Messages prend trop de temps. Vérifie l’accès au disque."))
     }
   }
 
@@ -4537,7 +4537,7 @@ final class InboxStore {
               id: "matrix-sync-\(conversation.id)",
               conversationID: conversation.id,
               network: conversation.network,
-              text: "Synchronisation du fil…",
+              text: String(localized: "Synchronisation du fil…"),
               sentAt: Date(),
               isFromMe: false
             )
@@ -4559,8 +4559,8 @@ final class InboxStore {
             conversationID: conversation.id,
             network: conversation.network,
             text: hasSession
-              ? "Pas encore de messages ici. Écris ci-dessous."
-              : "Le Relais n’est pas connecté. Va voir dans Réglages, Relais.",
+              ? String(localized: "Pas encore de messages ici. Écris ci-dessous.")
+              : String(localized: "Le Relais n’est pas connecté. Va voir dans Réglages, Relais."),
             sentAt: Date(),
             isFromMe: false
           )
@@ -4805,8 +4805,8 @@ final class InboxStore {
         id: "imessage:demo-1",
         network: .iMessage,
         address: "+33600000001",
-        title: "Marie (démo)",
-        preview: "On se voit demain ?",
+        title: String(localized: "Marie (démo)"),
+        preview: String(localized: "On se voit demain ?"),
         lastMessageAt: now.addingTimeInterval(-400),
         unreadCount: 1,
         isArchived: false,
@@ -4817,8 +4817,8 @@ final class InboxStore {
         id: "imessage:demo-2",
         network: .iMessage,
         address: "+33600000002",
-        title: "Julien (démo)",
-        preview: "Merci pour le lien.",
+        title: String(localized: "Julien (démo)"),
+        preview: String(localized: "Merci pour le lien."),
         lastMessageAt: now.addingTimeInterval(-8_000),
         unreadCount: 0,
         isArchived: false,
@@ -4835,7 +4835,7 @@ final class InboxStore {
         id: "d1",
         conversationID: conversationID,
         network: .iMessage,
-        text: "Salut — tu as deux minutes ?",
+        text: String(localized: "Salut — tu as deux minutes ?"),
         sentAt: now.addingTimeInterval(-3_600),
         isFromMe: false
       ),
@@ -4843,7 +4843,7 @@ final class InboxStore {
         id: "d2",
         conversationID: conversationID,
         network: .iMessage,
-        text: "Oui, dis-moi.",
+        text: String(localized: "Oui, dis-moi."),
         sentAt: now.addingTimeInterval(-3_400),
         isFromMe: true
       ),
@@ -4851,7 +4851,7 @@ final class InboxStore {
         id: "d3",
         conversationID: conversationID,
         network: .iMessage,
-        text: "On se voit demain ?",
+        text: String(localized: "On se voit demain ?"),
         sentAt: now.addingTimeInterval(-400),
         isFromMe: false
       ),

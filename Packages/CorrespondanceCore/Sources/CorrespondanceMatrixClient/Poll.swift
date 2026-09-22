@@ -94,13 +94,15 @@ public struct Poll: Hashable, Codable, Sendable {
 
   /// « 3 votes · 2 personnes », ou le silence avant les résultats.
   public func summaryFR() -> String {
-    guard showsResults else { return isClosed ? "Sondage clos" : "Résultats après la clôture" }
+    guard showsResults else {
+      return isClosed ? String(localized: "Sondage clos") : String(localized: "Résultats après la clôture")
+    }
     let people = voterCount
-    let suffix = isClosed ? " · clos" : ""
+    let suffix = isClosed ? String(localized: " · clos") : ""
     switch people {
-    case 0: return "Personne n'a encore voté" + suffix
-    case 1: return "1 vote" + suffix
-    default: return "\(people) votes" + suffix
+    case 0: return String(localized: "Personne n'a encore voté") + suffix
+    case 1: return String(localized: "1 vote") + suffix
+    default: return String(localized: "\(people) votes") + suffix
     }
   }
 }

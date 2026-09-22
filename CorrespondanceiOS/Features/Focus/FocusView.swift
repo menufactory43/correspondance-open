@@ -44,8 +44,8 @@ struct FocusView: View {
     var id: String { rawValue }
     var labelFR: String {
       switch self {
-      case .reply: "Répondre"
-      case .sort: "Trier"
+      case .reply: String(localized: "Répondre")
+      case .sort: String(localized: "Trier")
       }
     }
   }
@@ -59,10 +59,11 @@ struct FocusView: View {
 
     var labelFR: String {
       switch self {
-      case .replied: "Répondu"
-      case .archived: "Archivée"
-      case .reminded(let date): "De côté jusqu'à \(ConversationReminder(wakeAt: date).labelFR())"
-      case .kept: "Gardée dans la file"
+      case .replied: String(localized: "Répondu")
+      case .archived: String(localized: "Archivée")
+      case .reminded(let date):
+        String(localized: "De côté jusqu'à \(ConversationReminder(wakeAt: date).labelFR())")
+      case .kept: String(localized: "Gardée dans la file")
       }
     }
 
@@ -129,7 +130,8 @@ struct FocusView: View {
             .font(Typography.letterHeading(typeface, 56))
             .foregroundStyle(theme.ink)
             .monospacedDigit()
-          Text(queue.count == 1 ? "conversation non lue" : "conversations non lues")
+          Text(queue.count == 1 ? String(localized: "conversation non lue")
+               : String(localized: "conversations non lues"))
             .font(Typography.emptyState(typeface))
             .foregroundStyle(theme.inkSecondary)
             .padding(.top, -6)
@@ -140,8 +142,8 @@ struct FocusView: View {
           .pickerStyle(.segmented)
           .padding(.top, Spacing.sm)
           Text(pass == .reply
-               ? "Chaque conversation avec son composer. Répondre la fait sortir."
-               : "Sans composer : Archiver, Rappel ou Garder. Pour répondre plus tard, au Mac.")
+               ? String(localized: "Chaque conversation avec son composer. Répondre la fait sortir.")
+               : String(localized: "Sans composer : Archiver, Rappel ou Garder. Pour répondre plus tard, au Mac."))
             .font(Typography.meta(typeface))
             .foregroundStyle(theme.inkTertiary)
 
@@ -232,10 +234,22 @@ struct FocusView: View {
 
   private var tallyLine: String {
     var parts: [String] = []
-    if tally.replied > 0 { parts.append(tally.replied == 1 ? "1 réponse" : "\(tally.replied) réponses") }
-    if tally.archived > 0 { parts.append(tally.archived == 1 ? "1 archivée" : "\(tally.archived) archivées") }
-    if tally.reminded > 0 { parts.append(tally.reminded == 1 ? "1 rappel" : "\(tally.reminded) rappels") }
-    if tally.kept > 0 { parts.append(tally.kept == 1 ? "1 gardée" : "\(tally.kept) gardées") }
+    if tally.replied > 0 {
+      parts.append(tally.replied == 1 ? String(localized: "1 réponse")
+                                      : String(localized: "\(tally.replied) réponses"))
+    }
+    if tally.archived > 0 {
+      parts.append(tally.archived == 1 ? String(localized: "1 archivée")
+                                       : String(localized: "\(tally.archived) archivées"))
+    }
+    if tally.reminded > 0 {
+      parts.append(tally.reminded == 1 ? String(localized: "1 rappel")
+                                       : String(localized: "\(tally.reminded) rappels"))
+    }
+    if tally.kept > 0 {
+      parts.append(tally.kept == 1 ? String(localized: "1 gardée")
+                                   : String(localized: "\(tally.kept) gardées"))
+    }
     return parts.joined(separator: " · ")
   }
 
@@ -359,22 +373,26 @@ struct FocusView: View {
   private func reason(_ conversation: Conversation) -> String {
     var parts: [String] = []
     if conversation.unreadCount > 0 {
-      parts.append(conversation.unreadCount == 1 ? "1 message non lu" : "\(conversation.unreadCount) messages non lus")
+      parts.append(conversation.unreadCount == 1
+                   ? String(localized: "1 message non lu")
+                   : String(localized: "\(conversation.unreadCount) messages non lus"))
     } else if !conversation.lastMessageIsFromMe {
-      parts.append("sans réponse")
+      parts.append(String(localized: "sans réponse"))
     } else if !store.draftText(conversation.id).trimmingCharacters(in: .whitespaces).isEmpty {
-      parts.append("brouillon en cours")
+      parts.append(String(localized: "brouillon en cours"))
     } else {
-      parts.append("dernier mot à vous")
+      parts.append(String(localized: "dernier mot à vous"))
     }
-    parts.append("depuis \(ConversationRow.shortDate(conversation.lastMessageAt))")
+    parts.append(String(localized: "depuis \(ConversationRow.shortDate(conversation.lastMessageAt))"))
     return parts.joined(separator: " · ")
   }
 
   private func shortReason(_ conversation: Conversation) -> String {
     let when = ConversationRow.shortDate(conversation.lastMessageAt)
     if conversation.unreadCount > 0 { return "\(conversation.unreadCount) · \(when)" }
-    if !store.draftText(conversation.id).trimmingCharacters(in: .whitespaces).isEmpty { return "brouillon" }
+    if !store.draftText(conversation.id).trimmingCharacters(in: .whitespaces).isEmpty {
+      return String(localized: "brouillon")
+    }
     return when
   }
 
@@ -383,7 +401,7 @@ struct FocusView: View {
   /// Trois boutons, à la même place sur chaque page. Jamais un geste.
   private func actionRow(_ id: String) -> some View {
     HStack(spacing: 6) {
-      actionButton("Archiver", systemImage: "archivebox") {
+      actionButton(String(localized: "Archiver"), systemImage: "archivebox") {
         decide(.archived, for: id)
       }
       Menu {
@@ -391,10 +409,11 @@ struct FocusView: View {
           Button(suggestion.title) { decide(.reminded(suggestion.date), for: id) }
         }
       } label: {
-        actionLabel("Rappel", systemImage: "clock.arrow.circlepath")
+        actionLabel(String(localized: "Rappel"), systemImage: "clock.arrow.circlepath")
       }
       .accessibilityLabel("Me le rappeler")
-      actionButton(pass == .reply ? "Passer" : "Garder", systemImage: "chevron.down.2") {
+      actionButton(pass == .reply ? String(localized: "Passer") : String(localized: "Garder"),
+                   systemImage: "chevron.down.2") {
         decide(.kept, for: id)
       }
     }

@@ -44,8 +44,8 @@ struct ConversationPillHeader: View {
       }
       .accessibilityLabel(
         conversation.isGroup
-          ? "Infos du groupe \(conversation.title)"
-          : "Fiche de \(conversation.title)"
+          ? String(localized: "Infos du groupe \(conversation.title)")
+          : String(localized: "Fiche de \(conversation.title)")
       )
       .accessibilityHint("Ouvre les informations de la conversation")
       .popover(isPresented: $isShowingInfo, arrowEdge: .bottom) {
@@ -79,7 +79,7 @@ struct ConversationInfoCard: View {
           Text(conversation.title)
             .font(.system(size: 15, weight: .semibold))
           Label(
-            conversation.isGroup ? "\(conversation.network.labelFR) · groupe" : conversation.network.labelFR,
+            conversation.isGroup ? String(localized: "\(conversation.network.labelFR) · groupe") : conversation.network.labelFR,
             systemImage: conversation.rowSystemImage
           )
           .font(.system(size: 11))
@@ -168,11 +168,13 @@ struct ConversationInfoCard: View {
               .foregroundStyle(theme.accent)
               .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
-              Text(members.isEmpty ? "Fusionner avec un autre chat…" : "Ajouter un chat à cette personne…")
+              Text(members.isEmpty ? String(localized: "Fusionner avec un autre chat…") : String(localized: "Ajouter un chat à cette personne…"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.ink)
               if let suggested {
-                Text("\(suggested.count - 1) chat\(suggested.count > 2 ? "s" : "") repéré\(suggested.count > 2 ? "s" : "") — même numéro ou même nom")
+                Text(suggested.count > 2
+                  ? String(localized: "\(suggested.count - 1) chats repérés — même numéro ou même nom")
+                  : String(localized: "\(suggested.count - 1) chat repéré — même numéro ou même nom"))
                   .font(.system(size: 11))
                   .foregroundStyle(theme.accent)
               } else {
@@ -190,7 +192,7 @@ struct ConversationInfoCard: View {
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(members.isEmpty ? "Fusionner avec un autre chat" : "Ajouter un chat à cette personne")
+        .accessibilityLabel(members.isEmpty ? String(localized: "Fusionner avec un autre chat") : String(localized: "Ajouter un chat à cette personne"))
       }
 
       TranslationCard(conversationID: conversation.id, theme: theme)

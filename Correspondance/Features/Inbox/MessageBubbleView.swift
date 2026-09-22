@@ -65,17 +65,17 @@ struct MessageBubbleView: View {
 
     var titleFR: String {
       switch self {
-      case .locally: "Supprimer ce message ici ?"
-      case .everywhere: "Supprimer ce message pour tout le monde ?"
+      case .locally: String(localized: "Supprimer ce message ici ?")
+      case .everywhere: String(localized: "Supprimer ce message pour tout le monde ?")
       }
     }
 
     var detailFR: String {
       switch self {
       case .locally:
-        "Il disparaît de Correspondance, sur cette machine. Ton correspondant le garde."
+        String(localized: "Il disparaît de Correspondance, sur cette machine. Ton correspondant le garde.")
       case .everywhere:
-        "Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour."
+        String(localized: "Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour.")
       }
     }
   }
@@ -360,9 +360,13 @@ struct MessageBubbleView: View {
                   )
               }
               .buttonStyle(.plain)
-              .help(message.myReactionEmoji == emoji ? "Retirer ma réaction" : "Réagir \(emoji)")
+              .help(message.myReactionEmoji == emoji
+                ? String(localized: "Retirer ma réaction")
+                : String(localized: "Réagir \(emoji)"))
               .accessibilityLabel(
-                message.myReactionEmoji == emoji ? "Retirer la réaction \(emoji)" : "Réagir \(emoji)"
+                message.myReactionEmoji == emoji
+                  ? String(localized: "Retirer la réaction \(emoji)")
+                  : String(localized: "Réagir \(emoji)")
               )
             }
           }
@@ -422,23 +426,23 @@ struct MessageBubbleView: View {
     var parts: [String] = []
     var help: [String] = []
     if message.editedAt != nil, !message.isRetracted {
-      parts.append("Modifié")
+      parts.append(String(localized: "Modifié"))
       if message.editHistory.isEmpty {
-        help.append("Message modifié après envoi")
+        help.append(String(localized: "Message modifié après envoi"))
       } else {
         help.append(
-          "Versions précédentes :\n"
+          String(localized: "Versions précédentes :\n")
             + message.editHistory.map { "• \($0)" }.joined(separator: "\n")
         )
       }
     }
     if let effect = message.expressiveEffectName, !message.isRetracted {
-      parts.append("envoyé avec \(effect)")
-      help.append("Effet d’envoi : \(effect)")
+      parts.append(String(localized: "envoyé avec \(effect)"))
+      help.append(String(localized: "Effet d’envoi : \(effect)"))
     }
     if let aside = message.agentAside {
       parts.append(aside.footnoteFR)
-      help.append("Ce message nomme un agent : il n’est pas parti sur le réseau. Seuls toi et l’agent le voient.")
+      help.append(String(localized: "Ce message nomme un agent : il n’est pas parti sur le réseau. Seuls toi et l’agent le voient."))
     }
     guard !parts.isEmpty else { return nil }
     return (parts.joined(separator: " · "), help.joined(separator: "\n\n"))
@@ -503,7 +507,7 @@ struct MessageBubbleView: View {
             onReact?(emoji)
           } label: {
             // Le même emoji déjà posé : le menu propose alors de le retirer.
-            Text(message.myReactionEmoji == emoji ? "\(emoji)  Retirer" : emoji)
+            Text(message.myReactionEmoji == emoji ? String(localized: "\(emoji)  Retirer") : emoji)
           }
         }
       }
@@ -684,7 +688,7 @@ struct MessageBubbleView: View {
         maxHeight: 320,
         cornerRadius: 12,
         placeholder: theme.bubbleIn,
-        label: repaired.filename ?? "image animée"
+        label: repaired.filename ?? String(localized: "image animée")
       )
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       AttachmentImageView(
@@ -693,7 +697,7 @@ struct MessageBubbleView: View {
         maxHeight: 320,
         placeholder: theme.bubbleIn,
         border: theme.edge.opacity(0.5),
-        label: repaired.filename ?? "Image"
+        label: repaired.filename ?? String(localized: "Image")
       ) {
         unavailableImageLabel(repaired)
       }
@@ -707,7 +711,7 @@ struct MessageBubbleView: View {
         maxHeight: 320,
         placeholder: theme.bubbleIn,
         border: theme.edge.opacity(0.5),
-        label: repaired.filename ?? "Vidéo"
+        label: repaired.filename ?? String(localized: "Vidéo")
       )
     } else if repaired.isImage {
       unavailableImageLabel(repaired)
@@ -725,7 +729,7 @@ struct MessageBubbleView: View {
   /// ne décode pas. La bulle dit lequel plutôt que de laisser un trou.
   @ViewBuilder
   private func unavailableImageLabel(_ attachment: MessageAttachment) -> some View {
-    Label(attachment.filename ?? "Image indisponible", systemImage: "photo")
+    Label(attachment.filename ?? String(localized: "Image indisponible"), systemImage: "photo")
       .font(Typography.meta)
       .foregroundStyle(theme.inkSecondary)
       .padding(10)

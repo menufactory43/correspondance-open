@@ -15,15 +15,15 @@ public enum MessageArrival: String, CaseIterable, Identifiable, Codable, Sendabl
 
   public var labelFR: String {
     switch self {
-    case .encre: "Encre"
-    case .plume: "Plume"
+    case .encre: String(localized: "Encre")
+    case .plume: String(localized: "Plume")
     }
   }
 
   public var subtitleFR: String {
     switch self {
-    case .encre: "Le texte se précise depuis un flou"
-    case .plume: "Le texte se trace de gauche à droite"
+    case .encre: String(localized: "Le texte se précise depuis un flou")
+    case .plume: String(localized: "Le texte se trace de gauche à droite")
     }
   }
 

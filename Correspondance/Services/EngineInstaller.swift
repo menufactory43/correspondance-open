@@ -14,7 +14,7 @@ enum EngineInstaller {
     var sortie: String
     var errorDescription: String? {
       let queue = sortie.split(separator: "\n").suffix(6).joined(separator: "\n")
-      return "« \(commande) » n'est pas passée.\n\(queue.isEmpty ? "(aucune sortie)" : queue)"
+      return String(localized: "« \(commande) » n'est pas passée.\n\(queue.isEmpty ? String(localized: "(aucune sortie)") : queue)")
     }
   }
 

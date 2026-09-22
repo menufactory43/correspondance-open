@@ -38,7 +38,7 @@ public struct PollView: View {
       HStack(spacing: 5) {
         Image(systemName: "chart.bar.doc.horizontal")
           .font(.system(size: 10, weight: .semibold))
-        Text(poll.maxSelections > 1 ? "Sondage · plusieurs choix" : "Sondage")
+        Text(poll.maxSelections > 1 ? String(localized: "Sondage · plusieurs choix") : String(localized: "Sondage"))
           .font(Typography.meta(typeface))
       }
       .foregroundStyle(inkSoft)
@@ -112,7 +112,7 @@ public struct PollView: View {
     .disabled(onVote == nil || poll.isClosed)
     .accessibilityLabel(
       poll.showsResults
-        ? "\(answer.text), \(poll.count(of: answer.id)) vote(s)"
+        ? String(localized: "\(answer.text), \(poll.count(of: answer.id)) vote(s)")
         : answer.text
     )
     .accessibilityAddTraits(voted ? [.isSelected, .isButton] : .isButton)

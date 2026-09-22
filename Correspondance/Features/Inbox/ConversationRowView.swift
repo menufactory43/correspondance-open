@@ -12,8 +12,8 @@ struct ConversationRowView: View {
 
   private var subtitle: String {
     if conversation.hasLivePreview { return conversation.preview }
-    if isSyncing { return "Synchronisation…" }
-    if conversation.isGroup { return "En attente de messages" }
+    if isSyncing { return String(localized: "Synchronisation…") }
+    if conversation.isGroup { return String(localized: "En attente de messages") }
     return conversation.preview
   }
 

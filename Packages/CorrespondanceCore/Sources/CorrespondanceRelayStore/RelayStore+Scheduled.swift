@@ -132,7 +132,7 @@ extension RelayStore {
     let stillThere = !draftText(message.conversationID)
       .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     if stillThere {
-      markScheduled(message.id, error: syncError ?? "Envoi refusé par le Relais")
+      markScheduled(message.id, error: syncError ?? String(localized: "Envoi refusé par le Relais"))
       setDraft(previousDraft, conversationID: message.conversationID)
       for path in previousAttachments {
         addAttachment(path, conversationID: message.conversationID)

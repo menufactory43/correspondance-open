@@ -143,8 +143,8 @@ struct DetachedConversationWindow: View {
         .buttonStyle(.plain)
         .accessibilityLabel(
           conversation.isGroup
-            ? "Infos du groupe \(conversation.title)"
-            : "Fiche de \(conversation.title)"
+            ? String(localized: "Infos du groupe \(conversation.title)")
+            : String(localized: "Fiche de \(conversation.title)")
         )
         .popover(isPresented: $isShowingInfo, arrowEdge: .bottom) {
           ConversationInfoCard(conversation: conversation, theme: theme)
@@ -184,20 +184,22 @@ struct DetachedConversationWindow: View {
       Spacer(minLength: 0)
       SoftToolButton(
         systemImage: isPinned ? "pin.fill" : "pin",
-        helpText: isPinned ? "Ne plus épingler (⌘⌥P)" : "Épingler au-dessus (⌘⌥P)",
+        helpText: isPinned ? String(localized: "Ne plus épingler (⌘⌥P)")
+                           : String(localized: "Épingler au-dessus (⌘⌥P)"),
         isEmphasized: isPinned
       ) {
         store.togglePinnedDetached(conversationID)
       }
       SoftToolButton(
         systemImage: "rectangle.split.2x1",
-        helpText: "Ramener dans l’inbox (⌘⇧D)"
+        helpText: String(localized: "Ramener dans l’inbox (⌘⇧D)")
       ) {
         Task { await store.reattach(conversationID: conversationID) }
       }
       SoftToolButton(
         systemImage: store.isArchived(conversationID) ? "tray.and.arrow.up" : "archivebox",
-        helpText: store.isArchived(conversationID) ? "Désarchiver (⌘E)" : "Archiver (⌘E)"
+        helpText: store.isArchived(conversationID) ? String(localized: "Désarchiver (⌘E)")
+                                                   : String(localized: "Archiver (⌘E)")
       ) {
         Task { await store.toggleArchived(conversationID: conversationID) }
       }

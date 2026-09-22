@@ -49,8 +49,8 @@ public struct ScrollToBottomButton: View {
     .buttonStyle(.plain)
     .accessibilityLabel(
       unreadCount > 0
-        ? "Aller au dernier message, \(unreadCount) nouveau\(unreadCount > 1 ? "x" : "")"
-        : "Aller au dernier message"
+        ? String(localized: "Aller au dernier message, \(unreadCount) nouveau\(unreadCount > 1 ? "x" : "")")
+        : String(localized: "Aller au dernier message")
     )
   }
 }

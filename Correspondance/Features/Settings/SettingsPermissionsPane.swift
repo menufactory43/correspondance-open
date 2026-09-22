@@ -11,9 +11,9 @@ struct SettingsPermissionsPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
-      SettingsCard(title: "Autorisations") {
+      SettingsCard(title: String(localized: "Autorisations")) {
         SettingsRow(
-          label: "Contacts",
+          label: String(localized: "Contacts"),
           detail: store.contactsStatusFR,
           systemImage: "person.crop.circle"
         ) {
@@ -25,7 +25,7 @@ struct SettingsPermissionsPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "Notifications",
+          label: String(localized: "Notifications"),
           detail: store.notificationStatusFR,
           systemImage: "bell.badge"
         ) {
@@ -33,7 +33,11 @@ struct SettingsPermissionsPane: View {
             Task {
               await store.requestNotificationPermission()
               // Déjà refusé : macOS ne réaffiche plus la boîte, on ouvre les Réglages.
-              if store.notificationStatusFR.contains("refus") {
+              // Comparé à la MÊME chaîne localisée, et non à un morceau de
+              // français : le texte change avec la langue, le test doit suivre.
+              if store.notificationStatusFR
+                == String(localized: "Refusées. Autorise Correspondance dans Réglages Système, Notifications.")
+              {
                 store.openNotificationSettings()
               }
             }
@@ -43,7 +47,7 @@ struct SettingsPermissionsPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "Piloter Messages",
+          label: String(localized: "Piloter Messages"),
           detail: store.messagesAutomationStatusFR,
           systemImage: "gearshape.arrow.triangle.2.circlepath"
         ) {
@@ -55,30 +59,30 @@ struct SettingsPermissionsPane: View {
       }
 
       SettingsCard(
-        title: "Réglages système",
-        footnote: "Sans l’accès complet au disque, Correspondance ne peut pas lire tes iMessage."
+        title: String(localized: "Réglages système"),
+        footnote: String(localized: "Sans l’accès complet au disque, Correspondance ne peut pas lire tes iMessage.")
       ) {
-        SettingsRow(label: "Accès complet au disque", systemImage: "externaldrive") {
+        SettingsRow(label: String(localized: "Accès complet au disque"), systemImage: "externaldrive") {
           Button("Ouvrir") { openPrivacy("Privacy_AllFiles") }
         }
         SettingsDivider()
-        SettingsRow(label: "Contacts", systemImage: "person.2") {
+        SettingsRow(label: String(localized: "Contacts"), systemImage: "person.2") {
           Button("Ouvrir") { openPrivacy("Privacy_Contacts") }
         }
         SettingsDivider()
-        SettingsRow(label: "Automatisation", systemImage: "app.connected.to.app.below.fill") {
+        SettingsRow(label: String(localized: "Automatisation"), systemImage: "app.connected.to.app.below.fill") {
           Button("Ouvrir") { store.openAutomationPrivacySettings() }
         }
         SettingsDivider()
-        SettingsRow(label: "Accessibilité", systemImage: "accessibility") {
+        SettingsRow(label: String(localized: "Accessibilité"), systemImage: "accessibility") {
           Button("Ouvrir") { store.openAccessibilityPrivacySettings() }
         }
         SettingsDivider()
         // L'extension de partage est là dès l'installation, mais macOS ne coche
         // pas une extension tierce tout seul : une case, une fois.
         SettingsRow(
-          label: "Partager depuis le Finder, Safari, Photos",
-          detail: "Coche Correspondance dans Extensions › Partage, une fois.",
+          label: String(localized: "Partager depuis le Finder, Safari, Photos"),
+          detail: String(localized: "Coche Correspondance dans Extensions › Partage, une fois."),
           systemImage: "square.and.arrow.up"
         ) {
           Button("Ouvrir") { openExtensions() }

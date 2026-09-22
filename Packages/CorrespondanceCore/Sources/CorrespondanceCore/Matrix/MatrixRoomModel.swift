@@ -148,10 +148,12 @@ public struct MatrixRoomModel: Sendable {
     let count = typingUserIDs(now: now, selfUserID: selfUserID).count
     guard count > 0 else { return nil }
     switch names.count {
-    case 0: return count == 1 ? "Quelqu'un écrit…" : "\(count) personnes écrivent…"
-    case 1: return "\(names[0]) écrit…"
-    case 2: return "\(names[0]) et \(names[1]) écrivent…"
-    default: return "\(names.count) personnes écrivent…"
+    case 0:
+      return count == 1
+        ? String(localized: "Quelqu'un écrit…") : String(localized: "\(count) personnes écrivent…")
+    case 1: return String(localized: "\(names[0]) écrit…")
+    case 2: return String(localized: "\(names[0]) et \(names[1]) écrivent…")
+    default: return String(localized: "\(names.count) personnes écrivent…")
     }
   }
 
@@ -498,7 +500,7 @@ public struct MatrixRoomModel: Sendable {
       network: .agent,
       address: roomID,
       title: titre,
-      preview: last?.listPreview(isGroup: false) ?? "Écrire à \(titre)…",
+      preview: last?.listPreview(isGroup: false) ?? String(localized: "Écrire à \(titre)…"),
       lastMessageAt: last?.sentAt ?? lastEventAt,
       unreadCount: unreadCount,
       isArchived: false,
@@ -519,7 +521,9 @@ public struct MatrixRoomModel: Sendable {
     let group = isGroup(selfUserID: selfUserID)
     let last = lastListedMessage
     let preview = last?.listPreview(isGroup: group)
-      ?? (group ? "Groupe \(network.labelFR)" : "Écrire sur \(network.labelFR)…")
+      ?? (group
+        ? String(localized: "Groupe \(network.labelFR)")
+        : String(localized: "Écrire sur \(network.labelFR)…"))
     var conversation = Conversation(
       id: conversationID,
       network: network,

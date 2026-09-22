@@ -92,14 +92,14 @@ struct ThreadComposer: View {
   }
 
   private var placeholder: String {
-    if isEditing { return "Corriger le message" }
-    guard let network = store.sendingNetwork(conversationID) else { return "Répondre" }
-    let base = "Répondre sur \(network.labelFR)"
+    if isEditing { return String(localized: "Corriger le message") }
+    guard let network = store.sendingNetwork(conversationID) else { return String(localized: "Répondre") }
+    let base = String(localized: "Répondre sur \(network.labelFR)")
     // Un agent est là : le champ vide le dit, et que ce sera un aparté.
     guard network.isMatrixBridged,
           let agent = members.first(where: { MatrixIdentity.isAgent($0.userID) })
     else { return base }
-    return "\(base) · @\(MatrixIdentity.localpart(agent.userID)) pour un aparté"
+    return String(localized: "\(base) · @\(MatrixIdentity.localpart(agent.userID)) pour un aparté")
   }
 
   /// Le composer corrige une bulle : le champ le dit, et le bouton d'envoi
@@ -272,7 +272,9 @@ struct ThreadComposer: View {
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("composer.plus")
-    .accessibilityLabel(isTrayOpen ? "Fermer le plateau des médias" : "Joindre une photo, une vidéo ou un fichier")
+    .accessibilityLabel(isTrayOpen
+      ? String(localized: "Fermer le plateau des médias")
+      : String(localized: "Joindre une photo, une vidéo ou un fichier"))
   }
 
   // MARK: - Le champ
@@ -399,8 +401,10 @@ struct ThreadComposer: View {
       .scaleEffect(isHolding ? 1.25 : 1)
       .contentShape(Circle())
       .highPriorityGesture(holdToTalk)
-      .accessibilityLabel(isLocked ? "Envoyer le message vocal" : "Enregistrer un message vocal")
-      .accessibilityHint(isLocked ? "" : "Maintenir pour parler, relâcher pour envoyer")
+      .accessibilityLabel(isLocked
+        ? String(localized: "Envoyer le message vocal")
+        : String(localized: "Enregistrer un message vocal"))
+      .accessibilityHint(isLocked ? "" : String(localized: "Maintenir pour parler, relâcher pour envoyer"))
       .overlay(alignment: .top) { if isHolding, !isLocked { lockGuide } }
   }
 
@@ -651,8 +655,8 @@ struct ThreadComposer: View {
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(theme.accent)
       Text(pending.count == 1
-        ? "1 message part \(SendLaterTime.label(for: pending[0].sendAt).lowercased())"
-        : "\(pending.count) messages programmés")
+        ? String(localized: "1 message part \(SendLaterTime.label(for: pending[0].sendAt).lowercased())")
+        : String(localized: "\(pending.count) messages programmés"))
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkSecondary)
         .lineLimit(1)
@@ -739,10 +743,10 @@ struct ThreadComposer: View {
   }
 
   private func quotedSenderName(_ message: ChatMessage) -> String {
-    if message.isFromMe { return "Moi" }
+    if message.isFromMe { return String(localized: "Moi") }
     return message.displayedSenderName
       ?? store.conversation(conversationID)?.title
-      ?? "Ce message"
+      ?? String(localized: "Ce message")
   }
 
   private var attachmentStrip: some View {

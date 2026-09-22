@@ -17,13 +17,13 @@ struct SettingsDictationPane: View {
       SettingsCard(
         title: "Dictus",
         footnote: isInstalled
-          ? "Tout se passe sur ce Mac, rien ne part sur internet. Le micro lance Dictus, "
-            + "qui écrit le texte dans le champ."
-            + (DictusBridge.transcribeShortcutFR.map { " Son raccourci (\($0)) marche aussi." } ?? "")
-          : "Dictus n’est pas installé. La dictée passe par celle d’Apple."
+          ? String(localized: "Tout se passe sur ce Mac, rien ne part sur internet. Le micro lance Dictus, ")
+            + String(localized: "qui écrit le texte dans le champ.")
+            + (DictusBridge.transcribeShortcutFR.map { String(localized: " Son raccourci (\($0)) marche aussi.") } ?? "")
+          : String(localized: "Dictus n’est pas installé. La dictée passe par celle d’Apple.")
       ) {
         SettingsRow(
-          label: "Dicter avec Dictus",
+          label: String(localized: "Dicter avec Dictus"),
           detail: statusFR,
           systemImage: "waveform.badge.mic"
         ) {
@@ -36,19 +36,19 @@ struct SettingsDictationPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "Dictus est un logiciel libre",
-          detail: "Merci à ses auteurs. getdictus.com",
+          label: String(localized: "Dictus est un logiciel libre"),
+          detail: String(localized: "Merci à ses auteurs. getdictus.com"),
           systemImage: "heart"
         ) {
-          Button(isInstalled ? "Site" : "Télécharger") { DictusBridge.openWebsite() }
+          Button(isInstalled ? String(localized: "Site") : String(localized: "Télécharger")) { DictusBridge.openWebsite() }
         }
       }
 
       SettingsCard(
-        title: "Sans Dictus",
-        footnote: "La dictée d’Apple, directement sur le Mac quand la langue le permet."
+        title: String(localized: "Sans Dictus"),
+        footnote: String(localized: "La dictée d’Apple, directement sur le Mac quand la langue le permet.")
       ) {
-        SettingsRow(label: "Micro et reconnaissance vocale", systemImage: "mic") {
+        SettingsRow(label: String(localized: "Micro et reconnaissance vocale"), systemImage: "mic") {
           Button("Autorisations…") { openPrivacy("Privacy_Microphone") }
         }
       }
@@ -60,9 +60,11 @@ struct SettingsDictationPane: View {
   }
 
   private var statusFR: String {
-    if !isInstalled { return "Non installé" }
-    if !useDictus { return "Installé, non utilisé" }
-    return isRunning ? "Actif" : "Installé, se lance au premier appui sur le micro"
+    if !isInstalled { return String(localized: "Non installé") }
+    if !useDictus { return String(localized: "Installé, non utilisé") }
+    return isRunning
+      ? String(localized: "Actif")
+      : String(localized: "Installé, se lance au premier appui sur le micro")
   }
 
   private func openPrivacy(_ anchor: String) {

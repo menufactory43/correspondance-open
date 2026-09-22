@@ -338,9 +338,9 @@ struct MessageBubble: View {
 
   private var footnoteLabel: String? {
     var parts: [String] = []
-    if message.editedAt != nil, !message.isRetracted { parts.append("Modifié") }
+    if message.editedAt != nil, !message.isRetracted { parts.append(String(localized: "Modifié")) }
     if let effect = message.expressiveEffectName, !message.isRetracted {
-      parts.append("envoyé avec \(effect)")
+      parts.append(String(localized: "envoyé avec \(effect)"))
     }
     if let aside = message.agentAside { parts.append(aside.footnoteFR) }
     return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -364,7 +364,7 @@ struct MessageBubble: View {
         maxHeight: 420,
         cornerRadius: 16,
         placeholder: theme.bubbleIn,
-        label: repaired.filename ?? "image animée"
+        label: repaired.filename ?? String(localized: "image animée")
       )
     } else if let url = repaired.resolvedFileURL, repaired.isImage {
       // En grand : sur un écran de téléphone, une photo de 280 points est un
@@ -376,7 +376,7 @@ struct MessageBubble: View {
         cornerRadius: 16,
         placeholder: theme.bubbleIn,
         border: theme.edge.opacity(0.5),
-        label: repaired.filename ?? "Image"
+        label: repaired.filename ?? String(localized: "Image")
       ) {
         unavailable(repaired, systemImage: "photo")
       }
@@ -391,7 +391,7 @@ struct MessageBubble: View {
           let rank = visibleAttachments.firstIndex { $0.id == repaired.id } ?? 0
           opened = OpenedMedia(rank)
         }
-        .accessibilityLabel(repaired.filename ?? "Vidéo")
+        .accessibilityLabel(repaired.filename ?? String(localized: "Vidéo"))
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Ouvre la vidéo en plein écran")
     } else if repaired.isImage {
@@ -407,7 +407,7 @@ struct MessageBubble: View {
   }
 
   private func unavailable(_ attachment: MessageAttachment, systemImage: String) -> some View {
-    Label(attachment.filename ?? "Pièce jointe", systemImage: systemImage)
+    Label(attachment.filename ?? String(localized: "Pièce jointe"), systemImage: systemImage)
       .font(Typography.meta(typeface))
       .foregroundStyle(theme.inkSecondary)
       .padding(10)
@@ -505,7 +505,7 @@ struct MessageBubble: View {
   private var accessibilityLine: String {
     var parts: [String] = []
     if let senderLabel, !message.isFromMe { parts.append(senderLabel) }
-    parts.append(message.isFromMe ? "Moi" : "Reçu")
+    parts.append(message.isFromMe ? String(localized: "Moi") : String(localized: "Reçu"))
     parts.append(message.sidebarPreviewText)
     parts.append(message.sentAt.formatted(date: .omitted, time: .shortened))
     for reaction in message.reactions { parts.append("\(reaction.emoji) \(reaction.count)") }

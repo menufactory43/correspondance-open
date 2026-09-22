@@ -10,13 +10,13 @@ enum IMessageSendError: LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .emptyText:
-      "Message vide."
+      String(localized: "Message vide.")
     case .fileUnreadable(let name):
-      "Fichier illisible : \(name)"
+      String(localized: "Fichier illisible : \(name)")
     case .automationDenied:
-      "Messages refuse l’automatisation. Réglages Système → Confidentialité → Automatisation → coche Correspondance pour Messages."
+      String(localized: "Messages refuse l’automatisation. Réglages Système → Confidentialité → Automatisation → coche Correspondance pour Messages.")
     case .appleScript(let detail):
-      "Envoi iMessage échoué : \(detail)"
+      String(localized: "Envoi iMessage échoué : \(detail)")
     }
   }
 }

@@ -16,7 +16,7 @@ struct ContactsPermissionBanner: View {
         .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(theme.ink)
       Text(store.contactsStatusFR.isEmpty || store.contactsStatusFR == "…"
-        ? "Correspondance doit afficher la boîte système macOS. Sans ça, l’app n’apparaît pas dans Confidentialité → Contacts."
+        ? String(localized: "Correspondance doit afficher la boîte système macOS. Sans ça, l’app n’apparaît pas dans Confidentialité → Contacts.")
         : store.contactsStatusFR)
         .font(Typography.meta)
         .foregroundStyle(theme.inkSecondary)

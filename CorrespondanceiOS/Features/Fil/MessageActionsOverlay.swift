@@ -80,7 +80,10 @@ struct MessageActionsOverlay: View {
             .background(Circle().fill(mine ? theme.selection : .clear))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(mine ? "Retirer la réaction \(emoji)" : "Réagir \(emoji)")
+        .accessibilityLabel(
+          mine
+            ? String(localized: "Retirer la réaction \(emoji)")
+            : String(localized: "Réagir \(emoji)"))
       }
       Button {
         isPickingEmoji = true
@@ -149,14 +152,14 @@ struct MessageActionsOverlay: View {
       .padding(.horizontal, 14)
       .padding(.vertical, 12)
       divider
-      action("Supprimer", systemImage: "trash", destructive: true) {
+      action(String(localized: "Supprimer"), systemImage: "trash", destructive: true) {
         let fil = conversationID
         let bulle = message.id
         Task { @MainActor in await store.deleteEverywhere(messageID: bulle, conversationID: fil) }
         close()
       }
       divider
-      action("Annuler", systemImage: "xmark") {
+      action(String(localized: "Annuler"), systemImage: "xmark") {
         withAnimation(.easeOut(duration: 0.18)) { isConfirmingDeletion = false }
       }
     }
@@ -167,33 +170,33 @@ struct MessageActionsOverlay: View {
 
   private var actionList: some View {
     VStack(spacing: 0) {
-      action("Répondre en citant", systemImage: "arrowshape.turn.up.left") {
+      action(String(localized: "Répondre en citant"), systemImage: "arrowshape.turn.up.left") {
         store.setReplyTarget(message.id, conversationID: conversationID)
         close()
       }
       if store.canEdit(message) {
         divider
-        action("Modifier…", systemImage: "pencil") {
+        action(String(localized: "Modifier…"), systemImage: "pencil") {
           store.beginEditing(message, conversationID: conversationID)
           close()
         }
       }
       if store.canForward(message) {
         divider
-        action("Transférer…", systemImage: "arrowshape.turn.up.right") {
+        action(String(localized: "Transférer…"), systemImage: "arrowshape.turn.up.right") {
           store.beginForwarding(message)
           close()
         }
       }
       if !message.text.isEmpty {
         divider
-        action("Copier le texte", systemImage: "doc.on.doc") {
+        action(String(localized: "Copier le texte"), systemImage: "doc.on.doc") {
           Platform.copyToPasteboard(message.text)
           close()
         }
         if let onSelectText {
           divider
-          action("Sélectionner", systemImage: "character.cursor.ibeam") {
+          action(String(localized: "Sélectionner"), systemImage: "character.cursor.ibeam") {
             let text = message.text
             close()
             onSelectText(text)
@@ -204,12 +207,12 @@ struct MessageActionsOverlay: View {
       // la suppression sans le dire : « Supprimer ici » reste, lui, toujours vrai.
       if store.canDeleteEverywhere(message) {
         divider
-        action("Supprimer pour tout le monde…", systemImage: "trash", destructive: true) {
+        action(String(localized: "Supprimer pour tout le monde…"), systemImage: "trash", destructive: true) {
           withAnimation(.easeOut(duration: 0.18)) { isConfirmingDeletion = true }
         }
       }
       divider
-      action("Supprimer ici", systemImage: "eye.slash", destructive: true) {
+      action(String(localized: "Supprimer ici"), systemImage: "eye.slash", destructive: true) {
         store.hide(messageID: message.id, conversationID: conversationID)
         close()
       }
@@ -275,18 +278,18 @@ struct EmojiPickerSheet: View {
   private var typeface: WritingTypeface { themes.typeface }
 
   private static let families: [(String, [String])] = [
-    ("Visages", ["😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😏", "😅", "😉", "🙂", "🤔",
+    (String(localized: "Visages"), ["😀", "😁", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😏", "😅", "😉", "🙂", "🤔",
                  "🤨", "😐", "🙄", "😬", "😴", "🤯", "😳", "🥺", "😢", "😭", "😤", "😡", "🤬", "🤮", "🤒", "🤗",
                  "🤭", "🤫", "🤐", "😇", "🥲", "😱", "😈", "💀", "🤡", "👻", "👽", "🤖"]),
-    ("Gestes", ["👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👋", "🙌", "👏", "🙏", "💪", "✊", "👊", "🫶",
+    (String(localized: "Gestes"), ["👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👋", "🙌", "👏", "🙏", "💪", "✊", "👊", "🫶",
                 "🤝", "☝️", "👆", "👇", "👈", "👉", "🖐️", "✋", "🫡", "🤌"]),
-    ("Cœurs", ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "💕", "💞", "💓", "💗", "💖",
+    (String(localized: "Cœurs"), ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "💕", "💞", "💓", "💗", "💖",
                "💘", "💝", "💯", "✨", "⭐", "🌟", "🔥", "💥", "💫", "🎉", "🎊", "🎈", "🎁", "🏆"]),
-    ("Animaux", ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔",
+    (String(localized: "Animaux"), ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔",
                  "🐧", "🐦", "🦆", "🦉", "🐝", "🦋", "🐌", "🐢", "🐍", "🐙", "🦀", "🐳", "🦄", "🐘"]),
-    ("À table", ["🍏", "🍎", "🍋", "🍌", "🍉", "🍇", "🍓", "🍒", "🥑", "🌽", "🥐", "🥖", "🧀", "🍕", "🍔", "🍟",
+    (String(localized: "À table"), ["🍏", "🍎", "🍋", "🍌", "🍉", "🍇", "🍓", "🍒", "🥑", "🌽", "🥐", "🥖", "🧀", "🍕", "🍔", "🍟",
                  "🌮", "🍣", "🍜", "🍩", "🍪", "🎂", "🍰", "🍫", "🍿", "☕", "🍵", "🍺", "🍷", "🥂"]),
-    ("Autour", ["⚽", "🏀", "🎾", "🏓", "🎮", "🎲", "🎸", "🎧", "🎬", "📷", "💻", "📱", "✈️", "🚗", "🚲", "⛵",
+    (String(localized: "Autour"), ["⚽", "🏀", "🎾", "🏓", "🎮", "🎲", "🎸", "🎧", "🎬", "📷", "💻", "📱", "✈️", "🚗", "🚲", "⛵",
                 "🏠", "🌍", "🌈", "☀️", "🌙", "⛄", "🌧️", "🌸", "🌻", "🌲", "🍀", "💡", "📚", "✏️"]),
   ]
 
@@ -315,7 +318,10 @@ struct EmojiPickerSheet: View {
                       )
                   }
                   .buttonStyle(.plain)
-                  .accessibilityLabel(current == emoji ? "Retirer la réaction \(emoji)" : "Réagir \(emoji)")
+                  .accessibilityLabel(
+                    current == emoji
+                      ? String(localized: "Retirer la réaction \(emoji)")
+                      : String(localized: "Réagir \(emoji)"))
                 }
               }
             }

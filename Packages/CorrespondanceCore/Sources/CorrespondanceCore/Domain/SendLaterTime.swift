@@ -58,12 +58,12 @@ public enum SendLaterTime {
       guard !result.contains(where: { abs($0.date.timeIntervalSince(date)) < 60 }) else { return }
       result.append(Suggestion(title: title, date: date))
     }
-    add("Dans une heure", now.addingTimeInterval(3_600))
-    add("Dans deux heures", now.addingTimeInterval(7_200))
-    add("Ce soir", at(hour: Moment.evening, minute: 0, on: now, calendar: calendar))
-    add("Demain matin", at(hour: Moment.morning, minute: 0, on: day(1, from: now, calendar: calendar), calendar: calendar))
-    add("Ce week-end", at(hour: 10, minute: 0, on: nextWeekday(7, from: now, calendar: calendar, allowToday: false), calendar: calendar))
-    add("Lundi matin", at(hour: Moment.morning, minute: 0, on: nextWeekday(2, from: now, calendar: calendar, allowToday: false), calendar: calendar))
+    add(String(localized: "Dans une heure"), now.addingTimeInterval(3_600))
+    add(String(localized: "Dans deux heures"), now.addingTimeInterval(7_200))
+    add(String(localized: "Ce soir"), at(hour: Moment.evening, minute: 0, on: now, calendar: calendar))
+    add(String(localized: "Demain matin"), at(hour: Moment.morning, minute: 0, on: day(1, from: now, calendar: calendar), calendar: calendar))
+    add(String(localized: "Ce week-end"), at(hour: 10, minute: 0, on: nextWeekday(7, from: now, calendar: calendar, allowToday: false), calendar: calendar))
+    add(String(localized: "Lundi matin"), at(hour: Moment.morning, minute: 0, on: nextWeekday(2, from: now, calendar: calendar, allowToday: false), calendar: calendar))
     return result
   }
 
@@ -176,18 +176,18 @@ public enum SendLaterTime {
   /// « Aujourd'hui à 18:00 », « Demain à 9:00 », « Lundi à 9:00 », « 12 sept. à 9:00 ».
   public static func label(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
     let time = timeString(date, calendar: calendar)
-    if calendar.isDate(date, inSameDayAs: now) { return "Aujourd’hui à \(time)" }
-    if calendar.isDate(date, inSameDayAs: day(1, from: now, calendar: calendar)) { return "Demain à \(time)" }
+    if calendar.isDate(date, inSameDayAs: now) { return String(localized: "Aujourd’hui à \(time)") }
+    if calendar.isDate(date, inSameDayAs: day(1, from: now, calendar: calendar)) { return String(localized: "Demain à \(time)") }
     let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 99
     if (0..<7).contains(days) {
       let weekday = calendar.component(.weekday, from: date)
-      return "\(weekdayNames[weekday - 1].capitalized) à \(time)"
+      return String(localized: "\(weekdayNames[weekday - 1].capitalized) à \(time)")
     }
     let comps = calendar.dateComponents([.day, .month, .year], from: date)
     let month = monthShort[(comps.month ?? 1) - 1]
     let sameYear = calendar.component(.year, from: now) == comps.year
     let dayPart = "\(comps.day ?? 1) \(month)" + (sameYear ? "" : " \(comps.year ?? 0)")
-    return "\(dayPart) à \(time)"
+    return String(localized: "\(dayPart) à \(time)")
   }
 
   public static func timeString(_ date: Date, calendar: Calendar = .current) -> String {

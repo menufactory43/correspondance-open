@@ -28,7 +28,7 @@ struct SendLaterPicker: View {
       HStack(spacing: 6) {
         Image(systemName: "clock")
           .font(.system(size: 12, weight: .semibold))
-        Text(isRescheduling ? "Reprogrammer" : "Envoyer plus tard")
+        Text(isRescheduling ? String(localized: "Reprogrammer") : String(localized: "Envoyer plus tard"))
           .font(Typography.sidebarItem(themes.typeface))
       }
       .foregroundStyle(theme.ink)
@@ -68,7 +68,7 @@ struct SendLaterPicker: View {
         Spacer()
         Button("Annuler") { store.sendLaterPicker = nil }
           .keyboardShortcut(.cancelAction)
-        Button(isRescheduling ? "Reprogrammer" : "Choisir", action: confirm)
+        Button(isRescheduling ? String(localized: "Reprogrammer") : String(localized: "Choisir"), action: confirm)
           .keyboardShortcut(.defaultAction)
           .disabled(parsedDate == nil)
       }
@@ -190,9 +190,9 @@ struct ScheduledMessageRow: View {
   var isProse = false
 
   private var statusLine: String {
-    if let error = message.lastError { return "Non envoyé : \(error)" }
-    var line = "Partira \(SendLaterTime.label(for: message.sendAt))"
-    if message.onlyIfNoReply { line += " · si pas de réponse" }
+    if let error = message.lastError { return String(localized: "Non envoyé : \(error)") }
+    var line = String(localized: "Partira \(SendLaterTime.label(for: message.sendAt))")
+    if message.onlyIfNoReply { line += String(localized: " · si pas de réponse") }
     return line
   }
 
@@ -248,7 +248,7 @@ struct ScheduledMessageMenu: View {
   let message: ScheduledMessage
 
   var body: some View {
-    Button(message.lastError == nil ? "Envoyer maintenant" : "Réessayer maintenant") {
+    Button(message.lastError == nil ? String(localized: "Envoyer maintenant") : String(localized: "Réessayer maintenant")) {
       Task { await store.sendScheduledNow(message.id) }
     }
     Button("Reprogrammer…") {
@@ -306,7 +306,9 @@ struct ScheduledConversationRow: View {
           .multilineTextAlignment(.leading)
           .fixedSize(horizontal: false, vertical: true)
         if scheduled.count > 1 {
-          Text("+ \(scheduled.count - 1) autre\(scheduled.count > 2 ? "s" : "")")
+          Text(scheduled.count > 2
+            ? String(localized: "+ \(scheduled.count - 1) autres")
+            : String(localized: "+ \(scheduled.count - 1) autre"))
             .font(Typography.meta(typeface))
             .foregroundStyle(theme.inkTertiary)
         }

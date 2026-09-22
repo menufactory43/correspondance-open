@@ -67,12 +67,15 @@ public actor MatrixSalonAdmin {
     public var errorDescription: String? {
       switch self {
       case .salonIntrouvable(let serveur):
-        "le salon d'administration #admins:\(serveur) est introuvable — ce compte n'est "
-          + "probablement pas administrateur de ce Relais"
+        String(
+          localized:
+            "le salon d'administration #admins:\(serveur) est introuvable — ce compte n'est probablement pas administrateur de ce Relais"
+        )
       case .botMuet(let commande):
-        "le Relais n'a pas répondu à « \(commande) » en \(Int(MatrixSalonAdmin.delaiMax)) s"
+        String(
+          localized: "le Relais n'a pas répondu à « \(commande) » en \(Int(MatrixSalonAdmin.delaiMax)) s")
       case .commandeRefusee(let detail):
-        "le Relais a refusé la commande : \(detail)"
+        String(localized: "le Relais a refusé la commande : \(detail)")
       }
     }
   }

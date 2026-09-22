@@ -291,14 +291,14 @@ public struct BridgeAccount: Sendable, Equatable, Identifiable {
 
   public var stateFR: String {
     switch stateEvent {
-    case "CONNECTED": "Connecté"
-    case "BACKFILLING": "Connecté, historique en cours"
-    case "CONNECTING": "Connexion…"
-    case "TRANSIENT_DISCONNECT": "Reconnexion…"
-    case "BAD_CREDENTIALS": "Session expirée : à reconnecter"
-    case "LOGGED_OUT": "Déconnecté"
-    case "UNKNOWN_ERROR": "En erreur" + (stateMessage.map { " : \($0)" } ?? "")
-    default: stateEvent.isEmpty ? "État inconnu" : stateEvent
+    case "CONNECTED": String(localized: "Connecté")
+    case "BACKFILLING": String(localized: "Connecté, historique en cours")
+    case "CONNECTING": String(localized: "Connexion…")
+    case "TRANSIENT_DISCONNECT": String(localized: "Reconnexion…")
+    case "BAD_CREDENTIALS": String(localized: "Session expirée : à reconnecter")
+    case "LOGGED_OUT": String(localized: "Déconnecté")
+    case "UNKNOWN_ERROR": String(localized: "En erreur") + (stateMessage.map { " : \($0)" } ?? "")
+    default: stateEvent.isEmpty ? String(localized: "État inconnu") : stateEvent
     }
   }
 

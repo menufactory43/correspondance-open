@@ -50,7 +50,7 @@ extension RelayStore {
     guard tailcat == nil, let jeton = UserDefaults.standard.string(forKey: Self.tailcatJetonKey), !jeton.isEmpty else { return }
     tailcatJeton = jeton
     do { _ = try await ouvrirTailcat(jeton: jeton) } catch {
-      syncError = "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription)"
+      syncError = String(localized: "Tailcat n'a pas ouvert de chemin : \(error.localizedDescription)")
     }
   }
 

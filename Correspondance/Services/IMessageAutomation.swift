@@ -150,14 +150,14 @@ actor IMessageAutomation {
         identifiers: [tapback.axIdentifier],
         titles: tapback.frenchLabels,
         deadline: deadline,
-        describing: "le tapback \(tapback.emoji)"
+        describing: String(localized: "le tapback \(tapback.emoji)")
       )
       let guid = target.messageGUID
       let confirmed = await self.verifier.waitUntil(timeout: Self.confirmDeadline) { [verifier = self.verifier] in
         try verifier.hasTapback(targetGUID: guid, sinceRowID: since, removal: removing)
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("le tapback \(tapback.emoji) n’apparaît pas dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "le tapback \(tapback.emoji) n’apparaît pas dans chat.db"))
       }
     }
   }
@@ -167,7 +167,7 @@ actor IMessageAutomation {
   /// Vérifié par un `thread_originator_guid` pointant la bulle citée.
   func reply(to target: IMessageTarget, text: String) async throws {
     let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !body.isEmpty else { throw IMessageAutomationError.actionFailed("réponse vide") }
+    guard !body.isEmpty else { throw IMessageAutomationError.actionFailed(String(localized: "réponse vide")) }
 
     try await run(describing: "réponse citée") { deadline in
       let since = try self.verifier.latestMessageRowID()
@@ -177,10 +177,10 @@ actor IMessageAutomation {
         identifiers: [AXID.replyBalloon],
         titles: ["Répondre"],
         deadline: deadline,
-        describing: "« Répondre »"
+        describing: String(localized: "« Répondre »")
       )
       let pid = try await self.ensureRunningPID()
-      let field = try await self.waitForElement(deadline: deadline, describing: "le champ de saisie") {
+      let field = try await self.waitForElement(deadline: deadline, describing: String(localized: "le champ de saisie")) {
         let app = AXUIElementCreateApplication(pid)
         guard let window = Self.mainWindow(of: app) else { return nil }
         return AX.firstDescendant(window, identifier: AXID.composer)
@@ -195,7 +195,7 @@ actor IMessageAutomation {
         try verifier.hasReply(toGUID: guid, sinceRowID: since)
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("aucune réponse citée n’apparaît dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "aucune réponse citée n’apparaît dans chat.db"))
       }
     }
   }
@@ -212,7 +212,7 @@ actor IMessageAutomation {
   /// jointe, dont le transfert n'a pas échoué.
   func sendAttachment(_ fileURL: URL, chatGUID: String, chatIdentifier: String) async throws {
     guard FileManager.default.isReadableFile(atPath: fileURL.path) else {
-      throw IMessageAutomationError.actionFailed("fichier illisible : \(fileURL.lastPathComponent)")
+      throw IMessageAutomationError.actionFailed(String(localized: "fichier illisible : \(fileURL.lastPathComponent)"))
     }
     try await run(describing: "envoi de pièce jointe") { deadline in
       let since = try self.verifier.latestMessageRowID()
@@ -220,7 +220,7 @@ actor IMessageAutomation {
         chatGUID: chatGUID, chatIdentifier: chatIdentifier, deadline: deadline
       )
       let pid = try await self.ensureRunningPID()
-      let field = try await self.waitForElement(deadline: deadline, describing: "le champ de saisie") {
+      let field = try await self.waitForElement(deadline: deadline, describing: String(localized: "le champ de saisie")) {
         let app = AXUIElementCreateApplication(pid)
         guard let window = Self.mainWindow(of: app) else { return nil }
         return AX.firstDescendant(window, identifier: AXID.composer)
@@ -236,7 +236,7 @@ actor IMessageAutomation {
       }
       guard confirmed else {
         throw IMessageAutomationError.notConfirmed(
-          "aucune pièce jointe envoyée n'apparaît dans chat.db"
+          String(localized: "aucune pièce jointe envoyée n'apparaît dans chat.db")
         )
       }
     }
@@ -246,9 +246,9 @@ actor IMessageAutomation {
   /// tout sélectionner, coller, valider. Vérifié par `date_edited`.
   func edit(_ target: IMessageTarget, newText: String) async throws {
     let body = newText.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !body.isEmpty else { throw IMessageAutomationError.actionFailed("texte de modification vide") }
+    guard !body.isEmpty else { throw IMessageAutomationError.actionFailed(String(localized: "texte de modification vide")) }
     guard target.isFromMe else {
-      throw IMessageAutomationError.actionFailed("on ne modifie que ses propres messages")
+      throw IMessageAutomationError.actionFailed(String(localized: "on ne modifie que ses propres messages"))
     }
 
     try await run(describing: "modification") { deadline in
@@ -258,11 +258,11 @@ actor IMessageAutomation {
         identifiers: [],
         titles: ["Modifier"],
         deadline: deadline,
-        describing: "« Modifier » (Messages ne l’offre que 15 min après l’envoi)"
+        describing: String(localized: "« Modifier » (Messages ne l’offre que 15 min après l’envoi)")
       )
       let pid = try await self.ensureRunningPID()
       // Le champ éditable prend le focus dans la bulle elle-même.
-      let field = try await self.waitForElement(deadline: deadline, describing: "le champ d’édition") {
+      let field = try await self.waitForElement(deadline: deadline, describing: String(localized: "le champ d’édition")) {
         let app = AXUIElementCreateApplication(pid)
         return AX.attribute(app, kAXFocusedUIElementAttribute).map { AX.element($0) }
       }
@@ -276,7 +276,7 @@ actor IMessageAutomation {
         try verifier.isEdited(messageGUID: guid)
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("`date_edited` reste vide dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "`date_edited` reste vide dans chat.db"))
       }
     }
   }
@@ -284,7 +284,7 @@ actor IMessageAutomation {
   /// Annule l'envoi (≤ 2 min). Vérifié par `date_retracted`.
   func undoSend(_ target: IMessageTarget) async throws {
     guard target.isFromMe else {
-      throw IMessageAutomationError.actionFailed("on n’annule que ses propres envois")
+      throw IMessageAutomationError.actionFailed(String(localized: "on n’annule que ses propres envois"))
     }
     try await run(describing: "annulation d’envoi") { deadline in
       let cell = try await self.locateCell(target, deadline: deadline)
@@ -293,7 +293,7 @@ actor IMessageAutomation {
         identifiers: [],
         titles: ["Annuler l’envoi", "Annuler l'envoi"],
         deadline: deadline,
-        describing: "« Annuler l’envoi » (Messages ne l’offre que 2 min après l’envoi)"
+        describing: String(localized: "« Annuler l’envoi » (Messages ne l’offre que 2 min après l’envoi)")
       )
       // Messages peut demander confirmation par une feuille.
       let pid = try await self.ensureRunningPID()
@@ -304,7 +304,7 @@ actor IMessageAutomation {
         try verifier.isRetracted(messageGUID: guid)
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("`date_retracted` reste vide dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "`date_retracted` reste vide dans chat.db"))
       }
     }
   }
@@ -322,7 +322,7 @@ actor IMessageAutomation {
         try verifier.unreadCount(chatGUID: guid) == 0
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("`is_read` reste à 0 dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "`is_read` reste à 0 dans chat.db"))
       }
     }
   }
@@ -337,14 +337,14 @@ actor IMessageAutomation {
       try await self.selectThread(chatGUID: chatGUID, chatIdentifier: chatIdentifier, deadline: deadline)
       let pid = try await self.ensureRunningPID()
       guard await self.pressMenuItem(pid: pid, menuID: "com.messages.conversationsmenu", titles: ["Marquer comme non lu"]) else {
-        throw IMessageAutomationError.elementNotFound("Conversation → « Marquer comme non lu »")
+        throw IMessageAutomationError.elementNotFound(String(localized: "Conversation → « Marquer comme non lu »"))
       }
       let guid = chatGUID
       let confirmed = await self.verifier.waitUntil(timeout: Self.confirmDeadline) { [verifier = self.verifier] in
         try verifier.unreadCount(chatGUID: guid) > 0
       }
       guard confirmed else {
-        throw IMessageAutomationError.notConfirmed("`is_read` reste à 1 dans chat.db")
+        throw IMessageAutomationError.notConfirmed(String(localized: "`is_read` reste à 1 dans chat.db"))
       }
     }
   }
@@ -396,7 +396,7 @@ actor IMessageAutomation {
       _ = await Self.launchHidden(url: url)
     }
     // Laisser Messages appliquer la sélection, puis vérifier que le transcript existe.
-    _ = try await waitForElement(deadline: deadline, describing: "le transcript de Messages") {
+    _ = try await waitForElement(deadline: deadline, describing: String(localized: "le transcript de Messages")) {
       let app = AXUIElementCreateApplication(pid)
       guard let window = Self.mainWindow(of: app) else { return nil }
       return AX.firstDescendant(window, identifier: AXID.transcript)
@@ -421,7 +421,7 @@ actor IMessageAutomation {
       deadline: deadline
     )
     let pid = try await ensureRunningPID()
-    return try await waitForElement(deadline: deadline, describing: "la bulle « \(needle.prefix(30)) »") {
+    return try await waitForElement(deadline: deadline, describing: String(localized: "la bulle « \(needle.prefix(30)) »")) {
       let app = AXUIElementCreateApplication(pid)
       guard let window = Self.mainWindow(of: app),
             let transcript = AX.firstDescendant(window, identifier: AXID.transcript)
@@ -465,7 +465,7 @@ actor IMessageAutomation {
   ) async throws {
     AX.perform(cell, kAXShowMenuAction)
     let pid = try await ensureRunningPID()
-    let menu = try await waitForElement(deadline: deadline, describing: "le menu contextuel") {
+    let menu = try await waitForElement(deadline: deadline, describing: String(localized: "le menu contextuel")) {
       let app = AXUIElementCreateApplication(pid)
       return AX.children(app).first { AX.string($0, kAXRoleAttribute) == kAXMenuRole as String }
     }

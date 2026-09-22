@@ -9,8 +9,8 @@ public enum InboxMode: String, CaseIterable, Identifiable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .focus: "Focus"
-    case .inbox: "Inbox"
+    case .focus: String(localized: "Focus")
+    case .inbox: String(localized: "Inbox")
     }
   }
 

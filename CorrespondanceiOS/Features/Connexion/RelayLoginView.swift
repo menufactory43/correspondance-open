@@ -37,7 +37,7 @@ struct RelayLoginView: View {
 
         VStack(spacing: Spacing.sm) {
           field(
-            "Adresse du Relais",
+            String(localized: "Adresse du Relais"),
             hint: "relais.local:8008",
             text: $homeserver,
             field: .homeserver
@@ -47,7 +47,7 @@ struct RelayLoginView: View {
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
 
-          field("Identifiant", hint: "prénom", text: $user, field: .user)
+          field(String(localized: "Identifiant"), hint: String(localized: "prénom"), text: $user, field: .user)
             .textContentType(.username)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
@@ -64,8 +64,7 @@ struct RelayLoginView: View {
         demoButton
 
         Text(
-          "Le Relais est ton serveur, celui qui porte tes conversations WhatsApp, "
-            + "Instagram, Messenger, X, Slack et Signal. Il faut être sur son réseau pour l’atteindre."
+          String(localized: "Le Relais est ton serveur, celui qui porte tes conversations WhatsApp, Instagram, Messenger, X, Slack et Signal. Il faut être sur son réseau pour l’atteindre.")
         )
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)
@@ -98,8 +97,7 @@ struct RelayLoginView: View {
         .font(Typography.body(typeface))
         .foregroundStyle(theme.ink)
       Text(
-        "Il se pose depuis Correspondance pour Mac, en un clic : l’app l’installe, "
-          + "puis te donne l’adresse et l’identifiant à saisir ici."
+        String(localized: "Il se pose depuis Correspondance pour Mac, en un clic : l’app l’installe, puis te donne l’adresse et l’identifiant à saisir ici.")
       )
       .font(Typography.meta(typeface))
       .foregroundStyle(theme.inkSecondary)
@@ -206,7 +204,7 @@ struct RelayLoginView: View {
         if store.session == .connecting {
           ProgressView().tint(theme.accentInk)
         }
-        Text(store.session == .connecting ? "Connexion…" : "Se connecter")
+        Text(store.session == .connecting ? String(localized: "Connexion…") : String(localized: "Se connecter"))
           .font(Typography.body(typeface))
       }
       .frame(maxWidth: .infinity)

@@ -38,21 +38,21 @@ struct SettingsMatrixPane: View {
       // ne doit croire qu'il regarde ses vraies conversations.
       if let essai = CorrespondanceHome.name {
         SettingsCard(
-          title: "Essai",
-          footnote: "Tu regardes un jeu de données d’essai, pas tes vraies conversations. "
-            + "Elles sont intactes et reviendront au prochain lancement normal."
+          title: String(localized: "Essai"),
+          footnote: String(localized: "Tu regardes un jeu de données d’essai, pas tes vraies conversations. ")
+            + String(localized: "Elles sont intactes et reviendront au prochain lancement normal.")
         ) {
           SettingsRow(
-            label: "Jeu de données",
+            label: String(localized: "Jeu de données"),
             detail: "Correspondance-\(essai)",
             systemImage: "flask"
           ) { EmptyView() }
         }
       }
 
-      SettingsCard(title: "État") {
+      SettingsCard(title: String(localized: "État")) {
         SettingsRow(
-          label: "Connexion",
+          label: String(localized: "Connexion"),
           detail: store.matrixStatusFR,
           systemImage: store.isMatrixConnected ? "checkmark.seal.fill" : "exclamationmark.triangle"
         ) {
@@ -70,7 +70,7 @@ struct SettingsMatrixPane: View {
         }
 
         SettingsRow(
-          label: "Chiffrement",
+          label: String(localized: "Chiffrement"),
           detail: store.chiffrementFR,
           systemImage: "lock"
         ) {
@@ -79,7 +79,7 @@ struct SettingsMatrixPane: View {
 
         if store.isMatrixConnected {
           SettingsRow(
-            label: "Archives, épingles, brouillons",
+            label: String(localized: "Archives, épingles, brouillons"),
             detail: relayStateDetail,
             systemImage: store.relayQueue.isEmpty ? "arrow.triangle.2.circlepath" : "clock.arrow.circlepath"
           ) {
@@ -94,10 +94,10 @@ struct SettingsMatrixPane: View {
       }
 
       if store.isMatrixConnected {
-        SettingsCard(title: "Session") {
+        SettingsCard(title: String(localized: "Session")) {
           SettingsRow(
-            label: "Fermer la session",
-            detail: "WhatsApp, Instagram, Messenger et Signal disparaissent de l’inbox jusqu’à la prochaine connexion."
+            label: String(localized: "Fermer la session"),
+            detail: String(localized: "WhatsApp, Instagram, Messenger et Signal disparaissent de l’inbox jusqu’à la prochaine connexion.")
           ) {
             Button("Déconnecter") {
               Task { await store.disconnectMatrix() }
@@ -105,8 +105,8 @@ struct SettingsMatrixPane: View {
           }
 
           SettingsRow(
-            label: "Recharger depuis le Relais",
-            detail: "Repart de zéro et recharge tout. Utile si l’inbox semble décalée."
+            label: String(localized: "Recharger depuis le Relais"),
+            detail: String(localized: "Repart de zéro et recharge tout. Utile si l’inbox semble décalée.")
           ) {
             Button("Recharger") {
               Task { await store.reloadFromRelay() }
@@ -115,9 +115,9 @@ struct SettingsMatrixPane: View {
         }
       } else {
         SettingsCard(
-          title: "Connecter un Relais",
-          footnote: "Colle ici le code affiché à la fin de l’installation du Relais. "
-            + "Il contient un mot de passe, ne l’envoie à personne. Il expire au bout de quinze minutes."
+          title: String(localized: "Connecter un Relais"),
+          footnote: String(localized: "Colle ici le code affiché à la fin de l’installation du Relais. ")
+            + String(localized: "Il contient un mot de passe, ne l’envoie à personne. Il expire au bout de quinze minutes.")
         ) {
           VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField("correspondance://relais/…", text: $codeAppairage)
@@ -152,7 +152,7 @@ struct SettingsMatrixPane: View {
 
           HStack {
             Spacer()
-            Button(isConnecting ? "Connexion…" : "Connecter") { appairer() }
+            Button(isConnecting ? String(localized: "Connexion…") : String(localized: "Connecter")) { appairer() }
               .keyboardShortcut(.defaultAction)
               .disabled(isConnecting || codeAppairage.isEmpty)
           }
@@ -160,7 +160,7 @@ struct SettingsMatrixPane: View {
           .padding(.bottom, Spacing.xs)
         }
 
-        SettingsCard(title: "Ou avec un identifiant") {
+        SettingsCard(title: String(localized: "Ou avec un identifiant")) {
           VStack(alignment: .leading, spacing: Spacing.xs) {
             TextField("Adresse du Relais", text: $homeserver)
             TextField("Identifiant", text: $matrixUser, prompt: Text("prénom"))
@@ -172,7 +172,7 @@ struct SettingsMatrixPane: View {
 
           HStack {
             Spacer()
-            Button(isConnecting ? "Connexion…" : "Connexion") {
+            Button(isConnecting ? String(localized: "Connexion…") : String(localized: "Connexion")) {
               connect()
             }
             .keyboardShortcut(.defaultAction)
@@ -208,8 +208,10 @@ struct SettingsMatrixPane: View {
   /// Rien à régler ici : juste de quoi voir qu'une écriture attend son tour.
   private var relayStateDetail: String {
     let pending = store.relayQueue.count
-    guard pending > 0 else { return "À jour." }
-    return pending == 1 ? "1 modification en attente." : "\(pending) modifications en attente."
+    guard pending > 0 else { return String(localized: "À jour.") }
+    return pending == 1
+      ? String(localized: "1 modification en attente.")
+      : String(localized: "\(pending) modifications en attente.")
   }
 
   /// Lit le code, montre les six mots, puis se connecte. On affiche
@@ -219,13 +221,13 @@ struct SettingsMatrixPane: View {
     guard let code = RelayPairingCode(encoded: codeAppairage) else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "Ce code n’est pas lisible. Recopie-le en entier."
+      erreurCode = String(localized: "Ce code n’est pas lisible. Recopie-le en entier.")
       return
     }
     guard !code.isExpired() else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "Ce code a expiré. Demande-en un nouveau sur le Relais."
+      erreurCode = String(localized: "Ce code a expiré. Demande-en un nouveau sur le Relais.")
       return
     }
     motsDeVerification = code.fingerprintWords()

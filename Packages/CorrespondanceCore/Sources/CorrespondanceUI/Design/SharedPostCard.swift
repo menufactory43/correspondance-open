@@ -80,8 +80,8 @@ public struct SharedPostCard: View {
           .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(playsInPlace ? "Vidéo du post" : accessibilityLabel)
-        .accessibilityHint(playsInPlace ? "Lit la vidéo ici" : "Ouvre la publication dans Instagram")
+        .accessibilityLabel(playsInPlace ? String(localized: "Vidéo du post") : accessibilityLabel)
+        .accessibilityHint(playsInPlace ? String(localized: "Lit la vidéo ici") : String(localized: "Ouvre la publication dans Instagram"))
       }
 
       Button {
@@ -104,7 +104,7 @@ public struct SharedPostCard: View {
           }
           // Quand la vidéo se joue ici, le pied dit clairement ce qu'il
           // fait, lui : c'est le seul chemin vers Instagram qui reste.
-          Text(playsInPlace ? "Ouvrir dans Instagram" : "instagram.com")
+          Text(playsInPlace ? String(localized: "Ouvrir dans Instagram") : "instagram.com")
             .font(Typography.meta(typeface))
             .foregroundStyle(playsInPlace ? theme.accent : theme.inkTertiary)
         }

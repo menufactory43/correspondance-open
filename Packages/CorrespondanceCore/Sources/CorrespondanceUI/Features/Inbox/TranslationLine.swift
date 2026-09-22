@@ -74,7 +74,7 @@ public struct TranslationLine: View {
     .padding(.horizontal, 12)
     .frame(maxWidth: .infinity, alignment: .leading)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(translated.map { "Traduction : \($0)" } ?? "Traduction en cours")
+    .accessibilityLabel(translated.map { String(localized: "Traduction : \($0)") } ?? String(localized: "Traduction en cours"))
     .task(id: "\(messageID)→\(target)") {
       translated = nil
       failure = nil
@@ -98,7 +98,7 @@ public struct TranslationLine: View {
         translated = result
       } catch {
         failure = (error as? TextTranslator.Failure)?.errorDescription
-          ?? "Traduction indisponible \(TranslationPreferences.enFR(target)) sur cet appareil."
+          ?? String(localized: "Traduction indisponible \(TranslationPreferences.enFR(target)) sur cet appareil.")
       }
     }
   }

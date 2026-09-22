@@ -65,16 +65,16 @@ enum AgentLocalHost {
     /// plus cher qu'une phrase absente.
     func labelFR(agent: String = MatrixIdentity.agentName) -> String {
       switch self {
-      case .absent: "arrêté"
-      case .actif: "actif — \(agent) répond tant que Correspondance est ouverte"
+      case .absent: String(localized: "arrêté")
+      case .actif: String(localized: "actif — \(agent) répond tant que Correspondance est ouverte")
       case .silencieux(let depuis):
         if let depuis {
-          "démarré, mais muet depuis \(Self.ageFR(depuis))"
+          String(localized: "démarré, mais muet depuis \(Self.ageFR(depuis))")
         } else {
-          "démarré, il n'a pas encore publié son premier status"
+          String(localized: "démarré, il n'a pas encore publié son premier status")
         }
-      case .incomplet: "l'amorce de \(agent) n'est pas sur le disque"
-      case .introuvable: "cette build n'embarque pas l'agent"
+      case .incomplet: String(localized: "l'amorce de \(agent) n'est pas sur le disque")
+      case .introuvable: String(localized: "cette build n'embarque pas l'agent")
       case .abandonne(let raison): raison
       }
     }
@@ -85,9 +85,9 @@ enum AgentLocalHost {
 
     static func ageFR(_ date: Date) -> String {
       let minutes = Int(max(0, Date().timeIntervalSince(date)) / 60)
-      if minutes < 60 { return "\(minutes) min" }
+      if minutes < 60 { return String(localized: "\(minutes) min") }
       let heures = minutes / 60
-      return heures < 24 ? "\(heures) h" : "\(heures / 24) j"
+      return heures < 24 ? String(localized: "\(heures) h") : String(localized: "\(heures / 24) j")
     }
   }
 
@@ -250,10 +250,10 @@ enum AgentLocalHost {
   /// Ce qu'on dit quand le binaire n'est pas dans le bundle. On **constate**,
   /// on ne devine pas : l'ancien message conseillait de vérifier un fichier qui
   /// existait bel et bien, ce qui envoyait chercher au mauvais endroit.
-  static let aideIntrouvable = """
+  static let aideIntrouvable = String(localized: """
     Cette version de Correspondance n’embarque pas l’agent. \
     En attendant, il peut tourner sur une autre machine (« Une autre machine », ci-dessous).
-    """
+    """)
 
   /// Ouvre le panneau où l'approbation se donne — parce que « va dans les
   /// réglages » n'est pas une instruction, c'est un aveu.

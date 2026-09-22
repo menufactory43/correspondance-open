@@ -64,7 +64,9 @@ struct MergePickerSheet: View {
     NavigationStack {
       list
         .background(theme.paper.ignoresSafeArea())
-        .navigationTitle(store.isMerged(source.id) ? "Ajouter un chat" : "Fusionner avec…")
+        .navigationTitle(
+          store.isMerged(source.id)
+            ? String(localized: "Ajouter un chat") : String(localized: "Fusionner avec…"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
           ToolbarItem(placement: .topBarLeading) { Button("Fermer") { dismiss() } }
@@ -116,8 +118,8 @@ struct MergePickerSheet: View {
 
       if candidates.isEmpty && suggested.isEmpty {
         Text(trimmed.isEmpty
-          ? "Aucun autre fil à réunir : tous les réseaux de cette personne sont déjà là."
-          : "Personne ne répond à « \(trimmed) ».")
+          ? String(localized: "Aucun autre fil à réunir : tous les réseaux de cette personne sont déjà là.")
+          : String(localized: "Personne ne répond à « \(trimmed) »."))
           .font(Typography.body(typeface))
           .foregroundStyle(theme.inkSecondary)
           .frame(maxWidth: .infinity)
@@ -197,8 +199,10 @@ struct MergePickerSheet: View {
       .buttonStyle(.plain)
       .disabled(selectedIDs.isEmpty)
       Text(selectedIDs.isEmpty
-        ? "Aucun fil coché"
-        : "\(selectedIDs.count) fil\(selectedIDs.count > 1 ? "s" : "") coché\(selectedIDs.count > 1 ? "s" : "")")
+        ? String(localized: "Aucun fil coché")
+        : (selectedIDs.count > 1
+          ? String(localized: "\(selectedIDs.count) fils cochés")
+          : String(localized: "\(selectedIDs.count) fil coché")))
         .font(Typography.meta(typeface))
         .foregroundStyle(theme.inkTertiary)
     }
@@ -211,9 +215,13 @@ struct MergePickerSheet: View {
   private var actionLabel: String {
     let count = selectedIDs.count
     if store.isMerged(source.id) || selection.contains(where: { store.isMerged($0.id) }) {
-      return count <= 1 ? "Ajouter à cette personne" : "Ajouter \(count) chats"
+      return count <= 1
+        ? String(localized: "Ajouter à cette personne")
+        : String(localized: "Ajouter \(count) chats")
     }
-    return count == 0 ? "Fusionner" : "Fusionner \(count + 1) chats"
+    return count == 0
+      ? String(localized: "Fusionner")
+      : String(localized: "Fusionner \(count + 1) chats")
   }
 
   private func toggle(_ conversation: Conversation) {
@@ -286,7 +294,7 @@ struct MergeContactSheet: View {
           .padding(.horizontal, Spacing.lg)
 
         VStack(alignment: .leading, spacing: Spacing.xs) {
-          sectionTitle("Photo")
+          sectionTitle(String(localized: "Photo"))
           HStack(spacing: Spacing.md) {
             ForEach(candidates) { conversation in
               Button {
@@ -317,7 +325,7 @@ struct MergeContactSheet: View {
         }
 
         VStack(alignment: .leading, spacing: Spacing.xs) {
-          sectionTitle("Chat par défaut")
+          sectionTitle(String(localized: "Chat par défaut"))
           VStack(spacing: 0) {
             ForEach(Array(candidates.enumerated()), id: \.element.id) { index, conversation in
               Button {
@@ -407,7 +415,7 @@ struct MergeContactSheet: View {
     guard defaultConversationID.isEmpty else { return }
     title = candidates.first { !$0.hasPlaceholderTitle }?.title
       ?? candidates.first?.title
-      ?? "Contact"
+      ?? String(localized: "Contact")
     avatarConversationID = candidates.first { $0.remoteAvatarID != nil }?.id
       ?? candidates.first { !$0.hasPlaceholderTitle }?.id
       ?? candidates.first?.id

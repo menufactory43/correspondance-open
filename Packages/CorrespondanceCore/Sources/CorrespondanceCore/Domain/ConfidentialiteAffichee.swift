@@ -27,9 +27,9 @@ public struct ConfidentialiteAffichee: Sendable, Equatable {
   /// Les trois états, dans les mots de l'écran.
   public var libelleFR: String {
     switch etat {
-    case .chiffree: return "Chiffré"
-    case .pontee: return salonChiffre ? "Chiffré par le pont" : "En clair"
-    case .relaisSeul: return "En clair"
+    case .chiffree: return String(localized: "Chiffré")
+    case .pontee: return salonChiffre ? String(localized: "Chiffré par le pont") : String(localized: "En clair")
+    case .relaisSeul: return String(localized: "En clair")
     }
   }
 
@@ -49,8 +49,7 @@ public struct ConfidentialiteAffichee: Sendable, Equatable {
     case .chiffree:
       return ConversationPrivacy.chiffree.explanationFR
     case .pontee where salonChiffre:
-      return "Le salon est chiffré jusqu'au pont, et le pont le déchiffre pour traduire vers "
-        + "ce réseau : c'est sa fonction. Ce n'est donc pas du bout en bout."
+      return String(localized: "Le salon est chiffré jusqu'au pont, et le pont le déchiffre pour traduire vers ce réseau : c'est sa fonction. Ce n'est donc pas du bout en bout.")
     case .pontee:
       return ConversationPrivacy.pontee.explanationFR
     case .relaisSeul:

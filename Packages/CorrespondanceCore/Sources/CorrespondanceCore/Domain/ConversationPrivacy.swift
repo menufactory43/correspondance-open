@@ -25,9 +25,9 @@ public enum ConversationPrivacy: String, Sendable, Equatable, CaseIterable {
 
   public var labelFR: String {
     switch self {
-    case .chiffree: "Chiffré de bout en bout"
-    case .relaisSeul: "Chiffré jusqu'au Relais"
-    case .pontee: "Passe par un pont"
+    case .chiffree: String(localized: "Chiffré de bout en bout")
+    case .relaisSeul: String(localized: "Chiffré jusqu'au Relais")
+    case .pontee: String(localized: "Passe par un pont")
     }
   }
 
@@ -36,13 +36,11 @@ public enum ConversationPrivacy: String, Sendable, Equatable, CaseIterable {
   public var explanationFR: String {
     switch self {
     case .chiffree:
-      "Seuls les participants peuvent lire. Même la machine qui héberge le Relais n'y a pas accès."
+      String(localized: "Seuls les participants peuvent lire. Même la machine qui héberge le Relais n'y a pas accès.")
     case .relaisSeul:
-      "Le trajet est chiffré, mais la machine qui héberge le Relais peut lire. "
-        + "Si c'est ta machine, c'est toi ; si quelqu'un l'héberge pour toi, c'est lui."
+      String(localized: "Le trajet est chiffré, mais la machine qui héberge le Relais peut lire. Si c'est ta machine, c'est toi ; si quelqu'un l'héberge pour toi, c'est lui.")
     case .pontee:
-      "Le pont traduit les messages entre ce réseau et le Relais : il les lit au passage. "
-        + "Rien de ce qu'on ferait ici n'y changerait quelque chose."
+      String(localized: "Le pont traduit les messages entre ce réseau et le Relais : il les lit au passage. Rien de ce qu'on ferait ici n'y changerait quelque chose.")
     }
   }
 

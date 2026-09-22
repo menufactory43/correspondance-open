@@ -105,7 +105,7 @@ struct SendLaterSheet: View {
       }
       .scrollContentBackground(.hidden)
       .background(theme.paper.ignoresSafeArea())
-      .navigationTitle(rescheduling == nil ? "Envoyer plus tard" : "Déplacer")
+      .navigationTitle(rescheduling == nil ? String(localized: "Envoyer plus tard") : String(localized: "Déplacer"))
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .topBarLeading) { Button("Annuler") { dismiss() } }
@@ -179,7 +179,7 @@ struct ScheduledMessagesView: View {
               Text("· sauf réponse")
             }
             Spacer(minLength: 6)
-            Text(store.conversation(message.conversationID)?.title ?? "Fil inconnu")
+            Text(store.conversation(message.conversationID)?.title ?? String(localized: "Fil inconnu"))
               .lineLimit(1)
           }
           .font(Typography.meta(typeface))

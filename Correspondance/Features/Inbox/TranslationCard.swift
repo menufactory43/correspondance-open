@@ -35,8 +35,14 @@ struct TranslationCard: View {
       // La langue choisie est celle dans laquelle on **lit** ou on **envoie**,
       // pas celle qu'on attend : « Anglais » sur ce qui arrive laissait les
       // bulles anglaises telles quelles, et on cherchait pourquoi.
-      row("Ce qui arrive", detail: "Lu, sur cet appareil, en", none: "Sans traduction", selection: $incoming)
-      row("Ce que j'envoie", detail: "Traduit avant l'envoi en", none: "Sans traduction", selection: $outgoing)
+      row(String(localized: "Ce qui arrive"),
+          detail: String(localized: "Lu, sur cet appareil, en"),
+          none: String(localized: "Sans traduction"),
+          selection: $incoming)
+      row(String(localized: "Ce que j'envoie"),
+          detail: String(localized: "Traduit avant l'envoi en"),
+          none: String(localized: "Sans traduction"),
+          selection: $outgoing)
     }
   }
 

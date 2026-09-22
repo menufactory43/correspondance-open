@@ -39,7 +39,8 @@ struct NewGroupSheet: View {
   }
 
   private var participantPromptFR: String {
-    network == .signal ? "Identifiant Signal (UUID)" : "Numéro au format international"
+    network == .signal ? String(localized: "Identifiant Signal (UUID)")
+      : String(localized: "Numéro au format international")
   }
 
   var body: some View {

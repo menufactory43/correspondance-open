@@ -291,7 +291,7 @@ extension InboxStore {
     var next = config.settingVoice(mode, in: roomID)
     if let suggest { next = next.settingSuggest(suggest, in: roomID) }
     guard await writeAgentConsoleConfig(next, in: consoleRoomID) else {
-      lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
+      lastErrorMessage = String(localized: "le réglage n'est pas parti — il est resté sur ce Mac")
       return nil
     }
 
@@ -305,12 +305,12 @@ extension InboxStore {
       }
     } catch {
       let comment = switch mode {
-      case .direct: "à voix haute"
-      case .draft: "en brouillon"
-      case .pilot: "seul, en ton nom"
+      case .direct: String(localized: "à voix haute")
+      case .draft: String(localized: "en brouillon")
+      case .pilot: String(localized: "seul, en ton nom")
       }
-      lastErrorMessage = "\(agent) répondra \(comment), "
-        + "mais le pont n'a pas pris la commande de relais : \(error.localizedDescription)"
+      lastErrorMessage = String(localized: "\(agent) répondra \(comment), ")
+        + String(localized: "mais le pont n'a pas pris la commande de relais : \(error.localizedDescription)")
     }
     return mode
   }
@@ -375,7 +375,7 @@ extension InboxStore {
     else { return false }
     guard let (consoleRoomID, config) = await agentConfigForWriting(agent) else { return false }
     guard await writeAgentConsoleConfig(change(config, roomID), in: consoleRoomID) else {
-      lastErrorMessage = "le réglage n'est pas parti — il est resté sur ce Mac"
+      lastErrorMessage = String(localized: "le réglage n'est pas parti — il est resté sur ce Mac")
       return false
     }
     return true
@@ -389,7 +389,7 @@ extension InboxStore {
     if let console = await activateAgentConsole(agent: agent), let config = console.config {
       return (console.roomID, config)
     }
-    lastErrorMessage = "la console de \(agent) n'est pas joignable — le réglage n'est pas parti"
+    lastErrorMessage = String(localized: "la console de \(agent) n'est pas joignable — le réglage n'est pas parti")
     return nil
   }
 
@@ -470,9 +470,9 @@ struct AgentVoice: Identifiable, Equatable, Sendable {
   /// dans la fiche du fil, avec un cadre).
   var helpFR: String {
     switch mode {
-    case .direct: "\(agent) répond à voix haute ici, le correspondant le lit — passer en brouillon"
-    case .draft: "\(agent) propose des brouillons ici, visibles de toi seul — passer à voix haute"
-    case .pilot: "\(agent) répond seul ici, en ton nom, dans son cadre — repasser en brouillon"
+    case .direct: String(localized: "\(agent) répond à voix haute ici, le correspondant le lit — passer en brouillon")
+    case .draft: String(localized: "\(agent) propose des brouillons ici, visibles de toi seul — passer à voix haute")
+    case .pilot: String(localized: "\(agent) répond seul ici, en ton nom, dans son cadre — repasser en brouillon")
     }
   }
 }

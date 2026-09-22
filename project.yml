@@ -1,6 +1,10 @@
 name: Correspondance
 options:
   bundleIdPrefix: app.correspondance
+  # Le français est la langue de développement : les clés des catalogues de
+  # chaînes SONT le texte français. L'anglais est une traduction, et une clé
+  # sans traduction retombe sur le français — jamais sur un identifiant.
+  developmentLanguage: fr
   deploymentTarget:
     macOS: "14.0"
     iOS: "18.0"
@@ -40,6 +44,11 @@ targets:
           - Info.plist
       # Payloads /sync de démonstration, les mêmes que l'iPhone (cf. DemoMode.swift).
       - path: CorrespondanceiOS/Demo
+        buildPhase: resources
+      # Le catalogue de chaînes : clés en français, traduction anglaise.
+      # En `sources:` et non `resources:` — cette dernière clé n'existe pas
+      # chez xcodegen, et son contenu est ignoré sans un mot.
+      - path: Correspondance/Resources/Localizable.xcstrings
         buildPhase: resources
     resources:
       # xcassets à la racine projet — évite le conflit avec sources excludes Resources/**
@@ -267,6 +276,10 @@ targets:
       - path: CorrespondanceiOS
         excludes:
           - Demo/**
+          - Resources/**
+      # Le catalogue de chaînes : clés en français, traduction anglaise.
+      - path: CorrespondanceiOS/Resources/Localizable.xcstrings
+        buildPhase: resources
       # Payloads /sync de démonstration (les fixtures de Core) : ce sont des
       # ressources, pas des sources. Cf. CorrespondanceiOS/Store/DemoRelay.swift.
       - path: CorrespondanceiOS/Demo

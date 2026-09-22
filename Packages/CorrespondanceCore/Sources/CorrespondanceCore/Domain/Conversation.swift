@@ -66,9 +66,19 @@ public struct Conversation: Identifiable, Hashable, Sendable {
   /// Preview « catalogue » sans vrai message reçu. Les libellés sont ceux que
   /// `MatrixRoomModel.conversation` et le catalogue Signal posent faute de message :
   /// on les dérive des réseaux plutôt que de les recopier réseau par réseau.
+  ///
+  /// L'ensemble porte les DEUX formes : le français, qui est la clé du
+  /// catalogue de chaînes, et la forme traduite que `MatrixRoomModel` vient
+  /// d'écrire. Un aperçu posé en anglais doit se reconnaître comme un
+  /// placeholder tout autant qu'en français ; et garder le français dedans
+  /// laisse intacte la lecture d'une base écrite avant la traduction.
   public static let catalogPlaceholderPreviews: Set<String> = Set(
     MessageNetwork.allCases.filter { $0 != .iMessage }.flatMap {
-      ["Groupe \($0.labelFR)", "Écrire sur \($0.labelFR)…", $0.labelFR]
+      [
+        "Groupe \($0.labelFR)", "Écrire sur \($0.labelFR)…", $0.labelFR,
+        String(localized: "Groupe \($0.labelFR)"),
+        String(localized: "Écrire sur \($0.labelFR)…"),
+      ]
     }
   )
 

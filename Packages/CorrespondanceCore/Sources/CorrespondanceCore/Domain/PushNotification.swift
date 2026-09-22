@@ -38,11 +38,11 @@ public enum PushNotification {
   /// Ce qui s'affiche quand on n'a pas pu lire l'événement : Relais injoignable,
   /// Tailscale coupé, trente secondes écoulées. On ne ment pas, on ne devine pas.
   public static let fallbackTitle = "Correspondance"
-  public static let fallbackBody = "Nouveau message"
+  public static let fallbackBody = String(localized: "Nouveau message")
   /// Le Relais a répondu, mais la clé manque à cet appareil. Ce n'est pas la
   /// même panne qu'un Relais injoignable, et le dire évite de chercher au
   /// mauvais endroit.
-  public static let messageChiffreNonLu = "Message chiffré — ouvre Correspondance pour le lire"
+  public static let messageChiffreNonLu = String(localized: "Message chiffré — ouvre Correspondance pour le lire")
 
   /// Ce qu'on montre : « Alice · WhatsApp » en titre, le message en dessous.
   ///
@@ -333,24 +333,24 @@ public enum PushNotification {
     let label: String
     switch msgtype {
     case "m.image":
-      label = attachment.isGIF ? "GIF" : "📷 Photo"
+      label = attachment.isGIF ? String(localized: "GIF") : String(localized: "📷 Photo")
     case "m.video":
-      label = "🎥 Vidéo"
+      label = String(localized: "🎥 Vidéo")
     case "m.audio":
       if let voice = attachment.voice {
-        label = voice.duration > 0 ? "🎤 Message vocal · \(voice.durationLabel)" : "🎤 Message vocal"
+        label = voice.duration > 0 ? String(localized: "🎤 Message vocal · \(voice.durationLabel)") : String(localized: "🎤 Message vocal")
       } else {
-        label = "🎤 Message audio"
+        label = String(localized: "🎤 Message audio")
       }
     default:
       let name = (attachment.filename ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-      label = name.isEmpty ? "📎 Pièce jointe" : "📎 \(name)"
+      label = name.isEmpty ? String(localized: "📎 Pièce jointe") : "📎 \(name)"
     }
     // La légende : seulement quand `filename` porte le nom, et que `body` dit
     // autre chose. Certains ponts répètent le nom dans `body` — pas une légende.
     let caption = body.trimmingCharacters(in: .whitespacesAndNewlines)
     if let filename, !filename.isEmpty, !caption.isEmpty, caption != filename {
-      return "\(label) : \(caption)"
+      return String(localized: "\(label) : \(caption)")
     }
     return label
   }

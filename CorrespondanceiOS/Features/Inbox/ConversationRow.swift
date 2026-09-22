@@ -20,7 +20,7 @@ struct ConversationRow: View {
   private var subtitle: String {
     if !draft.isEmpty { return draft }
     if conversation.hasLivePreview { return conversation.preview }
-    if conversation.isGroup { return "En attente de messages" }
+    if conversation.isGroup { return String(localized: "En attente de messages") }
     return conversation.preview
   }
 
@@ -101,10 +101,10 @@ struct ConversationRow: View {
 
   private var accessibilityLine: String {
     var parts = [conversation.title, conversation.network.labelFR]
-    if conversation.hasUnread { parts.append("\(conversation.unreadCount) non lus") }
-    if isPinned { parts.append("épinglée") }
-    if isMuted { parts.append("muette") }
-    if !draft.isEmpty { parts.append("brouillon : \(draft)") } else { parts.append(subtitle) }
+    if conversation.hasUnread { parts.append(String(localized: "\(conversation.unreadCount) non lus")) }
+    if isPinned { parts.append(String(localized: "épinglée")) }
+    if isMuted { parts.append(String(localized: "muette")) }
+    if !draft.isEmpty { parts.append(String(localized: "brouillon : \(draft)")) } else { parts.append(subtitle) }
     return parts.joined(separator: ", ")
   }
 
@@ -116,7 +116,7 @@ struct ConversationRow: View {
       return date.formatted(.dateTime.hour().minute())
     }
     if calendar.isDateInYesterday(date) {
-      return "hier"
+      return String(localized: "hier")
     }
     if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
       return date.formatted(.dateTime.weekday(.abbreviated))

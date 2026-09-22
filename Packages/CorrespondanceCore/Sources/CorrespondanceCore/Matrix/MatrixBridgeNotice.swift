@@ -13,9 +13,9 @@ public enum MatrixBridgeNotice {
     case .none: break
     }
     if lower.contains("not bridged") {
-      return "Message non relayé par le pont : " + text
+      return String(localized: "Message non relayé par le pont : \(text)")
     }
-    return "Pont : " + text
+    return String(localized: "Pont : \(text)")
   }
 
   public static let relayOnText = "Relais du pont allumé : cc parle ici à voix haute, depuis ton compte."

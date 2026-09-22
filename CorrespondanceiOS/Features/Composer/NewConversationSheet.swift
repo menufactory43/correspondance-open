@@ -73,7 +73,7 @@ struct NewConversationSheet: View {
   private var networkChips: some View {
     ScrollView(.horizontal, showsIndicators: false) {
       HStack(spacing: 6) {
-        chip(label: "Tous", value: nil)
+        chip(label: String(localized: "Tous"), value: nil)
         ForEach(networks) { candidate in
           chip(label: candidate.labelFR, value: candidate)
         }
@@ -373,14 +373,14 @@ struct NewConversationSheet: View {
 
   private var placeholder: String {
     switch network {
-    case .whatsapp: "Nom ou numéro WhatsApp"
-    case .signal: "Nom ou numéro Signal"
-    case .instagram: "Nom d'utilisateur Instagram"
-    case .messenger: "Nom ou identifiant Messenger"
-    case .twitter: "Pseudo X, sans l'arobase"
-    case .slack: "Nom ou e-mail Slack"
-    case .telegram: "Pseudo ou numéro Telegram"
-    default: "Nom ou numéro"
+    case .whatsapp: String(localized: "Nom ou numéro WhatsApp")
+    case .signal: String(localized: "Nom ou numéro Signal")
+    case .instagram: String(localized: "Nom d'utilisateur Instagram")
+    case .messenger: String(localized: "Nom ou identifiant Messenger")
+    case .twitter: String(localized: "Pseudo X, sans l'arobase")
+    case .slack: String(localized: "Nom ou e-mail Slack")
+    case .telegram: String(localized: "Pseudo ou numéro Telegram")
+    default: String(localized: "Nom ou numéro")
     }
   }
 }

@@ -116,24 +116,24 @@ enum IMessageAutomationHealth: Equatable, Sendable {
   func labelFR(osVersion: String = IMessageAutomationHealth.currentOSVersion) -> String {
     switch self {
     case .unknown:
-      "Pas encore vérifié."
+      String(localized: "Pas encore vérifié.")
     case .disabled:
-      "Désactivé."
+      String(localized: "Désactivé.")
     case .accessibilityDenied:
-      "Il manque l’autorisation d’Accessibilité. Coche Correspondance dans Réglages Système, "
-        + "Confidentialité et sécurité, Accessibilité."
+      String(localized: "Il manque l’autorisation d’Accessibilité. Coche Correspondance dans Réglages Système, ")
+        + String(localized: "Confidentialité et sécurité, Accessibilité.")
     case .messagesNotRunning:
-      "Messages n’est pas ouvert. Il s’ouvrira en arrière-plan au premier geste."
+      String(localized: "Messages n’est pas ouvert. Il s’ouvrira en arrière-plan au premier geste.")
     case .axServerUnavailable:
-      "L’autorisation est là, mais le Mac ne répond plus. "
-        + "Ferme ta session et rouvre-la, puis vérifie à nouveau."
+      String(localized: "L’autorisation est là, mais le Mac ne répond plus. ")
+        + String(localized: "Ferme ta session et rouvre-la, puis vérifie à nouveau.")
     case .treeUnreadable:
-      "La fenêtre de Messages reste introuvable. Ouvre-en une (⌘N) et vérifie à nouveau. "
-        + "Si ça continue, retire puis remets Correspondance dans Accessibilité."
+      String(localized: "La fenêtre de Messages reste introuvable. Ouvre-en une (⌘N) et vérifie à nouveau. ")
+        + String(localized: "Si ça continue, retire puis remets Correspondance dans Accessibilité.")
     case .experimental:
-      "Ça marche, mais macOS \(osVersion) n’a pas encore été testée."
+      String(localized: "Ça marche, mais macOS \(osVersion) n’a pas encore été testée.")
     case .ok:
-      "Tout est en place (macOS \(osVersion))."
+      String(localized: "Tout est en place (macOS \(osVersion)).")
     }
   }
 }
@@ -154,25 +154,25 @@ enum IMessageAutomationError: LocalizedError, Sendable, Equatable {
   var errorDescription: String? {
     switch self {
     case .disabled:
-      "Le pilotage de Messages est désactivé. Active-le dans Réglages."
+      String(localized: "Le pilotage de Messages est désactivé. Active-le dans Réglages.")
     case .unhealthy(let health):
       health.labelFR()
     case .messagesUnavailable:
-      "Messages.app est introuvable ou refuse de se lancer en arrière-plan."
+      String(localized: "Messages.app est introuvable ou refuse de se lancer en arrière-plan.")
     case .chatNotFound(let title):
-      "La conversation « \(title) » n’existe pas dans Messages."
+      String(localized: "La conversation « \(title) » n’existe pas dans Messages.")
     case .messageNotFound:
-      "Ce message n’existe plus dans Messages."
+      String(localized: "Ce message n’existe plus dans Messages.")
     case .elementNotFound(let what):
-      "Introuvable dans la fenêtre de Messages : \(what)."
+      String(localized: "Introuvable dans la fenêtre de Messages : \(what).")
     case .actionFailed(let what):
-      "Messages a refusé l’action : \(what)."
+      String(localized: "Messages a refusé l’action : \(what).")
     case .timedOut(let what):
-      "Messages n’a pas répondu en 5 s : \(what)."
+      String(localized: "Messages n’a pas répondu en 5 s : \(what).")
     case .notConfirmed(let what):
-      "Action envoyée mais non confirmée par chat.db en 3 s : \(what)."
+      String(localized: "Action envoyée mais non confirmée par chat.db en 3 s : \(what).")
     case .cancelled:
-      "Automatisation annulée."
+      String(localized: "Automatisation annulée.")
     }
   }
 }

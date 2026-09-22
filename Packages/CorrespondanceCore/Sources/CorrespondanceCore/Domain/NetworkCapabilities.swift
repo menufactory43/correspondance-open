@@ -70,10 +70,10 @@ public struct NetworkCapabilities: Sendable, Hashable {
     guard let window else { return nil }
     if window >= 3600 {
       let heures = Int(window / 3600)
-      return heures == 1 ? "1 heure" : "\(heures) heures"
+      return heures == 1 ? String(localized: "1 heure") : String(localized: "\(heures) heures")
     }
     let minutes = Int(window / 60)
-    return minutes == 1 ? "1 minute" : "\(minutes) minutes"
+    return minutes == 1 ? String(localized: "1 minute") : String(localized: "\(minutes) minutes")
   }
 
   /// Ce que chaque réseau porte, réseau par réseau.

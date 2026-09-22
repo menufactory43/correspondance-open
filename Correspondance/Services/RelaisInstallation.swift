@@ -34,17 +34,17 @@ struct RelaisEtape: Equatable, Sendable {
   /// plutôt que de laisser un identifiant à l'écran.
   var libelleFR: String {
     switch etape {
-    case "prerequis": "Vérification de la machine"
-    case "binaires": "Téléchargement des binaires"
-    case "secrets": "Secrets du Relais"
-    case "configuration": "Configuration"
-    case "services": "Démarrage des services"
-    case "attente": "Attente du Relais"
-    case "tailcat": "Chemin sans Tailscale"
-    case "compte": "Compte propriétaire"
-    case "ponts": "Les quatre réseaux"
-    case "preuve": "Preuve de connexion"
-    case "appairage": "Appairage"
+    case "prerequis": String(localized: "Vérification de la machine")
+    case "binaires": String(localized: "Téléchargement des binaires")
+    case "secrets": String(localized: "Secrets du Relais")
+    case "configuration": String(localized: "Configuration")
+    case "services": String(localized: "Démarrage des services")
+    case "attente": String(localized: "Attente du Relais")
+    case "tailcat": String(localized: "Chemin sans Tailscale")
+    case "compte": String(localized: "Compte propriétaire")
+    case "ponts": String(localized: "Les quatre réseaux")
+    case "preuve": String(localized: "Preuve de connexion")
+    case "appairage": String(localized: "Appairage")
     default: etape
     }
   }
@@ -221,14 +221,14 @@ final class RelaisInstallateur {
 
     var errorDescription: String? {
       switch self {
-      case .adresse(let quoi): "adresse illisible : \(quoi)"
-      case .reseau(let quoi): "impossible de récupérer \(quoi) — vérifie la connexion"
+      case .adresse(let quoi): String(localized: "adresse illisible : \(quoi)")
+      case .reseau(let quoi): String(localized: "impossible de récupérer \(quoi) — vérifie la connexion")
       case .sommeAbsente(let nom):
-        "le SHA256SUMS publié ne contient pas \(nom) : on n'exécute rien"
+        String(localized: "le SHA256SUMS publié ne contient pas \(nom) : on n'exécute rien")
       case .sommeFausse(let nom, let attendue, let vue):
-        "\(nom) ne correspond pas à sa somme publiée (\(vue.prefix(12))… au lieu de "
-          + "\(attendue.prefix(12))…) : on n'exécute rien"
-      case .scriptTombe(let code): "l'installeur s'est arrêté (code \(code))"
+        String(localized: "\(nom) ne correspond pas à sa somme publiée (\(vue.prefix(12))… au lieu de ")
+          + String(localized: "\(attendue.prefix(12))…) : on n'exécute rien")
+      case .scriptTombe(let code): String(localized: "l'installeur s'est arrêté (code \(code))")
       }
     }
   }
@@ -307,7 +307,7 @@ final class RelaisInstallateur {
           await appairer(lu)
           phase = .fini
         } else {
-          phase = .echec("l'installeur a rendu un code illisible")
+          phase = .echec(String(localized: "l'installeur a rendu un code illisible"))
         }
       }
     }

@@ -70,7 +70,7 @@ public final class VoiceRecorder {
     let ticket = generation
     guard await Self.requestPermission() else {
       guard ticket == generation else { return false }
-      state = .failed("Le micro est refusé. Réglages › Correspondance › Micro.")
+      state = .failed(String(localized: "Le micro est refusé. Réglages › Correspondance › Micro."))
       return false
     }
     #if os(iOS)
@@ -92,7 +92,7 @@ public final class VoiceRecorder {
       return false
     }
     guard ready else {
-      state = .failed("Le micro n'a pas pu démarrer.")
+      state = .failed(String(localized: "Le micro n'a pas pu démarrer."))
       return false
     }
     #endif
@@ -119,7 +119,7 @@ public final class VoiceRecorder {
       return false
     }
     guard let started else {
-      state = .failed("Le micro n'a pas pu démarrer.")
+      state = .failed(String(localized: "Le micro n'a pas pu démarrer."))
       return false
     }
     recorder = started.recorder

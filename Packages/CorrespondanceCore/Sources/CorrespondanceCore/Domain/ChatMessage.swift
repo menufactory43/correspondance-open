@@ -327,18 +327,18 @@ public struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     // La ligne d'inbox montre le dernier VRAI message — cf. `MatrixRoomModel`.
     if isAgentProposal { return "" }
     if let systemEventText { return systemEventText }
-    if isRetracted { return "Message annulé" }
+    if isRetracted { return String(localized: "Message annulé") }
     if let poll { return "📊 \(poll.question)" }
     // Le Markdown d'un post partagé ne dit rien à qui balaie sa file : on le nomme.
     if let post = SharedPost.parse(self) { return post.previewText }
     if !text.isEmpty { return text }
     // Le GIF passe avant la photo : c'en est une, mais on la nomme autrement.
-    if attachments.contains(where: \.isGIF) { return "GIF" }
-    if attachments.contains(where: \.isImage) { return "📷 Photo" }
-    if attachments.contains(where: \.isVideo) { return "🎥 Vidéo" }
-    if attachments.contains(where: \.isVoiceNote) { return "🎤 Message vocal" }
-    if attachments.contains(where: \.isAudio) { return "🎤 Message audio" }
-    if !attachments.isEmpty { return "Pièce jointe" }
+    if attachments.contains(where: \.isGIF) { return String(localized: "GIF") }
+    if attachments.contains(where: \.isImage) { return String(localized: "📷 Photo") }
+    if attachments.contains(where: \.isVideo) { return String(localized: "🎥 Vidéo") }
+    if attachments.contains(where: \.isVoiceNote) { return String(localized: "🎤 Message vocal") }
+    if attachments.contains(where: \.isAudio) { return String(localized: "🎤 Message audio") }
+    if !attachments.isEmpty { return String(localized: "Pièce jointe") }
     return text
   }
 

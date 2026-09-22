@@ -59,9 +59,9 @@ struct AccueilRelaisView: View {
         .font(.system(size: 26, weight: .semibold))
         .foregroundStyle(theme.ink)
       Text(
-        "Le Relais est la machine qui tient tes conversations : WhatsApp, Signal, Instagram, "
-          + "Messenger, et tes notes. Il est à toi, il ne sort pas de chez toi, et tout ce "
-          + "qui y passe est chiffré. Il n'y a que deux endroits où le poser."
+        String(localized: "Le Relais est la machine qui tient tes conversations : WhatsApp, Signal, Instagram, ")
+          + String(localized: "Messenger, et tes notes. Il est à toi, il ne sort pas de chez toi, et tout ce ")
+          + String(localized: "qui y passe est chiffré. Il n'y a que deux endroits où le poser.")
       )
       .font(.body)
       .foregroundStyle(theme.inkSecondary)
@@ -73,11 +73,11 @@ struct AccueilRelaisView: View {
 
   private var carteCeMac: some View {
     SettingsCard(
-      title: "Sur ce Mac",
-      footnote: "Tout marche tant que ce Mac est allumé. Ton iPhone ne recevra rien quand il dort."
+      title: String(localized: "Sur ce Mac"),
+      footnote: String(localized: "Tout marche tant que ce Mac est allumé. Ton iPhone ne recevra rien quand il dort.")
     ) {
       SettingsRow(
-        label: "Installer ici",
+        label: String(localized: "Installer ici"),
         detail: detailCeMac,
         systemImage: "desktopcomputer"
       ) {
@@ -113,8 +113,8 @@ struct AccueilRelaisView: View {
       if relaisPose {
         SettingsDivider()
         SettingsRow(
-          label: "Tout retirer",
-          detail: "Arrête les services, efface le dossier du Relais, et ne touche à rien d'autre.",
+          label: String(localized: "Tout retirer"),
+          detail: String(localized: "Arrête les services, efface le dossier du Relais, et ne touche à rien d'autre."),
           systemImage: "trash"
         ) {
           Button("Tout retirer", role: .destructive) { Task { await installateur.retirer() } }
@@ -126,11 +126,11 @@ struct AccueilRelaisView: View {
   private var detailCeMac: String {
     switch installateur.phase {
     case .repos:
-      "Une minute, aucune question : l'app pose le Relais et les quatre réseaux, "
-        + "puis se connecte elle-même. Rien à recopier."
-    case .enCours: "installation en cours…"
+      String(localized: "Une minute, aucune question : l'app pose le Relais et les quatre réseaux, ")
+        + String(localized: "puis se connecte elle-même. Rien à recopier.")
+    case .enCours: String(localized: "installation en cours…")
     case .echec(let raison): raison
-    case .fini: "le Relais tourne sur ce Mac, et l'app y est connectée."
+    case .fini: String(localized: "le Relais tourne sur ce Mac, et l'app y est connectée.")
     }
   }
 
@@ -182,17 +182,17 @@ struct AccueilRelaisView: View {
 
   private var carteMachineAMoi: some View {
     SettingsCard(
-      title: "Sur une machine à moi",
-      footnote: "La commande contient de quoi installer, pas un secret : c'est le code "
-        + "d'appairage qu'elle affiche à la fin qui en porte un. Il périme en quinze minutes."
+      title: String(localized: "Sur une machine à moi"),
+      footnote: String(localized: "La commande contient de quoi installer, pas un secret : c'est le code ")
+        + String(localized: "d'appairage qu'elle affiche à la fin qui en porte un. Il périme en quinze minutes.")
     ) {
       SettingsRow(
-        label: "Allumée en permanence, tout marche partout. Le Mac s'y connecte tout seul ; "
-          + "l'iPhone a encore besoin de Tailscale.",
+        label: String(localized: "Allumée en permanence, tout marche partout. Le Mac s'y connecte tout seul ; ")
+          + String(localized: "l'iPhone a encore besoin de Tailscale."),
         detail: commande,
         systemImage: "server.rack"
       ) {
-        Button(copie ? "Copié" : "Copier") {
+        Button(copie ? String(localized: "Copié") : String(localized: "Copier")) {
           NSPasteboard.general.clearContents()
           NSPasteboard.general.setString(commande, forType: .string)
           copie = true
@@ -200,7 +200,7 @@ struct AccueilRelaisView: View {
       }
 
       SettingsRow(
-        label: "Un NUC chez toi est plus sûr qu'un serveur loué : l'hébergeur a l'accès physique.",
+        label: String(localized: "Un NUC chez toi est plus sûr qu'un serveur loué : l'hébergeur a l'accès physique."),
         systemImage: "house"
       )
 
@@ -256,13 +256,13 @@ struct AccueilRelaisView: View {
     guard let code = RelayPairingCode(encoded: codeAppairage) else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "ce code n'est pas lisible — recopie-le en entier"
+      erreurCode = String(localized: "ce code n'est pas lisible — recopie-le en entier")
       return
     }
     guard !code.isExpired() else {
       motsDeVerification = []
       cheminDuCode = nil
-      erreurCode = "ce code a expiré — relance l'installeur sur la machine du Relais"
+      erreurCode = String(localized: "ce code a expiré — relance l'installeur sur la machine du Relais")
       return
     }
     motsDeVerification = code.fingerprintWords()

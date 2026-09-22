@@ -58,7 +58,7 @@ public enum NotificationGrouping {
   public static func bodyFR(latest: String, count: Int) -> String {
     guard count > 1 else { return latest }
     let others = count - 1
-    let suffix = others == 1 ? "et 1 autre message" : "et \(others) autres messages"
+    let suffix = others == 1 ? String(localized: "et 1 autre message") : String(localized: "et \(others) autres messages")
     guard !latest.isEmpty else { return suffix }
     return "\(latest)\n\(suffix)"
   }

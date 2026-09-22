@@ -92,9 +92,9 @@ public struct LinkPreviewCard: View {
 
   private func accessibilityLabel(_ preview: LinkPreview) -> String {
     guard let title = preview.title, !title.isEmpty else {
-      return "Aperçu du lien sur \(preview.domain)"
+      return String(localized: "Aperçu du lien sur \(preview.domain)")
     }
-    return "Aperçu du lien : \(title), sur \(preview.domain)"
+    return String(localized: "Aperçu du lien : \(title), sur \(preview.domain)")
   }
 
   /// Sur le fil principal : c'est ici que la recherche part, et le magasin y

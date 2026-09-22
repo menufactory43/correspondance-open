@@ -24,13 +24,16 @@ struct PhraseDeRecuperationCard: View {
   private var theme: WritingTheme { themes.theme }
 
   var body: some View {
-    SettingsCard(title: "Phrase de récupération", footnote: pied) {
+    SettingsCard(title: String(localized: "Phrase de récupération"), footnote: pied) {
       switch modele.etape {
       case .inconnue:
-        SettingsRow(label: "Phrase de récupération", detail: "Lecture de l'état…") { EmptyView() }
+        SettingsRow(
+          label: String(localized: "Phrase de récupération"),
+          detail: String(localized: "Lecture de l'état…")
+        ) { EmptyView() }
 
       case let .indisponible(raison):
-        SettingsRow(label: "Phrase de récupération", detail: raison, systemImage: "key.slash") {
+        SettingsRow(label: String(localized: "Phrase de récupération"), detail: raison, systemImage: "key.slash") {
           EmptyView()
         }
 
@@ -61,7 +64,7 @@ struct PhraseDeRecuperationCard: View {
             // Le bouton reste éteint tant que la case n'est pas cochée : c'est
             // la seule protection possible contre une sauvegarde que personne
             // ne pourra jamais rouvrir.
-            Button(modele.occupe ? "Création…" : "Continuer") {
+            Button(modele.occupe ? String(localized: "Création…") : String(localized: "Continuer")) {
               Task { await modele.confirmerLaPhrase() }
             }
             .keyboardShortcut(.defaultAction)
@@ -84,7 +87,7 @@ struct PhraseDeRecuperationCard: View {
               .font(Typography.meta(themes.typeface))
               .foregroundStyle(theme.inkTertiary)
             Spacer()
-            Button(modele.occupe ? "Restauration…" : "Entrer la phrase") {
+            Button(modele.occupe ? String(localized: "Restauration…") : String(localized: "Entrer la phrase")) {
               Task { await modele.entrerLaPhrase(saisie); saisie = "" }
             }
             .keyboardShortcut(.defaultAction)
@@ -96,13 +99,13 @@ struct PhraseDeRecuperationCard: View {
 
       case let .enPlace(version, phraseConnue):
         SettingsRow(
-          label: "Sauvegarde des clés",
+          label: String(localized: "Sauvegarde des clés"),
           detail: modele.etape.expliqueFR,
           systemImage: "checkmark.seal"
         ) {
           HStack {
             if phraseConnue {
-              Button(modele.phraseRevelee == nil ? "Revoir" : "Cacher") {
+              Button(modele.phraseRevelee == nil ? String(localized: "Revoir") : String(localized: "Cacher")) {
                 if modele.phraseRevelee == nil { modele.revoirLaPhrase() } else { modele.cacherLaPhrase() }
               }
             }
@@ -135,9 +138,9 @@ struct PhraseDeRecuperationCard: View {
   private var pied: String? {
     switch modele.etape {
     case .aNoter:
-      "Ces mots restent sur ce Mac. Personne d’autre que toi ne peut les retrouver, pas même le Relais."
+      String(localized: "Ces mots restent sur ce Mac. Personne d’autre que toi ne peut les retrouver, pas même le Relais.")
     case .enPlace:
-      "La phrase est gardée dans le trousseau de ce Mac. Elle n’en est jamais sortie."
+      String(localized: "La phrase est gardée dans le trousseau de ce Mac. Elle n’en est jamais sortie.")
     default:
       nil
     }
@@ -188,14 +191,16 @@ struct AppareilsDuCompteCard: View {
 
   var body: some View {
     SettingsCard(
-      title: "Appareils",
-      footnote: "La dernière activité est notée toutes les dix minutes environ. "
-        + "Un appareil actif peut donc sembler silencieux un moment."
+      title: String(localized: "Appareils"),
+      footnote: String(localized: "La dernière activité est notée toutes les dix minutes environ. ")
+        + String(localized: "Un appareil actif peut donc sembler silencieux un moment.")
     ) {
       if modele.appareils.isEmpty {
         SettingsRow(
-          label: "Aucun appareil listé",
-          detail: modele.occupe ? "Lecture…" : "Le Relais n’a rien renvoyé.",
+          label: String(localized: "Aucun appareil listé"),
+          detail: modele.occupe
+            ? String(localized: "Lecture…")
+            : String(localized: "Le Relais n’a rien renvoyé."),
           systemImage: "laptopcomputer"
         ) {
           Button("Recharger") { Task { await modele.rafraichirLesAppareils() } }
@@ -273,7 +278,7 @@ private struct FeuilleDeDeconnexion: View {
       HStack {
         Button("Annuler") { fermer() }
         Spacer()
-        Button(modele.occupe ? "…" : "Déconnecter") {
+        Button(modele.occupe ? "…" : String(localized: "Déconnecter")) {
           Task {
             let fait = await modele.deconnecter(
               appareil.deviceID, motDePasse: motDePasseDemande ? motDePasse : nil)

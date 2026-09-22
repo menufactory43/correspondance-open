@@ -90,7 +90,7 @@ extension RelayStore {
       }
       guard conversation(message.conversationID) != nil else {
         // Le fil a disparu du Relais : on ne devine pas où envoyer.
-        markScheduled(message.id, error: "Conversation introuvable")
+        markScheduled(message.id, error: String(localized: "Conversation introuvable"))
         continue
       }
       let sent = await sendScheduled(message)
@@ -132,7 +132,7 @@ extension RelayStore {
     let stillThere = !draftText(message.conversationID)
       .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     if stillThere {
-      markScheduled(message.id, error: syncError ?? "Envoi refusé par le Relais")
+      markScheduled(message.id, error: syncError ?? String(localized: "Envoi refusé par le Relais"))
       setDraft(previousDraft, conversationID: message.conversationID)
       for path in previousAttachments {
         addAttachment(path, conversationID: message.conversationID)

@@ -108,7 +108,7 @@ struct OutgoingTranslationPanel: View {
         guard !result.isEmpty else { throw TextTranslator.Failure.unavailable }
         translated = result
       } catch {
-        failure = "Traduction indisponible \(languageFR) sur cet appareil. L’original peut partir tel quel."
+        failure = String(localized: "Traduction indisponible \(languageFR) sur cet appareil. L’original peut partir tel quel.")
       }
     }
   }

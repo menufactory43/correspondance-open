@@ -50,7 +50,7 @@ enum DictusBridge {
         case "command", "meta", "super": "⌘"
         case "shift": "⇧"
         case "control", "ctrl": "⌃"
-        case "space": "Espace"
+        case "space": String(localized: "Espace")
         default: key.capitalized
         }
       }
@@ -237,8 +237,8 @@ enum DictusBridgeError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .notInstalled: "Dictus n’est pas installé."
-    case .notRunning: "Dictus ne tourne pas."
+    case .notInstalled: String(localized: "Dictus n’est pas installé.")
+    case .notRunning: String(localized: "Dictus ne tourne pas.")
     }
   }
 }

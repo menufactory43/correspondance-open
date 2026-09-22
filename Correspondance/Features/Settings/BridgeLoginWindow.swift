@@ -117,16 +117,16 @@ struct BridgeLoginWindow: View {
   private func subtitle(for network: MessageNetwork) -> String {
     switch flow {
     case .qrCode:
-      "Comme un nouveau téléphone : scanne le code depuis \(network.labelFR), dans Appareils liés."
+      String(localized: "Comme un nouveau téléphone : scanne le code depuis \(network.labelFR), dans Appareils liés.")
     case .phoneCode:
-      "Comme un nouvel appareil : ton numéro, puis le code que Telegram envoie dans l'app de ton téléphone."
+      String(localized: "Comme un nouvel appareil : ton numéro, puis le code que Telegram envoie dans l'app de ton téléphone.")
     case .webSession:
       if network == .slack {
-        "Connecte-toi par e-mail : tu recevras un code, puis tu choisiras ton espace de travail."
+        String(localized: "Connecte-toi par e-mail : tu recevras un code, puis tu choisiras ton espace de travail.")
       } else if network == .twitter {
-        "Connecte-toi comme sur x.com. Si ton compte a une passkey, passe par ton navigateur, en bas."
+        String(localized: "Connecte-toi comme sur x.com. Si ton compte a une passkey, passe par ton navigateur, en bas.")
       } else {
-        "Connecte-toi comme sur le site : identifiants, code à deux facteurs, tout se passe ici."
+        String(localized: "Connecte-toi comme sur le site : identifiants, code à deux facteurs, tout se passe ici.")
       }
     }
   }
@@ -369,7 +369,7 @@ struct BridgeLoginWindow: View {
           .foregroundStyle(theme.ink)
           .multilineTextAlignment(.center)
       }
-      TextField(prompt.isSetup ? "Nouveau code PIN" : "Code PIN", text: $passcode)
+      TextField(prompt.isSetup ? String(localized: "Nouveau code PIN") : String(localized: "Code PIN"), text: $passcode)
         .textFieldStyle(.roundedBorder)
         .font(.system(size: 26, weight: .semibold, design: .monospaced))
         .multilineTextAlignment(.center)
@@ -378,7 +378,7 @@ struct BridgeLoginWindow: View {
           passcode = String(value.filter(\.isNumber).prefix(4))
         }
         .onSubmit(sendPasscode)
-      Button(prompt.isSetup ? "Créer le code" : "Déverrouiller", action: sendPasscode)
+      Button(prompt.isSetup ? String(localized: "Créer le code") : String(localized: "Déverrouiller"), action: sendPasscode)
         .keyboardShortcut(.defaultAction)
         .disabled(passcode.count != 4)
       Spacer()

@@ -284,9 +284,13 @@ public struct MatrixBridgeDescriptor: Sendable, Hashable {
   /// c'est l'identité du compte qui change d'un réseau à l'autre.
   public var accountsHintFR: String {
     switch network {
-    case .whatsapp, .signal, .telegram: "Un compte par numéro. Plusieurs numéros possibles."
-    case .slack: "Un compte par espace de travail. Plusieurs espaces possibles, même avec la même adresse."
-    default: "Plusieurs comptes possibles."
+    case .whatsapp, .signal, .telegram:
+      String(localized: "Un compte par numéro. Plusieurs numéros possibles.")
+    case .slack:
+      String(
+        localized:
+          "Un compte par espace de travail. Plusieurs espaces possibles, même avec la même adresse.")
+    default: String(localized: "Plusieurs comptes possibles.")
     }
   }
 

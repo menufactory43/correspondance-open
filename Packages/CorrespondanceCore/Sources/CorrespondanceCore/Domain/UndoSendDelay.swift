@@ -23,10 +23,10 @@ public enum UndoSendDelay: Int, CaseIterable, Identifiable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .off: "Désactivé"
-    case .three: "3 secondes"
-    case .five: "5 secondes"
-    case .ten: "10 secondes"
+    case .off: String(localized: "Désactivé")
+    case .three: String(localized: "3 secondes")
+    case .five: String(localized: "5 secondes")
+    case .ten: String(localized: "10 secondes")
     }
   }
 

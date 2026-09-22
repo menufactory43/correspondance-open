@@ -75,7 +75,7 @@ struct SettingsAgentsPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       if let erreur {
-        SettingsCard(title: "Un problème") {
+        SettingsCard(title: String(localized: "Un problème")) {
           SettingsRow(label: erreur, systemImage: "exclamationmark.triangle") {
             Button("Fermer") { self.erreur = nil }
           }
@@ -84,12 +84,12 @@ struct SettingsAgentsPane: View {
 
       if consoles.isEmpty && !isLoading {
         SettingsCard(
-          title: "Agents",
-          footnote: "Un agent est un assistant qui vit sur le Relais et répond dans tes conversations."
+          title: String(localized: "Agents"),
+          footnote: String(localized: "Un agent est un assistant qui vit sur le Relais et répond dans tes conversations.")
         ) {
           SettingsRow(
-            label: "Aucun agent",
-            detail: "Ajoute-en un ci-dessous : sur ce Mac, ou sur une machine qui reste allumée.",
+            label: String(localized: "Aucun agent"),
+            detail: String(localized: "Ajoute-en un ci-dessous : sur ce Mac, ou sur une machine qui reste allumée."),
             systemImage: "person.crop.circle.badge.questionmark"
           ) {
             if isLoading { ProgressView().controlSize(.small) } else {
@@ -130,7 +130,7 @@ struct SettingsAgentsPane: View {
     let etatLocal = AgentLocalHost.state(agent: agent, dernierStatus: console.status?.publishedAt)
 
     SettingsCard(title: agent, footnote: footnoteFor(console, local: local)) {
-      SettingsRow(label: "Où il tourne", detail: ouEtQuoi(console), systemImage: "cpu") {
+      SettingsRow(label: String(localized: "Où il tourne"), detail: ouEtQuoi(console), systemImage: "cpu") {
         if enCours == agent {
           ProgressView().controlSize(.small)
         } else if local {
@@ -142,7 +142,7 @@ struct SettingsAgentsPane: View {
 
       if let status = console.status {
         SettingsRow(
-          label: "Moteurs sur sa machine",
+          label: String(localized: "Moteurs sur sa machine"),
           detail: moteursLaBas(status),
           systemImage: "wrench.and.screwdriver"
         ) {
@@ -156,7 +156,7 @@ struct SettingsAgentsPane: View {
       }
 
       if local, let journal = AgentLocalHost.logURL(agent: agent) {
-        SettingsRow(label: "Journal", detail: journal.path(), systemImage: "waveform.path") {
+        SettingsRow(label: String(localized: "Journal"), detail: journal.path(), systemImage: "waveform.path") {
           Button("Ouvrir") { NSWorkspace.shared.open(journal) }
         }
       }
@@ -166,7 +166,7 @@ struct SettingsAgentsPane: View {
       }
 
       SettingsRow(
-        label: "Déplacer sur une autre machine",
+        label: String(localized: "Déplacer sur une autre machine"),
         detail: commandeDetail(cle: agent),
         systemImage: "server.rack"
       ) {
@@ -183,7 +183,7 @@ struct SettingsAgentsPane: View {
       if !console.journal.isEmpty {
         ForEach(console.journal.prefix(3)) { tour in
           SettingsRow(
-            label: tour.prompt.isEmpty ? "(sans texte)" : tour.prompt,
+            label: tour.prompt.isEmpty ? String(localized: "(sans texte)") : tour.prompt,
             detail: tour.summaryFR,
             systemImage: "clock.arrow.circlepath"
           ) {
@@ -201,18 +201,20 @@ struct SettingsAgentsPane: View {
   private func ouEtQuoi(_ console: MatrixBridgeService.AgentConsole) -> String {
     guard let status = console.status else {
       return AgentLocalHost.hasBootstrap(agent: console.agent)
-        ? "lancé sur ce Mac, pas encore de nouvelles"
-        : "créé, pas encore de nouvelles"
+        ? String(localized: "lancé sur ce Mac, pas encore de nouvelles")
+        : String(localized: "créé, pas encore de nouvelles")
     }
     let ou = status.host.map { hote in
-      hote == EngineCatalog.nomDeCeMac ? "sur ce Mac" : "sur \(Self.nomEtAdresse(hote, status.address))"
-    } ?? "quelque part, il ne dit pas où"
-    let moteur = status.backend.map { " · moteur \($0)" } ?? ""
+      hote == EngineCatalog.nomDeCeMac
+        ? String(localized: "sur ce Mac")
+        : String(localized: "sur \(Self.nomEtAdresse(hote, status.address))")
+    } ?? String(localized: "quelque part, il ne dit pas où")
+    let moteur = status.backend.map { String(localized: " · moteur \($0)") } ?? ""
     let age = status.publishedAt
       .formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
     return status.isFresh()
-      ? "\(ou)\(moteur), vu \(age)"
-      : "\(ou)\(moteur), silencieux depuis \(age)"
+      ? String(localized: "\(ou)\(moteur), vu \(age)")
+      : String(localized: "\(ou)\(moteur), silencieux depuis \(age)")
   }
 
   /// « umbrel (100.64.0.12) » — l'adresse à côté du nom, parce qu'un nom seul
@@ -223,18 +225,21 @@ struct SettingsAgentsPane: View {
 
   private func moteursLaBas(_ status: MatrixBridgeService.AgentStatus) -> String {
     var parts: [String] = []
-    parts.append("prêts : " + (status.enginesReady.isEmpty ? "aucun" : status.enginesReady.joined(separator: ", ")))
+    parts.append(
+      String(localized: "prêts : ")
+        + (status.enginesReady.isEmpty
+          ? String(localized: "aucun") : status.enginesReady.joined(separator: ", ")))
     if !status.enginesToConnect.isEmpty {
-      parts.append("à connecter : " + status.enginesToConnect.joined(separator: ", "))
+      parts.append(String(localized: "à connecter : ") + status.enginesToConnect.joined(separator: ", "))
     }
     return parts.joined(separator: " · ") + "."
   }
 
   private func footnoteFor(_ console: MatrixBridgeService.AgentConsole, local: Bool) -> String {
     local
-      ? "Il tourne sur ce Mac, tant que Correspondance est ouverte. "
-        + "Pour qu’il réponde jour et nuit, installe-le sur une machine qui reste allumée."
-      : "Il tourne sur une autre machine. Ce qui est affiché ici vient de ce qu’il en dit lui-même."
+      ? String(localized: "Il tourne sur ce Mac, tant que Correspondance est ouverte. ")
+        + String(localized: "Pour qu’il réponde jour et nuit, installe-le sur une machine qui reste allumée.")
+      : String(localized: "Il tourne sur une autre machine. Ce qui est affiché ici vient de ce qu’il en dit lui-même.")
   }
 
   /// Chaque état a une sortie : un écran qui affiche un fait sans offrir
@@ -276,9 +281,9 @@ struct SettingsAgentsPane: View {
     console: MatrixBridgeService.AgentConsole, config: AgentConsoleConfig
   ) -> some View {
     SettingsRow(
-      label: "Outils",
+      label: String(localized: "Outils"),
       detail: (AgentConsoleConfig.ToolPreset(rawValue: config.toolPreset ?? "")?.subtitleFR)
-        ?? "réglés à la main sur sa machine",
+        ?? String(localized: "réglés à la main sur sa machine"),
       systemImage: "wrench.and.screwdriver"
     ) {
       Picker("", selection: Binding(
@@ -292,9 +297,9 @@ struct SettingsAgentsPane: View {
     }
 
     SettingsRow(
-      label: "Voix par défaut",
+      label: String(localized: "Voix par défaut"),
       detail: (config.defaultMode ?? .draft).subtitleFR
-        + " Chaque conversation peut choisir autrement, sous son « + ».",
+        + String(localized: " Chaque conversation peut choisir autrement, sous son « + »."),
       systemImage: "person.2.wave.2"
     ) {
       Picker("", selection: Binding(
@@ -309,8 +314,8 @@ struct SettingsAgentsPane: View {
     }
 
     SettingsRow(
-      label: "Demandes par heure",
-      detail: "au-delà, l'agent répond qu'il faut attendre",
+      label: String(localized: "Demandes par heure"),
+      detail: String(localized: "au-delà, l'agent répond qu'il faut attendre"),
       systemImage: "gauge.with.needle"
     ) {
       Picker("", selection: Binding(
@@ -351,8 +356,8 @@ struct SettingsAgentsPane: View {
   }
 
   private var ajouterCard: some View {
-    SettingsCard(title: "Ajouter un agent", footnote: footnoteAjout) {
-      SettingsRow(label: "Où", detail: detailHote, systemImage: "location") {
+    SettingsCard(title: String(localized: "Ajouter un agent"), footnote: footnoteAjout) {
+      SettingsRow(label: String(localized: "Où"), detail: detailHote, systemImage: "location") {
         Picker("", selection: $hoteChoisi) {
           Text("Ce Mac").tag(HoteChoix.ceMac)
           ForEach(hotesConnus) { hote in
@@ -372,8 +377,8 @@ struct SettingsAgentsPane: View {
           lignesHoteConnu(hote)
         } else {
           SettingsRow(
-            label: "Cette machine n'a plus publié",
-            detail: "Aucun agent n'y a parlé récemment : choisis un autre hôte.",
+            label: String(localized: "Cette machine n'a plus publié"),
+            detail: String(localized: "Aucun agent n'y a parlé récemment : choisis un autre hôte."),
             systemImage: "questionmark.circle"
           )
         }
@@ -386,28 +391,28 @@ struct SettingsAgentsPane: View {
   private var footnoteAjout: String {
     switch hoteChoisi {
     case .ceMac:
-      "Un clic, et l’agent est prêt. Il répond tant que Correspondance est ouverte sur ce Mac."
+      String(localized: "Un clic, et l’agent est prêt. Il répond tant que Correspondance est ouverte sur ce Mac.")
     case .connu:
-      "La commande contient un mot de passe. Colle-la dans un terminal sur cette machine, "
-        + "jamais dans une conversation. Elle expire au bout de dix minutes."
+      String(localized: "La commande contient un mot de passe. Colle-la dans un terminal sur cette machine, ")
+        + String(localized: "jamais dans une conversation. Elle expire au bout de dix minutes.")
     case .autre:
-      "Sur une machine qui reste allumée, l’agent répond même quand ce Mac est fermé. "
-        + "La commande installe l’agent. Le moteur, lui, se connecte là-bas."
+      String(localized: "Sur une machine qui reste allumée, l’agent répond même quand ce Mac est fermé. ")
+        + String(localized: "La commande installe l’agent. Le moteur, lui, se connecte là-bas.")
     }
   }
 
   private var detailHote: String {
     switch hoteChoisi {
     case .ceMac:
-      return "Les moteurs installés sur ce Mac."
+      return String(localized: "Les moteurs installés sur ce Mac.")
     case .connu(let nom):
       if let hote = hotesConnus.first(where: { $0.nom == nom }), let status = hote.console.status {
         let age = status.publishedAt.formatted(.relative(presentation: .named).locale(Locale(identifier: "fr_FR")))
-        return "D'après \(hote.console.agent), vu \(age)."
+        return String(localized: "D'après \(hote.console.agent), vu \(age).")
       }
-      return "On ne sait plus rien de cette machine."
+      return String(localized: "On ne sait plus rien de cette machine.")
     case .autre:
-      return "Un petit serveur, un Raspberry Pi, n’importe quelle machine avec un terminal qui atteint le Relais."
+      return String(localized: "Un petit serveur, un Raspberry Pi, n’importe quelle machine avec un terminal qui atteint le Relais.")
     }
   }
 
@@ -485,15 +490,15 @@ struct SettingsAgentsPane: View {
     var texte = trouve.state.labelFR
     if let path = trouve.path { texte += " · \(path)" }
     if case .nonConnecte(let geste) = trouve.state {
-      texte += "\nInstallé mais pas connecté : \(geste)"
+      texte += "\n" + String(localized: "Installé mais pas connecté : \(geste)")
     } else if !trouve.state.estPret {
       texte += "\n\(trouve.entry.indiceInstallation)"
     }
     if trouve.state.estPret, nomDejaPris(trouve) {
-      texte += "\nCe nom est déjà pris."
+      texte += "\n" + String(localized: "Ce nom est déjà pris.")
     }
     if !peutProvisionner, trouve.state.estPret {
-      texte += "\nSeul l’administrateur du Relais peut créer un agent."
+      texte += "\n" + String(localized: "Seul l’administrateur du Relais peut créer un agent.")
     }
     return texte
   }
@@ -512,8 +517,8 @@ struct SettingsAgentsPane: View {
     SettingsRow(
       label: Self.nomEtAdresse(hote.nom, hote.adresse),
       detail: hote.adresse == nil
-        ? "Adresse inconnue. L’agent date d’une ancienne version, réinstalle-le."
-        : "Où coller la commande.",
+        ? String(localized: "Adresse inconnue. L’agent date d’une ancienne version, réinstalle-le.")
+        : String(localized: "Où coller la commande."),
       systemImage: "server.rack"
     ) {
       if enCours == "rescan:\(hote.console.agent)" {
@@ -554,10 +559,11 @@ struct SettingsAgentsPane: View {
     }
 
     ForEach(hote.aConnecter, id: \.self) { moteur in
-      let geste = EngineLogin.gesture(for: moteur) ?? "connecte-le dans un terminal là-bas."
+      let geste = EngineLogin.gesture(for: moteur)
+        ?? String(localized: "connecte-le dans un terminal là-bas.")
       SettingsRow(
         label: EngineCatalog.entries.first { $0.id == moteur || $0.acpCommand == moteur }?.labelFR ?? moteur,
-        detail: "installé là-bas, mais pas connecté : \(geste)",
+        detail: String(localized: "installé là-bas, mais pas connecté : \(geste)"),
         systemImage: "person.crop.circle.badge.exclamationmark"
       ) {
         Button("Copier") { copier(geste) }
@@ -566,10 +572,10 @@ struct SettingsAgentsPane: View {
 
     if hote.disponibles.isEmpty, hote.aConnecter.isEmpty {
       SettingsRow(
-        label: "Rien à ajouter",
+        label: String(localized: "Rien à ajouter"),
         detail: hote.prets.isEmpty
-          ? "Aucun moteur prêt sur cette machine. Installe-en un, connecte-le, puis « Rescanner »."
-          : "Chaque moteur prêt là-bas porte déjà un agent.",
+          ? String(localized: "Aucun moteur prêt sur cette machine. Installe-en un, connecte-le, puis « Rescanner ».")
+          : String(localized: "Chaque moteur prêt là-bas porte déjà un agent."),
         systemImage: "checkmark.circle"
       )
     }
@@ -580,8 +586,8 @@ struct SettingsAgentsPane: View {
   @ViewBuilder
   private var lignesAutreMachine: some View {
     SettingsRow(
-      label: "Moteur",
-      detail: "Le moteur que l’agent utilisera. Il doit être installé et connecté sur cette machine.",
+      label: String(localized: "Moteur"),
+      detail: String(localized: "Le moteur que l’agent utilisera. Il doit être installé et connecté sur cette machine."),
       systemImage: "engine.combustion"
     ) {
       Picker("", selection: $moteurAutre) {
@@ -592,8 +598,8 @@ struct SettingsAgentsPane: View {
     }
 
     SettingsRow(
-      label: "Nom",
-      detail: "Pour l’appeler dans une conversation : « @\(nomAutreEffectif) ».",
+      label: String(localized: "Nom"),
+      detail: String(localized: "Pour l’appeler dans une conversation : « @\(nomAutreEffectif) »."),
       systemImage: "at"
     ) {
       TextField("nom", text: $nomAutre, prompt: Text(nomLibre(base: entreeAutre?.nomAgentPropose ?? moteurAutre)))
@@ -602,7 +608,7 @@ struct SettingsAgentsPane: View {
     }
 
     SettingsRow(
-      label: "La commande",
+      label: String(localized: "La commande"),
       detail: commandeDetail(cle: "autre"),
       systemImage: "terminal"
     ) {
@@ -640,13 +646,15 @@ struct SettingsAgentsPane: View {
   private func commandeDetail(cle: String) -> String {
     guard let commande = commandes[cle] else {
       return peutProvisionner
-        ? "une commande à coller sur l’autre machine"
-        : "seul l’administrateur du Relais peut créer un agent"
+        ? String(localized: "une commande à coller sur l’autre machine")
+        : String(localized: "seul l’administrateur du Relais peut créer un agent")
     }
-    guard commande.expire > Date() else { return "la commande a expiré, prépare-en une autre" }
+    guard commande.expire > Date() else {
+      return String(localized: "la commande a expiré, prépare-en une autre")
+    }
     let heure = commande.expire.formatted(date: .omitted, time: .shortened)
-    return "commande prête. Colle-la dans un terminal sur l’autre machine. "
-      + "Elle contient un mot de passe et expire à \(heure)"
+    return String(localized: "commande prête. Colle-la dans un terminal sur l’autre machine. ")
+      + String(localized: "Elle contient un mot de passe et expire à \(heure)")
   }
 
   /// Un nom qui n'est pris par aucune console. Deux agents du même nom, ce
@@ -683,7 +691,7 @@ struct SettingsAgentsPane: View {
     defer { enCours = nil }
     erreur = nil
     guard await store.requestAgentRescan(console) else {
-      erreur = "La demande n’est pas partie. Réessaie."
+      erreur = String(localized: "La demande n’est pas partie. Réessaie.")
       return
     }
     try? await Task.sleep(for: .seconds(4))
@@ -704,7 +712,7 @@ struct SettingsAgentsPane: View {
     let nom = (nomsProposes[trouve.entry.id] ?? trouve.entry.nomAgentPropose)
       .trimmingCharacters(in: .whitespaces)
     guard !nom.isEmpty else {
-      erreur = "Donne un nom à l’agent."
+      erreur = String(localized: "Donne un nom à l’agent.")
       return
     }
     enCours = trouve.entry.id
@@ -756,7 +764,7 @@ struct SettingsAgentsPane: View {
     guard var config = console.config else { return }
     mutation(&config)
     if await !store.writeAgentConsoleConfig(config, in: console.roomID) {
-      erreur = "Le réglage n’est pas parti. Réessaie."
+      erreur = String(localized: "Le réglage n’est pas parti. Réessaie.")
     }
     await recharger()
   }

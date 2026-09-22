@@ -150,7 +150,7 @@ struct SearchSheet: View {
       conversations, query: trimmed, index: store.searchIndex(query: trimmed)
     )
       .sorted { $0.lastMessageAt > $1.lastMessageAt }
-    return list(empty: "Rien de ce nom-là") {
+    return list(empty: String(localized: "Rien de ce nom-là")) {
       ForEach(hits) { conversation in
         row(conversation, subtitle: nil)
       }
@@ -161,7 +161,8 @@ struct SearchSheet: View {
   /// ancien. Sans mot, rien — la liste entière est déjà derrière la feuille.
   private var threadMessageResults: some View {
     let hits = threadHits
-    return list(empty: trimmed.isEmpty ? "Un mot, et le fil se cherche" : "Rien dans ce fil") {
+    return list(empty: trimmed.isEmpty ? String(localized: "Un mot, et le fil se cherche")
+                                      : String(localized: "Rien dans ce fil")) {
       ForEach(hits) { message in
         messageRow(message, in: conversations.first)
       }
@@ -181,7 +182,7 @@ struct SearchSheet: View {
       drafts: store.viewState.drafts,
       query: trimmed
     )
-    return list(empty: "Aucun brouillon en cours") {
+    return list(empty: String(localized: "Aucun brouillon en cours")) {
       ForEach(hits) { conversation in
         row(conversation, subtitle: store.viewState.drafts[conversation.id])
       }
@@ -193,7 +194,7 @@ struct SearchSheet: View {
   private func messageResults(_ facet: MessageFacet) -> some View {
     let hits = facetHits(facet)
 
-    return list(empty: "Rien en « \(facet.labelFR) »") {
+    return list(empty: String(localized: "Rien en « \(facet.labelFR) »")) {
       ForEach(hits) { hit in
         messageRow(hit.message, in: hit.conversation)
       }

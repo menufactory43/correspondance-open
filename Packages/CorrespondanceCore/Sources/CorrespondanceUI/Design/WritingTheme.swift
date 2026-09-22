@@ -14,23 +14,23 @@ public enum WritingThemeID: String, CaseIterable, Identifiable, Codable, Sendabl
 
   public var labelFR: String {
     switch self {
-    case .papier: "Papier"
-    case .dune: "Dune"
-    case .clairDeLune: "Clair de lune"
-    case .encreDeNuit: "Encre de nuit"
-    case .vieuxBureau: "Vieux bureau"
-    case .cireEtChene: "Cire et chêne"
+    case .papier: String(localized: "Papier")
+    case .dune: String(localized: "Dune")
+    case .clairDeLune: String(localized: "Clair de lune")
+    case .encreDeNuit: String(localized: "Encre de nuit")
+    case .vieuxBureau: String(localized: "Vieux bureau")
+    case .cireEtChene: String(localized: "Cire et chêne")
     }
   }
 
   public var subtitleFR: String {
     switch self {
-    case .papier: "Parchemin tiède, rose fané"
-    case .dune: "Sable et sépia, encre brûlée"
-    case .clairDeLune: "Brume claire, bleu franc"
-    case .encreDeNuit: "Nuit indigo, bleu de lune"
-    case .vieuxBureau: "Lampe verte, forêt sombre"
-    case .cireEtChene: "Bois brûlé, cire orangée"
+    case .papier: String(localized: "Parchemin tiède, rose fané")
+    case .dune: String(localized: "Sable et sépia, encre brûlée")
+    case .clairDeLune: String(localized: "Brume claire, bleu franc")
+    case .encreDeNuit: String(localized: "Nuit indigo, bleu de lune")
+    case .vieuxBureau: String(localized: "Lampe verte, forêt sombre")
+    case .cireEtChene: String(localized: "Bois brûlé, cire orangée")
     }
   }
 

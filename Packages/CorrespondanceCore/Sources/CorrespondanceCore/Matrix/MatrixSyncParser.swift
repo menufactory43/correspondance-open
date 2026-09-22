@@ -391,7 +391,7 @@ public struct MatrixSyncParser: Sendable {
     let name = content.string(at: "displayname").map(MatrixIdentity.stripBridgeSuffix)
       ?? model.members[userID]?.displayName
       ?? MatrixIdentity.localpart(of: userID)
-    let place = isGroup ? "le groupe" : "la conversation"
+    let place = isGroup ? String(localized: "le groupe") : String(localized: "la conversation")
     // L'auteur du geste : le pont signe l'événement du fantôme de celui qui a
     // ajouté ou retiré. Quand c'est la personne elle-même, elle « rejoint »
     // ou « quitte » ; quand c'est un autre, il « ajoute » ou « retire ».
@@ -403,11 +403,19 @@ public struct MatrixSyncParser: Sendable {
     let text: String
     switch (wasJoined, membership) {
     case (false, "join"):
-      text = actor.map { $0 == "Vous" ? "Vous avez ajouté \(name)" : "\($0) a ajouté \(name)" }
-        ?? "\(name) a rejoint \(place)"
+      text =
+        actor.map {
+          $0 == "Vous"
+            ? String(localized: "Vous avez ajouté \(name)")
+            : String(localized: "\($0) a ajouté \(name)")
+        } ?? String(localized: "\(name) a rejoint \(place)")
     case (true, "leave"), (true, "ban"):
-      text = actor.map { $0 == "Vous" ? "Vous avez retiré \(name)" : "\($0) a retiré \(name)" }
-        ?? "\(name) a quitté \(place)"
+      text =
+        actor.map {
+          $0 == "Vous"
+            ? String(localized: "Vous avez retiré \(name)")
+            : String(localized: "\($0) a retiré \(name)")
+        } ?? String(localized: "\(name) a quitté \(place)")
     default:
       return
     }
@@ -443,8 +451,12 @@ public struct MatrixSyncParser: Sendable {
       let name = MatrixIdentity.stripBridgeSuffix(raw)
       guard name != previous, !name.isEmpty else { return }
       let actor = Self.actorName(of: event, in: model, selfUserID: selfUserID)
-      text = actor.map { $0 == "Vous" ? "Vous avez renommé le groupe « \(name) »" : "\($0) a renommé le groupe « \(name) »" }
-        ?? "Le groupe s'appelle désormais « \(name) »"
+      text =
+        actor.map {
+          $0 == "Vous"
+            ? String(localized: "Vous avez renommé le groupe « \(name) »")
+            : String(localized: "\($0) a renommé le groupe « \(name) »")
+        } ?? String(localized: "Le groupe s'appelle désormais « \(name) »")
     case "m.room.avatar":
       guard model.isGroup(selfUserID: selfUserID),
             model.messagesByID.values.contains(where: { !$0.isSystemEvent }),
@@ -454,11 +466,19 @@ public struct MatrixSyncParser: Sendable {
       guard url != previous else { return }
       let actor = Self.actorName(of: event, in: model, selfUserID: selfUserID)
       if url.isEmpty {
-        text = actor.map { $0 == "Vous" ? "Vous avez retiré la photo du groupe" : "\($0) a retiré la photo du groupe" }
-          ?? "La photo du groupe a été retirée"
+        text =
+          actor.map {
+            $0 == "Vous"
+              ? String(localized: "Vous avez retiré la photo du groupe")
+              : String(localized: "\($0) a retiré la photo du groupe")
+          } ?? String(localized: "La photo du groupe a été retirée")
       } else {
-        text = actor.map { $0 == "Vous" ? "Vous avez changé la photo du groupe" : "\($0) a changé la photo du groupe" }
-          ?? "La photo du groupe a changé"
+        text =
+          actor.map {
+            $0 == "Vous"
+              ? String(localized: "Vous avez changé la photo du groupe")
+              : String(localized: "\($0) a changé la photo du groupe")
+          } ?? String(localized: "La photo du groupe a changé")
       }
     default:
       return

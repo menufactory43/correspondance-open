@@ -24,17 +24,17 @@ public struct AgentSettings: Hashable, Codable, Sendable {
 
     public var labelFR: String {
       switch self {
-      case .direct: "À voix haute"
-      case .draft: "Brouillon à valider"
-      case .pilot: "Répond seul"
+      case .direct: String(localized: "À voix haute")
+      case .draft: String(localized: "Brouillon à valider")
+      case .pilot: String(localized: "Répond seul")
       }
     }
 
     public var subtitleFR: String {
       switch self {
-      case .direct: "cc répond dans la conversation, et le correspondant le lit."
-      case .draft: "cc propose ; rien ne part avant que tu l'aies envoyé."
-      case .pilot: "cc envoie lui-même, dans le cadre ci-dessous. Chaque réponse est marquée. Hors cadre, il te passe la main."
+      case .direct: String(localized: "cc répond dans la conversation, et le correspondant le lit.")
+      case .draft: String(localized: "cc propose ; rien ne part avant que tu l'aies envoyé.")
+      case .pilot: String(localized: "cc envoie lui-même, dans le cadre ci-dessous. Chaque réponse est marquée. Hors cadre, il te passe la main.")
       }
     }
 

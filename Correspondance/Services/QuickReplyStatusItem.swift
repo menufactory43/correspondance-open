@@ -68,12 +68,12 @@ final class QuickReplyStatusItem {
   private func install() {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     let menu = NSMenu()
-    menu.addItem(withTitle: "Réponse rapide", action: #selector(toggleQuickReply), keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "Réponse rapide"), action: #selector(toggleQuickReply), keyEquivalent: "")
       .target = self
-    menu.addItem(withTitle: "Ouvrir l’inbox", action: #selector(openInbox), keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "Ouvrir l’inbox"), action: #selector(openInbox), keyEquivalent: "")
       .target = self
     menu.addItem(.separator())
-    menu.addItem(withTitle: "Quitter Correspondance", action: #selector(quit), keyEquivalent: "")
+    menu.addItem(withTitle: String(localized: "Quitter Correspondance"), action: #selector(quit), keyEquivalent: "")
       .target = self
     item.menu = menu
     self.item = item

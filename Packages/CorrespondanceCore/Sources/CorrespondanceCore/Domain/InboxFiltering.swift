@@ -19,10 +19,10 @@ public enum InboxScope: String, CaseIterable, Identifiable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .inbox: "Inbox"
-    case .archive: "Archive"
-    case .reminders: "Rappels"
-    case .requests: "Demandes"
+    case .inbox: String(localized: "Inbox")
+    case .archive: String(localized: "Archive")
+    case .reminders: String(localized: "Rappels")
+    case .requests: String(localized: "Demandes")
     }
   }
 
@@ -55,12 +55,12 @@ public enum ConversationFilter: String, CaseIterable, Identifiable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .all: "Tous"
-    case .unread: "Non lus"
-    case .unanswered: "Sans réponse"
-    case .drafts: "Brouillons"
-    case .scheduled: "Programmés"
-    case .groups: "Groupes"
+    case .all: String(localized: "Tous")
+    case .unread: String(localized: "Non lus")
+    case .unanswered: String(localized: "Sans réponse")
+    case .drafts: String(localized: "Brouillons")
+    case .scheduled: String(localized: "Programmés")
+    case .groups: String(localized: "Groupes")
     }
   }
 

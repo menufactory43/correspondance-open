@@ -49,7 +49,7 @@ struct InboxListView: View {
               Section {
                 pinnedRows(sections.pinned)
               } header: {
-                sectionHeader("Épinglées")
+                sectionHeader(String(localized: "Épinglées"))
               }
             }
             Section {
@@ -190,7 +190,7 @@ struct InboxListView: View {
         store.toggleArchived(conversation.id)
       } label: {
         Label(
-          store.isArchived(conversation.id) ? "Désarchiver" : "Archiver",
+          store.isArchived(conversation.id) ? String(localized: "Désarchiver") : String(localized: "Archiver"),
           systemImage: store.isArchived(conversation.id) ? "tray.and.arrow.up" : "archivebox"
         )
       }
@@ -202,7 +202,7 @@ struct InboxListView: View {
         store.togglePinned(conversation.id)
       } label: {
         Label(
-          store.isPinned(conversation.id) ? "Désépingler" : "Épingler",
+          store.isPinned(conversation.id) ? String(localized: "Désépingler") : String(localized: "Épingler"),
           systemImage: store.isPinned(conversation.id) ? "pin.slash" : "pin"
         )
       }
@@ -212,7 +212,7 @@ struct InboxListView: View {
         store.toggleMuted(conversation.id)
       } label: {
         Label(
-          store.isMuted(conversation.id) ? "Réactiver" : "Muet",
+          store.isMuted(conversation.id) ? String(localized: "Réactiver") : String(localized: "Muet"),
           systemImage: store.isMuted(conversation.id) ? "bell" : "bell.slash"
         )
       }
@@ -387,7 +387,8 @@ struct InboxListView: View {
         isShowingScheduled = true
       } label: {
         Label(
-          store.scheduled.isEmpty ? "Programmés" : "Programmés (\(store.scheduled.count))",
+          store.scheduled.isEmpty ? String(localized: "Programmés")
+            : String(localized: "Programmés (\(store.scheduled.count))"),
           systemImage: "clock"
         )
       }
@@ -429,7 +430,7 @@ struct InboxListView: View {
       checklist = scope
     } label: {
       Label(
-        count == 0 ? scope.labelFR : "\(scope.labelFR) (\(count))",
+        count == 0 ? scope.labelFR : String(localized: "\(scope.labelFR) (\(count))"),
         systemImage: scope.systemImage
       )
     }
@@ -490,13 +491,13 @@ struct InboxListView: View {
   }
 
   private var emptyTitle: String {
-    if store.filter != .all { return "Rien en « \(store.filter.labelFR) »" }
-    if let network = store.networkFilter { return "Aucune conversation \(network.labelFR)" }
+    if store.filter != .all { return String(localized: "Rien en « \(store.filter.labelFR) »") }
+    if let network = store.networkFilter { return String(localized: "Aucune conversation \(network.labelFR)") }
     switch scope {
-    case .inbox: return "Vous êtes à jour"
-    case .archive: return "L'archive est vide"
-    case .reminders: return "Rien de mis de côté"
-    case .requests: return "Aucune demande"
+    case .inbox: return String(localized: "Vous êtes à jour")
+    case .archive: return String(localized: "L'archive est vide")
+    case .reminders: return String(localized: "Rien de mis de côté")
+    case .requests: return String(localized: "Aucune demande")
     }
   }
 }

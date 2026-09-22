@@ -13,8 +13,8 @@ struct SettingsAccountsPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
-        title: "Sur ce Mac",
-        footnote: "iMessage marche tout seul : Correspondance lit Messages et envoie par lui. Rien à connecter."
+        title: String(localized: "Sur ce Mac"),
+        footnote: String(localized: "iMessage marche tout seul : Correspondance lit Messages et envoie par lui. Rien à connecter.")
       ) {
         SettingsRow(
           label: MessageNetwork.iMessage.labelFR,
@@ -24,12 +24,12 @@ struct SettingsAccountsPane: View {
       }
 
       SettingsCard(
-        title: "Par le Relais",
-        footnote: "Chaque réseau se connecte comme sur un nouveau téléphone : un QR code pour WhatsApp "
-          + "et Signal, tes identifiants pour Instagram, Messenger, X et Slack, ton numéro et le code "
-          + "reçu dans l'app pour Telegram. "
-          + "Signal ne montre que les messages reçus après la liaison. "
-          + "Déconnecter un compte ferme sa session côté réseau ; ses conversations restent ici, en historique."
+        title: String(localized: "Par le Relais"),
+        footnote: String(localized: "Chaque réseau se connecte comme sur un nouveau téléphone : un QR code pour WhatsApp ")
+          + String(localized: "et Signal, tes identifiants pour Instagram, Messenger, X et Slack, ton numéro et le code ")
+          + String(localized: "reçu dans l'app pour Telegram. ")
+          + String(localized: "Signal ne montre que les messages reçus après la liaison. ")
+          + String(localized: "Déconnecter un compte ferme sa session côté réseau ; ses conversations restent ici, en historique.")
       ) {
         ForEach(Array(MessageNetwork.matrixBridged.enumerated()), id: \.element.id) { index, network in
           if index > 0 { SettingsDivider() }
@@ -40,7 +40,9 @@ struct SettingsAccountsPane: View {
           ) {
             HStack(spacing: Spacing.xs) {
               disconnectControl(for: network)
-              Button((store.bridgeAccounts[network]?.isEmpty ?? true) ? "Connecter…" : "Ajouter un compte…") {
+              Button((store.bridgeAccounts[network]?.isEmpty ?? true)
+                ? String(localized: "Connecter…")
+                : String(localized: "Ajouter un compte…")) {
                 store.presentBridgeLogin(network: network)
               }
               .disabled(!store.isMatrixConnected)
@@ -69,13 +71,15 @@ struct SettingsAccountsPane: View {
   /// La ligne d'état d'un réseau : ses comptes et leur état, ou pourquoi on ne
   /// les connaît pas — et, toujours, ce qu'est un compte sur ce réseau.
   private func accountsDetail(for network: MessageNetwork) -> String {
-    guard store.isMatrixConnected else { return "Connecte d’abord le Relais." }
+    guard store.isMatrixConnected else { return String(localized: "Connecte d’abord le Relais.") }
     if let error = store.bridgeAccountsErrors[network] {
-      return "Comptes inconnus : \(error)"
+      return String(localized: "Comptes inconnus : \(error)")
     }
-    guard let accounts = store.bridgeAccounts[network] else { return "Lecture des comptes…" }
+    guard let accounts = store.bridgeAccounts[network] else {
+      return String(localized: "Lecture des comptes…")
+    }
     let hint = network.bridge?.accountsHintFR ?? ""
-    if accounts.isEmpty { return "Aucun compte connecté. " + hint }
+    if accounts.isEmpty { return String(localized: "Aucun compte connecté. ") + hint }
     let lines = accounts.map { "\($0.labelFR) — \($0.stateFR)" }
     return lines.joined(separator: "\n") + "\n" + hint
   }

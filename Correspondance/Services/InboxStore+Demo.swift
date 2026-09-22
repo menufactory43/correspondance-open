@@ -14,11 +14,11 @@ extension InboxStore {
     let local = DemoMode.iMessageConversations()
     demoMessagesByID = DemoMode.iMessageMessages()
 
-    iMessageStatusFR = "Démonstration : \(local.count) conversations inventées."
-    matrixStatusFR = "Démonstration : \(MatrixBridgeService.bridgedCountFR(bridged))."
-    contactsStatusFR = "Démonstration."
-    notificationStatusFR = "Démonstration."
-    chiffrementFR = "Démonstration."
+    iMessageStatusFR = String(localized: "Démonstration : \(local.count) conversations inventées.")
+    matrixStatusFR = String(localized: "Démonstration : \(MatrixBridgeService.bridgedCountFR(bridged)).")
+    contactsStatusFR = String(localized: "Démonstration.")
+    notificationStatusFR = String(localized: "Démonstration.")
+    chiffrementFR = String(localized: "Démonstration.")
     isMatrixConnected = true
     didSettleInitialMatrixSync = true
     isInitialSync = false

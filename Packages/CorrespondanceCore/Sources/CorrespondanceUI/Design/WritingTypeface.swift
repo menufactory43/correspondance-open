@@ -26,12 +26,12 @@ public enum WritingTypeface: String, CaseIterable, Identifiable, Codable, Sendab
 
   public var subtitleFR: String {
     switch self {
-    case .quattro: "Pour lire longtemps"
-    case .duo: "Un air de machine à écrire"
-    case .mono: "Chaque lettre a la même largeur"
-    case .plexSerif: "À empattements, moderne"
-    case .plexSans: "Sans empattements, nette"
-    case .systemSerif: "Celle d’Apple, à empattements"
+    case .quattro: String(localized: "Pour lire longtemps")
+    case .duo: String(localized: "Un air de machine à écrire")
+    case .mono: String(localized: "Chaque lettre a la même largeur")
+    case .plexSerif: String(localized: "À empattements, moderne")
+    case .plexSans: String(localized: "Sans empattements, nette")
+    case .systemSerif: String(localized: "Celle d’Apple, à empattements")
     }
   }
 
@@ -92,8 +92,8 @@ public enum FocusScope: String, CaseIterable, Identifiable, Codable, Sendable {
 
   public var labelFR: String {
     switch self {
-    case .sentence: "Phrase"
-    case .paragraph: "Paragraphe"
+    case .sentence: String(localized: "Phrase")
+    case .paragraph: String(localized: "Paragraphe")
     }
   }
 }
@@ -127,5 +127,5 @@ public enum LineLengthPreset: Int, CaseIterable, Identifiable, Codable, Sendable
 
   public var id: Int { rawValue }
 
-  public var labelFR: String { "\(rawValue) car." }
+  public var labelFR: String { String(localized: "\(rawValue) car.") }
 }

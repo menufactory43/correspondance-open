@@ -149,7 +149,8 @@ struct MediaTray: View {
       .contentShape(shape)
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(asset.mediaType == .video ? "Vidéo" : "Photo")
+    .accessibilityLabel(
+      asset.mediaType == .video ? String(localized: "Vidéo") : String(localized: "Photo"))
     .accessibilityAddTraits(isChosen ? [.isSelected] : [])
   }
 
@@ -204,10 +205,18 @@ struct MediaTray: View {
           }
           .accessibilityLabel("Chat actif : \(active.network.labelFR). Changer de réseau d'envoi.")
         }
-        Button(action: onPhotos) { Door(title: "Photos", systemImage: "photo.on.rectangle", theme: theme) }
-        Button(action: onCamera) { Door(title: "Caméra", systemImage: "camera", theme: theme) }
-        Button(action: onFile) { Door(title: "Fichier", systemImage: "doc", theme: theme) }
-        Button(action: onSendLater) { Door(title: "Plus tard", systemImage: "clock", theme: theme) }
+        Button(action: onPhotos) {
+          Door(title: String(localized: "Photos"), systemImage: "photo.on.rectangle", theme: theme)
+        }
+        Button(action: onCamera) {
+          Door(title: String(localized: "Caméra"), systemImage: "camera", theme: theme)
+        }
+        Button(action: onFile) {
+          Door(title: String(localized: "Fichier"), systemImage: "doc", theme: theme)
+        }
+        Button(action: onSendLater) {
+          Door(title: String(localized: "Plus tard"), systemImage: "clock", theme: theme)
+        }
       }
       .padding(.horizontal, Spacing.md)
     }

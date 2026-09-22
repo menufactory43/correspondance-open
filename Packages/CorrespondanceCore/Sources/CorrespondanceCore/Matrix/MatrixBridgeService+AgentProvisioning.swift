@@ -49,16 +49,21 @@ extension MatrixBridgeService {
     public var errorDescription: String? {
       switch self {
       case .notServerAdmin:
-        "ce compte n'est pas administrateur du Relais — c'est lui qui crée les comptes des agents"
+        String(
+          localized:
+            "ce compte n'est pas administrateur du Relais — c'est lui qui crée les comptes des agents")
       case .notConnected:
-        "pas encore connecté au Relais"
+        String(localized: "pas encore connecté au Relais")
       case .agentDejaVivant(let hote):
-        "cc tourne déjà sur \(hote). Deux agents sur le même compte répondraient deux fois — "
-          + "arrête celui-là d'abord. Si c'est déjà fait, le Relais met jusqu'à un quart d'heure "
-          + "à le voir disparaître."
+        String(
+          localized:
+            "cc tourne déjà sur \(hote). Deux agents sur le même compte répondraient deux fois — arrête celui-là d'abord. Si c'est déjà fait, le Relais met jusqu'à un quart d'heure à le voir disparaître."
+        )
       case .identifiantsRefuses(let detail):
-        "le Relais refuse les identifiants de cc (\(detail)). Rien n'a été installé — "
-          + "le compte existe peut-être avec un autre mot de passe."
+        String(
+          localized:
+            "le Relais refuse les identifiants de cc (\(detail)). Rien n'a été installé — le compte existe peut-être avec un autre mot de passe."
+        )
       }
     }
   }
@@ -255,12 +260,14 @@ public enum AgentSessions {
       let age = now.timeIntervalSince(seen)
       guard age >= 0, age < silenceMax else { continue }
       if device.displayName == mine { continue }
-      let depuis = age < 90 ? "il y a \(Int(age)) s" : "il y a \(Int(age / 60)) min"
+      let depuis =
+        age < 90
+        ? String(localized: "il y a \(Int(age)) s") : String(localized: "il y a \(Int(age / 60)) min")
       if let nom = device.displayName, nom.hasPrefix(prefixe) {
-        return "\(nom.dropFirst(prefixe.count)) (vu \(depuis))"
+        return String(localized: "\(String(nom.dropFirst(prefixe.count))) (vu \(depuis))")
       }
-      let nom = device.displayName ?? "sans nom, \(device.deviceID)"
-      return "une autre machine (session « \(nom) », vue \(depuis))"
+      let nom = device.displayName ?? String(localized: "sans nom, \(device.deviceID)")
+      return String(localized: "une autre machine (session « \(nom) », vue \(depuis))")
     }
     return nil
   }
@@ -282,14 +289,17 @@ public enum AgentAttestation: Sendable, Equatable {
 
   public var phraseFR: String {
     switch self {
-    case .faite: "Agent attesté : sa clé porte ta signature."
-    case .dejaFaite: "Agent déjà attesté."
+    case .faite: String(localized: "Agent attesté : sa clé porte ta signature.")
+    case .dejaFaite: String(localized: "Agent déjà attesté.")
     case .pasEncore(let raison):
-      "Agent pas encore attestable — il pose ses clés à son premier démarrage. (\(raison))"
+      String(
+        localized: "Agent pas encore attestable — il pose ses clés à son premier démarrage. (\(raison))")
     case .sansClesDeSignature:
-      "Cet appareil n'a pas encore de clés de signature : Réglages › Chiffrement, "
-        + "« poser les signatures ». Sans elles, on ne peut attester personne."
-    case .relaisAbsent: "Relais non connecté."
+      String(
+        localized:
+          "Cet appareil n'a pas encore de clés de signature : Réglages › Chiffrement, « poser les signatures ». Sans elles, on ne peut attester personne."
+      )
+    case .relaisAbsent: String(localized: "Relais non connecté.")
     }
   }
 }

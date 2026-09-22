@@ -52,7 +52,12 @@ public struct AudioMessageView: View {
     }
     .onDisappear(perform: stop)
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("Message \(attachment.isVoiceNote ? "vocal" : "audio"), \(timeLabel)")
+    // Deux phrases entières plutôt qu'un mot interpolé : « Message %@ » aurait
+    // laissé « vocal » et « audio » hors du catalogue, donc en français.
+    .accessibilityLabel(
+      attachment.isVoiceNote
+        ? String(localized: "Message vocal, \(timeLabel)")
+        : String(localized: "Message audio, \(timeLabel)"))
   }
 
   private var speed: PlaybackSpeed { PlaybackSpeed(rawValue: storedRate) ?? .normale }
@@ -69,12 +74,12 @@ public struct AudioMessageView: View {
       }
       .buttonStyle(.plain)
       .disabled(failed)
-      .accessibilityLabel(isPlaying ? "Suspendre le message audio" : "Écouter le message audio")
+      .accessibilityLabel(isPlaying ? String(localized: "Suspendre le message audio") : String(localized: "Écouter le message audio"))
 
       VStack(alignment: .leading, spacing: 3) {
         positionBar
         HStack(spacing: 6) {
-          Text(failed ? "Audio illisible" : timeLabel)
+          Text(failed ? String(localized: "Audio illisible") : timeLabel)
             .font(Typography.meta(typeface))
             .foregroundStyle(isFromMe ? theme.bubbleOutInk.opacity(0.8) : theme.inkSecondary)
             .monospacedDigit()
@@ -176,7 +181,7 @@ public struct AudioMessageView: View {
         .foregroundStyle(isFromMe ? theme.bubbleOutInk : theme.accent)
     }
     .buttonStyle(.plain)
-    .accessibilityLabel("Vitesse d'écoute : \(speed.label). Toucher pour changer.")
+    .accessibilityLabel(String(localized: "Vitesse d'écoute : \(speed.label). Toucher pour changer."))
   }
 
   /// Viser un instant : le curseur suit le doigt sans toucher au lecteur.
@@ -233,7 +238,7 @@ public struct AudioMessageView: View {
     }
     .buttonStyle(.plain)
     .disabled(isTranscribing || attachment.resolvedFileURL == nil)
-    .accessibilityLabel(transcript == nil ? "Transcrire le message vocal" : "Masquer la transcription")
+    .accessibilityLabel(transcript == nil ? String(localized: "Transcrire le message vocal") : String(localized: "Masquer la transcription"))
   }
 
   @ViewBuilder
@@ -251,7 +256,7 @@ public struct AudioMessageView: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           .textSelection(.enabled)
         if text.count > 300 {
-          Button(isTranscriptExpanded ? "Replier" : "Tout lire") {
+          Button(isTranscriptExpanded ? String(localized: "Replier") : String(localized: "Tout lire")) {
             isTranscriptExpanded.toggle()
           }
           .buttonStyle(.plain)

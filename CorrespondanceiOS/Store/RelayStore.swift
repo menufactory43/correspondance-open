@@ -201,11 +201,11 @@ final class RelayStore {
     switch await matrix.checkSession() {
     case .invalid:
       session = .disconnected
-      connectionError = "La session enregistrée n'est plus valable — reconnecte-toi."
+      connectionError = String(localized: "La session enregistrée n'est plus valable — reconnecte-toi.")
       return
     case .unreachable:
       session = .connected
-      noteSyncFailure("Relais injoignable pour l'instant — nouvel essai en cours.")
+      noteSyncFailure(String(localized: "Relais injoignable pour l'instant — nouvel essai en cours."))
     case .valid:
       session = .connected
       conversations = mergedRows(await matrix.conversations())
@@ -242,7 +242,7 @@ final class RelayStore {
     connectionError = nil
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard let url = Self.homeserverURL(from: trimmed) else {
-      connectionError = "Adresse du Relais illisible. Exemple : http://relais.local:8008"
+      connectionError = String(localized: "Adresse du Relais illisible. Exemple : http://relais.local:8008")
       return
     }
     session = .connecting
@@ -304,17 +304,17 @@ final class RelayStore {
     // `MatrixError.transport` recopie le message d'URLSession, qui est en
     // anglais : le seul endroit de la pile où une erreur remonte non traduite.
     if case .transport = error as? MatrixError {
-      return "Le Relais ne répond pas à cette adresse. Vérifie-la, et que Tailscale est connecté."
+      return String(localized: "Le Relais ne répond pas à cette adresse. Vérifie-la, et que Tailscale est connecté.")
     }
     if let matrix = error as? MatrixError { return matrix.errorDescription ?? "\(matrix)" }
     let urlError = error as? URLError
     switch urlError?.code {
     case .some(.cannotFindHost), .some(.cannotConnectToHost):
-      return "Le Relais ne répond pas à cette adresse. Tailscale est-il connecté ?"
+      return String(localized: "Le Relais ne répond pas à cette adresse. Tailscale est-il connecté ?")
     case .some(.notConnectedToInternet):
-      return "Pas de réseau."
+      return String(localized: "Pas de réseau.")
     case .some(.timedOut):
-      return "Le Relais met trop de temps à répondre."
+      return String(localized: "Le Relais met trop de temps à répondre.")
     default:
       return error.localizedDescription
     }
@@ -404,7 +404,7 @@ final class RelayStore {
       await refreshTypingLabels()
     } catch MatrixError.http(let status, let code, _) where status == 401 || code == "M_UNKNOWN_TOKEN" {
       session = .disconnected
-      connectionError = "Session expirée sur le Relais — reconnecte-toi."
+      connectionError = String(localized: "Session expirée sur le Relais — reconnecte-toi.")
       syncTask?.cancel()
       syncTask = nil
     } catch {
@@ -530,7 +530,7 @@ final class RelayStore {
     guard members.count >= 2 else { return }
     let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
     let contact = MergedContact(
-      title: cleanTitle.isEmpty ? (members.first?.title ?? "Contact") : cleanTitle,
+      title: cleanTitle.isEmpty ? (members.first?.title ?? String(localized: "Contact")) : cleanTitle,
       memberIDs: members.map(\.id),
       avatarConversationID: avatarConversationID,
       defaultConversationID: members.contains { $0.id == defaultConversationID }
@@ -1240,8 +1240,9 @@ final class RelayStore {
     // La fenêtre a pu se fermer pendant qu'on écrivait : le pont refuserait en
     // silence, et la correction ne vivrait que sur cet appareil.
     guard message.network.acceptsEdit(sentAt: message.sentAt) else {
-      syncError = "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? "le délai"), "
-        + "\(message.network.labelFR) n’accepte plus de modification."
+      syncError = String(
+        localized: "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? String(localized: "le délai")), \(message.network.labelFR) n’accepte plus de modification."
+      )
       return
     }
     await editMessage(messageID: message.id, newText: corrected, conversationID: conversationID)

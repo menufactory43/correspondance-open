@@ -62,18 +62,18 @@ struct PermissionBanner: View {
 
   private var explanation: String {
     if DiskAccess.isRunFromXcode {
-      return "Lancée depuis Xcode, l’app lit le disque avec les droits d’Xcode : c’est à Xcode qu’il faut « Accès complet au disque », pas à Correspondance."
+      return String(localized: "Lancée depuis Xcode, l’app lit le disque avec les droits d’Xcode : c’est à Xcode qu’il faut « Accès complet au disque », pas à Correspondance.")
     }
-    return "Correspondance lit ~/Library/Messages/chat.db. Sans « Accès complet au disque », l’app affiche des conversations fictives (Marie, Julien…)."
+    return String(localized: "Correspondance lit ~/Library/Messages/chat.db. Sans « Accès complet au disque », l’app affiche des conversations fictives (Marie, Julien…).")
   }
 
   private var steps: String {
     if DiskAccess.isRunFromXcode {
-      return "Coche Xcode dans la liste (ajoute-le avec « + » s’il n’y est pas), puis relance depuis Xcode."
+      return String(localized: "Coche Xcode dans la liste (ajoute-le avec « + » s’il n’y est pas), puis relance depuis Xcode.")
     }
     let place = DiskAccess.isInstalledInApplications
       ? "/Applications/Correspondance.app"
-      : "cette copie-ci (\(DiskAccess.bundleURL.path)) — pas une autre"
-    return "Ajoute \(place) avec « + », coche-la, puis « Quitter et rouvrir » : macOS n’applique la case qu’au prochain lancement."
+      : String(localized: "cette copie-ci (\(DiskAccess.bundleURL.path)) — pas une autre")
+    return String(localized: "Ajoute \(place) avec « + », coche-la, puis « Quitter et rouvrir » : macOS n’applique la case qu’au prochain lancement.")
   }
 }

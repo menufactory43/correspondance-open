@@ -11,12 +11,12 @@ struct SettingsAutomationPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: Spacing.lg) {
       SettingsCard(
-        title: "Messages en arrière-plan",
-        footnote: "Pour les réactions, les réponses citées, modifier ou annuler un envoi sur iMessage. "
-          + "Messages tourne caché, tu ne le verras pas."
+        title: String(localized: "Messages en arrière-plan"),
+        footnote: String(localized: "Pour les réactions, les réponses citées, modifier ou annuler un envoi sur iMessage. ")
+          + String(localized: "Messages tourne caché, tu ne le verras pas.")
       ) {
         SettingsRow(
-          label: "Piloter Messages",
+          label: String(localized: "Piloter Messages"),
           detail: store.messagesAutomationStatusFR,
           systemImage: "message.badge.waveform"
         ) {
@@ -30,7 +30,7 @@ struct SettingsAutomationPane: View {
         SettingsDivider()
 
         SettingsRow(
-          label: "État",
+          label: String(localized: "État"),
           detail: store.messagesAutomationHealthFR,
           systemImage: "stethoscope"
         ) {
@@ -41,12 +41,12 @@ struct SettingsAutomationPane: View {
       }
 
       SettingsCard(
-        title: "Si ça coince",
-        footnote: "Certains gestes ont besoin d’une vraie fenêtre Messages. "
-          + "Elle est alors placée hors de l’écran."
+        title: String(localized: "Si ça coince"),
+        footnote: String(localized: "Certains gestes ont besoin d’une vraie fenêtre Messages. ")
+          + String(localized: "Elle est alors placée hors de l’écran.")
       ) {
         SettingsRow(
-          label: "Fenêtre Messages hors écran",
+          label: String(localized: "Fenêtre Messages hors écran"),
           systemImage: "rectangle.on.rectangle.slash"
         ) {
           Toggle("", isOn: Binding(

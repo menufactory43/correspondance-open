@@ -114,7 +114,8 @@ struct ComposerTrailingControl: View {
     case .send, .schedule:
       ComposerCircleButton(
         systemImage: action == .schedule ? "clock.badge.checkmark" : "arrow.up",
-        helpText: action == .schedule ? "Programmer l’envoi" : "Envoyer",
+        helpText: action == .schedule ? String(localized: "Programmer l’envoi")
+                                      : String(localized: "Envoyer"),
         theme: theme,
         size: ComposerMetrics.innerControl,
         iconSize: 13,
@@ -126,7 +127,9 @@ struct ComposerTrailingControl: View {
     case .dictation:
       ComposerCircleButton(
         systemImage: "mic.fill",
-        helpText: isListening ? "Arrêter la dictée" : (DictusBridge.isActive ? "Dicter (Dictus)" : "Dicter"),
+        helpText: isListening
+          ? String(localized: "Arrêter la dictée")
+          : (DictusBridge.isActive ? String(localized: "Dicter (Dictus)") : String(localized: "Dicter")),
         theme: theme,
         size: ComposerMetrics.innerControl,
         iconSize: 13,
@@ -289,7 +292,7 @@ struct ComposerPlusTray: View {
     HStack(spacing: 4) {
       ComposerCircleButton(
         systemImage: showsScheduling && !isExpanded ? "clock.circle.fill" : "plus.circle",
-        helpText: isExpanded ? "Fermer" : "Options",
+        helpText: isExpanded ? String(localized: "Fermer") : String(localized: "Options"),
         theme: theme,
         iconSize: iconSize,
         isActive: showsScheduling,
@@ -304,7 +307,7 @@ struct ComposerPlusTray: View {
       HStack(spacing: Self.itemSpacing) {
         ComposerCircleButton(
           systemImage: "photo",
-          helpText: "Joindre une image",
+          helpText: String(localized: "Joindre une image"),
           theme: theme,
           iconSize: 15,
           action: { choose(onAttach) }
@@ -312,7 +315,8 @@ struct ComposerPlusTray: View {
         if let onSendLater {
           ComposerCircleButton(
             systemImage: "clock",
-            helpText: showsScheduling ? "Changer l’heure d’envoi (⌘⇧L)" : "Envoyer plus tard (⌘⇧L)",
+            helpText: showsScheduling ? String(localized: "Changer l’heure d’envoi (⌘⇧L)")
+                                      : String(localized: "Envoyer plus tard (⌘⇧L)"),
             theme: theme,
             iconSize: 15,
             isActive: showsScheduling,
@@ -326,7 +330,7 @@ struct ComposerPlusTray: View {
               // « brouillon » une fois l'agent présent, et un même dessin pour
               // deux gestes faisait cliquer « inviter » en croyant régler.
               systemImage: "sparkles",
-              helpText: "Inviter \(seul) dans cette conversation",
+              helpText: String(localized: "Inviter \(seul) dans cette conversation"),
               theme: theme,
               iconSize: 15,
               action: { choose { onInviteAgent(seul) } }
@@ -334,7 +338,7 @@ struct ComposerPlusTray: View {
           } else {
             ComposerCircleMenu(
               systemImage: "sparkles",
-              helpText: "Inviter un agent dans cette conversation",
+              helpText: String(localized: "Inviter un agent dans cette conversation"),
               theme: theme,
               iconSize: 15
             ) {
@@ -361,7 +365,7 @@ struct ComposerPlusTray: View {
         if let onManageGroup {
           ComposerCircleButton(
             systemImage: "person.2.badge.gearshape",
-            helpText: "Gérer le groupe : nom, membres",
+            helpText: String(localized: "Gérer le groupe : nom, membres"),
             theme: theme,
             iconSize: 15,
             action: { choose(onManageGroup) }

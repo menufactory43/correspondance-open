@@ -84,12 +84,12 @@ public actor MatrixBridgeService {
 
   public func statusMessageFR() async -> String {
     guard let creds = await client.currentCredentials else {
-      return "Matrix : non connecté."
+      return String(localized: "Matrix : non connecté.")
     }
     do {
       let userID = try await client.whoami()
       selfUserID = userID
-      return "Matrix connecté (\(userID)) · \(Self.bridgedCountFR(conversations()))."
+      return String(localized: "Matrix connecté (\(userID)) · \(Self.bridgedCountFR(conversations())).")
     } catch {
       return "Matrix (\(creds.homeserver.host ?? "?")) : \(error.localizedDescription)"
     }
@@ -1122,9 +1122,9 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID),
           let message = rooms[roomID]?.messagesByID[messageID]
     else { throw MatrixError.decoding("message introuvable") }
-    guard message.isFromMe else { throw MatrixError.decoding("on ne modifie que ses propres messages") }
+    guard message.isFromMe else { throw MatrixError.decoding(String(localized: "on ne modifie que ses propres messages")) }
     guard message.network.supportsEditing else {
-      throw MatrixError.decoding("\(message.network.labelFR) ne sait pas modifier un message envoyé")
+      throw MatrixError.decoding(String(localized: "\(message.network.labelFR) ne sait pas modifier un message envoyé"))
     }
     // Le pont annonce sa fenêtre (`edit_max_age`) et refuse au-delà, sans rien
     // nous dire : ni notice, ni accusé d'échec. Une correction partie trop tard
@@ -1132,8 +1132,10 @@ public actor MatrixBridgeService {
     // à la réception. On s'arrête avant de créer cet écart.
     guard message.network.acceptsEdit(sentAt: message.sentAt) else {
       throw MatrixError.decoding(
-        "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? "le délai"), "
-          + "\(message.network.labelFR) n’accepte plus de modification"
+        String(
+          localized:
+            "Trop tard pour corriger : passé \(message.network.editWindowLabelFR ?? String(localized: "le délai")), \(message.network.labelFR) n’accepte plus de modification"
+        )
       )
     }
     let trimmed = newText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1488,7 +1490,7 @@ public actor MatrixBridgeService {
   public func submitLoginPasscode(_ raw: String, network: MessageNetwork) async throws {
     let pin = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard pin.count == 4, pin.allSatisfy(\.isNumber) else {
-      throw MatrixError.decoding("le code PIN de X fait quatre chiffres")
+      throw MatrixError.decoding(String(localized: "le code PIN de X fait quatre chiffres"))
     }
     try await submitLoginCookies(pin, network: network)
   }
@@ -1619,7 +1621,11 @@ public actor MatrixBridgeService {
   static func slackInputStep(inBotMessage body: String) -> BridgeLoginStep? {
     let lower = body.lowercased()
     if lower.contains("captcha") {
-      return .failure("Slack demande un captcha, que la fenêtre ne sait pas afficher. Utilise « Coller la session ».")
+      return .failure(
+        String(
+          localized:
+            "Slack demande un captcha, que la fenêtre ne sait pas afficher. Utilise « Coller la session »."
+        ))
     }
     guard let range = body.range(of: "please enter your ", options: [.caseInsensitive]) else { return nil }
     // Le nom du champ, première ligne après « Please enter your ».
@@ -1705,7 +1711,7 @@ public actor MatrixBridgeService {
     case .whatsapp:
       let digits = identifier.filter { $0.isNumber }
       guard digits.count >= 8 else {
-        throw MatrixError.decoding("numéro WhatsApp invalide")
+        throw MatrixError.decoding(String(localized: "numéro WhatsApp invalide"))
       }
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: "+\(digits)"), to: network)
     case .twitter:
@@ -1713,19 +1719,19 @@ public actor MatrixBridgeService {
       // compte dont le `screen_name` est exactement celui-là) : `pm <pseudo>`,
       // sans arobase, et sans passer par `search` — que ce pont n'expose pas.
       let handle = Self.twitterHandle(identifier)
-      guard !handle.isEmpty else { throw MatrixError.decoding("pseudo X vide") }
+      guard !handle.isEmpty else { throw MatrixError.decoding(String(localized: "pseudo X vide")) }
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: handle), to: network)
     case .slack:
       // Slack résout par e-mail (LookupEmail) ou par recherche : `pm <identifiant>`,
       // le connecteur s'en charge.
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Slack vide") }
+      guard !trimmed.isEmpty else { throw MatrixError.decoding(String(localized: "identifiant Slack vide")) }
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: trimmed), to: network)
     default:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
       guard !trimmed.isEmpty else {
-        throw MatrixError.decoding("identifiant \(network.labelFR) vide")
+        throw MatrixError.decoding(String(localized: "identifiant \(network.labelFR) vide"))
       }
       let metaID = trimmed.allSatisfy(\.isNumber)
         ? trimmed
@@ -1750,7 +1756,7 @@ public actor MatrixBridgeService {
     guard let roomID = roomID(forConversation: conversationID),
           let network = rooms[roomID]?.network,
           let bridge = network.bridge
-    else { throw MatrixError.decoding("fil sans pont : impossible d'y ajouter quelqu'un") }
+    else { throw MatrixError.decoding(String(localized: "fil sans pont : impossible d'y ajouter quelqu'un")) }
     let ghost = try await ghostUserID(for: identifier, network: network, bridge: bridge)
     try await withRoomPower(roomID: roomID) {
       try await self.client.invite(roomID: roomID, userID: ghost)
@@ -1773,12 +1779,12 @@ public actor MatrixBridgeService {
     switch network {
     case .whatsapp:
       let digits = identifier.filter { $0.isNumber }
-      guard digits.count >= 8 else { throw MatrixError.decoding("numéro WhatsApp invalide") }
+      guard digits.count >= 8 else { throw MatrixError.decoding(String(localized: "numéro WhatsApp invalide")) }
       localpart = bridge.ghostPrefix + digits
     case .instagram, .messenger:
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
-      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant \(network.labelFR) vide") }
+      guard !trimmed.isEmpty else { throw MatrixError.decoding(String(localized: "identifiant \(network.labelFR) vide")) }
       let metaID = trimmed.allSatisfy(\.isNumber)
         ? trimmed
         : try await resolveRemoteID(username: trimmed, network: network)
@@ -1787,7 +1793,7 @@ public actor MatrixBridgeService {
       // Un ghost X porte l'identifiant numérique du compte ; un pseudo passe par
       // `resolve-identifier`, dont la réponse est formatée comme celle de `search`.
       let handle = Self.twitterHandle(identifier)
-      guard !handle.isEmpty else { throw MatrixError.decoding("pseudo X vide") }
+      guard !handle.isEmpty else { throw MatrixError.decoding(String(localized: "pseudo X vide")) }
       let userID = handle.allSatisfy(\.isNumber)
         ? handle
         : try await resolveRemoteID(username: handle, network: network)
@@ -1796,7 +1802,7 @@ public actor MatrixBridgeService {
       // Un ghost Slack porte l'identifiant du membre ; un e-mail ou un nom passe
       // par `resolve-identifier`, formaté comme `search`.
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty else { throw MatrixError.decoding("identifiant Slack vide") }
+      guard !trimmed.isEmpty else { throw MatrixError.decoding(String(localized: "identifiant Slack vide")) }
       let userID = trimmed.contains("-") && !trimmed.contains("@")
         ? trimmed
         : try await resolveRemoteID(username: trimmed, network: network)
@@ -1805,12 +1811,15 @@ public actor MatrixBridgeService {
       let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
       guard trimmed.contains("-"), trimmed.count >= 32 else {
         throw MatrixError.decoding(
-          "Signal identifie ses correspondants par UUID, pas par numéro : ouvre d'abord un fil avec la personne."
+          String(
+          localized:
+            "Signal identifie ses correspondants par UUID, pas par numéro : ouvre d'abord un fil avec la personne."
+        )
         )
       }
       localpart = bridge.ghostPrefix + trimmed.lowercased()
     default:
-      throw MatrixError.decoding("ajouter quelqu'un n'est pas possible sur \(network.labelFR)")
+      throw MatrixError.decoding(String(localized: "ajouter quelqu'un n'est pas possible sur \(network.labelFR)"))
     }
     return "@\(localpart):\(serverName)"
   }
@@ -1836,16 +1845,16 @@ public actor MatrixBridgeService {
     identifiers: [String]
   ) async throws -> String {
     guard network.capabilities.createsGroup, let bridge = network.bridge else {
-      throw MatrixError.decoding("\(network.labelFR) ne sait pas créer un groupe depuis l'app")
+      throw MatrixError.decoding(String(localized: "\(network.labelFR) ne sait pas créer un groupe depuis l'app"))
     }
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { throw MatrixError.decoding("un groupe a besoin d'un nom") }
+    guard !trimmed.isEmpty else { throw MatrixError.decoding(String(localized: "un groupe a besoin d'un nom")) }
     // Signal borne le nom à 32 signes ; refuser ici évite un aller-retour et un
     // salon à jeter.
     guard network != .signal || trimmed.count <= 32 else {
-      throw MatrixError.decoding("un groupe Signal ne prend pas plus de 32 caractères")
+      throw MatrixError.decoding(String(localized: "un groupe Signal ne prend pas plus de 32 caractères"))
     }
-    guard !identifiers.isEmpty else { throw MatrixError.decoding("un groupe a besoin de quelqu'un") }
+    guard !identifiers.isEmpty else { throw MatrixError.decoding(String(localized: "un groupe a besoin de quelqu'un")) }
 
     var ghosts: [String] = []
     for identifier in identifiers {
@@ -1891,7 +1900,7 @@ public actor MatrixBridgeService {
         throw MatrixError.decoding("\(network.labelFR) : \(body)")
       }
     }
-    throw MatrixError.decoding("\(network.labelFR) n'a pas créé le groupe — le pont est peut-être trop ancien.")
+    throw MatrixError.decoding(String(localized: "\(network.labelFR) n'a pas créé le groupe — le pont est peut-être trop ancien."))
   }
 
   /// Le bot annonce ses refus en clair. On ne cherche pas à tout comprendre :
@@ -1910,7 +1919,7 @@ public actor MatrixBridgeService {
   /// `NetworkCapabilities` qui décide si le geste est seulement proposé.
   public func renameGroup(conversationID: String, name: String) async throws {
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else { throw MatrixError.decoding("un groupe ne se nomme pas avec du blanc") }
+    guard !trimmed.isEmpty else { throw MatrixError.decoding(String(localized: "un groupe ne se nomme pas avec du blanc")) }
     guard let roomID = roomID(forConversation: conversationID) else {
       throw MatrixError.decoding("salon introuvable pour \(conversationID)")
     }
@@ -1918,7 +1927,7 @@ public actor MatrixBridgeService {
     // comme on veut.
     let network = rooms[roomID]?.network ?? .selfNote
     guard network.supportsGroupRename else {
-      throw MatrixError.decoding("\(network.labelFR) ne relaie pas le nom d'un groupe")
+      throw MatrixError.decoding(String(localized: "\(network.labelFR) ne relaie pas le nom d'un groupe"))
     }
     try await withRoomPower(roomID: roomID) {
       try await self.client.setRoomName(roomID: roomID, name: trimmed)
@@ -1932,10 +1941,10 @@ public actor MatrixBridgeService {
           let network = rooms[roomID]?.network
     else { throw MatrixError.decoding("salon introuvable pour \(conversationID)") }
     guard network.supportsMemberRemoval else {
-      throw MatrixError.decoding("\(network.labelFR) ne relaie pas le retrait d'un membre")
+      throw MatrixError.decoding(String(localized: "\(network.labelFR) ne relaie pas le retrait d'un membre"))
     }
     guard userID != selfUserID else {
-      throw MatrixError.decoding("pour sortir soi-même d'un groupe, il faut le quitter")
+      throw MatrixError.decoding(String(localized: "pour sortir soi-même d'un groupe, il faut le quitter"))
     }
     try await withRoomPower(roomID: roomID) {
       try await self.client.kick(roomID: roomID, userID: userID)
@@ -1962,8 +1971,10 @@ public actor MatrixBridgeService {
         // ce qui manque et par où passer — le bot du pont, lui, sait donner un
         // pouvoir dans son propre portail.
         throw MatrixError.administrationIndisponible(
-          "me donner le pouvoir dans ce salon. Le pont y est seul au pouvoir ; "
-            + "demande-le-lui dans son salon de gestion (« set-pl <mon identifiant> 100 »)")
+          String(
+            localized:
+              "me donner le pouvoir dans ce salon. Le pont y est seul au pouvoir ; demande-le-lui dans son salon de gestion (« set-pl <mon identifiant> 100 »)"
+          ))
       }
       try await action()
     }
@@ -1994,7 +2005,7 @@ public actor MatrixBridgeService {
         if let id = Self.firstSearchResultID(in: body) { return id }
       }
     }
-    throw MatrixError.decoding("aucun compte \(network.labelFR) trouvé pour « \(username) »")
+    throw MatrixError.decoding(String(localized: "aucun compte \(network.labelFR) trouvé pour « \(username) »"))
   }
 
   /// Premier identifiant d'une réponse `search` : bridgev2 formate chaque résultat
@@ -2148,7 +2159,7 @@ public actor MatrixBridgeService {
       let count = conversations.filter { $0.network == network }.count
       return count > 0 ? "\(count) \(network.labelFR)" : nil
     }
-    return parts.isEmpty ? "aucune conversation" : parts.joined(separator: " · ")
+    return parts.isEmpty ? String(localized: "aucune conversation") : parts.joined(separator: " · ")
   }
 
   // MARK: - Privé

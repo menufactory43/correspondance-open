@@ -45,8 +45,8 @@ public enum MessageNetwork: String, CaseIterable, Identifiable, Codable, Sendabl
     case .twitter: "X"
     case .slack: "Slack"
     case .telegram: "Telegram"
-    case .selfNote: "Note à soi"
-    case .agent: "Agent"
+    case .selfNote: String(localized: "Note à soi")
+    case .agent: String(localized: "Agent")
     }
   }
 

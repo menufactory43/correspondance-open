@@ -139,7 +139,7 @@ final class PushRegistration {
 
   func didFailToRegister(_ error: Error) {
     isRegistered = false
-    lastError = "APNs n'a pas donné de jeton : \(error.localizedDescription)"
+    lastError = String(localized: "APNs n'a pas donné de jeton : \(error.localizedDescription)")
     Self.log.notice("APNs refuse l'inscription : \(error.localizedDescription, privacy: .public)")
   }
 
@@ -222,12 +222,12 @@ final class PushRegistration {
 
   var authorizationLabelFR: String {
     switch authorization {
-    case .authorized: "Autorisées"
-    case .provisional: "Silencieuses"
-    case .denied: "Refusées"
-    case .ephemeral: "Temporaires"
-    case .notDetermined: "Pas encore demandées"
-    @unknown default: "Inconnues"
+    case .authorized: String(localized: "Autorisées")
+    case .provisional: String(localized: "Silencieuses")
+    case .denied: String(localized: "Refusées")
+    case .ephemeral: String(localized: "Temporaires")
+    case .notDetermined: String(localized: "Pas encore demandées")
+    @unknown default: String(localized: "Inconnues")
     }
   }
 }

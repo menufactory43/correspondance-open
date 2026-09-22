@@ -57,7 +57,7 @@ public struct AnimatedImageView: View {
       }
     }
     .overlay(alignment: .bottomLeading) { badge }
-    .accessibilityLabel("GIF, \(label)")
+    .accessibilityLabel(String(localized: "GIF, \(label)"))
     .onAppear { isAnimating = true }
     .onDisappear { isAnimating = false }
     .task(id: taskKey) { await animate() }

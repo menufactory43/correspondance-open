@@ -190,7 +190,8 @@ struct ThreadView: View {
           store.toggleArchived(conversationID)
         } label: {
           Label(
-            store.isArchived(conversationID) ? "Désarchiver" : "Archiver",
+            store.isArchived(conversationID)
+              ? String(localized: "Désarchiver") : String(localized: "Archiver"),
             systemImage: store.isArchived(conversationID) ? "tray.and.arrow.up" : "archivebox"
           )
         }
@@ -198,7 +199,8 @@ struct ThreadView: View {
           store.togglePinned(conversationID)
         } label: {
           Label(
-            store.isPinned(conversationID) ? "Désépingler" : "Épingler",
+            store.isPinned(conversationID)
+              ? String(localized: "Désépingler") : String(localized: "Épingler"),
             systemImage: store.isPinned(conversationID) ? "pin.slash" : "pin"
           )
         }
@@ -206,7 +208,8 @@ struct ThreadView: View {
           store.toggleMuted(conversationID)
         } label: {
           Label(
-            store.isMuted(conversationID) ? "Réactiver les notifications" : "Mettre en muet",
+            store.isMuted(conversationID)
+              ? String(localized: "Réactiver les notifications") : String(localized: "Mettre en muet"),
             systemImage: store.isMuted(conversationID) ? "bell" : "bell.slash"
           )
         }
@@ -435,7 +438,9 @@ struct ThreadView: View {
   private func unreadMark(_ count: Int) -> some View {
     HStack(spacing: 8) {
       Rectangle().fill(theme.accent.opacity(0.35)).frame(height: 1)
-      Text(count == 1 ? "1 message non lu" : "\(count) messages non lus")
+      Text(count == 1
+        ? String(localized: "1 message non lu")
+        : String(localized: "\(count) messages non lus"))
         .font(Typography.meta(typeface))
         .fontWeight(.medium)
         .foregroundStyle(theme.accent)
@@ -445,7 +450,9 @@ struct ThreadView: View {
     .padding(.top, 14)
     .padding(.bottom, 4)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel(count == 1 ? "1 message non lu" : "\(count) messages non lus")
+    .accessibilityLabel(count == 1
+      ? String(localized: "1 message non lu")
+      : String(localized: "\(count) messages non lus"))
   }
 
   /// L'encre ne prend que sur une VRAIE arrivée : le dernier message, posté

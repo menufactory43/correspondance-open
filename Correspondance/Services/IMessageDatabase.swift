@@ -10,11 +10,11 @@ enum IMessageAccessError: LocalizedError, Sendable {
   var errorDescription: String? {
     switch self {
     case .authorizationDenied:
-      "Accès refusé à Messages. Accorde « Accès complet au disque » à Correspondance (Réglages Système → Confidentialité et sécurité), puis quitte et relance l’app : macOS n’applique ce réglage qu’au prochain lancement."
+      String(localized: "Accès refusé à Messages. Accorde « Accès complet au disque » à Correspondance (Réglages Système → Confidentialité et sécurité), puis quitte et relance l’app : macOS n’applique ce réglage qu’au prochain lancement.")
     case .openFailed(let detail):
-      "Impossible d’ouvrir chat.db : \(detail)"
+      String(localized: "Impossible d’ouvrir chat.db : \(detail)")
     case .queryFailed(let detail):
-      "Lecture Messages impossible : \(detail)"
+      String(localized: "Lecture Messages impossible : \(detail)")
     }
   }
 }
@@ -129,7 +129,7 @@ struct IMessageDatabase: Sendable {
 
       if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, hasAttachment {
         // Détail mime résolu à l’ouverture du fil — aperçu générique ici.
-        text = "📷 Photo"
+        text = String(localized: "📷 Photo")
       }
 
       let isGroup = Self.isGroupChat(style: style, identifier: identifier)
@@ -140,7 +140,7 @@ struct IMessageDatabase: Sendable {
         let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         if isGroup {
-          if participantHandles.isEmpty { return "Groupe" }
+          if participantHandles.isEmpty { return String(localized: "Groupe") }
           // Libellé provisoire — ContactDirectory enrichira avec les vrais noms.
           return participantHandles.prefix(3).map(prettyHandle).joined(separator: ", ")
             + (participantHandles.count > 3 ? "…" : "")
@@ -371,11 +371,11 @@ struct IMessageDatabase: Sendable {
       // portent leur propre libellé, on ne leur colle pas « Pièce jointe ».
       if message.text.isEmpty, !message.isRetracted, !message.isSystemEvent {
         if message.attachments.contains(where: \.isImage) {
-          message.text = "📷 Photo"
+          message.text = String(localized: "📷 Photo")
         } else if message.attachments.contains(where: \.isAudio) {
-          message.text = "🎤 Message audio"
+          message.text = String(localized: "🎤 Message audio")
         } else if !message.attachments.isEmpty {
-          message.text = "Pièce jointe"
+          message.text = String(localized: "Pièce jointe")
         }
       }
       rows.append(message)
@@ -395,7 +395,7 @@ struct IMessageDatabase: Sendable {
       var updated = message
       updated.replyTo = QuotedMessage(
         messageID: target,
-        senderName: origin.isFromMe ? "Moi" : (origin.senderID ?? ""),
+        senderName: origin.isFromMe ? String(localized: "Moi") : (origin.senderID ?? ""),
         text: origin.sidebarPreviewText
       )
       return updated
@@ -455,7 +455,7 @@ struct IMessageDatabase: Sendable {
       guard let target = Self.tapbackTargetGUID(rawTarget) else { continue }
       let removed = type >= 3000
       guard let emoji = Self.tapbackEmoji(type: type, custom: customEmoji) else { continue }
-      let sender = isFromMe ? "Moi" : (handle.isEmpty ? "?" : handle)
+      let sender = isFromMe ? String(localized: "Moi") : (handle.isEmpty ? "?" : handle)
       latest[target, default: [:]][sender] = (emoji: emoji, isMine: isFromMe, removed: removed)
     }
 
@@ -614,7 +614,7 @@ struct IMessageDatabase: Sendable {
         let contentType = resolvedContentType(mime: mime, uti: uti, path: filename)
         let localPath = resolveAttachmentFilesystemPath(filename)
         let displayName = transferName.isEmpty
-          ? (localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "fichier")
+          ? (localPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? String(localized: "fichier"))
           : transferName
 
         let attachment = MessageAttachment(
@@ -732,7 +732,7 @@ struct IMessageDatabase: Sendable {
   }
 
   private func prettyHandle(_ identifier: String) -> String {
-    if identifier.hasPrefix("chat") { return "Groupe" }
+    if identifier.hasPrefix("chat") { return String(localized: "Groupe") }
     return identifier
   }
 

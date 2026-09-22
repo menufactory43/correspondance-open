@@ -44,7 +44,7 @@ struct PhraseDeRecuperationSection: View {
         MotsDeLaPhrase(phrase: phrase)
         Toggle("Je l'ai notée", isOn: $confirmeNotee)
         Button("Copier") { UIPasteboard.general.string = phrase }
-        Button(modele.occupe ? "Création…" : "Continuer") {
+        Button(modele.occupe ? String(localized: "Création…") : String(localized: "Continuer")) {
           Task { await modele.confirmerLaPhrase() }
         }
         .disabled(!confirmeNotee || modele.occupe)
@@ -57,7 +57,7 @@ struct PhraseDeRecuperationSection: View {
         TextField("douze mots séparés par des espaces", text: $saisie, axis: .vertical)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
-        Button(modele.occupe ? "Restauration…" : "Entrer la phrase") {
+        Button(modele.occupe ? String(localized: "Restauration…") : String(localized: "Entrer la phrase")) {
           Task { await modele.entrerLaPhrase(saisie); saisie = "" }
         }
         .disabled(modele.occupe || saisie.isEmpty)
@@ -66,7 +66,10 @@ struct PhraseDeRecuperationSection: View {
       case let .enPlace(version, phraseConnue):
         Text(modele.etape.expliqueFR).font(Typography.meta(typeface)).foregroundStyle(theme.inkSecondary)
         if phraseConnue {
-          Button(modele.phraseRevelee == nil ? "Revoir la phrase" : "Cacher la phrase") {
+          Button(
+            modele.phraseRevelee == nil
+              ? String(localized: "Revoir la phrase") : String(localized: "Cacher la phrase")
+          ) {
             if modele.phraseRevelee == nil { modele.revoirLaPhrase() } else { modele.cacherLaPhrase() }
           }
         }
@@ -86,8 +89,7 @@ struct PhraseDeRecuperationSection: View {
       Text("Phrase de récupération")
     } footer: {
       Text(
-        "Douze mots qui ne quittent jamais cet appareil. "
-          + "Sans eux, un nouvel appareil ne peut pas relire les anciens messages."
+        "Douze mots qui ne quittent jamais cet appareil. Sans eux, un nouvel appareil ne peut pas relire les anciens messages."
       )
       .font(Typography.meta(typeface))
     }
@@ -176,8 +178,7 @@ struct AppareilsListeView: View {
         }
       } footer: {
         Text(
-          "La dernière activité est notée toutes les dix minutes environ. "
-            + "Un appareil actif peut donc sembler silencieux un moment."
+          "La dernière activité est notée toutes les dix minutes environ. Un appareil actif peut donc sembler silencieux un moment."
         )
         .font(Typography.meta(typeface))
       }
@@ -186,7 +187,7 @@ struct AppareilsListeView: View {
     .refreshable { await modele.rafraichirLesAppareils() }
     .task { await modele.rafraichirLesAppareils() }
     .alert(
-      "Déconnecter « \(aDeconnecter?.nom ?? aDeconnecter?.deviceID ?? "")" + " » ?",
+      String(localized: "Déconnecter « \(aDeconnecter?.nom ?? aDeconnecter?.deviceID ?? "") » ?"),
       isPresented: Binding(get: { aDeconnecter != nil }, set: { if !$0 { aDeconnecter = nil } })
     ) {
       // Le champ n'apparaît qu'au second tour : le premier part sans mot de
@@ -206,7 +207,8 @@ struct AppareilsListeView: View {
     } message: {
       Text(
         modele.message
-          ?? "Cet appareil n’aura plus accès au compte. Tes messages restent lisibles sur les autres."
+          ?? String(
+            localized: "Cet appareil n’aura plus accès au compte. Tes messages restent lisibles sur les autres.")
       )
     }
   }

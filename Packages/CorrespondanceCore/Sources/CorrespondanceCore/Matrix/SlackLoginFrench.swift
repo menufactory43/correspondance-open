@@ -17,7 +17,7 @@ public enum SlackLoginFrench {
     if english.hasPrefix("Successfully logged into "), let asRange = english.range(of: " as ", options: .backwards) {
       let team = english[english.index(english.startIndex, offsetBy: "Successfully logged into ".count)..<asRange.lowerBound]
       let who = english[asRange.upperBound...]
-      return "Connecté à \(team) en tant que \(who)."
+      return String(localized: "Connecté à \(team) en tant que \(who).")
     }
     if let byStep = byStepID[step.stepID], !english.isEmpty {
       // Une phrase inconnue sur une étape connue : le français de l'étape, et
@@ -37,52 +37,52 @@ public enum SlackLoginFrench {
   }
 
   static let byStepID: [String: String] = [
-    "fi.mau.slack.login.enter_email": "Ton adresse e-mail Slack.",
-    "fi.mau.slack.login.email_captcha": "Slack demande une vérification avant d'envoyer le code : passe-la ci-dessous.",
-    "fi.mau.slack.login.enter_email_code": "Slack t'a envoyé un code par e-mail. Saisis ses six caractères.",
-    "fi.mau.slack.login.select_workspace": "Choisis l'espace de travail à connecter.",
-    "fi.mau.slack.login.two_factor": "Le code d'authentification demandé par cet espace de travail.",
-    "fi.mau.slack.login.enter_auth_token": "Colle la session : l'objet JSON, ou une commande cURL copiée des outils de développement.",
+    "fi.mau.slack.login.enter_email": String(localized: "Ton adresse e-mail Slack."),
+    "fi.mau.slack.login.email_captcha": String(localized: "Slack demande une vérification avant d'envoyer le code : passe-la ci-dessous."),
+    "fi.mau.slack.login.enter_email_code": String(localized: "Slack t'a envoyé un code par e-mail. Saisis ses six caractères."),
+    "fi.mau.slack.login.select_workspace": String(localized: "Choisis l'espace de travail à connecter."),
+    "fi.mau.slack.login.two_factor": String(localized: "Le code d'authentification demandé par cet espace de travail."),
+    "fi.mau.slack.login.enter_auth_token": String(localized: "Colle la session : l'objet JSON, ou une commande cURL copiée des outils de développement."),
   ]
 
   static let phrases: [String: String] = [
-    "Enter the email address associated with your Slack account.": "Ton adresse e-mail Slack.",
-    "Enter a valid Slack account email address.": "Cette adresse n'a pas l'air valide. Vérifie-la.",
+    "Enter the email address associated with your Slack account.": String(localized: "Ton adresse e-mail Slack."),
+    "Enter a valid Slack account email address.": String(localized: "Cette adresse n'a pas l'air valide. Vérifie-la."),
     "Slack requires a CAPTCHA before it can email the confirmation code. Complete the embedded challenge to continue.":
-      "Slack demande une vérification avant d'envoyer le code : passe-la ci-dessous.",
-    "Complete the embedded CAPTCHA before continuing.": "Passe d'abord la vérification ci-dessous.",
+      String(localized: "Slack demande une vérification avant d'envoyer le code : passe-la ci-dessous."),
+    "Complete the embedded CAPTCHA before continuing.": String(localized: "Passe d'abord la vérification ci-dessous."),
     "The CAPTCHA did not return a solution. Complete a new embedded challenge to continue.":
-      "La vérification n'a rien rendu. Recommence-la.",
+      String(localized: "La vérification n'a rien rendu. Recommence-la."),
     "Slack rejected or expired that CAPTCHA solution. Complete a new embedded challenge to continue.":
-      "Slack a refusé cette vérification, ou elle a expiré. Recommence-la.",
+      String(localized: "Slack a refusé cette vérification, ou elle a expiré. Recommence-la."),
     "Slack is rate limiting email sign-in. Wait a few minutes, then complete a new embedded challenge.":
-      "Slack limite les connexions par e-mail. Attends quelques minutes, puis recommence la vérification.",
+      String(localized: "Slack limite les connexions par e-mail. Attends quelques minutes, puis recommence la vérification."),
     "Slack is rate limiting email sign-in. Wait a few minutes before trying again.":
-      "Slack limite les connexions par e-mail. Attends quelques minutes avant de réessayer.",
-    "Slack rejected that email address. Check it and try again.": "Slack refuse cette adresse. Vérifie-la et réessaie.",
+      String(localized: "Slack limite les connexions par e-mail. Attends quelques minutes avant de réessayer."),
+    "Slack rejected that email address. Check it and try again.": String(localized: "Slack refuse cette adresse. Vérifie-la et réessaie."),
     "Slack requires a CAPTCHA for this sign-in. Complete the embedded challenge and try again.":
-      "Slack demande une vérification pour cette connexion. Passe-la et réessaie.",
-    "Slack could not start email sign-in. Try again later.": "Slack n'a pas pu démarrer la connexion par e-mail. Réessaie plus tard.",
+      String(localized: "Slack demande une vérification pour cette connexion. Passe-la et réessaie."),
+    "Slack could not start email sign-in. Try again later.": String(localized: "Slack n'a pas pu démarrer la connexion par e-mail. Réessaie plus tard."),
     "Slack emailed you a confirmation code. Enter the six characters from that email.":
-      "Slack t'a envoyé un code par e-mail. Saisis ses six caractères.",
-    "Enter the six-character code Slack emailed you.": "Le code fait six caractères : vérifie-le.",
-    "Slack rejected that confirmation code. Check the email and try again.": "Slack refuse ce code. Vérifie l'e-mail et réessaie.",
+      String(localized: "Slack t'a envoyé un code par e-mail. Saisis ses six caractères."),
+    "Enter the six-character code Slack emailed you.": String(localized: "Le code fait six caractères : vérifie-le."),
+    "Slack rejected that confirmation code. Check the email and try again.": String(localized: "Slack refuse ce code. Vérifie l'e-mail et réessaie."),
     "That Slack confirmation code expired. Enter your email to request a new one.":
-      "Ce code a expiré. Saisis ton adresse pour en recevoir un nouveau.",
-    "Slack is rate limiting code checks. Wait before trying again.": "Slack limite les essais de code. Attends un peu avant de réessayer.",
+      String(localized: "Ce code a expiré. Saisis ton adresse pour en recevoir un nouveau."),
+    "Slack is rate limiting code checks. Wait before trying again.": String(localized: "Slack limite les essais de code. Attends un peu avant de réessayer."),
     "Slack did not return any workspaces that support email sign-in for this account.":
-      "Aucun espace de travail de ce compte n'accepte la connexion par e-mail.",
-    "Choose the Slack workspace to connect.": "Choisis l'espace de travail à connecter.",
-    "Choose one of the Slack workspaces in the list.": "Choisis un espace de travail dans la liste.",
-    "Enter the authentication code required by this Slack workspace.": "Le code d'authentification demandé par cet espace de travail.",
-    "Enter the six-digit code from your authenticator app or SMS.": "Le code à six chiffres de ton application d'authentification, ou reçu par SMS.",
+      String(localized: "Aucun espace de travail de ce compte n'accepte la connexion par e-mail."),
+    "Choose the Slack workspace to connect.": String(localized: "Choisis l'espace de travail à connecter."),
+    "Choose one of the Slack workspaces in the list.": String(localized: "Choisis un espace de travail dans la liste."),
+    "Enter the authentication code required by this Slack workspace.": String(localized: "Le code d'authentification demandé par cet espace de travail."),
+    "Enter the six-digit code from your authenticator app or SMS.": String(localized: "Le code à six chiffres de ton application d'authentification, ou reçu par SMS."),
     "Slack is rate limiting authentication-code checks. Wait before trying again.":
-      "Slack limite les essais de code d'authentification. Attends un peu avant de réessayer.",
-    "That two-factor session expired. Enter a new authentication code.": "La session d'authentification a expiré. Saisis un nouveau code.",
-    "Slack rejected that authentication code. Check the code and try again.": "Slack refuse ce code d'authentification. Vérifie-le et réessaie.",
+      String(localized: "Slack limite les essais de code d'authentification. Attends un peu avant de réessayer."),
+    "That two-factor session expired. Enter a new authentication code.": String(localized: "La session d'authentification a expiré. Saisis un nouveau code."),
+    "Slack rejected that authentication code. Check the code and try again.": String(localized: "Slack refuse ce code d'authentification. Vérifie-le et réessaie."),
     "Slack did not complete two-factor authentication. Check the code and try again.":
-      "Slack n'a pas terminé l'authentification à deux facteurs. Vérifie le code et réessaie.",
+      String(localized: "Slack n'a pas terminé l'authentification à deux facteurs. Vérifie le code et réessaie."),
     "Slack created a session, but the bridge could not validate it. Enter your email to try again.":
-      "Slack a ouvert une session, mais le pont n'a pas pu la valider. Saisis ton adresse pour réessayer.",
+      String(localized: "Slack a ouvert une session, mais le pont n'a pas pu la valider. Saisis ton adresse pour réessayer."),
   ]
 }

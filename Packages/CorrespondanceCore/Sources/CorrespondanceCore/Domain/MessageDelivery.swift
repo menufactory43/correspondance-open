@@ -19,10 +19,10 @@ public enum MessageDelivery: String, Codable, Sendable, Hashable, CaseIterable {
 
   public var labelFR: String {
     switch self {
-    case .sending: "Envoi…"
-    case .sent: "Envoyé"
-    case .delivered: "Livré"
-    case .read: "Vu"
+    case .sending: String(localized: "Envoi…")
+    case .sent: String(localized: "Envoyé")
+    case .delivered: String(localized: "Livré")
+    case .read: String(localized: "Vu")
     }
   }
 }
