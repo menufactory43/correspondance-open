@@ -1064,7 +1064,7 @@ public struct MatrixSyncParser: Sendable {
   /// quelqu'un, c'est une clé de base de données. Aux vues de choisir alors
   /// quoi montrer (le titre du fil, rien du tout) — cf. `displayedSenderName`.
   private func displayName(of userID: String, in model: MatrixRoomModel) -> String {
-    if userID == selfUserID { return "Moi" }
+    if userID == selfUserID { return String(localized: "Moi") }
     if let name = model.members[userID]?.displayName, !name.isEmpty { return name }
     guard !MatrixIdentity.isGhost(userID), !MatrixIdentity.isBridgeBot(userID) else { return "" }
     return MatrixIdentity.localpart(userID)
@@ -1082,7 +1082,7 @@ public struct MatrixSyncParser: Sendable {
     in model: MatrixRoomModel
   ) -> String {
     if let quoted {
-      if quoted.isFromMe { return "Moi" }
+      if quoted.isFromMe { return String(localized: "Moi") }
       let name = displayName(of: quoted.senderID ?? "", in: model)
       if !name.isEmpty { return name }
     }

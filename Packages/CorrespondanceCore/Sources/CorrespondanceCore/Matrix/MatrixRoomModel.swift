@@ -417,7 +417,7 @@ public struct MatrixRoomModel: Sendable {
        let quoted = messagesByID[targetID]
     {
       if quoted.isFromMe {
-        quote.senderName = "Moi"
+        quote.senderName = String(localized: "Moi")
       } else if let senderID = quoted.senderID, let name = members[senderID]?.displayName, !name.isEmpty {
         quote.senderName = name
       }

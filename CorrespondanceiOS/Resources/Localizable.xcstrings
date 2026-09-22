@@ -5186,6 +5186,16 @@
         }
       }
     },
+    "Ignorer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore"
+          }
+        }
+      }
+    },
     "Il disparaît du fil, chez toi comme chez ton correspondant. C'est sans retour.": {
       "extractionState": "manual",
       "localizations": {

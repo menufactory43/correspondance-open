@@ -1102,7 +1102,7 @@ public actor MatrixBridgeService {
       targetEventID: messageID,
       emoji: emoji,
       senderID: selfUserID,
-      senderName: "Moi",
+      senderName: String(localized: "Moi"),
       isMine: true
     )
     rooms[roomID]?.markWritten(eventID)

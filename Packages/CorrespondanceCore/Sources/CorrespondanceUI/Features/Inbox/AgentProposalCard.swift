@@ -104,12 +104,12 @@ public struct AgentProposalCard: View {
       HStack(spacing: 6) {
         switch proposal.kind {
         case .summary:
-          action("Répondre", systemImage: "arrowshape.turn.up.left", isPrimary: true, run: onReply ?? onEdit)
-          action("Fermer", systemImage: "xmark", isPrimary: false, run: onIgnore)
+          action(String(localized: "Répondre"), systemImage: "arrowshape.turn.up.left", isPrimary: true, run: onReply ?? onEdit)
+          action(String(localized: "Fermer"), systemImage: "xmark", isPrimary: false, run: onIgnore)
         case .reply, .suggest, .handover:
-          action("Envoyer", systemImage: "paperplane", isPrimary: true, run: onSend)
-          action("Modifier", systemImage: "pencil", isPrimary: false, run: onEdit)
-          action("Ignorer", systemImage: "xmark", isPrimary: false, run: onIgnore)
+          action(String(localized: "Envoyer"), systemImage: "paperplane", isPrimary: true, run: onSend)
+          action(String(localized: "Modifier"), systemImage: "pencil", isPrimary: false, run: onEdit)
+          action(String(localized: "Ignorer"), systemImage: "xmark", isPrimary: false, run: onIgnore)
         }
         Spacer(minLength: 0)
       }

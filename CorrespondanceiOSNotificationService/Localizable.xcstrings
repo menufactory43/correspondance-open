@@ -2619,6 +2619,16 @@
         }
       }
     },
+    "Envoyer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
     "Envoyé": {
       "extractionState": "manual",
       "localizations": {
@@ -2649,6 +2659,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Espagnol"
+          }
+        }
+      }
+    },
+    "Fermer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
           }
         }
       }
@@ -2870,6 +2890,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Identifiants Matrix refusés."
+          }
+        }
+      }
+    },
+    "Ignorer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignore"
           }
         }
       }
@@ -3992,6 +4022,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Message vocal, %@"
+          }
+        }
+      }
+    },
+    "Modifier": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "Moi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Me"
           }
         }
       }
@@ -5216,6 +5266,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Répond seul"
+          }
+        }
+      }
+    },
+    "Répondre": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply"
           }
         }
       }
