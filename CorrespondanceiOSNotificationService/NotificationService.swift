@@ -69,7 +69,8 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
       // de mention de Matrix priment sur la règle de salon (cf.
       // `PushNotification.shouldPresent`) ; c'est rare, donc cet aller-retour
       // de plus l'est aussi.
-      let isPersonal = PersonalMessage.mentions(shown.body, names: SharedRelayState.myNames())
+      let isPersonal = !shown.isReaction
+        && PersonalMessage.mentions(shown.body, names: SharedRelayState.myNames())
       guard PushNotification.shouldPresent(
         roomID: reference.roomID,
         mutedRoomIDs: isMuted ? [reference.roomID] : [],

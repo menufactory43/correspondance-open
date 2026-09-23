@@ -202,6 +202,9 @@ public struct MatrixRoomModel: Sendable {
     public var senderID: String
     public var senderName: String
     public var isMine: Bool
+    /// L'heure de la réaction. `nil` pour celles rangées avant qu'on la
+    /// garde : elles ne notifient pas, elles ne comptent pas.
+    public var sentAt: Date? = nil
   }
 
   public struct Member: Sendable, Hashable, Codable {
@@ -338,6 +341,39 @@ public struct MatrixRoomModel: Sendable {
     return messagesByID.values.count {
       $0.sentAt > marker.sentAt && !$0.isFromMe && !$0.isSystemEvent && !$0.isAgentProposal
     }
+  }
+
+  /// Les réactions des autres arrivées depuis mon accusé. Le Relais les compte
+  /// comme des notifications (sa règle de push les fait sonner, cf.
+  /// `MatrixClient.enableReactionPushes`) ; pour l'inbox, une réaction n'est
+  /// pas un message à lire, on les retire de `notification_count`.
+  func incomingReactionsSinceMyReceipt(selfUserID: String) -> Int {
+    guard let markerID = readMarkerByUser[selfUserID],
+      let marker = messagesByID[markerID]
+    else { return 0 }
+    return reactionsByEventID.values.count {
+      guard !$0.isMine, let sentAt = $0.sentAt else { return false }
+      return sentAt > marker.sentAt
+    }
+  }
+
+  /// La réaction la plus récente d'un autre que moi — celle qu'une
+  /// notification annoncerait.
+  public func lastIncomingReaction(selfUserID: String) -> IncomingReaction? {
+    guard let (eventID, reaction) = reactionsByEventID
+      .filter({ !$0.value.isMine && $0.value.senderID != selfUserID && $0.value.sentAt != nil })
+      .max(by: { ($0.value.sentAt!, $0.key) < ($1.value.sentAt!, $1.key) }),
+      let sentAt = reaction.sentAt
+    else { return nil }
+    var name = reaction.senderName
+    if let current = members[reaction.senderID]?.displayName, !current.isEmpty { name = current }
+    return IncomingReaction(
+      id: eventID,
+      senderName: MatrixIdentity.stripBridgeSuffix(name),
+      emoji: reaction.emoji,
+      targetPreview: messagesByID[reaction.targetEventID]?.sidebarPreviewText,
+      sentAt: sentAt
+    )
   }
 
   /// Le dernier message me concerne PERSONNELLEMENT : il me nomme, ou il
@@ -532,7 +568,7 @@ public struct MatrixRoomModel: Sendable {
       title: title(selfUserID: selfUserID),
       preview: preview,
       lastMessageAt: last?.sentAt ?? lastEventAt,
-      unreadCount: unreadCount,
+      unreadCount: max(0, unreadCount - incomingReactionsSinceMyReceipt(selfUserID: selfUserID)),
       isArchived: false,
       transportKey: roomID,
       isGroup: group
@@ -546,6 +582,8 @@ public struct MatrixRoomModel: Sendable {
     conversation.lastMessageIsFromMe = last?.isFromMe ?? false
     conversation.unreadSinceReceipt = unreadSinceMyReceipt(selfUserID: selfUserID)
     conversation.lastMessageIsPersonal = lastMessageIsPersonal(selfUserID: selfUserID)
+    conversation.lastMessageIsSystemEvent = last?.isSystemEvent ?? false
+    conversation.lastIncomingReaction = lastIncomingReaction(selfUserID: selfUserID)
     conversation.lastDelivery = (last?.isFromMe == true) ? delivery(selfUserID: selfUserID) : nil
     if conversation.lastMessageAt == .distantPast {
       conversation.lastMessageAt = Date(timeIntervalSince1970: 0)

@@ -85,7 +85,7 @@ public extension LocalStore {
     read([:]) {
       let statement = try database
         .prepare(
-          "SELECT event_id, target_event_id, emoji, sender_id, sender_name, is_mine "
+          "SELECT event_id, target_event_id, emoji, sender_id, sender_name, is_mine, sent_at "
             + "FROM reactions WHERE room_id = ?;"
         )
         .bind([.text(roomID)])
@@ -96,7 +96,8 @@ public extension LocalStore {
           emoji: row.string(2),
           senderID: row.string(3),
           senderName: row.string(4),
-          isMine: row.bool(5)
+          isMine: row.bool(5),
+          sentAt: row.isNull(6) ? nil : row.date(6)
         )
       }
       return result
@@ -207,15 +208,16 @@ public extension LocalStore {
   ) throws {
     try database.run(
       """
-      INSERT INTO reactions (event_id, room_id, target_event_id, emoji, sender_id, sender_name, is_mine)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO reactions (event_id, room_id, target_event_id, emoji, sender_id, sender_name, is_mine, sent_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(event_id) DO UPDATE SET
         room_id = excluded.room_id,
         target_event_id = excluded.target_event_id,
         emoji = excluded.emoji,
         sender_id = excluded.sender_id,
         sender_name = excluded.sender_name,
-        is_mine = excluded.is_mine;
+        is_mine = excluded.is_mine,
+        sent_at = excluded.sent_at;
       """,
       [
         .text(eventID),
@@ -225,6 +227,7 @@ public extension LocalStore {
         .text(reaction.senderID),
         .text(reaction.senderName),
         .bool(reaction.isMine),
+        reaction.sentAt.map(SQLiteValue.date) ?? .null,
       ]
     )
   }

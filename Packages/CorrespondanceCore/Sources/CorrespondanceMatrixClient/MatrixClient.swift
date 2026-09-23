@@ -954,6 +954,46 @@ public actor MatrixClient {
     .object(["actions": .array([])])
   }
 
+  /// Notre règle : une réaction sonne. Une `underride`, pas une `override` —
+  /// c'est tout l'intérêt : les règles de salon passent AVANT, et la sourdine
+  /// en est une (`actions: []`). Un fil muet reste donc muet pour les
+  /// réactions aussi, sans que le téléphone ait à en taire une seule.
+  public static let reactionPushRuleID = "fr.correspondance.reaction"
+
+  public static var reactionPushRulePath: String {
+    "/_matrix/client/v3/pushrules/global/underride/\(escape(reactionPushRuleID))"
+  }
+
+  /// La règle par défaut de Synapse qui fait taire les réactions. Une
+  /// `override` : tant qu'elle est active, elle passe avant la nôtre.
+  public static let defaultReactionPushRulePath =
+    "/_matrix/client/v3/pushrules/global/override/.m.rule.reaction/enabled"
+
+  public static func reactionPushRuleBody() -> MatrixJSON {
+    .object([
+      "conditions": .array([
+        .object(["kind": .string("event_match"), "key": .string("type"), "pattern": .string("m.reaction")])
+      ]),
+      "actions": .array([.string("notify")]),
+    ])
+  }
+
+  /// Les réactions sonnent : « Alice a réagi 👍 à « … » » sur l'écran
+  /// verrouillé. Idempotent — deux `PUT`, rejoués à chaque déclaration du
+  /// pusher sans rien changer la deuxième fois.
+  ///
+  /// L'ordre compte : la nôtre d'abord, la règle par défaut ensuite. À
+  /// l'envers, un échec entre les deux laisserait les réactions sans règle,
+  /// ce qui revient au même silence qu'avant — mais autant ne pas le risquer.
+  public func enableReactionPushes() async throws {
+    _ = try await request(method: "PUT", path: Self.reactionPushRulePath, body: Self.reactionPushRuleBody())
+    _ = try await request(
+      method: "PUT",
+      path: Self.defaultReactionPushRulePath,
+      body: .object(["enabled": .bool(false)])
+    )
+  }
+
   private func userID() throws -> String {
     guard let userID = credentials?.userID else { throw MatrixError.notConfigured }
     return userID

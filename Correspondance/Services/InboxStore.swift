@@ -1555,6 +1555,29 @@ final class InboxStore {
         requestID: burst.key
       )
     }
+    postReactionNotifications()
+  }
+
+  /// « Alice a réagi 👍 à « … » » : une notification par réaction, dans le
+  /// fil de la conversation. Pas de rafale — deux réactions différentes
+  /// disent deux choses.
+  private func postReactionNotifications() {
+    for conversation in conversations {
+      guard NotificationPolicy.shouldNotifyReaction(
+        current: conversation,
+        previous: notificationBaseline[conversation.id],
+        isMuted: mutedIDs.contains(conversation.id),
+        isSelected: isReadOnScreen(conversation.id)
+      ), let reaction = conversation.lastIncomingReaction else { continue }
+      Self.notificationJournal.info("réaction notifiée pour \(conversation.id, privacy: .public)")
+      NotificationService.shared.postIncoming(
+        conversationID: conversation.id,
+        title: conversation.title,
+        networkLabel: conversation.network.labelFR,
+        body: reaction.bodyFR,
+        requestID: "\(conversation.id)#reaction-\(reaction.id)"
+      )
+    }
   }
 
   /// Réinstalle `isArchived` depuis la source de vérité persistée.

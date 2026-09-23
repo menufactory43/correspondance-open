@@ -47,6 +47,15 @@ extension RelayStore {
       notificationBursts[conversation.id] = burst
       post(conversation: conversation, burst: burst)
     }
+    for conversation in conversations {
+      guard NotificationPolicy.shouldNotifyReaction(
+        current: conversation,
+        previous: baseline[conversation.id],
+        isMuted: isMuted(conversation.id),
+        isSelected: isOnScreen(conversation.id)
+      ), let reaction = conversation.lastIncomingReaction else { continue }
+      post(conversation: conversation, body: reaction.bodyFR, stackTag: "\(conversation.id)#reaction-\(reaction.id)")
+    }
   }
 
   /// Ce fil est-il sous les yeux ? Un message qu'on regarde arriver n'a pas
@@ -57,11 +66,19 @@ extension RelayStore {
   }
 
   private func post(conversation: Conversation, burst: NotificationBurst) {
+    post(
+      conversation: conversation,
+      body: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count),
+      stackTag: burst.key
+    )
+  }
+
+  private func post(conversation: Conversation, body: String, stackTag: String) {
     let shown = PushNotification.presentation(
       senderName: nil,
       conversationTitle: conversation.title,
       network: conversation.network,
-      text: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count)
+      text: body
     )
     if let notificationPresenter {
       notificationPresenter(shown.title, shown.body)
@@ -69,7 +86,7 @@ extension RelayStore {
     }
     var arguments = ["notify-send", "--app-name=Correspondance", "--category=im.received"]
     // La MÊME rafale remplace sa notification au lieu d'en empiler une autre.
-    arguments.append("--hint=string:x-dunst-stack-tag:\(burst.key)")
+    arguments.append("--hint=string:x-dunst-stack-tag:\(stackTag)")
     if let path = conversation.groupPhotoPath, FileManager.default.fileExists(atPath: path) {
       arguments.append("--icon=\(path)")
     }

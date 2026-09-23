@@ -80,7 +80,7 @@ public final class LocalStore: @unchecked Sendable {
   /// Version du schéma attendue par ce code. Chaque migration est jouée dans
   /// l'ordre, une fois, et la base retient où elle en est — plus de champ
   /// « absent des caches plus anciens » : la forme est la même pour tous.
-  static let schemaVersion = 2
+  static let schemaVersion = 3
 
   private func migrate() throws {
     try withLock {
@@ -105,6 +105,7 @@ public final class LocalStore: @unchecked Sendable {
     switch version {
     case 1: return schemaV1
     case 2: return schemaV2
+    case 3: return schemaV3
     default: return ""
     }
   }
@@ -204,6 +205,13 @@ public final class LocalStore: @unchecked Sendable {
 
   INSERT INTO messages_fts (rowid, text, sender_name, attachment_names, attachment_types)
     SELECT rowid, text, IFNULL(sender_name, ''), attachment_names, attachment_types FROM messages;
+  """
+
+  /// v3 — l'heure d'une réaction : c'est elle qui dit qu'une réaction vient
+  /// d'arriver (notification) et qu'elle suit mon accusé de lecture (non-lus).
+  /// `NULL` pour les réactions rangées avant : elles ne sont plus nouvelles.
+  private static let schemaV3 = """
+  ALTER TABLE reactions ADD COLUMN sent_at REAL;
   """
 
   // MARK: - Curseur de `/sync`

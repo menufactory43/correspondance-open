@@ -392,6 +392,74 @@
         }
       }
     },
+    "%@ a réagi %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ reacted %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ a réagi %@"
+          }
+        }
+      }
+    },
+    "%@ a réagi %@ à « %@ »": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ reacted %2$@ to “%3$@”"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ a réagi %@ à « %@ »"
+          }
+        }
+      }
+    },
+    "A réagi %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reacted %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A réagi %@"
+          }
+        }
+      }
+    },
+    "A réagi %@ à « %@ »": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reacted %1$@ to “%2$@”"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A réagi %@ à « %@ »"
+          }
+        }
+      }
+    },
     "%@ a renommé le groupe « %@ »": {
       "extractionState": "manual",
       "localizations": {

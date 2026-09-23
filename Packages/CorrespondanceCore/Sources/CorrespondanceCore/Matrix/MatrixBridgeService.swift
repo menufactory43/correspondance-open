@@ -1240,6 +1240,10 @@ public actor MatrixBridgeService {
       deviceDisplayName: deviceDisplayName,
       appID: appID
     )
+    // Les réactions, poussées comme les messages (sauf fil muet). Un échec
+    // ici ne défait pas le pusher : on n'y perd que les réactions, et la
+    // prochaine déclaration réessaiera.
+    try? await client.enableReactionPushes()
   }
 
   /// Retire le pusher — à la déconnexion, tant que le jeton d'accès vaut encore.

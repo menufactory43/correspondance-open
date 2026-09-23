@@ -865,7 +865,8 @@ public struct MatrixSyncParser: Sendable {
       emoji: key,
       senderID: sender,
       senderName: displayName(of: sender, in: model),
-      isMine: sender == selfUserID
+      isMine: sender == selfUserID,
+      sentAt: event.sentAt
     )
     model.markWritten(eventID)
   }

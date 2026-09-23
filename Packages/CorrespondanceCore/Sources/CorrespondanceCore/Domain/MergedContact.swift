@@ -87,7 +87,7 @@ public struct MergedContact: Identifiable, Codable, Hashable, Sendable {
     // qu'on écrira si le fil ne dit rien d'autre.
     let base = members.first { $0.id == defaultConversationID } ?? newest
 
-    return Conversation(
+    var row = Conversation(
       id: id,
       network: newest.network,
       address: base.address,
@@ -112,6 +112,12 @@ public struct MergedContact: Identifiable, Codable, Hashable, Sendable {
       groupPhotoPath: faceOrder(members, base: base).first { $0.groupPhotoPath != nil }?.groupPhotoPath,
       remoteAvatarID: faceOrder(members, base: base).first { $0.remoteAvatarID != nil }?.remoteAvatarID
     )
+    row.lastMessageIsSystemEvent = newest.lastMessageIsSystemEvent
+    // La réaction la plus récente, quel que soit le fil où elle est tombée.
+    row.lastIncomingReaction = members
+      .compactMap(\.lastIncomingReaction)
+      .max { $0.sentAt < $1.sentAt }
+    return row
   }
 
   /// Les membres dans l'ordre où l'on leur emprunte un visage : celui choisi à

@@ -57,6 +57,15 @@ extension RelayStore {
       notificationBursts[conversation.id] = burst
       post(conversation: conversation, burst: burst)
     }
+    for conversation in conversations {
+      guard NotificationPolicy.shouldNotifyReaction(
+        current: conversation,
+        previous: baseline[conversation.id],
+        isMuted: isMuted(conversation.id),
+        isSelected: isOnScreen(conversation.id)
+      ), let reaction = conversation.lastIncomingReaction else { continue }
+      post(conversation: conversation, body: reaction.bodyFR, identifier: "\(conversation.id)#reaction-\(reaction.id)")
+    }
   }
 
   /// L'app passe en arrière-plan : iOS la suspend, le `/sync` s'arrête, et
@@ -77,11 +86,19 @@ extension RelayStore {
   }
 
   private func post(conversation: Conversation, burst: NotificationBurst) {
+    post(
+      conversation: conversation,
+      body: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count),
+      identifier: burst.key
+    )
+  }
+
+  private func post(conversation: Conversation, body: String, identifier: String) {
     let shown = PushNotification.presentation(
       senderName: nil,
       conversationTitle: conversation.title,
       network: conversation.network,
-      text: NotificationGrouping.bodyFR(latest: conversation.preview, count: burst.count)
+      text: body
     )
     let content = UNMutableNotificationContent()
     content.title = shown.title
@@ -108,7 +125,7 @@ extension RelayStore {
       // La MÊME identité pendant toute la rafale : la notification qui arrive
       // remplace la précédente au lieu d'en empiler une deuxième.
       try? await UNUserNotificationCenter.current().add(
-        UNNotificationRequest(identifier: burst.key, content: enriched, trigger: nil)
+        UNNotificationRequest(identifier: identifier, content: enriched, trigger: nil)
       )
     }
   }

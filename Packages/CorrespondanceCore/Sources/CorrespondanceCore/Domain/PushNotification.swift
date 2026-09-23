@@ -74,6 +74,9 @@ public enum PushNotification {
     /// ignore la photo du groupe (vu au journal le 3 sept. 2026 :
     /// `recipientsArrayCount: 0` → `MessagingDirect`).
     public var memberNames: [String] = []
+    /// Une réaction, pas un message : elle ne nomme personne, et ne perce
+    /// donc jamais la sourdine — même quand le message visé me nommait.
+    public var isReaction = false
 
     public init(title: String, body: String) {
       self.title = title
@@ -170,8 +173,24 @@ public enum PushNotification {
       text = media
     }
 
+    // Une réaction : le texte n'est pas dans l'event, il est dans le message
+    // qu'elle vise — une lecture de plus.
+    var reaction: (emoji: String, target: String?)?
+    if event.string(at: "type") == "m.reaction",
+       let emoji = event.string(at: "content.m.relates_to.key") {
+      var target: String?
+      if let targetID = event.string(at: "content.m.relates_to.event_id") {
+        target = await previewText(ofEvent: targetID, roomID: reference.roomID, client: client)
+      }
+      reaction = (emoji, target)
+    }
+
     let sender = event.string(at: "sender")
     let room = await RoomFacts.load(roomID: reference.roomID, sender: sender, client: client)
+    if let reaction {
+      text = IncomingReaction.body(
+        senderName: room.senderName, emoji: reaction.emoji, targetPreview: reaction.target)
+    }
 
     var shown = presentation(
       senderName: room.senderName,
@@ -180,6 +199,7 @@ public enum PushNotification {
       text: text
     )
     shown.isGroup = room.isGroup
+    shown.isReaction = reaction != nil
     // En tête-à-tête, la photo de la personne ; en groupe, celle du groupe.
     // Un groupe sans photo montre ses membres en mosaïque, à défaut l'auteur.
     if room.isGroup {
@@ -193,6 +213,22 @@ public enum PushNotification {
       shown.avatarMXC = room.senderAvatarMXC ?? room.avatarMXC
     }
     return shown
+  }
+
+  /// Le message qu'une réaction vise, en une ligne : son texte sans la
+  /// citation, ou le nom de son média. `nil` s'il ne se lit pas.
+  static func previewText(ofEvent eventID: String, roomID: String, client: MatrixClient) async -> String? {
+    guard var event = try? await client.roomEvent(roomID: roomID, eventID: eventID) else { return nil }
+    if event.string(at: "type") == "m.room.encrypted" {
+      guard let clair = await client.dechiffrerEvenement(event, salon: roomID) else { return nil }
+      event = clair
+    }
+    if let content = event.value(at: "content"), let media = mediaBody(in: content) { return media }
+    var text = event.string(at: "content.body") ?? ""
+    if event.string(at: "content.m.relates_to.m.in_reply_to.event_id") != nil {
+      text = QuotedMessage.strippingReplyFallback(text)
+    }
+    return text.isEmpty ? nil : text
   }
 
   /// Ce que l'état du salon dit, lu en **une** requête (`GET /state`) : le

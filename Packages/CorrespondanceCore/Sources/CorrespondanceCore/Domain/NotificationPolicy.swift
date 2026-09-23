@@ -34,6 +34,10 @@ public enum NotificationPolicy {
     guard now.timeIntervalSince(current.lastMessageAt) < maxAge else { return false }
     // Un message que j'ai envoyé moi-même ne me prévient pas.
     guard !current.lastMessageIsFromMe else { return false }
+    // « Alice a rejoint le groupe » n'est pas un message : la ligne se lit
+    // dans le fil, elle ne sonne pas. Le Relais pense pareil — sa règle
+    // `.m.rule.member_event` ne pousse aucune arrivée.
+    guard !current.lastMessageIsSystemEvent else { return false }
     // Muet veut dire « plus de notifications », pas « plus rien ». Être nommé,
     // ou se voir répondre, passe outre la sourdine — c'est la règle de Signal
     // et de Slack, et celle de Matrix, dont les règles de mention priment sur
@@ -45,6 +49,27 @@ public enum NotificationPolicy {
     guard let previous else { return false }
     guard current.lastMessageAt > previous.lastMessageAt else { return false }
     if let alreadyNotifiedAt, current.lastMessageAt <= alreadyNotifiedAt { return false }
+    return true
+  }
+
+  /// Une réaction qui vient d'arriver mérite-t-elle sa notification ?
+  /// « Alice a réagi 👍 à « … » », comme WhatsApp et Signal.
+  ///
+  /// Plus stricte qu'un message : muet veut dire muet, une réaction ne nomme
+  /// personne et ne perce jamais la sourdine. Archivé non plus. Et seule une
+  /// réaction PLUS RÉCENTE que celle d'avant compte : une réaction retirée
+  /// fait réapparaître la précédente, qui n'a rien de neuf.
+  public static func shouldNotifyReaction(
+    current: Conversation,
+    previous: Conversation?,
+    isMuted: Bool,
+    isSelected: Bool,
+    now: Date = Date()
+  ) -> Bool {
+    guard !current.isArchived, !isMuted, !isSelected else { return false }
+    guard let reaction = current.lastIncomingReaction, let previous else { return false }
+    guard now.timeIntervalSince(reaction.sentAt) < maxAge else { return false }
+    if let before = previous.lastIncomingReaction, reaction.sentAt <= before.sentAt { return false }
     return true
   }
 }

@@ -43,6 +43,13 @@ public struct Conversation: Identifiable, Hashable, Sendable {
   /// Le dernier message me nomme, ou répond à un de mes messages. Un fil muet
   /// notifie quand même pour ça — et pour ça seulement.
   public var lastMessageIsPersonal: Bool = false
+  /// Le dernier élément du fil est une ligne d'événement — « Alice a rejoint
+  /// le groupe », « … a renommé le groupe » — et non un message. Il fait
+  /// remonter le fil, il ne sonne pas.
+  public var lastMessageIsSystemEvent: Bool = false
+  /// La réaction la plus récente d'un autre que moi, de quoi l'annoncer
+  /// (« Alice a réagi 👍 à « … » »). `nil` sans réaction datée.
+  public var lastIncomingReaction: IncomingReaction? = nil
 
   public var hasUnread: Bool { unreadCount > 0 }
 
@@ -153,5 +160,45 @@ public struct Conversation: Identifiable, Hashable, Sendable {
     self.groupPhotoPath = groupPhotoPath
     self.remoteAvatarID = remoteAvatarID
     self.memberAvatarIDs = memberAvatarIDs
+  }
+}
+
+/// Une réaction reçue, telle qu'une notification la raconte.
+public struct IncomingReaction: Hashable, Sendable {
+  /// L'event `m.reaction` : deux réactions ne se confondent jamais.
+  public var id: String
+  public var senderName: String
+  public var emoji: String
+  /// Le message visé, en une ligne (`sidebarPreviewText`) ; `nil` s'il n'est
+  /// pas dans ce qu'on a chargé du fil.
+  public var targetPreview: String?
+  public var sentAt: Date
+
+  public init(id: String, senderName: String, emoji: String, targetPreview: String?, sentAt: Date) {
+    self.id = id
+    self.senderName = senderName
+    self.emoji = emoji
+    self.targetPreview = targetPreview
+    self.sentAt = sentAt
+  }
+
+  /// « Alice a réagi 👍 à « On se voit demain ? » ». Le message visé est
+  /// coupé : sur l'écran verrouillé, c'est la réaction qui compte.
+  public var bodyFR: String {
+    Self.body(senderName: senderName, emoji: emoji, targetPreview: targetPreview)
+  }
+
+  public static func body(senderName: String?, emoji: String, targetPreview: String?) -> String {
+    let who = senderName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let quoted = targetPreview?
+      .replacingOccurrences(of: "\n", with: " ")
+      .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let short = quoted.count > 60 ? String(quoted.prefix(59)).trimmingCharacters(in: .whitespaces) + "…" : quoted
+    switch (who.isEmpty, short.isEmpty) {
+    case (false, false): return String(localized: "\(who) a réagi \(emoji) à « \(short) »")
+    case (false, true): return String(localized: "\(who) a réagi \(emoji)")
+    case (true, false): return String(localized: "A réagi \(emoji) à « \(short) »")
+    case (true, true): return String(localized: "A réagi \(emoji)")
+    }
   }
 }
