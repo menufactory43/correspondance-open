@@ -1737,11 +1737,27 @@ final class InboxStore {
     for member in members { mergedMemberCache[member.id] = member }
     mergedContacts.append(contact)
     persistMergedContacts()
+    unarchiveMembersOfActiveRow(contact)
     // Le visage avant la ligne : sinon elle s'affiche une fois avec ses
     // initiales, et l'avatar choisi n'arrive qu'au rafraîchissement suivant.
     await adoptMergedAvatar(contact)
     normalizeMergedContacts()
     await select(contact.id)
+  }
+
+  /// Une ligne dont un membre est dehors est dehors : les membres rangés en
+  /// sortent, au Relais compris. Sinon un fil archivé avant la fusion garde
+  /// son tag, et l'iPhone tait ses notifications sous une ligne active —
+  /// « Patate », épinglée, dont le Signal affichait « Nouveau message ».
+  private func unarchiveMembersOfActiveRow(_ contact: MergedContact) {
+    let ids = ArchiveState.membersToUnarchiveOnMerge(contact.memberIDs, archivedIDs: archivedIDs)
+    guard !ids.isEmpty else { return }
+    for id in ids {
+      archivedIDs.remove(id)
+      mergedMemberCache[id]?.isArchived = false
+    }
+    persistFlags()
+    relayNote(.archived, value: false, conversationIDs: ids)
   }
 
   /// Sépare : les fils repartent chacun de leur côté, et la paire ne se
@@ -1854,6 +1870,7 @@ final class InboxStore {
     }
     if !absorbedIDs.isEmpty { persistFlags(); persistDraftsNow() }
     persistMergedContacts()
+    unarchiveMembersOfActiveRow(contact)
     normalizeMergedContacts()
     await select(mergedID)
   }
@@ -4706,6 +4723,7 @@ final class InboxStore {
     merged: MergedContactStore.Stored?
   ) {
     var changedFlags = false
+    let archivedBefore = archivedIDs
     for id in known {
       let wasPinned = pinnedIDs.contains(id)
       if pinned.contains(id) { pinnedIDs.insert(id) } else { pinnedIDs.remove(id) }
@@ -4719,6 +4737,21 @@ final class InboxStore {
       requestDecisions[id] = newRequests[id]
       if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
         || wasArchived != archived.contains(id) || wasAsleep != newReminders[id] { changedFlags = true }
+    }
+    // Une ligne rangée ailleurs (l'iPhone) : ses salons le sont tous, mais le
+    // fil iMessage, que le Relais ignore, la garderait dehors ici.
+    for contact in mergedContacts {
+      let follow = ArchiveState.localMembersToArchive(
+        memberIDs: contact.memberIDs,
+        isRelayBacked: { Self.relayRoomID(ofConversation: $0) != nil },
+        archivedBefore: archivedBefore,
+        archivedNow: archivedIDs
+      )
+      for id in follow {
+        archivedIDs.insert(id)
+        mergedMemberCache[id]?.isArchived = true
+        changedFlags = true
+      }
     }
     if changedFlags {
       persistFlags()

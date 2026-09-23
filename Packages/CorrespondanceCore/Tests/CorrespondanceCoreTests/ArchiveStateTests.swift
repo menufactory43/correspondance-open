@@ -59,4 +59,42 @@ final class ArchiveStateTests: XCTestCase {
     let normalized = ArchiveState.normalized([row], archivedIDs: ["merged:x", "a"], mergedMembers: members)
     XCTAssertEqual(normalized?.first?.isArchived, false)
   }
+
+  // MARK: - Une ligne fusionnée n'a qu'un état
+
+  /// Fusionner des fils rangés avec un fil dehors donne une ligne dehors : les
+  /// rangés en sortent. Tous rangés, la ligne le reste.
+  func testMergingIntoAnActiveRowUnarchivesTheArchivedMembers() {
+    let members = ["imessage:any;-;+33600000000", "signal:!s:local", "messenger:!m:local"]
+    XCTAssertEqual(
+      ArchiveState.membersToUnarchiveOnMerge(members, archivedIDs: ["signal:!s:local", "messenger:!m:local"]),
+      ["signal:!s:local", "messenger:!m:local"]
+    )
+    XCTAssertEqual(ArchiveState.membersToUnarchiveOnMerge(members, archivedIDs: Set(members)), [])
+    XCTAssertEqual(ArchiveState.membersToUnarchiveOnMerge(members, archivedIDs: []), [])
+  }
+
+  /// L'iPhone range la ligne : tous les salons passent archivés d'un coup, le
+  /// fil iMessage suit sur le Mac. Un état figé, ou un seul salon rangé
+  /// (les autres tags n'étant pas encore arrivés), ne décide rien.
+  func testArchivingElsewhereCarriesTheMembersWithoutARoom() {
+    let members = ["imessage:any;-;+33600000000", "signal:!s:local", "messenger:!m:local"]
+    let relay: (String) -> Bool = { $0.contains("!") }
+    let rooms: Set<String> = ["signal:!s:local", "messenger:!m:local"]
+    XCTAssertEqual(
+      ArchiveState.localMembersToArchive(
+        memberIDs: members, isRelayBacked: relay, archivedBefore: [], archivedNow: rooms),
+      ["imessage:any;-;+33600000000"]
+    )
+    XCTAssertEqual(
+      ArchiveState.localMembersToArchive(
+        memberIDs: members, isRelayBacked: relay, archivedBefore: rooms, archivedNow: rooms),
+      []
+    )
+    XCTAssertEqual(
+      ArchiveState.localMembersToArchive(
+        memberIDs: members, isRelayBacked: relay, archivedBefore: [], archivedNow: ["signal:!s:local"]),
+      []
+    )
+  }
 }

@@ -457,7 +457,24 @@ public enum SharedRelayState {
     snapshot.muted
   }
 
+  /// Les salons archivés, lus comme l'inbox les lit : un salon membre d'une
+  /// ligne fusionnée n'est rangé que si la **ligne** l'est, c'est-à-dire si
+  /// tous ses salons le sont. Un seul fil encore dehors garde la ligne dans
+  /// l'inbox — et ses notifications avec, quel que soit le fil qui parle.
+  /// Vu le 23 sept. 2026 : « Patate », épinglée, dont le fil Signal portait un
+  /// tag d'archive resté d'avant la fusion ; l'extension le taisait, et l'écran
+  /// verrouillé disait « Nouveau message » pour un texte ordinaire.
+  ///
+  /// Un membre sans salon (iMessage) n'entre pas dans le compte : son archive
+  /// ne vit que sur le Mac, l'iPhone ne peut pas la lire.
   public static func archivedRoomIDs(in snapshot: ConversationStateSnapshot) -> Set<String> {
-    snapshot.archived
+    var archived = snapshot.archived
+    for contact in snapshot.mergedContacts?.merged ?? [] {
+      let rooms = contact.memberIDs.compactMap(MatrixSyncParser.roomID(inConversationID:))
+      if rooms.contains(where: { !snapshot.archived.contains($0) }) {
+        archived.subtract(rooms)
+      }
+    }
+    return archived
   }
 }

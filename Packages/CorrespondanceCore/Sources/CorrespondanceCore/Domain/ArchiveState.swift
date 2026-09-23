@@ -44,4 +44,39 @@ public enum ArchiveState {
     }
     return archivedIDs.contains(id)
   }
+
+  /// Les membres à sortir de l'archive quand des fils se réunissent. Une ligne
+  /// n'a qu'un état : si un seul membre est dehors, elle l'est, et les membres
+  /// rangés doivent en sortir aussi. Sinon leur tag reste au Relais, invisible
+  /// ici, et l'iPhone — qui ne voit pas le fil iMessage — tait leurs
+  /// notifications sous une ligne pourtant active.
+  public static func membersToUnarchiveOnMerge(
+    _ memberIDs: [String],
+    archivedIDs: Set<String>
+  ) -> [String] {
+    guard !memberIDs.allSatisfy(archivedIDs.contains) else { return [] }
+    return memberIDs.filter(archivedIDs.contains)
+  }
+
+  /// Les membres sans salon (iMessage) à ranger parce qu'un autre appareil
+  /// vient de ranger la ligne. L'iPhone archive tous les salons d'une ligne
+  /// fusionnée, mais il ne peut rien écrire pour le fil iMessage : sans cette
+  /// passe, le Mac garderait la ligne dehors pendant que l'iPhone la tait.
+  ///
+  /// Seul un **changement** vaut intention : tous les salons rangés, et au
+  /// moins un d'entre eux depuis la dernière lecture. Un état figé ne dit
+  /// rien de plus que ce que le Mac sait déjà.
+  public static func localMembersToArchive(
+    memberIDs: [String],
+    isRelayBacked: (String) -> Bool,
+    archivedBefore: Set<String>,
+    archivedNow: Set<String>
+  ) -> [String] {
+    let rooms = memberIDs.filter(isRelayBacked)
+    guard !rooms.isEmpty,
+          rooms.allSatisfy(archivedNow.contains),
+          rooms.contains(where: { !archivedBefore.contains($0) })
+    else { return [] }
+    return memberIDs.filter { !isRelayBacked($0) && !archivedNow.contains($0) }
+  }
 }

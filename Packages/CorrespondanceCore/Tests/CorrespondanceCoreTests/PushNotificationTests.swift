@@ -171,6 +171,32 @@ final class PushNotificationTests: XCTestCase {
     XCTAssertEqual(SharedRelayState.archivedRoomIDs(suiteName: suite), ["!a:s"])
   }
 
+  /// Une ligne fusionnée dont un seul salon reste dehors n'est pas rangée :
+  /// aucun de ses salons ne se tait, même celui qui porte encore un tag
+  /// d'archive. Rangée en entier, elle se tait en entier. Le membre iMessage,
+  /// sans salon, ne compte pas.
+  func testAMergedRowIsSilencedOnlyWhenAllItsRoomsAreArchived() {
+    let patate = MergedContact(
+      title: "Patate",
+      memberIDs: [
+        "imessage:any;-;+33600000000",
+        "signal:!signal:correspondance.local",
+        "messenger:!messenger:correspondance.local",
+      ],
+      defaultConversationID: "signal:!signal:correspondance.local"
+    )
+    var snapshot = ConversationStateSnapshot()
+    snapshot.mergedContacts = MergedContactStore.Stored(merged: [patate])
+    snapshot.archived = ["!signal:correspondance.local", "!range:correspondance.local"]
+    XCTAssertEqual(SharedRelayState.archivedRoomIDs(in: snapshot), ["!range:correspondance.local"])
+
+    snapshot.archived.insert("!messenger:correspondance.local")
+    XCTAssertEqual(
+      SharedRelayState.archivedRoomIDs(in: snapshot),
+      ["!signal:correspondance.local", "!messenger:correspondance.local", "!range:correspondance.local"]
+    )
+  }
+
   // MARK: - Le muet, seconde garde
 
   func testAMutedRoomIsNeverPresented() {

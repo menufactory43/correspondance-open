@@ -540,6 +540,7 @@ final class RelayStore {
     for member in members { mergedMemberCache[member.id] = member }
     mergedContacts.append(contact)
     persistMergedContacts()
+    unarchiveMembersOfActiveRow(contact)
     refoldMergedRows()
     // Le fil qu'on lisait vient de se replier : on suit la ligne qui le porte.
     let memberIDs = Set(contact.memberIDs)
@@ -564,10 +565,21 @@ final class RelayStore {
     mergedContacts.removeAll { absorbedIDs.contains($0.id) }
     for id in absorbedIDs { forgetMergedRowState(id) }
     persistMergedContacts()
+    unarchiveMembersOfActiveRow(contact)
     refoldMergedRows()
     let gone = absorbedIDs.union(ids)
     if let id = selectedConversationID, gone.contains(id) { selectedConversationID = mergedID }
     if let id = focusConversationID, gone.contains(id) { focusConversationID = mergedID }
+  }
+
+  /// Une ligne dont un membre est dehors est dehors : les membres rangés en
+  /// sortent, au Relais compris — sinon l'extension de notification, qui lit
+  /// les tags salon par salon, tairait un fil que l'inbox montre (cf. le Mac).
+  private func unarchiveMembersOfActiveRow(_ contact: MergedContact) {
+    let ids = ArchiveState.membersToUnarchiveOnMerge(contact.memberIDs, archivedIDs: state.archived)
+    guard !ids.isEmpty else { return }
+    for id in ids { state.archived.remove(id) }
+    relayNote(.archived, value: false, conversationIDs: ids)
   }
 
   /// Sépare : les fils repartent chacun de leur côté, et la paire ne se
