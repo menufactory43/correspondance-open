@@ -26,6 +26,11 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
   /// Les réglages de l'agent. `nil` tant que personne n'a tranché : l'agent
   /// s'en tient alors à sa propre configuration.
   public var agentSettings: AgentSettings?
+  /// Les salons que le Relais ne pousse plus du tout parce qu'ils sont
+  /// archivés : nos règles `override` (`MatrixClient.archivePushRuleID`).
+  /// `nil` tant qu'aucun `m.push_rules` n'est passé — on ne sait rien, et on
+  /// n'écrit rien.
+  public var archiveSilenced: Set<String>? = nil
 
   public init(
     archived: Set<String> = [],
@@ -90,6 +95,7 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
     switch event.type {
     case ConversationStateKeys.pushRulesType:
       muted = Self.mutedRoomIDs(inPushRules: content)
+      archiveSilenced = Self.archiveSilencedRoomIDs(inPushRules: content)
     case ConversationStateKeys.selfNoteType:
       selfNoteRoomID = content.string(at: "room_id")
     case ConversationStateKeys.mergedContactsType:
@@ -135,6 +141,21 @@ public struct ConversationStateSnapshot: Codable, Sendable, Equatable {
 
   private func setMembership(_ set: inout Set<String>, _ roomID: String, _ member: Bool) {
     if member { set.insert(roomID) } else { set.remove(roomID) }
+  }
+
+  /// Les salons tus pour cause d'archive : nos règles `override`, reconnues à
+  /// leur préfixe. Une règle désactivée ne tait rien.
+  public static func archiveSilencedRoomIDs(inPushRules content: MatrixJSON) -> Set<String> {
+    let rules = content.value(at: "global.override")?.arrayValue ?? []
+    var result: Set<String> = []
+    for rule in rules {
+      guard let id = rule["rule_id"]?.stringValue,
+            id.hasPrefix(MatrixClient.archivePushRulePrefix),
+            rule["enabled"]?.boolValue != false
+      else { continue }
+      result.insert(String(id.dropFirst(MatrixClient.archivePushRulePrefix.count)))
+    }
+    return result
   }
 
   /// Les salons muets, lus dans `m.push_rules`.

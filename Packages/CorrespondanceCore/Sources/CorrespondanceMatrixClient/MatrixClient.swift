@@ -1073,6 +1073,42 @@ public actor MatrixClient {
     }
   }
 
+  /// Archivé, c'est fini : ni bannière, ni son, pas même une mention. La
+  /// règle de salon de la sourdine n'y suffit pas — les règles de mention sont
+  /// des `override` et passent avant. Une `override` à nous, elle, passe avant
+  /// celles du serveur : le Relais n'appelle plus Sygnal du tout, et l'iPhone
+  /// n'a plus à taire une notification qu'il ne sait que rendre discrète.
+  public static let archivePushRulePrefix = "fr.correspondance.archived."
+
+  public static func archivePushRuleID(roomID: String) -> String { archivePushRulePrefix + roomID }
+
+  public static func archivePushRulePath(roomID: String) -> String {
+    "/_matrix/client/v3/pushrules/global/override/\(escape(archivePushRuleID(roomID: roomID)))"
+  }
+
+  public static func archivePushRuleBody(roomID: String) -> MatrixJSON {
+    .object([
+      "conditions": .array([
+        .object(["kind": .string("event_match"), "key": .string("room_id"), "pattern": .string(roomID)])
+      ]),
+      "actions": .array([]),
+    ])
+  }
+
+  public func setArchivePushRule(roomID: String, silenced: Bool) async throws {
+    if silenced {
+      _ = try await request(
+        method: "PUT", path: Self.archivePushRulePath(roomID: roomID),
+        body: Self.archivePushRuleBody(roomID: roomID))
+    } else {
+      do {
+        _ = try await request(method: "DELETE", path: Self.archivePushRulePath(roomID: roomID))
+      } catch MatrixError.http(let status, _, _) where status == 404 {
+        // Déjà retirée.
+      }
+    }
+  }
+
   // MARK: - Push (Sygnal → APNs)
 
   public static let pushersSetPath = "/_matrix/client/v3/pushers/set"

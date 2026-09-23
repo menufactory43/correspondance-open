@@ -156,3 +156,33 @@ final class ReactionNotificationTests: XCTestCase {
       #"{"actions":["notify"],"conditions":[{"key":"type","kind":"event_match","pattern":"m.reaction"}]}"#)
   }
 }
+
+/// Un fil archivé ne pousse plus rien : une règle `override` par salon, que
+/// l'état du Relais relit.
+final class ArchivePushRuleTests: XCTestCase {
+  private let room = "!abc:correspondance.local"
+
+  func testTheRuleSilencesTheWholeRoom() throws {
+    XCTAssertEqual(
+      MatrixClient.archivePushRulePath(roomID: room),
+      "/_matrix/client/v3/pushrules/global/override/fr.correspondance.archived.%21abc%3Acorrespondance.local")
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let body = String(data: try encoder.encode(MatrixClient.archivePushRuleBody(roomID: room)), encoding: .utf8)
+    XCTAssertEqual(
+      body,
+      #"{"actions":[],"conditions":[{"key":"room_id","kind":"event_match","pattern":"!abc:correspondance.local"}]}"#)
+  }
+
+  func testTheSnapshotReadsOurOverrideRulesOnly() throws {
+    let json = """
+      {"global":{"override":[
+        {"rule_id":".m.rule.master","enabled":false,"actions":[]},
+        {"rule_id":"fr.correspondance.archived.!abc:correspondance.local","enabled":true,"actions":[]},
+        {"rule_id":"fr.correspondance.archived.!off:correspondance.local","enabled":false,"actions":[]}
+      ]}}
+      """
+    let content = try JSONDecoder().decode(MatrixJSON.self, from: Data(json.utf8))
+    XCTAssertEqual(ConversationStateSnapshot.archiveSilencedRoomIDs(inPushRules: content), [room])
+  }
+}

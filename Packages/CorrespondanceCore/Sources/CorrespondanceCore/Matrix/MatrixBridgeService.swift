@@ -43,6 +43,10 @@ public actor MatrixBridgeService {
   /// L'état de conversation tel que le Relais le raconte (ADR 0001). Cumulatif :
   /// chaque `/sync` y fusionne ce qui a changé.
   private var relayState = ConversationStateSnapshot()
+  /// Les règles d'archive déjà écrites ou retirées ce lancement-ci, en
+  /// attendant que `m.push_rules` revienne les confirmer : sans ça, chaque
+  /// passe de `/sync` réécrirait les mêmes.
+  private var archiveRulesInFlight: [String: Bool] = [:]
   /// La base locale. `nil` seulement si SQLite refuse d'ouvrir le fichier —
   /// l'app marche alors sans mémoire, plutôt que pas du tout.
   private let store: LocalStore?
@@ -248,6 +252,7 @@ public actor MatrixBridgeService {
     let before = Set(rooms.keys)
     parser.apply(response, to: &rooms)
     parser.applyConversationState(response, to: &relayState)
+    await reconcileArchivePushRules()
     dirtyRoomIDs.formUnion(response.rooms?.join?.keys ?? [:].keys)
     let left = before.subtracting(rooms.keys)
     await repairNetworklessPortals()
@@ -1280,6 +1285,40 @@ public actor MatrixBridgeService {
     snapshot.apply(response)
     relayState = snapshot
     return snapshot
+  }
+
+  /// Aligne les règles de push sur l'archive du Relais : un salon rangé ne
+  /// pousse plus rien, un salon ressorti pousse de nouveau. Lu comme l'inbox
+  /// le lit (`SharedRelayState.archivedRoomIDs(in:)`) : un fil d'une ligne
+  /// fusionnée n'est tu que si toute la ligne est rangée.
+  ///
+  /// Un appareil suffit, n'importe lequel : c'est l'état du Relais qu'on
+  /// écrit, et deux appareils qui l'écrivent ensemble écrivent la même chose.
+  func reconcileArchivePushRules() async {
+    guard let silenced = relayState.archiveSilenced else { return }
+    let wanted = SharedRelayState.archivedRoomIDs(in: relayState).intersection(rooms.keys)
+    // Ce que le Relais a confirmé n'est plus en vol.
+    archiveRulesInFlight = archiveRulesInFlight.filter { roomID, value in
+      silenced.contains(roomID) != value
+    }
+    var changes: [(String, Bool)] = []
+    for roomID in wanted.subtracting(silenced) where archiveRulesInFlight[roomID] != true {
+      changes.append((roomID, true))
+    }
+    for roomID in silenced.subtracting(wanted) where archiveRulesInFlight[roomID] != false {
+      // Un salon quitté garde sa règle : elle ne gêne personne, et un salon
+      // qu'on ne voit plus n'est pas un salon ressorti de l'archive.
+      guard rooms[roomID] != nil else { continue }
+      changes.append((roomID, false))
+    }
+    for (roomID, value) in changes {
+      archiveRulesInFlight[roomID] = value
+      do {
+        try await client.setArchivePushRule(roomID: roomID, silenced: value)
+      } catch {
+        archiveRulesInFlight.removeValue(forKey: roomID)
+      }
+    }
   }
 
   /// Envoie une écriture en attente. Jette si le Relais refuse — l'appelant la
