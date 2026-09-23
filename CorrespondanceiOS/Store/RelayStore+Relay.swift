@@ -157,10 +157,21 @@ extension RelayStore {
   /// le montrer, ni le perdre.
   func adoptRelayState() async {
     guard !isDemo else { return }
-    let snapshot = relayQueue.applied(to: await matrix.conversationState)
+    adoptRelayState(await matrix.conversationState)
+  }
+
+  /// Sans `await` : au lancement, les salons relus et leur état se posent dans
+  /// le même tour, et SwiftUI ne dessine jamais l'entre-deux.
+  func adoptRelayState(_ relayed: ConversationStateSnapshot) {
+    guard !isDemo else { return }
+    let snapshot = relayQueue.applied(to: relayed)
     // Les réglages de l'agent ne dépendent d'aucun salon : ils s'adoptent avant
     // qu'on renonce faute de conversation connue.
     installAgentSettings(snapshot.agentSettings)
+    // Les fusions d'abord : l'état d'une ligne fusionnée se lit dans ses
+    // membres, et au lancement on ne les connaît qu'ici. Adoptées après, une
+    // ligne archivée restait dans l'inbox jusqu'au `/sync` suivant.
+    if let stored = snapshot.mergedContacts { adoptMergedContacts(stored) }
 
     var roomToConversation: [String: String] = [:]
     for conversation in conversations {
@@ -213,7 +224,11 @@ extension RelayStore {
       }
     }
 
+    let mutedChanged = next.muted != state.muted
     if next != state { state = next }
+    // Un fil muet compte ses non-lus depuis mon accusé, pas depuis le serveur
+    // (`mergedRows`) : si la sourdine a bougé, la liste se recompte.
+    if mutedChanged { refoldMergedRows() }
     refreshPendingRequests()
 
     // Le masquage s'ajoute, il ne se retire jamais : rien dans l'app ne démasque
@@ -221,8 +236,6 @@ extension RelayStore {
     var hidden = hiddenMessageIDs
     for roomID in roomToConversation.keys { hidden.formUnion(snapshot.hidden[roomID] ?? []) }
     if hidden != hiddenMessageIDs { hiddenMessageIDs = hidden }
-
-    if let stored = snapshot.mergedContacts { adoptMergedContacts(stored) }
 
     // Ce que l'extension de notification a le droit de savoir, et rien d'autre :
     // quels salons sont muets, lesquels sont archivés. Elle ne tient pas de

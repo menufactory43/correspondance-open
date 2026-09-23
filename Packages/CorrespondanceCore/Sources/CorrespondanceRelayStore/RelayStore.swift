@@ -175,7 +175,13 @@ package final class RelayStore {
       return
     }
     if await matrix.restoreFromDisk() {
-      conversations = mergedRows(await matrix.conversations())
+      // Les salons et leur état relus de la base, posés dans le même tour :
+      // la première image de l'inbox est la bonne (cf. l'iPhone).
+      let restored = await matrix.conversations()
+      let saved = await matrix.conversationState
+      conversations = restored
+      adoptRelayState(saved)
+      conversations = mergedRows(restored)
       session = .connected
     }
     await rouvrirTailcatSiBesoin()
@@ -189,8 +195,10 @@ package final class RelayStore {
       syncError = String(localized: "Relais injoignable pour l'instant — nouvel essai en cours.")
     case .valid:
       session = .connected
-      conversations = mergedRows(await matrix.conversations())
-      await reloadRelayState()
+      let rows = mergedRows(await matrix.conversations())
+      if rows != conversations { conversations = rows }
+      // Relire tout le Relais ne sert qu'à un appareil qui n'a rien gardé.
+      if !(await matrix.conversationStateIsRestored) { await reloadRelayState() }
       refreshPendingRequests()
     }
     startSyncLoop()

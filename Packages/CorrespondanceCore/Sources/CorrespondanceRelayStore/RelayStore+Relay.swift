@@ -157,10 +157,21 @@ extension RelayStore {
   /// le montrer, ni le perdre.
   package func adoptRelayState() async {
     guard !isDemo else { return }
-    let snapshot = relayQueue.applied(to: await matrix.conversationState)
+    adoptRelayState(await matrix.conversationState)
+  }
+
+  /// Sans `await` : au lancement, les salons relus et leur état se posent dans
+  /// le même tour.
+  package func adoptRelayState(_ relayed: ConversationStateSnapshot) {
+    guard !isDemo else { return }
+    let snapshot = relayQueue.applied(to: relayed)
     // Les réglages de l'agent ne dépendent d'aucun salon : ils s'adoptent avant
     // qu'on renonce faute de conversation connue.
     installAgentSettings(snapshot.agentSettings)
+    // Les fusions d'abord : l'état d'une ligne fusionnée se lit dans ses membres.
+    if let stored = snapshot.mergedContacts, stored.merged != mergedContacts {
+      mergedContacts = stored.merged
+    }
 
     var roomToConversation: [String: String] = [:]
     for conversation in conversations {
@@ -215,10 +226,6 @@ extension RelayStore {
     var hidden = hiddenMessageIDs
     for roomID in roomToConversation.keys { hidden.formUnion(snapshot.hidden[roomID] ?? []) }
     if hidden != hiddenMessageIDs { hiddenMessageIDs = hidden }
-
-    if let stored = snapshot.mergedContacts, stored.merged != mergedContacts {
-      mergedContacts = stored.merged
-    }
 
     // Ce que l'extension de notification a le droit de savoir, et rien d'autre :
     // quels salons sont muets, lesquels sont archivés. Elle ne tient pas de

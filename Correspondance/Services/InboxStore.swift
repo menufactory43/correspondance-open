@@ -2746,10 +2746,15 @@ final class InboxStore {
         return
       }
       self.isMatrixConnected = true
-      // L'état de conversation ne revient pas dans un `/sync` incrémental : on le
-      // relit une fois au démarrage, curseur intact. C'est ce qui le fait revenir
-      // après un `defaults delete`, et ce qui le donnera à un appareil neuf.
-      await self.reloadRelayState()
+      // L'état de conversation relu de la base est tenu à jour par le `/sync`
+      // incrémental, écrit avec son curseur. Il ne se relit en entier, curseur
+      // intact, que s'il n'y a rien en base : un appareil neuf, une base
+      // vidée — c'est ce qui le fait revenir après un « Recharger ».
+      if await self.matrix.conversationStateIsRestored {
+        await self.adoptRelayState()
+      } else {
+        await self.reloadRelayState()
+      }
       // La note à soi, garantie à **chaque** connexion et pas seulement au
       // premier appairage : quelqu'un d'déjà appairé — c'est-à-dire tout le
       // monde dès la deuxième version — ne l'aurait jamais eue. `ensureSelfNote`
@@ -4170,7 +4175,11 @@ final class InboxStore {
       let ids = staleAvatarIDs
       Task { for id in ids { await ConversationAvatarStore.shared.invalidate(conversationID: id) } }
     }
-    conversations = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+    // Réassignée seulement si elle change : chaque affectation rejoue le
+    // `didSet` (normalisations, badge, passe de notifications sur tout
+    // l'inbox) et redessine la liste — pour un accusé ou une frappe.
+    let next = Array(byID.values).sorted(by: { sortForInbox($0, $1) })
+    if next != conversations { conversations = next }
   }
 
   /// Le `/sync` a rendu quelque chose : chaque fil sous les yeux de quelqu'un
@@ -4747,20 +4756,29 @@ final class InboxStore {
   ) {
     var changedFlags = false
     let archivedBefore = archivedIDs
+    // Sur des copies, remises en place seulement si elles ont bougé : chaque
+    // `insert` sur une propriété observée compte comme un changement, même
+    // quand l'élément y était déjà — et chaque `/sync` redessinait l'inbox.
+    var nextPinned = pinnedIDs
+    var nextMuted = mutedIDs
+    var nextArchived = archivedIDs
+    var nextReminders = remindersByID
+    var nextDecisions = requestDecisions
     for id in known {
-      let wasPinned = pinnedIDs.contains(id)
-      if pinned.contains(id) { pinnedIDs.insert(id) } else { pinnedIDs.remove(id) }
-      let wasMuted = mutedIDs.contains(id)
-      if muted.contains(id) { mutedIDs.insert(id) } else { mutedIDs.remove(id) }
-      let wasArchived = archivedIDs.contains(id)
-      if archived.contains(id) { archivedIDs.insert(id) } else { archivedIDs.remove(id) }
-      mergedMemberCache[id]?.isArchived = archived.contains(id)
-      let wasAsleep = remindersByID[id]
-      remindersByID[id] = newReminders[id]
-      requestDecisions[id] = newRequests[id]
-      if wasPinned != pinned.contains(id) || wasMuted != muted.contains(id)
-        || wasArchived != archived.contains(id) || wasAsleep != newReminders[id] { changedFlags = true }
+      if pinned.contains(id) { nextPinned.insert(id) } else { nextPinned.remove(id) }
+      if muted.contains(id) { nextMuted.insert(id) } else { nextMuted.remove(id) }
+      if archived.contains(id) { nextArchived.insert(id) } else { nextArchived.remove(id) }
+      if let cached = mergedMemberCache[id], cached.isArchived != archived.contains(id) {
+        mergedMemberCache[id]?.isArchived = archived.contains(id)
+      }
+      nextReminders[id] = newReminders[id]
+      nextDecisions[id] = newRequests[id]
     }
+    if nextPinned != pinnedIDs { pinnedIDs = nextPinned; changedFlags = true }
+    if nextMuted != mutedIDs { mutedIDs = nextMuted; changedFlags = true }
+    if nextArchived != archivedIDs { archivedIDs = nextArchived; changedFlags = true }
+    if nextReminders != remindersByID { remindersByID = nextReminders; changedFlags = true }
+    if nextDecisions != requestDecisions { requestDecisions = nextDecisions }
     // Une ligne rangée ailleurs (l'iPhone) : ses salons le sont tous, mais le
     // fil iMessage, que le Relais ignore, la garderait dehors ici.
     for contact in mergedContacts {

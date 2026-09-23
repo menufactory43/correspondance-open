@@ -43,6 +43,12 @@ public actor MatrixBridgeService {
   /// L'état de conversation tel que le Relais le raconte (ADR 0001). Cumulatif :
   /// chaque `/sync` y fusionne ce qui a changé.
   private var relayState = ConversationStateSnapshot()
+  /// Le dernier état de conversation écrit en base : on ne le réécrit que
+  /// s'il a bougé.
+  private var persistedRelayState: ConversationStateSnapshot?
+  /// Vrai quand l'état de conversation vient de la base, écrit avec le
+  /// curseur : le `/sync` incrémental suffit alors à le tenir à jour.
+  private var restoredRelayState = false
   /// Les règles d'archive déjà écrites ou retirées ce lancement-ci, en
   /// attendant que `m.push_rules` revienne les confirmer : sans ça, chaque
   /// passe de `/sync` réécrirait les mêmes.
@@ -147,6 +153,9 @@ public actor MatrixBridgeService {
     didHydrate = true
     rooms = [:]
     nextBatch = nil
+    relayState = ConversationStateSnapshot()
+    persistedRelayState = nil
+    restoredRelayState = false
     managementRoomIDs = [:]
     loadedHistoryRoomIDs = []
     dirtyRoomIDs = []
@@ -301,7 +310,8 @@ public actor MatrixBridgeService {
   /// ou, sans borne connue, une seule page. « Tant que du nouveau » plutôt que
   /// « jusqu'au premier event connu » : un historique troué par le passé (salon
   /// rejoint en retard, anciennes absences) se répare ainsi au passage, dans
-  /// la même borne. Un échec réseau laisse le trou en attente : on retentera à
+  /// la même borne. « Nouveau » veut dire absent de la base : ce qu'elle a déjà
+  /// n'est ni rechargé en mémoire ni compté. Un échec réseau laisse le trou en attente : on retentera à
   /// la passe suivante, le curseur ne le resignalera pas.
   private func fillTimelineGaps() async {
     let parser = MatrixSyncParser(selfUserID: selfUserID)
@@ -320,7 +330,13 @@ public actor MatrixBridgeService {
           )
           pages += 1
           guard var model = rooms[roomID] else { break }
-          let outcome = parser.applyMessages(page.chunk, roomID: roomID, to: &model)
+          // « Nouveau » se juge contre la base, pas contre la mémoire : au
+          // lancement, un salon n'y tient que son dernier message, et tout ce
+          // que la base avait déjà passait pour neuf — dix pages de cent par
+          // salon bavard à chaque retour, décodées, gardées, réécrites.
+          let stored = store?.knownEventIDs(page.chunk.compactMap(\.eventID)) ?? []
+          let fresh = page.chunk.filter { $0.eventID.map { !stored.contains($0) } ?? true }
+          let outcome = parser.applyMessages(fresh, roomID: roomID, to: &model)
           rooms[roomID] = model
           // Plus rien de nouveau, ou début du salon : le trou est comblé.
           guard outcome.added > 0, !page.chunk.isEmpty, let next = page.end else { break }
@@ -1264,7 +1280,18 @@ public actor MatrixBridgeService {
   // MARK: - État de conversation (Relais)
 
   /// L'état que le Relais a déjà raconté à cette session.
-  public var conversationState: ConversationStateSnapshot { relayState }
+  public var conversationState: ConversationStateSnapshot {
+    hydrateIfNeeded()
+    return relayState
+  }
+
+  /// L'état de conversation a été relu de la base, avec le curseur qui le
+  /// prolonge. Relire tout le Relais au lancement devient inutile : comme
+  /// Signal, on part de ce qu'on sait, et le `/sync` apporte ce qui a changé.
+  public var conversationStateIsRestored: Bool {
+    hydrateIfNeeded()
+    return restoredRelayState
+  }
 
   /// Relit tout l'état depuis le Relais, sans consommer le curseur `/sync` :
   /// Le filtre de la boucle `/sync` : sans la présence. Personne ne la lit,
@@ -1279,11 +1306,16 @@ public actor MatrixBridgeService {
   @discardableResult
   public func fetchConversationState() async throws -> ConversationStateSnapshot {
     guard await client.isConfigured else { throw MatrixError.notConfigured }
+    hydrateIfNeeded()
     let filter = #"{"room":{"timeline":{"limit":0},"state":{"types":[]}},"presence":{"types":[]}}"#
     let response = try await client.sync(since: nil, timeoutMilliseconds: 0, filter: filter)
     var snapshot = ConversationStateSnapshot()
     snapshot.apply(response)
+    // Les règles de push ne passent pas par ce sync filtré : on garde ce que
+    // la boucle en sait déjà, plutôt que de retomber à « on ne sait rien ».
+    if snapshot.archiveSilenced == nil { snapshot.archiveSilenced = relayState.archiveSilenced }
     relayState = snapshot
+    persist()
     return snapshot
   }
 
@@ -1367,6 +1399,7 @@ public actor MatrixBridgeService {
     // L'écriture partie, on la pose aussi sur notre copie : le `/sync` qui la
     // renverra n'apprendra rien de neuf, et rien ne clignote entre-temps.
     write.apply(to: &relayState)
+    persist()
   }
 
   private func setTag(roomID: String, tag: String, on: Bool) async throws {
@@ -2224,6 +2257,16 @@ public actor MatrixBridgeService {
     didHydrate = true
     guard let store else { return }
     store.importLegacySnapshotIfNeeded(selfUserID: selfUserID)
+    // L'état de conversation du dernier lancement : archive, épingles, muets,
+    // fusions. C'est ce qui fait que la première image de l'inbox est déjà la
+    // bonne, au lieu d'attendre que le Relais le raconte de nouveau.
+    if let json = store.flag(LocalStore.conversationStateKey),
+       let saved = try? JSONDecoder().decode(ConversationStateSnapshot.self, from: Data(json.utf8))
+    {
+      relayState = saved
+      persistedRelayState = saved
+      restoredRelayState = store.syncCursor != nil
+    }
 
     let stored = store.rooms()
     guard !stored.isEmpty else {
@@ -2339,13 +2382,22 @@ public actor MatrixBridgeService {
     }
     dirtyRoomIDs.removeAll()
 
+    var stateJSON: String?
+    if relayState != persistedRelayState,
+       let data = try? JSONEncoder().encode(relayState)
+    {
+      stateJSON = String(decoding: data, as: UTF8.self)
+      persistedRelayState = relayState
+    }
+
     store.commit(
       rooms: storedRooms,
       messages: messages,
       reactions: reactions,
       deletedEventIDs: deleted,
       deletedRoomIDs: leftRoomIDs,
-      cursor: cursor
+      cursor: cursor,
+      conversationState: stateJSON
     )
   }
 }

@@ -189,7 +189,14 @@ final class RelayStore {
     isRestoring = true
     session = .connected
     if await matrix.restoreFromDisk() {
-      conversations = mergedRows(await matrix.conversations())
+      // Les salons ET leur état — archive, épingles, muets, fusions — relus
+      // de la base, puis posés d'un seul geste, sans `await` entre les deux :
+      // la première image de l'inbox est la bonne. Avant, elle montrait les
+      // archivés et les fils non fusionnés le temps que le Relais le redise.
+      let restored = await matrix.conversations()
+      let saved = await matrix.conversationState
+      conversations = mergedRows(restored)
+      adoptRelayState(saved)
     }
     isRestoring = false
     // Le carnet, s'il est déjà ouvert : les numéros deviennent des noms sans
@@ -208,8 +215,12 @@ final class RelayStore {
       noteSyncFailure(String(localized: "Relais injoignable pour l'instant — nouvel essai en cours."))
     case .valid:
       session = .connected
-      conversations = mergedRows(await matrix.conversations())
-      await reloadRelayState()
+      let rows = mergedRows(await matrix.conversations())
+      if rows != conversations { conversations = rows }
+      // Relire tout le Relais (un `/sync` sans curseur, sur chaque salon) ne
+      // sert qu'à un appareil qui n'a rien gardé : ailleurs, l'état relu de
+      // la base et le `/sync` incrémental suffisent.
+      if !(await matrix.conversationStateIsRestored) { await reloadRelayState() }
       refreshPendingRequests()
     }
     startSyncLoop()
@@ -636,7 +647,7 @@ final class RelayStore {
   /// s'effacent, leurs membres reviennent du cache, et `mergedRows` repose
   /// celles qui existent encore. C'est ce qui fait qu'une fusion défaite sur
   /// le Mac rouvre deux fils ici sans attendre un catalogue complet.
-  private func refoldMergedRows() {
+  func refoldMergedRows() {
     var pool = conversations.filter { !MergedContact.isMergedID($0.id) }
     let present = Set(pool.map(\.id))
     pool += mergedMemberCache.values.filter { !present.contains($0.id) }.sorted { $0.id < $1.id }

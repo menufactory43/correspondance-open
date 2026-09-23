@@ -73,6 +73,26 @@ public extension LocalStore {
     }
   }
 
+  /// Ceux de ces events que la base a déjà, messages ou réactions. C'est ce
+  /// qui arrête le rattrapage d'un trou au premier event connu **de la base**,
+  /// pas seulement de la mémoire — qui, au lancement, ne tient qu'un message
+  /// par salon.
+  func knownEventIDs(_ eventIDs: [String]) -> Set<String> {
+    guard !eventIDs.isEmpty else { return [] }
+    return read([]) {
+      let holes = Array(repeating: "?", count: eventIDs.count).joined(separator: ", ")
+      let statement = try database
+        .prepare(
+          "SELECT event_id FROM messages WHERE event_id IN (\(holes)) "
+            + "UNION SELECT event_id FROM reactions WHERE event_id IN (\(holes));"
+        )
+        .bind(eventIDs.map { .text($0) } + eventIDs.map { .text($0) })
+      var result = Set<String>()
+      try statement.forEachRow { row in result.insert(row.string(0)) }
+      return result
+    }
+  }
+
   func messageCount(roomID: String) -> Int {
     read(0) {
       Int(try database.scalarInt("SELECT COUNT(*) FROM messages WHERE room_id = ?;", [.text(roomID)]) ?? 0)
@@ -113,7 +133,8 @@ public extension LocalStore {
     reactions: [String: [String: MatrixRoomModel.ReactionEvent]],
     deletedEventIDs: [String] = [],
     deletedRoomIDs: [String] = [],
-    cursor: String?? = nil
+    cursor: String?? = nil,
+    conversationState: String? = nil
   ) {
     attempt {
       try database.transaction {
@@ -146,6 +167,15 @@ public extension LocalStore {
             try database.run("DELETE FROM sync_state WHERE key = 'next_batch';")
           }
         }
+        // L'état de conversation voyage avec le curseur : un curseur avancé
+        // sans lui perdrait les tags racontés entre-temps.
+        if let conversationState {
+          try database.run(
+            "INSERT INTO sync_state (key, value) VALUES (?, ?) "
+              + "ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+            [.text(Self.conversationStateKey), .text(conversationState)]
+          )
+        }
       }
     }
   }
@@ -160,6 +190,9 @@ public extension LocalStore {
       }
     }
   }
+
+  /// La clé de `sync_state` où dort l'état de conversation du Relais (JSON).
+  static let conversationStateKey = "conversation_state"
 
   // MARK: - Privé
 
