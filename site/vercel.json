@@ -1,22 +1,5 @@
 {
   "cleanUrls": true,
-  "redirects": [
-    {
-      "source": "/mac",
-      "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/mac-latest/Correspondance.dmg",
-      "permanent": false
-    },
-    {
-      "source": "/linux",
-      "destination": "https://github.com/menufactory43/correspondance-releases/releases/download/linux-latest/Correspondance-linux-x86_64.tar.gz",
-      "permanent": false
-    },
-    {
-      "source": "/ios",
-      "destination": "https://testflight.apple.com/join/pv7HR2YT",
-      "permanent": false
-    }
-  ],
   "headers": [
     {
       "source": "/img/(.*)",
@@ -26,6 +9,20 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/mac",
+      "destination": "/api/dl?p=mac"
+    },
+    {
+      "source": "/linux",
+      "destination": "/api/dl?p=linux"
+    },
+    {
+      "source": "/ios",
+      "destination": "/api/dl?p=ios"
     }
   ]
 }

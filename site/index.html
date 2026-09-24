@@ -199,6 +199,8 @@
   details p{margin-top:12px;color:var(--ink-2);font-size:15.5px;max-width:64ch}
 
   .final{text-align:center;padding:120px 0 96px;background:linear-gradient(180deg,#fff,var(--bg-2))}
+  .final .tally{margin-top:22px;font-size:14px;color:var(--ink-3)}
+  .final .tally b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
   .final .icon{width:72px;height:72px;border-radius:17px;margin:0 auto 24px;box-shadow:var(--shadow-sm)}
 
   footer{border-top:1px solid var(--line);padding:48px 0 40px;font-size:14px;color:var(--ink-3)}
@@ -209,7 +211,7 @@
   footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   footer .bottom{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:13px}
 </style>
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "@id": "https://correspondance-eta.vercel.app/", "name": "Correspondance", "url": "https://correspondance-eta.vercel.app/", "inLanguage": "fr", "description": "Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X et Slack dans une seule inbox sur Mac, iPhone et Linux, avec un assistant IA qui propose des réponses que vous validez avant envoi. Gratuit, hébergé chez vous.", "applicationCategory": "CommunicationApplication", "operatingSystem": "macOS, iOS, Linux", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock"}, "downloadUrl": "https://github.com/menufactory43/correspondance-releases/releases", "installUrl": "https://testflight.apple.com/join/pv7HR2YT", "featureList": ["iMessage", "Signal", "WhatsApp", "Instagram", "Messenger", "X", "Slack", "Assistant IA qui propose des brouillons", "Traduction sur l'appareil"], "author": {"@type": "Person", "name": "meffysto", "url": "https://github.com/menufactory43"}, "image": "https://correspondance-eta.vercel.app/img/og.png", "sameAs": ["https://notacent.vercel.app/app/correspondance", "https://github.com/menufactory43/correspondance-open"], "license": "https://opensource.org/licenses/MIT"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "@id": "https://correspondance-eta.vercel.app/", "name": "Correspondance", "url": "https://correspondance-eta.vercel.app/", "inLanguage": "fr", "description": "Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X et Slack dans une seule inbox sur Mac, iPhone et Linux, avec un assistant IA qui propose des réponses que vous validez avant envoi. Gratuit, hébergé chez vous.", "applicationCategory": "CommunicationApplication", "operatingSystem": "macOS, iOS, Linux", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock"}, "downloadUrl": "https://github.com/menufactory43/correspondance-releases/releases", "installUrl": "https://apps.apple.com/fr/app/correspondance-une-inbox/id6807945434", "featureList": ["iMessage", "Signal", "WhatsApp", "Instagram", "Messenger", "X", "Slack", "Assistant IA qui propose des brouillons", "Traduction sur l'appareil"], "author": {"@type": "Person", "name": "meffysto", "url": "https://github.com/menufactory43"}, "image": "https://correspondance-eta.vercel.app/img/og.png", "sameAs": ["https://notacent.vercel.app/app/correspondance", "https://github.com/menufactory43/correspondance-open"], "license": "https://opensource.org/licenses/MIT"}</script>
 </head>
 <body>
 
@@ -226,7 +228,7 @@
       <li><a href="#faq">FAQ</a></li>
       <li><a href="/en" lang="en" hreflang="en" title="English version">EN</a></li>
     </ul>
-    <a class="btn" href="https://testflight.apple.com/join/pv7HR2YT">Rejoindre la bêta</a>
+    <a class="btn" href="/ios">Télécharger</a>
   </div>
 </nav>
 
@@ -234,11 +236,11 @@
   <div class="wrap">
     <img class="icon" src="/img/icon.png" alt="Icône de Correspondance">
     <h1>Toutes vos messageries, une inbox. Et un assistant qui répond avec vous.</h1>
-    <p class="lede">iMessage, Signal, WhatsApp, Instagram, Messenger, X et Slack réunis, sur Mac, iPhone et Linux. Invitez votre assistant dans un fil : il propose une réponse que vous seul voyez, vous l’envoyez, la corrigez ou l’ignorez. Il tourne chez vous, avec votre abonnement Claude, sans app Meta sur votre téléphone.</p>
+    <p class="lede">Sur Mac, iPhone et Linux. L’assistant propose une réponse, vous décidez de l’envoyer. Tout tourne chez vous.</p>
     <div class="cta">
-      <a class="btn" href="https://testflight.apple.com/join/pv7HR2YT">
+      <a class="btn" href="/ios">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.7c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.8 3-.5 7.6 1.3 10.1.9 1.2 1.9 2.6 3.2 2.5 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.3.8 1.4 0 2.3-1.2 3.1-2.5.6-.9 1.1-1.9 1.4-2.9-.1 0-2.9-1.1-2.9-4Zm-2.5-7.4c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.1.1 2.3-.6 3-1.5Z"/></svg>
-        <span class="store"><small>Bêta gratuite via TestFlight</small>Télécharger pour iPhone</span>
+        <span class="store"><small>Gratuit sur l’App Store · iOS 18</small>Télécharger pour iPhone</span>
       </a>
       <a class="btn secondary" href="/mac">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
@@ -512,7 +514,7 @@
     <h2>Une inbox pour tout. Un assistant qui répond avec vous.</h2>
     <p class="lede" style="margin:14px auto 0;max-width:44ch">Gratuit pour toujours, open source, sur iPhone, sur Mac et sur Linux.</p>
     <div class="cta">
-      <a class="btn" href="https://testflight.apple.com/join/pv7HR2YT"><span class="store"><small>Bêta gratuite via TestFlight</small>Télécharger pour iPhone</span></a>
+      <a class="btn" href="/ios"><span class="store"><small>Gratuit sur l’App Store · iOS 18</small>Télécharger pour iPhone</span></a>
       <a class="btn secondary" href="/mac">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         <span class="store"><small>Apple Silicon · macOS 14</small>Télécharger pour Mac</span>
@@ -522,6 +524,7 @@
         <span class="store"><small>x86_64 · binaire statique</small>Télécharger pour Linux</span>
       </a>
     </div>
+    <p class="tally" id="tally" hidden aria-live="polite">Déjà téléchargé <b id="tally-n"></b> fois sur Mac.</p>
   </div>
 </div>
 
@@ -533,7 +536,7 @@
         <p style="margin-top:12px;max-width:32ch">Sept messageries dans une inbox, avec un assistant dedans. Mac, iPhone et Linux. Hébergé chez vous.</p>
       </div>
       <div><h4>Produit</h4><ul><li><a href="#inbox">Inbox</a></li><li><a href="#agents">Agents</a></li><li><a href="#fonctions">Fonctions</a></li><li><a href="#comparer">Comparer</a></li></ul></div>
-      <div><h4>Télécharger</h4><ul><li><a href="https://testflight.apple.com/join/pv7HR2YT">iPhone (TestFlight)</a></li><li><a href="/mac">Mac (DMG)</a></li><li><a href="/linux">Linux (tar.gz)</a></li><li><a href="https://github.com/menufactory43/correspondance-releases/releases">Toutes les versions</a></li><li><a href="https://github.com/menufactory43/correspondance-open">Code source (MIT)</a></li></ul></div>
+      <div><h4>Télécharger</h4><ul><li><a href="/ios">iPhone (App Store)</a></li><li><a href="/mac">Mac (DMG)</a></li><li><a href="/linux">Linux (tar.gz)</a></li><li><a href="https://github.com/menufactory43/correspondance-releases/releases">Toutes les versions</a></li><li><a href="https://github.com/menufactory43/correspondance-open">Code source (MIT)</a></li></ul></div>
       <div><h4>Contact</h4><ul><li><a href="mailto:meffysto@gmail.com">Nous écrire</a></li><li><a href="/support">Aide</a></li><li><a href="#faq">FAQ</a></li><li><a href="/confidentialite">Politique de confidentialité</a></li></ul></div>
     </div>
     <div class="bottom">
@@ -543,5 +546,23 @@
   </div>
 </footer>
 
+<script>
+// Le compteur des téléchargements Mac (/api/stats, agrégé). Affiché seulement
+// au-dessus d'un seuil : un petit chiffre ferait l'inverse de l'effet voulu.
+// Tout échec est silencieux.
+(function () {
+  var SEUIL = 25;
+  var el = document.getElementById("tally"), n = document.getElementById("tally-n");
+  if (!el || !n || !window.fetch) return;
+  fetch("/api/stats", { headers: { Accept: "application/json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || typeof d.mac !== "number" || d.mac < SEUIL) return;
+      n.textContent = d.mac.toLocaleString("fr-FR");
+      el.hidden = false;
+    })
+    .catch(function () {});
+})();
+</script>
 </body>
 </html>
