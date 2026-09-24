@@ -33,14 +33,31 @@ struct NewConversationSheet: View {
 
   /// Les réseaux où un fil neuf s'ouvre depuis un numéro ou une adresse.
   private var freshNetworks: [MessageNetwork] {
-    ReachablePeople.freshNetworks(isMatrixConnected: store.isMatrixConnected, inUse: store.hasConversations(on:))
+    ReachablePeople.freshNetworks(isMatrixConnected: store.isMatrixConnected, inUse: isUsable)
+  }
+
+  /// Un réseau bridgé sert quand on y a un fil — ou, pour Signal, quand le
+  /// pont nous en donne le carnet : on y est connecté, même sans fil encore.
+  private func isUsable(_ network: MessageNetwork) -> Bool {
+    store.hasConversations(on: network) || (network == .signal && !store.signalContacts.isEmpty)
+  }
+
+  /// Les contacts Signal qui répondent à ce qu'on tape. Sans rien taper, les
+  /// quarante premiers, comme le carnet : six cents noms ne sont pas une liste.
+  private var signalHits: [BridgeContact] {
+    let needle = trimmedQuery.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    guard !needle.isEmpty else { return Array(store.signalContacts.prefix(40)) }
+    return store.signalContacts.filter { contact in
+      contact.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).contains(needle)
+        || (contact.phone?.contains(needle) ?? false)
+    }
   }
 
   /// Les puces : iMessage, puis les réseaux bridgés qui ont déjà un fil.
   private var filterNetworks: [MessageNetwork] {
     var networks: [MessageNetwork] = [.iMessage]
     if store.isMatrixConnected {
-      networks += MessageNetwork.matrixBridged.filter(store.hasConversations(on:))
+      networks += MessageNetwork.matrixBridged.filter(isUsable)
     }
     return networks
   }
@@ -50,6 +67,7 @@ struct NewConversationSheet: View {
       conversations: store.conversations,
       members: store.memberConversations(of:),
       book: bookHits,
+      signalContacts: signalHits,
       freshNetworks: freshNetworks
     )
   }
@@ -126,6 +144,7 @@ struct NewConversationSheet: View {
       isFieldFocused = true
       await store.refreshAgentDirectory()
       await refreshBook()
+      await store.refreshSignalContacts()
     }
     .onChange(of: query) { _, _ in
       Task { await refreshBook() }

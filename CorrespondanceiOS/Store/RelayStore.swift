@@ -1824,6 +1824,18 @@ final class RelayStore {
     try await matrix.startConversation(network: network, identifier: identifier)
   }
 
+  /// Le carnet Signal tel que le pont le tient : des gens joignables sans fil
+  /// ni numéro connu de l'iPhone. Écrit par `refreshSignalContacts()`.
+  var signalContacts: [BridgeContact] = []
+
+  /// Relu à chaque ouverture de « Nouvelle conversation » ; une erreur laisse
+  /// la dernière liste lue.
+  func refreshSignalContacts() async {
+    guard !isDemo else { return }
+    guard let contacts = try? await matrix.bridgeContacts(network: .signal) else { return }
+    signalContacts = contacts
+  }
+
   // MARK: - La fiche d'un fil
 
   struct ThreadMember: Identifiable, Hashable {

@@ -50,7 +50,10 @@ struct NewConversationSheet: View {
       .safeAreaInset(edge: .bottom, spacing: 0) { searchField }
     }
     .tint(theme.accent)
-    .task { isFocused = !store.isDemo }
+    .task {
+      isFocused = !store.isDemo
+      await store.refreshSignalContacts()
+    }
     .sheet(isPresented: $isCreatingGroup) {
       NewGroupSheet()
         .environment(store)
@@ -66,8 +69,29 @@ struct NewConversationSheet: View {
   /// Seuls les réseaux qui ont déjà un fil : une puce Messenger sans compte
   /// Messenger ne mènerait nulle part, et le dirait trop tard.
   private var networks: [MessageNetwork] {
-    let inUse = store.networksInUse
+    var inUse = store.networksInUse
+    // Un carnet Signal lu au pont : on y est connecté, même sans fil encore.
+    if !store.signalContacts.isEmpty, !inUse.contains(.signal) {
+      inUse = MessageNetwork.matrixBridged.filter { inUse.contains($0) || $0 == .signal }
+    }
     return inUse.isEmpty ? MessageNetwork.matrixBridged : inUse
+  }
+
+  /// Les contacts Signal sans fil ouvert qui répondent à ce qu'on tape. Sans
+  /// rien taper, les quarante premiers : six cents noms ne sont pas une liste.
+  private var signalHits: [BridgeContact] {
+    guard network == nil || network == .signal else { return [] }
+    let existing = Set(store.conversations.map(\.id))
+    let open = store.signalContacts.filter { contact in
+      guard let room = contact.dmRoomID else { return true }
+      return !existing.contains("\(MessageNetwork.signal.rawValue):\(room)")
+    }
+    let needle = trimmed.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+    guard !needle.isEmpty else { return Array(open.prefix(40)) }
+    return open.filter { contact in
+      contact.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).contains(needle)
+        || (contact.phone?.contains(needle) ?? false)
+    }
   }
 
   private var networkChips: some View {
@@ -228,6 +252,37 @@ struct NewConversationSheet: View {
               .font(Typography.sidebarSection(typeface))
               .foregroundStyle(theme.inkTertiary)
           }
+        }
+      }
+
+      // Le carnet de Signal, lu au pont : des gens qu'on peut joindre sans
+      // leur numéro — l'identifiant est un UUID que le pont résout.
+      if !signalHits.isEmpty {
+        Section {
+          ForEach(signalHits) { contact in
+            Button {
+              open(freeform: Freeform(network: .signal, identifier: contact.id))
+            } label: {
+              Label {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text(contact.name)
+                    .foregroundStyle(theme.ink)
+                  Text(contact.phone.map { "\($0) — nouveau fil Signal" } ?? String(localized: "Nouveau fil Signal"))
+                    .font(Typography.meta(typeface))
+                    .foregroundStyle(theme.inkTertiary)
+                }
+              } icon: {
+                Image(systemName: MessageNetwork.signal.systemImage)
+                  .foregroundStyle(theme.accent)
+              }
+            }
+            .disabled(isOpening)
+            .listRowBackground(Color.clear)
+          }
+        } header: {
+          Text("Contacts Signal")
+            .font(Typography.sidebarSection(typeface))
+            .foregroundStyle(theme.inkTertiary)
         }
       }
     }

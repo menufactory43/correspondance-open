@@ -1779,11 +1779,25 @@ public actor MatrixBridgeService {
     try await client.createDM(with: ghostUserID)
   }
 
-  public func startConversation(network: MessageNetwork, identifier: String) async throws {
+  /// Rend l'identifiant de conversation quand le pont le donne tout de suite
+  /// (Signal) ; `nil` quand le salon n'arrivera qu'avec un prochain `/sync`.
+  @discardableResult
+  public func startConversation(network: MessageNetwork, identifier: String) async throws -> String? {
     guard let bridge = network.bridge else {
       throw MatrixError.decoding("réseau non bridgé : \(network.rawValue)")
     }
     switch network {
+    case .signal:
+      // Signal résout lui-même un UUID ou un numéro international : l'API de
+      // provisioning ouvre le fil et nomme le salon. `search` ne marchait pas
+      // ici — ses résultats sont des UUID, pas les identifiants numériques
+      // qu'attend `firstSearchResultID`.
+      let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+      let target = PhoneNormalizer.isUUID(trimmed) ? trimmed : (PhoneNormalizer.e164(trimmed) ?? trimmed)
+      guard !target.isEmpty else {
+        throw MatrixError.decoding(String(localized: "identifiant Signal vide"))
+      }
+      return try await createDirectChat(network: network, identifier: target)
     case .whatsapp:
       let digits = identifier.filter { $0.isNumber }
       guard digits.count >= 8 else {
@@ -1814,6 +1828,7 @@ public actor MatrixBridgeService {
         : try await resolveRemoteID(username: trimmed, network: network)
       _ = try await sendBotCommand(bridge.startChatCommand(identifier: metaID), to: network)
     }
+    return nil
   }
 
   /// Un pseudo X tel que le connecteur le compare : sans arobase ni blancs.

@@ -60,6 +60,7 @@ enum ReachablePeople {
     conversations: [Conversation],
     members: (String) -> [Conversation],
     book: [ContactDirectory.DirectoryHit],
+    signalContacts: [BridgeContact] = [],
     freshNetworks: [MessageNetwork]
   ) -> [ReachablePerson] {
     var people: [ReachablePerson] = []
@@ -147,6 +148,30 @@ enum ReachablePeople {
       }
     }
 
+    // 3. Le carnet de Signal, tel que le pont le tient : des gens joignables
+    //    sans numéro connu du Mac — leur identifiant est un UUID. Rapprochés
+    //    par numéro quand Signal le partage, sinon par nom, comme le carnet.
+    let existingIDs = Set(conversations.map(\.id))
+    for contact in signalContacts {
+      if let room = contact.dmRoomID, existingIDs.contains("\(MessageNetwork.signal.rawValue):\(room)") { continue }
+      let nameKey = "name:" + contact.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+      var keys = [nameKey]
+      if let phone = contact.phone, let identity = PhoneNormalizer.identityKey(for: phone) { keys.insert(identity, at: 0) }
+
+      let index = person(forKeys: keys) {
+        ReachablePerson(
+          id: "signal-contact:" + contact.id,
+          name: contact.name,
+          detail: contact.phone ?? "",
+          avatar: signalAvatar(contact),
+          reaches: [],
+          lastMessageAt: nil
+        )
+      }
+      guard !people[index].reaches.contains(where: { $0.network == .signal }) else { continue }
+      people[index].reaches.append(Reach(network: .signal, conversationID: nil, handle: contact.id))
+    }
+
     // Les fils existants d'abord, puis les réseaux à ouvrir — dans l'ordre de l'enum.
     for index in people.indices {
       let existing = people[index].reaches.filter(\.isExisting)
@@ -190,8 +215,11 @@ enum ReachablePeople {
     if fold(person.name).contains(needle) { return true }
     if fold(person.detail).contains(needle) { return true }
     let digits = needle.filter(\.isNumber)
+    // Un UUID Signal n'est pas quelque chose qu'on tape : ses chiffres
+    // feraient remonter n'importe qui sur quatre chiffres d'un numéro.
     return person.reaches.contains { reach in
-      fold(reach.handle).contains(needle)
+      guard !PhoneNormalizer.isUUID(reach.handle) else { return false }
+      return fold(reach.handle).contains(needle)
         || (!digits.isEmpty && digits.count >= 4 && reach.handle.filter(\.isNumber).contains(digits))
     }
   }
@@ -226,6 +254,21 @@ enum ReachablePeople {
       unreadCount: 0,
       isArchived: false,
       transportKey: handle,
+      isGroup: false
+    )
+  }
+
+  private static func signalAvatar(_ contact: BridgeContact) -> Conversation {
+    Conversation(
+      id: "signal-contact:" + contact.id,
+      network: .signal,
+      address: contact.phone ?? contact.id,
+      title: contact.name,
+      preview: "",
+      lastMessageAt: .distantPast,
+      unreadCount: 0,
+      isArchived: false,
+      transportKey: contact.id,
       isGroup: false
     )
   }

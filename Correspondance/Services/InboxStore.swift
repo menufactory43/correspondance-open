@@ -241,6 +241,8 @@ final class InboxStore {
   /// des noms serait pire qu'un bouton unique.
   /// Écrit par `refreshAgentDirectory()`, qui est le seul à le remplir.
   var agentDirectory: [String] = []
+  /// Le carnet Signal tel que le pont le tient. Écrit par `refreshSignalContacts()`.
+  var signalContacts: [BridgeContact] = []
   /// Fusions de contacts — plusieurs réseaux, une seule ligne. Réappliquées
   /// après chaque fusion de catalogue, exactement comme l'archivage.
   private(set) var mergedContacts: [MergedContact] = []
@@ -2625,14 +2627,32 @@ final class InboxStore {
   }
 
   /// Nouveau fil bridgé : commande bot `pm <identifiant>`, le salon arrive par /sync.
-  func startBridgeConversation(network: MessageNetwork, identifier: String) async {
+  func startBridgeConversation(network: MessageNetwork, identifier: String, title: String? = nil) async {
     do {
-      try await matrix.startConversation(network: network, identifier: identifier)
-      matrixStatusFR = String(localized: "\(network.labelFR) : ouverture du fil vers \(identifier)…")
+      let id = try await matrix.startConversation(network: network, identifier: identifier)
+      let who = title.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } ?? identifier
+      matrixStatusFR = String(localized: "\(network.labelFR) : ouverture du fil vers \(who)…")
       mode = .inbox
+      // Le pont a nommé le salon (Signal) : il arrive avec le `/sync` qui
+      // suit l'invitation. On l'attend quelques secondes pour l'ouvrir, comme
+      // on ouvrirait un fil existant ; au-delà, il se range dans l'inbox.
+      guard let id else { return }
+      for _ in 0..<30 where !conversations.contains(where: { $0.id == id }) {
+        try? await Task.sleep(for: .milliseconds(500))
+      }
+      if conversations.contains(where: { $0.id == id }) { await select(id) }
     } catch {
       lastErrorMessage = error.localizedDescription
     }
+  }
+
+  /// Les contacts Signal du pont — le carnet de Signal lui-même, qui permet
+  /// d'écrire à quelqu'un sans fil ni numéro connu. Relu à chaque ouverture
+  /// de « Nouvelle conversation » ; une erreur laisse la dernière liste lue.
+  func refreshSignalContacts() async {
+    guard isMatrixConnected else { signalContacts = []; return }
+    guard let contacts = try? await matrix.bridgeContacts(network: .signal) else { return }
+    signalContacts = contacts
   }
 
   func openOrCreateConversation(network: MessageNetwork, handle: String, title: String) async {
@@ -2647,7 +2667,7 @@ final class InboxStore {
 
     // Un réseau bridgé n'a pas de brouillon local : c'est le pont qui crée le salon.
     if network.isMatrixBridged {
-      await startBridgeConversation(network: network, identifier: trimmed)
+      await startBridgeConversation(network: network, identifier: trimmed, title: title)
       return
     }
 

@@ -174,7 +174,7 @@ extension MatrixBridgeService {
     return base
   }
 
-  private func provisioningRequest(
+  func provisioningRequest(
     network: MessageNetwork,
     method: String = "POST",
     path: String,
