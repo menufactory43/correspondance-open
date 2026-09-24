@@ -211,6 +211,13 @@
   footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
   footer a{text-decoration:none}footer a:hover{color:var(--ink)}
   footer .bottom{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:13px}
+  .sept,.agentfig{margin:32px auto 0;max-width:820px}
+  .privfig{margin:28px 0 8px;max-width:900px}
+  .sept video,.sept img,.agentfig video,.agentfig img,.privfig video,.privfig img{display:block;width:100%;height:auto}
+  .sept img,.agentfig img,.privfig img{display:none}
+  @media (prefers-reduced-motion:reduce){.sept video,.agentfig video,.privfig video{display:none}.sept img,.agentfig img,.privfig img{display:block}}
+  .cap i.spot{width:64px;height:64px;border:0;background:none;border-radius:0;display:block;margin:-6px 0 12px -6px;box-shadow:none}
+  .cap i.spot img{width:64px;height:64px;display:block}
 </style>
 <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "@id": "https://correspondance-eta.vercel.app/en/", "name": "Correspondance", "url": "https://correspondance-eta.vercel.app/en/", "inLanguage": "en", "description": "Correspondance brings iMessage, Signal, WhatsApp, Instagram, Messenger, X and Slack into one inbox on Mac, iPhone and Linux, with an AI assistant that drafts replies you approve before they go out. Free, hosted at home.", "applicationCategory": "CommunicationApplication", "operatingSystem": "macOS, iOS, Linux", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock"}, "downloadUrl": "https://github.com/menufactory43/correspondance-releases/releases", "installUrl": "https://apps.apple.com/app/correspondance-une-inbox/id6807945434", "featureList": ["iMessage", "Signal", "WhatsApp", "Instagram", "Messenger", "X", "Slack", "AI assistant drafting replies", "On-device translation"], "author": {"@type": "Person", "name": "meffysto", "url": "https://github.com/menufactory43"}, "image": "https://correspondance-eta.vercel.app/img/og.png", "sameAs": ["https://notacent.vercel.app/app/correspondance", "https://github.com/menufactory43/correspondance-open"], "license": "https://opensource.org/licenses/MIT"}</script>
 </head>
@@ -283,14 +290,14 @@
       <p class="lede">A unified inbox already saves you time. The assistant is a second pen beside you: it writes, you decide, nothing goes out without you.</p>
     </div>
     <div class="grid">
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M3 7h18l-1.5 9a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7L3 7z"/><path d="M8 7V5a4 4 0 0 1 8 0v2"/></svg></i><h3>Selling on Marketplace, Craigslist, Vinted</h3><p>Buyers write on Messenger, WhatsApp and Instagram. One list, sorted by date. At the tenth “still available?”, ask the assistant for a polite reply and send it with one tap.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/></svg></i><h3>Freelancers and small shops</h3><p>Customers write on Instagram, WhatsApp and Messenger. You answer from one place, on Mac and on iPhone, and hand the assistant the first draft of the replies that need care.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20a6 6 0 0 1 12 0M14 20a4.5 4.5 0 0 1 7-3.7"/></svg></i><h3>Family across four networks</h3><p>iMessage with your parents, WhatsApp with the cousins, Signal with friends, Messenger with the neighbour. One list, one notification, the same photo of Julie everywhere.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M13 7l3 3"/></svg></i><h3>The delicate message</h3><p>A refusal, a follow-up, a reply that calls for tact. Name the assistant in the thread, say the tone: it has read the thread and writes a draft only you can see. You send, fix or drop it.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 6h16M4 11h16M4 16h9"/><path d="M17 15l2 2 4-4"/></svg></i><h3>The group you have no time to read</h3><p>Forty messages in the school parents’ group. One Summarize button, and the assistant tells you what is waiting on you, then the rest in three lines. In the morning, at the time you set, it rounds up every thread where someone is waiting for you.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 5v2c0 3.5-2 6.5-4.5 8M6 9c1 2.5 3 4.5 5.5 6M13 19l4-10 4 10M14.5 15.5h5"/></svg></i><h3>In-laws who write in Portuguese</h3><p>Under a bubble in another language, a Translate button, and the translation reads in grey below. Set a thread so that everything arriving is translated right away, and what you send too. On the device, without sending a line to anyone.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></i><h3>An assistant you reach like a contact</h3><p>A thread of its own, on iPhone and on Mac. A question, a photo, a PDF, a task on your machine: it runs at home around the clock, on your subscription, with no API key.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></i><h3>Less tracking on your phone</h3><p>The Meta apps no longer run on your phone, so neither do their advertising SDKs. Your messages go through a relay of your own, never through our servers.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/marketplace.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Selling on Marketplace, Craigslist, Vinted</h3><p>Buyers write on Messenger, WhatsApp and Instagram. One list, sorted by date. At the tenth “still available?”, ask the assistant for a polite reply and send it with one tap.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/commerce.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Freelancers and small shops</h3><p>Customers write on Instagram, WhatsApp and Messenger. You answer from one place, on Mac and on iPhone, and hand the assistant the first draft of the replies that need care.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/famille.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Family across four networks</h3><p>iMessage with your parents, WhatsApp with the cousins, Signal with friends, Messenger with the neighbour. One list, one notification, the same photo of Julie everywhere.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/message-delicat.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>The delicate message</h3><p>A refusal, a follow-up, a reply that calls for tact. Name the assistant in the thread, say the tone: it has read the thread and writes a draft only you can see. You send, fix or drop it.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/groupe.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>The group you have no time to read</h3><p>Forty messages in the school parents’ group. One Summarize button, and the assistant tells you what is waiting on you, then the rest in three lines. In the morning, at the time you set, it rounds up every thread where someone is waiting for you.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/traduction.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>In-laws who write in Portuguese</h3><p>Under a bubble in another language, a Translate button, and the translation reads in grey below. Set a thread so that everything arriving is translated right away, and what you send too. On the device, without sending a line to anyone.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/assistant.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>An assistant you reach like a contact</h3><p>A thread of its own, on iPhone and on Mac. A question, a photo, a PDF, a task on your machine: it runs at home around the clock, on your subscription, with no API key.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/tracking.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Less tracking on your phone</h3><p>The Meta apps no longer run on your phone, so neither do their advertising SDKs. Your messages go through a relay of your own, never through our servers.</p></div>
     </div>
   </div>
 </section>
@@ -302,6 +309,11 @@
       <h2>Seven networks. One list. Zero tabs.</h2>
       <p class="lede">Every conversation lands in the same list, sorted by date, with its network badge. You reply from Correspondance and the message leaves through the right channel.</p>
     </div>
+    <figure class="sept" aria-hidden="true">
+      <video id="sept-video" autoplay muted loop playsinline poster="/img/anim/corresp-poster.webp"></video>
+      <img src="/img/anim/corresp-poster.webp" alt="" loading="lazy">
+      <script>(function(){var v=document.getElementById("sept-video");v.src=/Apple/.test(navigator.vendor)?"/img/anim/corresp.mov":"/img/anim/corresp.webm";})();</script>
+    </figure>
 
     <div class="feature">
       <div>
@@ -347,6 +359,11 @@
       <h2>An agent is a contact. Invite it into the conversation.</h2>
       <p class="lede">Claude Code, Hermes or another engine becomes a member of your inbox. It reads the thread before replying, runs on your Mac or your own machine, on your subscription. No API key to paste.</p>
     </div>
+    <figure class="agentfig" aria-hidden="true">
+      <video id="agent-video" autoplay muted loop playsinline poster="/img/anim/cagent-poster.webp"></video>
+      <img src="/img/anim/cagent-poster.webp" alt="" loading="lazy">
+      <script>(function(){var v=document.getElementById("agent-video");v.src=/Apple/.test(navigator.vendor)?"/img/anim/cagent.mov":"/img/anim/cagent.webm";})();</script>
+    </figure>
 
     <div class="feature">
       <div class="card">
@@ -428,15 +445,15 @@
       <h2>Built for the keyboard, the Mac and your pocket.</h2>
     </div>
     <div class="grid">
-      <div class="cap"><i><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6"/></svg></i><h3>Quick reply</h3><p>A global shortcut opens a card above everything. You reply, it vanishes. Without switching windows.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></i><h3>Sticky note</h3><p>Detach a conversation into a small window that stays on top. Three sizes, light or dark.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></i><h3>Focus mode</h3><p><span class="kbd">⌘1</span> hides the list and leaves a single thread. The page turns from one conversation to the next, <span class="kbd">⌘K</span> finds one without leaving the page. <span class="kbd">⌘2</span> brings the list back.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20M7 15h.01M11 15h6"/></svg></i><h3>Menu bar</h3><p>The unread count and quick reply, reachable from the Mac menu bar.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></i><h3>Four themes</h3><p>Paper, Wax and oak, Moonlight, Night ink. They follow the system or are set by hand.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></i><h3>Share</h3><p>From Photos, Safari or the Finder: Share, a person, Send. On iPhone and on Mac, without opening the app.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M11 18h2"/></svg></i><h3>iPhone</h3><p>The same inbox, the same agents, the same drafts, the same merged chats. Rich notifications, reply from the notification, and your camera roll in place of the keyboard to send a photo or a video.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 5v2c0 3.5-2 6.5-4.5 8M6 9c1 2.5 3 4.5 5.5 6M13 19l4-10 4 10M14.5 15.5h5"/></svg></i><h3>On-device translation</h3><p>Translate under a bubble, or a whole thread up front, incoming and outgoing. Through Apple’s translation, on macOS 15 and iOS 18: nothing goes to a server.</p></div>
-      <div class="cap"><i><svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.2A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6-.4.8-1.2 2-2.4 3.1M6.6 6.6C4.3 8 2.9 10.4 2.5 12c1 2 4.5 6 9.5 6 1.5 0 2.9-.4 4.1-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></i><h3>Incognito mode</h3><p>Read without telling: no read receipt goes out, and unread counts stay as a reminder. <span class="kbd">⌘⇧I</span> on the Mac, the “…” menu on the iPhone. Replying or “Mark as read” are the only gestures that let the other person know.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/reponse-rapide.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Quick reply</h3><p>A global shortcut opens a card above everything. You reply, it vanishes. Without switching windows.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/post-it.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Sticky note</h3><p>Detach a conversation into a small window that stays on top. Three sizes, light or dark.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/focus.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Focus mode</h3><p><span class="kbd">⌘1</span> hides the list and leaves a single thread. The page turns from one conversation to the next, <span class="kbd">⌘K</span> finds one without leaving the page. <span class="kbd">⌘2</span> brings the list back.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/barre-menus.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Menu bar</h3><p>The unread count and quick reply, reachable from the Mac menu bar.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/themes.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Four themes</h3><p>Paper, Wax and oak, Moonlight, Night ink. They follow the system or are set by hand.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/partager.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Share</h3><p>From Photos, Safari or the Finder: Share, a person, Send. On iPhone and on Mac, without opening the app.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/iphone.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>iPhone</h3><p>The same inbox, the same agents, the same drafts, the same merged chats. Rich notifications, reply from the notification, and your camera roll in place of the keyboard to send a photo or a video.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/traduction-appareil.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>On-device translation</h3><p>Translate under a bubble, or a whole thread up front, incoming and outgoing. Through Apple’s translation, on macOS 15 and iOS 18: nothing goes to a server.</p></div>
+      <div class="cap"><i class="spot"><img src="/img/spots/incognito.webp" width="64" height="64" alt="" loading="lazy" decoding="async"></i><h3>Incognito mode</h3><p>Read without telling: no read receipt goes out, and unread counts stay as a reminder. <span class="kbd">⌘⇧I</span> on the Mac, the “…” menu on the iPhone. Replying or “Mark as read” are the only gestures that let the other person know.</p></div>
     </div>
   </div>
 </section>
@@ -447,6 +464,11 @@
       <p class="eyebrow">Privacy</p>
       <h2>Your messages never touch a server of ours.</h2>
       <p class="lede" style="margin-top:14px;max-width:60ch">There is no Correspondance account and no Correspondance cloud. You install a Relay at home, in one click, and your devices talk to it encrypted.</p>
+      <figure class="privfig" aria-hidden="true">
+        <video id="priv-video" autoplay muted loop playsinline poster="/img/anim/cprivacy-poster.webp"></video>
+        <img src="/img/anim/cprivacy-poster.webp" alt="" loading="lazy">
+        <script>(function(){var v=document.getElementById("priv-video");v.src=/Apple/.test(navigator.vendor)?"/img/anim/cprivacy.mov":"/img/anim/cprivacy.webm";})();</script>
+      </figure>
       <ol>
         <li><b>iMessage read on your Mac</b><p>The app reads the Messages database locally and sends through Messages. Nothing leaves the machine.</p></li>
         <li><b>A Relay of your own</b><p>Signal, WhatsApp, Instagram, Messenger, X and Slack are linked like one more device, through a relay installed on your Mac or a small machine.</p></li>
