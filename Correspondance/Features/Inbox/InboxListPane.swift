@@ -489,7 +489,11 @@ struct InboxListPane: View {
         conversation: conversation,
         theme: theme,
         typeface: themes.typeface,
-        isSyncing: store.isInitialSync || store.isLoading || store.isLiveSyncing,
+        // « Synchronisation… » ne concerne qu'une ligne sans aperçu. Pour les
+        // autres, l'entrée reste `false` : sinon `isLiveSyncing`, qui bascule
+        // à chaque passe de `/sync`, redessinait toute la liste deux fois.
+        isSyncing: !conversation.hasLivePreview
+          && (store.isInitialSync || store.isLoading || store.isLiveSyncing),
         isPinned: store.isPinned(conversation.id),
         isMuted: store.isMuted(conversation.id)
       )
@@ -601,7 +605,7 @@ struct InboxListPane: View {
 
     reminderMenu(conversation)
 
-    if store.isRequest(conversation.id) {
+    if store.isRequest(conversation) {
       Divider()
       Button("Accepter la demande") {
         Task { await store.decideRequest(.accepted, conversationID: conversation.id) }
@@ -630,7 +634,7 @@ struct InboxListPane: View {
         store.toggleMuted(conversationID: conversation.id)
       }
 
-      if store.canManageGroup(conversation.id) {
+      if store.canManageGroup(conversation) {
         Button("Gérer le groupe…") {
           store.presentGroupSheet(conversation.id)
         }

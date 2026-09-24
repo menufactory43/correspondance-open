@@ -1934,7 +1934,10 @@ final class InboxStore {
   }
 
   /// L'écriture de l'index du partage en attente (InboxStore+Partage).
-  var partageIndexTask: Task<Void, Never>?
+  @ObservationIgnored var partageIndexTask: Task<Void, Never>?
+  /// Les destinataires du dernier index écrit, dates effacées : une passe qui
+  /// ne change rien à la liste de l'extension ne réécrit rien (InboxStore+Partage).
+  @ObservationIgnored var partageDernierIndex: [Partage.Destinataire]?
   /// Un vidage de la boîte du partage est en cours : le lancement par
   /// `correspondance://partage` et la fin de `start()` peuvent tomber ensemble,
   /// et deux vidages liraient les mêmes dépôts.

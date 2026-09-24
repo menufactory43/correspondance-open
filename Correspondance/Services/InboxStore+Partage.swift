@@ -30,14 +30,25 @@ extension InboxStore {
       .sorted { $0.lastMessageAt > $1.lastMessageAt }.prefix(50)
     var avatars: [String: String] = [:]
     for conversation in recents {
+      let cle = conversation.remoteAvatarID ?? conversation.id
+      // Déjà dans la boîte : rien à relire ni à écrire.
+      if let nom = boite.avatarPose(cle: cle) {
+        avatars[conversation.id] = nom
+        continue
+      }
       guard let data = await ConversationAvatarStore.shared.imageData(for: conversation),
-            let nom = boite.poserAvatar(data, cle: conversation.remoteAvatarID ?? conversation.id)
+            let nom = boite.poserAvatar(data, cle: cle)
       else { continue }
       avatars[conversation.id] = nom
     }
     let index = Partage.index(conversations: conversations) { avatars[$0.id] }
+    // Un nouveau message dans un fil déjà en tête ne change que sa date, que
+    // l'extension ne montre pas : sa liste reste la même, on ne réécrit rien.
+    let sansDates = index.destinataires.map { var d = $0; d.lastMessageAt = .distantPast; return d }
+    guard sansDates != partageDernierIndex else { return }
     do {
       try boite.ecrire(index)
+      partageDernierIndex = sansDates
       boite.balayerAvatars(gardant: index)
     } catch {
       Self.journal.error("index du partage non écrit : \(error.localizedDescription, privacy: .public)")

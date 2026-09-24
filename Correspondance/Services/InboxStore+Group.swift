@@ -27,9 +27,14 @@ extension InboxStore {
   /// La fiche n'a de sens que sur un groupe du Relais dont au moins un geste
   /// est porté par le pont.
   func canManageGroup(_ conversationID: String) -> Bool {
-    guard let conversation = conversations.first(where: { $0.id == conversationID }),
-          conversation.isGroup, conversation.network.livesOnRelay
-    else { return false }
+    guard let conversation = conversations.first(where: { $0.id == conversationID }) else { return false }
+    return canManageGroup(conversation)
+  }
+
+  /// La même chose, quand on tient déjà le fil : la liste la demande pour
+  /// chaque ligne, et chercher le fil à chaque fois coûtait un tour de la liste.
+  func canManageGroup(_ conversation: Conversation) -> Bool {
+    guard conversation.isGroup, conversation.network.livesOnRelay else { return false }
     let capabilities = conversation.network.capabilities
     return capabilities.renamesGroup || capabilities.removesMember || capabilities.addsMember
   }
