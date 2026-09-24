@@ -16,10 +16,9 @@ const LIGHT = "#f4f1ea";
 const frac = (v: number) => v - Math.floor(v);
 
 const PHONE: P = [170, 285], MAC: P = [560, 300], RELAY: P = [700, 372], DOOR: P = [440, 330];
-const NETS: { c: string; at: P; w: number }[] = [
-  { c: "#3a76f0", at: [980, 130], w: 96 }, { c: "#25d366", at: [1100, 190], w: 104 }, { c: "#e1306c", at: [960, 250], w: 90 },
-  { c: "#0084ff", at: [1090, 320], w: 98 }, { c: "#8a8a92", at: [965, 390], w: 84 }, { c: "#4a154b", at: [1085, 440], w: 92 },
-];
+// seven networks in a staggered column: 62 px apart, alternating sides, so none touch and each still reads at 390 px wide
+const NETS: { c: string; at: P; w: number }[] = ["#3a76f0", "#25d366", "#2aabee", "#e1306c", "#0084ff", "#8a8a92", "#4a154b"]
+  .map((c, i) => ({ c, at: [i % 2 ? 1105 : 985, 72 + i * 62] as P, w: 100 }));
 
 const pen = (g: Gfx, pts: P[], seed: number, o: { w?: number; op?: number; color?: string } = {}) =>
   g.pen(pts, { w: o.w ?? 1.6, color: o.color ?? LIGHT, seed, wobble: 0.8, boil: 0.35, opacity: o.op ?? 0.9, retrace: false });
@@ -80,8 +79,8 @@ export const drawCprivacy = (ctx: Ctx, frame: number, env: Env) => {
   });
 
   // the networks: just their colours and a bubble each
-  g.group("paint", () => NETS.forEach((n, i) => g.wash(bubble(n.at, n.w, 40), n.c, { seed: 70 + i, alpha: 0.7, dx: 1, dy: 1, shrink: 0.98, rim: true })));
-  g.group("ink", () => NETS.forEach((n, i) => pen(g, closed(bubble(n.at, n.w, 40)), 80 + i, { w: 1.2, op: 0.75 })));
+  g.group("paint", () => NETS.forEach((n, i) => g.wash(bubble(n.at, n.w, 46), n.c, { seed: 70 + i, alpha: 0.7, dx: 1, dy: 1, shrink: 0.98, rim: true })));
+  g.group("ink", () => NETS.forEach((n, i) => pen(g, closed(bubble(n.at, n.w, 46)), 80 + i, { w: 1.2, op: 0.75 })));
 
   // the cloud that is not on the way: off every wire, crossed out in rust
   const C: P = [300, 110], cloud: P[] = [[220, 140], [214, 116], [236, 96], [262, 98], [282, 70], [322, 68], [346, 92], [376, 92], [392, 118], [380, 142]];

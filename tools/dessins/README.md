@@ -7,7 +7,7 @@ dessins sont dans `STYLE.md`.
 
 | Fichier | Rendu | Où sur le site |
 |---|---|---|
-| `corresp.ts` | boucle 8 s : sept réseaux → une liste | `#inbox` → `img/anim/corresp.*` |
+| `corresp.ts` | boucle 8 s : huit réseaux → une liste | `#inbox` → `img/anim/corresp.*` |
 | `cagent.ts` | boucle 8 s : cc rejoint le fil, propose, vous validez | `#agents` → `img/anim/cagent.*` |
 | `cprivacy.ts` | boucle 8 s, encre claire : iPhone ↔ Relais ↔ réseaux | `#confidentialite` → `img/anim/cprivacy.*` |
 | `cspot.ts` | 17 dessins fixes, un par frame (0–16) | cartes `.cap` → `img/spots/*.webp` |
@@ -24,8 +24,8 @@ node tools/gate.mjs corresp                                         # détermini
 node tools/still.mjs cspot --frame 0 --scale 2 --out out/marketplace.png
 
 # Safari ne lit la transparence qu'en HEVC :
-ffmpeg -c:v libvpx-vp9 -i out/corresp.webm -c:v hevc_videotoolbox -alpha_quality 0.8 \
-  -b:v 1.5M -tag:v hvc1 -allow_sw 1 out/corresp.mov
+ffmpeg -c:v libvpx-vp9 -i out/corresp.webm -c:v hevc_videotoolbox -q:v 40 -alpha_quality 0.5 \
+  -tag:v hvc1 -allow_sw 1 out/corresp.mov   # qualité constante : 3 à 4 fois plus léger qu'un débit fixe
 # Dessins des cartes : 128 px (64 px affichés en Retina)
 cwebp -q 90 -resize 128 128 out/marketplace.png -o marketplace.webp
 ```

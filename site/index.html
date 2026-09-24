@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Correspondance — Toutes vos messageries, une inbox. Et un assistant qui répond avec vous.</title>
-<meta name="description" content="Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X et Slack dans une seule inbox sur Mac, iPhone et Linux. Un assistant IA y propose des réponses que vous validez avant envoi, résume ce que vous avez manqué, et la traduction se fait sur l’appareil. Sans app Meta sur votre téléphone, hébergé chez vous.">
+<meta name="description" content="Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack et Telegram dans une seule inbox sur Mac, iPhone et Linux. Un assistant IA y propose des réponses que vous validez avant envoi, résume ce que vous avez manqué, et la traduction se fait sur l’appareil. Sans app Meta sur votre téléphone, hébergé chez vous.">
 <meta property="og:title" content="Correspondance">
 <meta property="og:description" content="Toutes vos messageries dans une inbox, et un assistant IA qui propose des réponses que vous validez. Rien ne part sans vous. Hébergé chez vous.">
 <meta property="og:type" content="website">
@@ -34,7 +34,7 @@
     --ink:#111114; --ink-2:#4b4a52; --ink-3:#83828a;
     --line:#e6e4df; --line-2:#d8d5ce;
     --accent:#8a3f2b; --accent-2:#a44f38; --accent-soft:#f4e9e4;
-    --imsg:#34c759; --signal:#3a76f0; --wa:#25d366; --ig:#e1306c; --msg:#0084ff; --x:#111114; --slack:#4a154b;
+    --imsg:#34c759; --signal:#3a76f0; --wa:#25d366; --ig:#e1306c; --msg:#0084ff; --x:#111114; --slack:#4a154b; --tg:#2aabee;
     --r:14px;
     --shadow-lg:0 40px 80px -30px rgba(17,17,20,.28), 0 12px 30px -16px rgba(17,17,20,.18);
     --shadow-sm:0 1px 2px rgba(17,17,20,.06), 0 6px 20px -10px rgba(17,17,20,.12);
@@ -218,7 +218,7 @@
   .cap i.spot{width:64px;height:64px;border:0;background:none;border-radius:0;display:block;margin:-6px 0 12px -6px;box-shadow:none}
   .cap i.spot img{width:64px;height:64px;display:block}
 </style>
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "@id": "https://correspondance-eta.vercel.app/", "name": "Correspondance", "url": "https://correspondance-eta.vercel.app/", "inLanguage": "fr", "description": "Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X et Slack dans une seule inbox sur Mac, iPhone et Linux, avec un assistant IA qui propose des réponses que vous validez avant envoi. Gratuit, hébergé chez vous.", "applicationCategory": "CommunicationApplication", "operatingSystem": "macOS, iOS, Linux", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock"}, "downloadUrl": "https://github.com/menufactory43/correspondance-releases/releases", "installUrl": "https://apps.apple.com/fr/app/correspondance-une-inbox/id6807945434", "featureList": ["iMessage", "Signal", "WhatsApp", "Instagram", "Messenger", "X", "Slack", "Assistant IA qui propose des brouillons", "Traduction sur l'appareil"], "author": {"@type": "Person", "name": "meffysto", "url": "https://github.com/menufactory43"}, "image": "https://correspondance-eta.vercel.app/img/og.png", "sameAs": ["https://notacent.vercel.app/app/correspondance", "https://github.com/menufactory43/correspondance-open"], "license": "https://opensource.org/licenses/MIT"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "@id": "https://correspondance-eta.vercel.app/", "name": "Correspondance", "url": "https://correspondance-eta.vercel.app/", "inLanguage": "fr", "description": "Correspondance réunit iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack et Telegram dans une seule inbox sur Mac, iPhone et Linux, avec un assistant IA qui propose des réponses que vous validez avant envoi. Gratuit, hébergé chez vous.", "applicationCategory": "CommunicationApplication", "operatingSystem": "macOS, iOS, Linux", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock"}, "downloadUrl": "https://github.com/menufactory43/correspondance-releases/releases", "installUrl": "https://apps.apple.com/fr/app/correspondance-une-inbox/id6807945434", "featureList": ["iMessage", "Signal", "WhatsApp", "Instagram", "Messenger", "X", "Slack", "Telegram", "Assistant IA qui propose des brouillons", "Traduction sur l'appareil"], "author": {"@type": "Person", "name": "meffysto", "url": "https://github.com/menufactory43"}, "image": "https://correspondance-eta.vercel.app/img/og.png", "sameAs": ["https://notacent.vercel.app/app/correspondance", "https://github.com/menufactory43/correspondance-open"], "license": "https://opensource.org/licenses/MIT"}</script>
 </head>
 <body>
 
@@ -268,6 +268,7 @@
       <span class="logo"><i style="background:var(--msg)"><svg viewBox="0 0 24 24"><path d="M12 2C6.4 2 2 6.2 2 11.4c0 2.9 1.4 5.5 3.6 7.3V22l3.3-1.8c.9.3 2 .4 3.1.4 5.6 0 10-4.2 10-9.4S17.6 2 12 2zm1 12.6-2.6-2.7-5 2.7 5.5-5.8 2.6 2.7 4.9-2.7-5.4 5.8z"/></svg></i>Messenger</span>
       <span class="logo"><i style="background:var(--x)"><svg viewBox="0 0 24 24"><path d="M17.8 3h3.1l-6.8 7.8L22 21h-6.3l-4.9-6.4L5.2 21H2.1l7.3-8.3L1.8 3h6.4l4.4 5.9L17.8 3zm-1.1 16.2h1.7L7.4 4.7H5.6l11.1 14.5z"/></svg></i>X</span>
       <span class="logo"><i style="background:var(--slack)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M9 4v5M15 4v5M9 15v5M15 15v5M4 9h5M4 15h5M15 9h5M15 15h5"/></svg></i>Slack</span>
+      <span class="logo"><i style="background:var(--tg)"><svg viewBox="0 0 24 24"><path d="M21.4 3.6 2.9 10.8c-1.3.5-1.2 1.3-.2 1.6l4.7 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.5l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5zM8.9 13.6l9.6-6.1c.5-.3.9-.1.5.2l-8 7.3-.3 3.4-1.8-4.8z"/></svg></i>Telegram</span>
     </div>
 
     <figure class="stage">
@@ -305,7 +306,7 @@
   <div class="wrap">
     <div class="head center">
       <p class="eyebrow">Inbox unifiée</p>
-      <h2>Sept réseaux. Une liste. Zéro onglet.</h2>
+      <h2>Huit réseaux. Une liste. Zéro onglet.</h2>
       <p class="lede">Chaque conversation arrive dans le même fil, triée par date, avec la pastille de son réseau. Vous répondez depuis Correspondance et le message part par le bon canal.</p>
     </div>
     <figure class="sept" aria-hidden="true">
@@ -470,7 +471,7 @@
       </figure>
       <ol>
         <li><b>iMessage lu sur votre Mac</b><p>L'app lit la base de Messages localement et envoie par Messages. Rien ne quitte la machine.</p></li>
-        <li><b>Un Relais à vous</b><p>Signal, WhatsApp, Instagram, Messenger, X et Slack sont liés comme un appareil de plus, via un relais installé sur votre Mac ou une petite machine.</p></li>
+        <li><b>Un Relais à vous</b><p>Signal, WhatsApp, Instagram, Messenger, X, Slack et Telegram sont liés comme un appareil de plus, via un relais installé sur votre Mac ou une petite machine.</p></li>
         <li><b>Chiffré de bout en bout</b><p>Entre votre iPhone, votre Mac et votre Relais, tout circule chiffré. Nous n'avons ni clés, ni copie.</p></li>
         <li><b>Agents chez vous</b><p>L'agent tourne sur votre Mac ou votre machine, avec votre abonnement. Vos conversations ne sont envoyées à aucun service de plus.</p></li>
         <li><b>Traduction sur l'appareil</b><p>Le bouton Traduire passe par la traduction d'Apple, sur la machine. Aucun texte ne part vers un service de traduction.</p></li>
@@ -495,7 +496,7 @@
       <table>
         <thead><tr><th></th><th class="us">Correspondance</th><th>Inbox unifiée classique</th><th>Client web en onglets</th></tr></thead>
         <tbody>
-          <tr><td>iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack</td><td><span class="y">✓</span></td><td><span class="y">✓</span><small>souvent plus de réseaux</small></td><td><span class="y">✓</span><small>sauf iMessage</small></td></tr>
+          <tr><td>iMessage, Signal, WhatsApp, Instagram, Messenger, X, Slack, Telegram</td><td><span class="y">✓</span></td><td><span class="y">✓</span><small>souvent plus de réseaux</small></td><td><span class="y">✓</span><small>sauf iMessage</small></td></tr>
           <tr><td>Agents IA dans les conversations</td><td><span class="y">✓</span><small>brouillon à valider devant un tiers</small></td><td><span class="n"></span></td><td><span class="n"></span></td></tr>
           <tr><td>Mode incognito, sans accusé de lecture</td><td><span class="y">✓</span><small>tous les réseaux</small></td><td><span class="y">✓</span></td><td><span class="n"></span></td></tr>
           <tr><td>Traduction sur l'appareil</td><td><span class="y">✓</span><small>macOS 15, iOS 18</small></td><td><span class="n"></span></td><td><span class="n"></span></td></tr>
@@ -520,7 +521,7 @@
     <div class="faq">
       <details><summary>C'est gratuit ?</summary><p>Oui, et pour toujours : sans limite de réseaux ni de temps, sans abonnement, sans version payante. Le code est public sous licence MIT, sur <a href="https://github.com/menufactory43/correspondance-open">GitHub</a> : n'importe qui peut le lire, le compiler, le modifier ou le reprendre. Une app dont le code est libre ne peut pas devenir payante à votre insu.</p></details>
       <details><summary>Il me faut un Mac ?</summary><p>Pour iMessage, oui : c'est le seul endroit où Apple laisse lire ces messages. Le Mac peut rester fermé dans un coin, l'iPhone s'y connecte. Pour les autres réseaux, le Relais tourne sur un Mac ou sur n'importe quelle petite machine Linux — et Correspondance existe aussi pour Linux : même inbox, même Focus, dans un binaire sans dépendance.</p></details>
-      <details><summary>Dois-je créer un compte ?</summary><p>Non. Vous liez vos réseaux existants comme vous lieriez un ordinateur de plus : un QR code pour Signal et WhatsApp, une fenêtre de connexion pour Instagram, Messenger et Slack. Pour X, importez la session depuis Brave, Chrome, Edge ou Arc en un clic, puis le code à quatre chiffres de X Chat. Vos comptes liés se lisent et se déconnectent depuis Réglages › Comptes.</p></details>
+      <details><summary>Dois-je créer un compte ?</summary><p>Non. Vous liez vos réseaux existants comme vous lieriez un ordinateur de plus : un QR code pour Signal et WhatsApp, une fenêtre de connexion pour Instagram, Messenger et Slack. Pour X, importez la session depuis Brave, Chrome, Edge ou Arc en un clic, puis le code à quatre chiffres de X Chat. Pour Telegram, votre numéro puis le code reçu dans l'app, et votre mot de passe si la validation en deux étapes est active. Vos comptes liés se lisent et se déconnectent depuis Réglages › Comptes.</p></details>
       <details><summary>Où tourne l'agent ?</summary><p>Sur votre Mac, en un clic depuis les réglages : il s'arrête quand vous quittez l'app. Ou sur une machine à vous qui reste allumée, pour un agent joignable jour et nuit, même Mac fermé.</p></details>
       <details><summary>L'agent peut-il envoyer un message sans moi ?</summary><p>Pas par défaut. Dès qu'un tiers est dans le fil, il propose un brouillon que vous seul voyez, et rien ne part sans votre clic. Vous pouvez, fil par fil, le passer en « Répond seul » : il répond alors à votre place dans le cadre que vous écrivez, dix fois par heure au plus, chaque envoi marqué dans votre fil, et il vous passe la main dès qu'on sort du cadre. Un clic le ramène en brouillon.</p></details>
       <details><summary>Que sait-il de mes conversations ?</summary><p>Ce que vous lui adressez, et les derniers messages du fil où on le nomme, pour répondre à propos. Il ne fouille pas votre historique et ne lit pas les fils où il n'est pas invité. Le bouton Résumer et le point du matin travaillent sur ce qui n'est pas lu, pas sur les archives.</p></details>
@@ -555,7 +556,7 @@
     <div class="cols">
       <div>
         <a class="brand" href="#"><img src="/img/icon.png" alt="">Correspondance</a>
-        <p style="margin-top:12px;max-width:32ch">Sept messageries dans une inbox, avec un assistant dedans. Mac, iPhone et Linux. Hébergé chez vous.</p>
+        <p style="margin-top:12px;max-width:32ch">Huit messageries dans une inbox, avec un assistant dedans. Mac, iPhone et Linux. Hébergé chez vous.</p>
       </div>
       <div><h4>Produit</h4><ul><li><a href="#inbox">Inbox</a></li><li><a href="#agents">Agents</a></li><li><a href="#fonctions">Fonctions</a></li><li><a href="#comparer">Comparer</a></li></ul></div>
       <div><h4>Télécharger</h4><ul><li><a href="/ios">iPhone (App Store)</a></li><li><a href="/mac">Mac (DMG)</a></li><li><a href="/linux">Linux (tar.gz)</a></li><li><a href="https://github.com/menufactory43/correspondance-releases/releases">Toutes les versions</a></li><li><a href="https://github.com/menufactory43/correspondance-open">Code source (MIT)</a></li></ul></div>
