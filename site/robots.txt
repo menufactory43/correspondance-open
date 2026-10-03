@@ -11,3 +11,5 @@ User-agent: Claude-SearchBot
 Allow: /
 User-agent: PerplexityBot
 Allow: /
+
+Sitemap: https://correspondance-eta.vercel.app/sitemap.xml
