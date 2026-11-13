@@ -150,6 +150,36 @@ extension RelayStore {
     conversations.first { Self.relayRoomID(ofConversation: $0.id) == roomID }?.id
   }
 
+  /// Retire du centre de notifications ce qui est déjà lu.
+  ///
+  /// Rien ne le faisait : une notification restait tant qu'on ne la balayait
+  /// pas à la main, et comme elles se rangent par fil, la suivante ramenait
+  /// toute la pile avec elle — des messages lus depuis longtemps (vu le
+  /// 13 nov. 2026).
+  ///
+  /// - Parameter ids: les fils qu'on vient de lire. `nil` : tous ceux dont le
+  ///   compteur est à zéro — à n'appeler qu'après un `/sync`, sur des comptes
+  ///   frais, sinon on effacerait le message qui vient d'arriver.
+  ///
+  /// Une notification locale porte l'identifiant du fil, un push celui du
+  /// salon : on retire les deux.
+  func clearDeliveredNotifications(forRead ids: [String]? = nil) {
+    let read = ids ?? conversations.filter { $0.unreadCount == 0 }.map(\.id)
+    var threads = Set(read)
+    for id in read {
+      if let room = Self.relayRoomID(ofConversation: id) { threads.insert(room) }
+    }
+    guard !threads.isEmpty else { return }
+    let readThreads = threads
+    UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+      let stale = delivered
+        .filter { readThreads.contains($0.request.content.threadIdentifier) }
+        .map(\.request.identifier)
+      guard !stale.isEmpty else { return }
+      UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: stale)
+    }
+  }
+
   /// Ouvre le fil qu'une notification désigne — au retour dans l'app.
   func openConversationFromNotification(_ conversationID: String) {
     scope = .inbox

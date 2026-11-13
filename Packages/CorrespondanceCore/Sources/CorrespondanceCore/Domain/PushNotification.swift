@@ -473,6 +473,24 @@ public enum SharedRelayState {
     return Set(stored)
   }
 
+  private static let badgeKey = "correspondance.shared.badgeCount"
+
+  /// Le nombre que porte la pastille de l'icône : les non-lus de l'inbox, tels
+  /// que l'app les compte (fils muets et archivés exclus).
+  ///
+  /// Le push de Sygnal arrive avec `aps.badge` = le compte de Synapse, qui
+  /// n'est pas le nôtre : il compte des salons et non des messages, il inclut
+  /// les fils archivés et tout salon que l'inbox ne montre pas. Vu le 13 nov.
+  /// 2026 : 17 sur l'icône, zéro dans l'app. L'app dépose donc son compte ici,
+  /// et l'extension l'écrit à la place de celui du push.
+  public static func saveBadgeCount(_ count: Int, suiteName: String = appGroup) {
+    defaults(suiteName: suiteName)?.set(max(0, count), forKey: badgeKey)
+  }
+
+  public static func badgeCount(suiteName: String = appGroup) -> Int {
+    max(0, defaults(suiteName: suiteName)?.integer(forKey: badgeKey) ?? 0)
+  }
+
   private static let namesKey = "correspondance.shared.myNames"
 
   /// Les noms sous lesquels on peut me désigner, laissés à l'extension.

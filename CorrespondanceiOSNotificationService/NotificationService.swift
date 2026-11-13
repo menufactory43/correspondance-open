@@ -38,9 +38,14 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     // brute que Sygnal a mise dans `aps.alert`.
     mutable.title = PushNotification.fallbackTitle
     mutable.body = PushNotification.fallbackBody
+    // La pastille de l'icône : notre compte, pas celui du push. Synapse compte
+    // des salons, fils archivés compris ; l'app, des messages de l'inbox. Posé
+    // tout de suite lui aussi : une notification qu'on tait ne l'augmente pas.
+    mutable.badge = NSNumber(value: SharedRelayState.badgeCount())
 
     let payload = request.content.userInfo as? [String: Any] ?? [:]
     guard let reference = PushNotification.reference(in: payload) else {
+      Self.countOneMore(on: mutable)
       return contentHandler(mutable)
     }
 
@@ -57,7 +62,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
 
     MatrixCredentialStore.accessGroup = SharedRelayState.keychainAccessGroup
     guard let credentials = MatrixCredentialStore.load() else {
-      if isMuted { silence(mutable) }
+      if isMuted { silence(mutable) } else { Self.countOneMore(on: mutable) }
       return contentHandler(mutable)
     }
 
@@ -107,6 +112,15 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
 
   private func silence(_ content: UNMutableNotificationContent) { Self.silence(content) }
 
+  /// Un message de plus qu'on montre : la pastille monte d'un cran, et le
+  /// compte partagé avec, pour que le push suivant parte du bon nombre. L'app
+  /// le remet d'aplomb dès qu'elle revient au premier plan.
+  private static func countOneMore(on content: UNMutableNotificationContent) {
+    let count = SharedRelayState.badgeCount() + 1
+    SharedRelayState.saveBadgeCount(count)
+    content.badge = NSNumber(value: count)
+  }
+
   /// Le passage du résultat au système, une fois et une seule.
   private func finish(
     with shown: PushNotification.Presentation,
@@ -116,6 +130,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
     guard let handler, let content else { return }
     content.title = shown.title
     content.body = shown.body
+    Self.countOneMore(on: content)
     // Le fil d'où vient le message : deux notifications d'Alice se rangent
     // ensemble, comme dans Messages.
     content.threadIdentifier = threadIdentifier

@@ -1150,6 +1150,7 @@ final class RelayStore {
   /// Le compteur de non-lus s'éteint à l'écran tout de suite ; le Relais suivra
   /// avec son accusé de lecture, au rythme du réseau.
   private func markLocallyRead(_ conversationID: String) {
+    clearDeliveredNotifications(forRead: relayTargets(of: conversationID) + [conversationID])
     for target in relayTargets(of: conversationID) {
       guard let index = conversations.firstIndex(where: { $0.id == target }),
             conversations[index].unreadCount > 0

@@ -1,6 +1,7 @@
 import CorrespondanceCore
 import CorrespondanceUI
 import SwiftUI
+import UserNotifications
 
 /// Les onglets de l'iPhone. Inbox par défaut (décision 9), Focus à un tap,
 /// dans la barre d'onglets du système ; la recherche est l'onglet de rôle
@@ -51,6 +52,7 @@ struct RootView: View {
   @Environment(RelayStore.self) private var store
   @Environment(ThemePreferences.self) private var themes
   @Environment(PushRegistration.self) private var push
+  @Environment(\.scenePhase) private var scenePhase
 
   @State private var mode: PhoneMode = .inbox
   // `.automatic` replie la liste sur un iPad en portrait : les deux colonnes
@@ -128,6 +130,20 @@ struct RootView: View {
       // les feuilles lisent.
       if let scope = new.scope { store.scope = scope }
     }
+    // La pastille de l'icône dit la même chose que l'onglet Inbox. Sans cela
+    // elle garde le compte du dernier push, qui est celui de Synapse.
+    .onChange(of: unreadCount, initial: true) { _, count in syncIconBadge(count) }
+    // Un compte qui bouge vient d'un `/sync` : c'est le moment de retirer les
+    // notifications de ce qui a été lu ailleurs (sur le Mac, par exemple).
+    .onChange(of: unreadCount) { _, _ in store.clearDeliveredNotifications() }
+    // Reposée aussi au retour et au départ : un push de simple compteur
+    // (lecture faite ailleurs) a pu la réécrire pendant que l'app tournait.
+    .onChange(of: scenePhase) { _, _ in syncIconBadge(unreadCount) }
+  }
+
+  private func syncIconBadge(_ count: Int) {
+    SharedRelayState.saveBadgeCount(count)
+    UNUserNotificationCenter.current().setBadgeCount(count) { _ in }
   }
 
   /// Le badge de l'onglet Inbox : ce qui n'est pas lu dans la file.
