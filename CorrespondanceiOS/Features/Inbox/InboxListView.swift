@@ -5,9 +5,12 @@ import SwiftUI
 /// L'écran par défaut de l'iPhone (décision 9).
 ///
 /// Le titre nomme la portée — Inbox, Archive, ou le réseau choisi — et ne
-/// s'ouvre pas : la portée se change dans la barre d'onglets. Sous le titre, le
-/// filtre en jetons (Tous / Non lus / Sans réponse / Brouillons / Groupes),
-/// comme les catégories de Mail. En haut à droite, un seul menu « … » pour ce
+/// s'ouvre pas : la portée se change dans la barre d'onglets. Le filtre (Tous /
+/// Non lus / Sans réponse / Brouillons / Groupes) tient dans un bouton de la
+/// barre, comme celui de Mail ; il ne prend une ligne sous le titre que
+/// lorsqu'il est actif, pour dire ce qu'on regarde et s'enlever d'un tap. Une
+/// rangée de jetons à demeure coûtait une ligne de file sur les trois ou
+/// quatre que montre l'écran extérieur de l'iPhone Duo. Un menu « … » pour ce
 /// qui n'est ni un onglet ni un filtre : le réseau, les listes de
 /// vérification (Demandes, Rappels, Programmés), la note à soi, le balayage,
 /// les Réglages. Entre les deux, la file, épinglées en tête.
@@ -31,6 +34,14 @@ struct InboxListView: View {
   /// Le balayage de fin de journée se demande une fois, avec son compte.
   @State private var confirmsArchiveAllRead = false
   @Environment(\.dismiss) private var dismiss
+
+  /// Remis à neuf à chaque retour dans l'app (cf. `ThreadView.toolbarEpoch`). Sur l'écran extérieur de l'iPhone
+  /// Duo, iOS range les boutons de la barre dans une bande à droite, et au
+  /// retour de l'arrière-plan ils y restaient parfois vides — la capsule est
+  /// là, l'icône non (capture du 13 nov. 2026). Leur donner une identité neuve
+  /// force la barre à les reposer. Parade à l'aveugle : la cause est chez iOS.
+  @State private var toolbarEpoch = 0
+  @Environment(\.scenePhase) private var scenePhase
 
   private var theme: WritingTheme { themes.theme }
   private var typeface: WritingTypeface { themes.typeface }
@@ -73,8 +84,9 @@ struct InboxListView: View {
         ToolbarItem(placement: .topBarTrailing) { Button("Fermer") { dismiss() } }
       } else {
         ToolbarItemGroup(placement: .topBarTrailing) {
-          moreMenu
-          newConversationButton
+          if scope == .inbox || scope == .archive { filterMenu.id(toolbarEpoch) }
+          moreMenu.id(toolbarEpoch)
+          newConversationButton.id(toolbarEpoch)
         }
       }
     }
@@ -82,7 +94,7 @@ struct InboxListView: View {
     .safeAreaInset(edge: .top, spacing: 0) {
       VStack(spacing: 0) {
         syncBanner
-        if scope == .inbox || scope == .archive { filterChips }
+        if scope == .inbox || scope == .archive, store.filter != .all { activeFilterChip }
       }
       .background(theme.paper)
     }
@@ -127,6 +139,16 @@ struct InboxListView: View {
       Text("Les fils épinglés et les non lus restent dans la file. Un nouveau message ramène un fil archivé.")
     }
     .task { openDemoSheetIfRequested() }
+    .onChange(of: scenePhase) { _, phase in
+        guard phase == .active else { return }
+        toolbarEpoch += 1
+        // Une seconde fois, la transition de retour finie : c'est pendant
+        // elle que la bande se vide.
+        Task { @MainActor in
+          try? await Task.sleep(for: .milliseconds(450))
+          toolbarEpoch += 1
+        }
+      }
   }
 
   /// En démonstration, la feuille demandée s'ouvre seule — une capture n'a pas
@@ -323,43 +345,70 @@ struct InboxListView: View {
 
   // MARK: - Chrome
 
-  /// Le filtre, en jetons sous le titre : visible, un tap. Le jeton actif
-  /// porte son compte quand il en a un.
-  private var filterChips: some View {
-    ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 6) {
-        ForEach(ConversationFilter.allCases.filter { $0 != .scheduled }) { candidate in
-          let selected = store.filter == candidate
-          Button {
-            withAnimation(.easeOut(duration: 0.16)) { store.filter = candidate }
-          } label: {
-            HStack(spacing: 5) {
-              Text(candidate.labelFR)
-              if candidate == .unread, unreadInScope > 0 {
-                Text("\(unreadInScope)")
-                  .monospacedDigit()
-                  .opacity(0.85)
-              }
-            }
-            .font(Typography.meta(typeface))
-            .fontWeight(selected ? .semibold : .regular)
-            .foregroundStyle(selected ? theme.accentInk : theme.inkSecondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-              Capsule().fill(selected ? theme.accentFill : theme.paperSecondary.opacity(0.7))
-            )
-            .overlay(Capsule().strokeBorder(selected ? Color.clear : theme.edge.opacity(0.6)))
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel("Filtre \(candidate.labelFR)")
-          .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+  /// Les filtres qu'on propose : « Programmés » a sa propre feuille.
+  private var filterChoices: [ConversationFilter] {
+    ConversationFilter.allCases.filter { $0 != .scheduled }
+  }
+
+  /// Le filtre, dans la barre : un bouton, plein quand un filtre est posé.
+  private var filterMenu: some View {
+    Menu {
+      Picker("Filtrer", selection: Binding(
+        get: { store.filter },
+        set: { new in withAnimation(.easeOut(duration: 0.16)) { store.filter = new } }
+      )) {
+        ForEach(filterChoices) { candidate in
+          Label(
+            candidate == .unread && unreadInScope > 0
+              ? String(localized: "\(candidate.labelFR) (\(unreadInScope))") : candidate.labelFR,
+            systemImage: candidate.systemImage
+          )
+          .tag(candidate)
         }
       }
-      .padding(.horizontal, Spacing.md)
-      .padding(.top, 2)
-      .padding(.bottom, Spacing.xs)
+    } label: {
+      // Une étiquette nue, sans fonte ni couleur à nous : la barre en fait un
+      // vrai bouton du système, qu'elle sait ranger dans sa bande latérale.
+      Label(
+        "Filtrer",
+        systemImage: store.filter == .all
+          ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill"
+      )
     }
+    .accessibilityValue(store.filter.labelFR)
+  }
+
+  /// Le filtre posé, sous le titre : ce qu'on regarde, et la croix qui l'enlève.
+  /// Absent sans filtre — la file commence alors sous la barre.
+  private var activeFilterChip: some View {
+    Button {
+      withAnimation(.easeOut(duration: 0.16)) { store.filter = .all }
+    } label: {
+      HStack(spacing: 5) {
+        Text(store.filter.labelFR)
+        if store.filter == .unread, unreadInScope > 0 {
+          Text("\(unreadInScope)")
+            .monospacedDigit()
+            .opacity(0.85)
+        }
+        Image(systemName: "xmark")
+          .font(.system(size: 9, weight: .bold))
+          .opacity(0.7)
+      }
+      .font(Typography.meta(typeface))
+      .fontWeight(.semibold)
+      .foregroundStyle(theme.accentInk)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 4)
+      .background(Capsule().fill(theme.accentFill))
+      // La cible reste confortable, la ligne reste mince.
+      .contentShape(Rectangle().inset(by: -8))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Retirer le filtre \(store.filter.labelFR)")
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal, Spacing.md)
+    .padding(.bottom, 6)
   }
 
   private var unreadInScope: Int {
@@ -419,10 +468,8 @@ struct InboxListView: View {
         Label("Réglages", systemImage: "gearshape")
       }
     } label: {
-      Image(systemName: "ellipsis.circle")
-        .font(.system(size: 17, weight: .medium))
+      Label("Plus", systemImage: "ellipsis.circle")
     }
-    .accessibilityLabel("Plus")
   }
 
   private func checklistButton(_ scope: InboxScope, count: Int) -> some View {
@@ -440,10 +487,8 @@ struct InboxListView: View {
     Button {
       isComposingNew = true
     } label: {
-      Image(systemName: "square.and.pencil")
-        .font(.system(size: 17, weight: .medium))
+      Label("Nouvelle conversation", systemImage: "square.and.pencil")
     }
-    .accessibilityLabel("Nouvelle conversation")
   }
 
   @ViewBuilder

@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 import UIKit
 
@@ -161,6 +162,30 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
   private var lastBottomInset: CGFloat = 0
   /// Ce qu'on tient sous les yeux le temps d'une remise en page.
   private var heldAnchor: Anchor?
+  /// La largeur a bougé depuis la dernière repose : les bulles sont à
+  /// re-mesurer. Une hauteur qui change seule ne touche à aucune rangée.
+  private var needsRemeasure = false
+  /// Combien de fois la géométrie a bougé dans le même tour de boucle. Une
+  /// rotation, un dépliage : une ou deux. Au-delà, c'est une boucle.
+  private var boundsPassesThisTurn = 0
+  /// La repose attend le tour suivant — la mise en page en cours tourne en rond.
+  private var hasDeferredRepin = false
+  private var isTurnEndScheduled = false
+  /// Les tours de suite qui ont fini en boucle : passé trois, on ne repose plus.
+  private var loopStrikes = 0
+  /// Un recollage au bas qu'on a retenu parce qu'un doigt tenait le fil : il
+  /// se fera quand le geste s'arrête, si l'on est toujours tenu par le bas.
+  private var owesBottom = false
+
+  /// Un doigt tient le fil, ou son élan le porte encore. Le décalage est alors
+  /// À LUI : rien d'autre ne le déplace. Sans ça, on ne remontait plus d'un
+  /// fil posé en bas — sur les soixante premiers points du geste le fil se
+  /// croit encore tenu par son bas, et la moindre remise en page (une barre
+  /// qui se replie sous le défilement, une passe de `/sync`) le recollait
+  /// sous le doigt (iPhone Duo, écran extérieur, 13 nov. 2026).
+  private var isUnderFinger: Bool {
+    collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
+  }
   private var reportedState = ThreadListState()
   /// Vrai le temps d'une remise en page : les relevés de défilement qu'elle
   /// provoque décrivent un fil à moitié posé, pas ce que l'œil voit.
@@ -296,7 +321,11 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
       return
     }
     if pinned {
-      place { scrollToBottom(animated: glides) }
+      if isUnderFinger {
+        owesBottom = true
+      } else {
+        place { scrollToBottom(animated: glides) }
+      }
     } else if let anchor {
       place { restore(anchor) }
     }
@@ -521,12 +550,15 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
   override func viewWillLayoutSubviews() {
     super.viewWillLayoutSubviews()
     guard hasPlacedFirstLayout, view.bounds.size != lastBounds else { return }
-    heldAnchor = holdsBottom ? nil : currentAnchor()
+    // Le PREMIER relevé d'une rafale est le bon : les suivants décrivent un
+    // fil déjà à moitié reposé.
+    if heldAnchor == nil, !holdsBottom { heldAnchor = currentAnchor() }
   }
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    let boundsChanged = view.bounds.size != lastBounds
+    let previous = lastBounds
+    let boundsChanged = view.bounds.size != previous
     lastBounds = view.bounds.size
     defer { lastBottomInset = collectionView.adjustedContentInset.bottom }
 
@@ -538,13 +570,43 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
       adjustForInsetChange()
       return
     }
-    // La largeur a changé : les bulles se re-mesurent, donc toutes les hauteurs
-    // avec. On invalide, on laisse la liste se refaire, et seulement ensuite on
-    // repose ce qu'on tenait.
-    collectionView.collectionViewLayout.invalidateLayout()
+    // Une taille de passage, sans largeur ou sans hauteur : rien à y poser.
+    guard view.bounds.width > 1, view.bounds.height > 1 else { return }
+    if abs(view.bounds.width - previous.width) > 0.5 { needsRemeasure = true }
+
+    // **Jamais plus de deux reposes dans le même tour de boucle.** Sur l'écran
+    // extérieur de l'iPhone Duo, au retour par une notification, la taille
+    // qu'on nous donne changeait à chaque passe d'une même mise en page : elle
+    // ne rendait plus la main, chaque passe invalidait tout et refaisait les
+    // cellules, et le système tuait l'app au bout de dix secondes (quatre
+    // rapports 0x8BADF00D le 13 nov. 2026, tous dans cette fonction). Ce qui
+    // fait osciller la taille n'est pas établi ; ce qui est sûr, c'est qu'on
+    // ne doit pas y répondre à chaque fois. Passé deux, on laisse la géométrie
+    // finir de bouger et on repose UNE fois, au tour suivant.
+    boundsPassesThisTurn += 1
+    scheduleTurnEnd()
+    guard boundsPassesThisTurn <= 2 else {
+      hasDeferredRepin = true
+      return
+    }
+    repin()
+  }
+
+  /// Repose ce qu'on tenait dans la géométrie nouvelle : le bas, ou la rangée
+  /// relevée avant que tout ne bouge.
+  private func repin() {
+    if needsRemeasure {
+      needsRemeasure = false
+      // La largeur a changé : les bulles se re-mesurent, donc toutes les
+      // hauteurs avec. On invalide, on laisse la liste se refaire, et
+      // seulement ensuite on repose ce qu'on tenait.
+      collectionView.collectionViewLayout.invalidateLayout()
+    }
     place {
       collectionView.layoutIfNeeded()
-      if holdsBottom {
+      if isUnderFinger {
+        owesBottom = holdsBottom
+      } else if holdsBottom {
         scrollToBottom(animated: false)
       } else if let heldAnchor {
         restore(heldAnchor)
@@ -554,6 +616,37 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     reportState()
   }
 
+  /// La fin du tour de boucle : le compte des passes repart de zéro, et la
+  /// repose qu'on avait remise à plus tard se fait — hors de toute mise en page.
+  private func scheduleTurnEnd() {
+    guard !isTurnEndScheduled else { return }
+    isTurnEndScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      isTurnEndScheduled = false
+      let passes = boundsPassesThisTurn
+      boundsPassesThisTurn = 0
+      guard hasDeferredRepin else {
+        loopStrikes = 0
+        return
+      }
+      hasDeferredRepin = false
+      loopStrikes += 1
+      Self.log.notice(
+        "fil : \(passes) changements de taille dans un tour (\(self.view.bounds.width)×\(self.view.bounds.height)), repose remise, série \(self.loopStrikes)"
+      )
+      // Trois tours de suite : notre repose entretient la boucle. On s'arrête
+      // là — un fil mal calé se rattrape d'un geste, une app figée non.
+      guard loopStrikes <= 3 else {
+        heldAnchor = nil
+        return
+      }
+      repin()
+    }
+  }
+
+  private static var log: Logger { Logger(subsystem: "com.correspondance.ios", category: "fil") }
+
   /// Le bas se rétrécit — clavier qui s'ouvre, citation ou pièces jointes qui
   /// coiffent le champ. Collé au bas, on y reste ; plus haut, ce qu'on lisait
   /// reste sous les yeux au lieu de passer sous le composer.
@@ -561,6 +654,10 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     let bottom = collectionView.adjustedContentInset.bottom
     let delta = bottom - lastBottomInset
     guard abs(delta) > 0.5 else { return }
+    guard !isUnderFinger else {
+      owesBottom = holdsBottom
+      return
+    }
     place {
       if holdsBottom {
         scrollToBottom(animated: false)
@@ -586,6 +683,22 @@ final class ThreadListViewController<Row: View>: UIViewController, UICollectionV
     // au-dessus, et la lecture ne bouge pas d'un pouce (cf. `restore`).
     let fromTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
     if fromTop <= 400, isScrollable { onReachTop() }
+  }
+
+  func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    if !decelerate { settleOwedBottom() }
+  }
+
+  func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { settleOwedBottom() }
+
+  /// Le geste est fini : ce qu'on avait retenu pour ne pas le contrarier se
+  /// fait maintenant — si le fil est resté tenu par son bas.
+  private func settleOwedBottom() {
+    guard owesBottom else { return }
+    owesBottom = false
+    guard holdsBottom else { return }
+    place { scrollToBottom(animated: true) }
+    reportState()
   }
 
   private var isScrollable: Bool {

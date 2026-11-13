@@ -68,6 +68,14 @@ struct ThreadView: View {
   /// les bulles y reconnaissent les « @Nom » posés.
   @State private var members: [RelayStore.ThreadMember] = []
 
+  /// Remis à neuf à chaque retour dans l'app. Sur l'écran extérieur de l'iPhone
+  /// Duo, iOS range les boutons de la barre dans une bande à droite, et au
+  /// retour de l'arrière-plan ils y restaient parfois vides — la capsule est
+  /// là, l'icône non (capture du 13 nov. 2026). Leur donner une identité neuve
+  /// force la barre à les reposer. Parade à l'aveugle : la cause est chez iOS.
+  @State private var toolbarEpoch = 0
+  @Environment(\.scenePhase) private var scenePhase
+
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -154,6 +162,16 @@ struct ThreadView: View {
         await store.open(conversationID: conversationID)
       }
       .task(id: conversationID) { members = await store.members(conversationID) }
+      .onChange(of: scenePhase) { _, phase in
+        guard phase == .active else { return }
+        toolbarEpoch += 1
+        // Une seconde fois, la transition de retour finie : c'est pendant
+        // elle que la bande se vide.
+        Task { @MainActor in
+          try? await Task.sleep(for: .milliseconds(450))
+          toolbarEpoch += 1
+        }
+      }
       .onDisappear {
         // La barre s'oublie en quittant : y revenir ne doit pas ressusciter
         // des non-lus d'il y a une heure.
@@ -214,9 +232,9 @@ struct ThreadView: View {
           )
         }
       } label: {
-        Image(systemName: "ellipsis.circle")
+        Label("Actions de la conversation", systemImage: "ellipsis.circle")
       }
-      .accessibilityLabel("Actions de la conversation")
+      .id(toolbarEpoch)
     }
   }
 
